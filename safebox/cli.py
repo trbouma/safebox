@@ -39,6 +39,9 @@ WALLET  = config_obj['wallet']
 def cli():
     pass
 
+@click.command()
+def info():
+    click.echo("This is safebox")
 
 @click.command(help="set local config options")
 @click.option('--nsec', '-n', default=None, help='set nsec')
@@ -167,6 +170,7 @@ def additem():
     index_out = wallet_obj.add_item(safe_box_item)
     click.echo(index_out)
 
+cli.add_command(info)
 cli.add_command(profile)
 cli.add_command(set)
 cli.add_command(getwalletinfo)
