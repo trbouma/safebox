@@ -29,9 +29,14 @@ class SafeboxItem(BaseModel):
     name:           str|None=None
     type:           str|None=None
     description:    str|None=None
+    value:          str|None=None
    
 
     
     def gethash(self):       
         
         return hexlify(hashlib.sha256((self.name+self.description).encode()).digest()).decode()
+    
+    def get_d_tag(self, pubkey: str):       
+        
+        return hexlify(hashlib.sha256((self.name+self.description+pubkey).encode()).digest()).decode()

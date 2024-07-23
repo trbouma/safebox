@@ -283,7 +283,7 @@ class Wallet:
         
         payload_encrypt = my_enc.encrypt(payload,to_pub_k=self.pubkey_hex)
         
-        tags = [['d',safe_box_item.gethash()]]
+        tags = [['d',safe_box_item.get_d_tag(self.pubkey_hex)]]
       
 
         async with ClientPool(self.relays) as c:
