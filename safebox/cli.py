@@ -7,12 +7,12 @@ from safebox.models import nostrProfile, SafeboxItem
 from datetime import datetime
 from safebox.wallet import Wallet
 
-relays  = ["wss://nostr-pub.wellorder.net", "wss://relay.nimo.cash"]
-mints   = ["https://mint.nimo.cash"]
+relays  = ["wss://nostr-pub.wellorder.net", "wss://relay.damus.io"]
+mints   = ["https://8333.space:8333"]
 wallet  = "default" 
 
 home_directory = os.path.expanduser('~')
-cli_directory = '.npcache'
+cli_directory = '.safebox'
 config_file = 'config.yml'
 config_directory = os.path.join(home_directory, cli_directory)
 file_path = os.path.join(home_directory, cli_directory, config_file)

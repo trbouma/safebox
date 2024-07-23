@@ -11,12 +11,28 @@ The idea is that the safebox contains different item types, wallets, records, et
 
 Initial implementation will be a Python class that is invoked by a command line utility. The eventual goal is to create a drop-in component for a custodial service.
 
-If you have Poetry installed, you can do the following:
+You can install via pip. Make sure you have a virtual enviroment set up first
 ```
-poetry add git+https://github.com/trbouma/safebox.git
+python3 -m venv .venv
+source .venv/bin/activate
+pip install git+https://github.com/trbouma/safebox.git
+safebox info
+```
 
+
+
+Alternatively, if you have Poetry installed, you can do the following:
+```
+poetry new safebox
+cd safebox
+poetry add git+https://github.com/trbouma/safebox.git
+poetry shell
 safebox --help
 ```
+Before you start using, you need a few settings for your nsec, relays and mints. 
+
+
+
 
 No guarantees. No promises of support. This is very experimental - more to come! 
 
