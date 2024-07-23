@@ -1,5 +1,5 @@
 # Nostr SafeBox
-Your own private safebox on nostr!
+Your own private portable safebox on nostr!
 
 ## General Concept 
 
