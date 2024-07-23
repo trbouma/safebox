@@ -12,6 +12,7 @@ class BIP329Enum(Enum):
     TYPE_XPUB   =   "xpub"
     TYPE_WALLET =   "wallet"
     TYPE_NOTE   =   "note"
+    TYPE_PROOF  =   "proof"
 
 
 class nostrProfile(BaseModel):
