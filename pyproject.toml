@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "safebox"
+version = "0.1.0"
+description = "Nostr SafeBox"
+authors = ["trbouma <trbouma@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10.4"
+monstr = "^0.1.9"
+asyncio = "^3.4.3"
+logging = "^0.4.9.6"
+click = "^8.1.7"
+wheel = "^0.43.0"
+pyyaml = "^6.0.1"
+pydantic = "^2.8.2"
+
+[tool.poetry.scripts]
+npcache = "safebox.cli:cli"
+safebox = "safebox.cli:cli"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
