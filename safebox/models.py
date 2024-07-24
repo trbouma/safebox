@@ -28,7 +28,7 @@ class nostrProfile(BaseModel):
 
 class SafeboxItem(BaseModel):
     name:           str|None=None
-    type:           str|None=None
+    type:           BIP329Enum|None=None
     description:    str|None=None
     value:          str|None=None
    

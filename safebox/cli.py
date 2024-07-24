@@ -155,11 +155,14 @@ def setindexinfo(jsons):
     wallet_obj.set_index_info(jsons)
 
 @click.command(help='help for getindexinfo')
-def getindexinfo():
+def index():
     click.echo("getindex info")
     wallet_obj = Wallet(NSEC, RELAYS)
     index_out = wallet_obj.get_index_info()
-    click.echo(index_out)
+    if index_out:
+        click.echo(index_out)
+    else:
+        click.echo("No index!")
 
 @click.command(help='help for getindexinfo')
 def additem():
@@ -176,7 +179,7 @@ cli.add_command(set)
 cli.add_command(getwalletinfo)
 cli.add_command(setwalletinfo)
 cli.add_command(setindexinfo)
-cli.add_command(getindexinfo)
+cli.add_command(index)
 cli.add_command(additem)
 
 

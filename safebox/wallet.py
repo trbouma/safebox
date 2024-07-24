@@ -30,27 +30,36 @@ class Wallet:
 
         else:
             print("Error")
+
+        # Create wallet profile event if no
+        index = self.get_index_info()
+        if index == None:
+            
+            init_index = "[{\"root\":\"init\"}]"
+            self.set_index_info(init_index)
+
   
 
     def get_profile(self) -> nostrProfile:
         
-        
+        nostr_profile = None
         FILTER = [{
             'limit': 1,
             'authors': [self.pubkey_hex],
             'kinds': [0]
         }]
+        
         profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
+        if profile:
+            nostr_profile = nostrProfile(name           = profile.get('name', 'Not Set'),
+                                        display_name   = profile.get('display_name', 'Not Set'),
+                                        about          = profile.get('about', "Not Set" ),
+                                        nip05          = profile.get('nip05', "Not Set" ),
+                                        banner         = profile.get('banner', "Not Set" ),
+                                        website        = profile.get('website', "Not Set" ),
+                                        lud16          = profile.get('lud16', "Not Set" ),
 
-        nostr_profile = nostrProfile(name           = profile.get('name', 'Not Set'),
-                                     display_name   = profile.get('display_name', 'Not Set'),
-                                     about          = profile.get('about', "Not Set" ),
-                                     nip05          = profile.get('nip05', "Not Set" ),
-                                     banner         = profile.get('banner', "Not Set" ),
-                                     website        = profile.get('website', "Not Set" ),
-                                     lud16          = profile.get('lud16', "Not Set" ),
-
-                                     )
+                                        )
 
         
         
@@ -234,7 +243,7 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def get_index_info(self, d_tag:str=None):
+    def get_index_info(self):
         my_enc = NIP44Encrypt(self.k)
         
         DEFAULT_RELAY = self.relays[0]
@@ -244,13 +253,17 @@ class Wallet:
             'kinds': [17375]
             
         }]
-        event =asyncio.run(self._async_get_index_info(FILTER))
+        try:
+            event =asyncio.run(self._async_get_index_info(FILTER))
         
-        # print(event.data())
-        decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+            # print(event.data())
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
 
+            index_obj = json.loads(decrypt_content)
 
-        return "event " + event.id + " " + decrypt_content 
+            return index_obj
+        except:
+            return None
     
     async def _async_get_index_info(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
@@ -263,7 +276,7 @@ class Wallet:
             
             events = await c.query(filter)
             
-            print(f"27375 events: {len(events)}")
+            # print(f"{filter} events: {len(events)}")
   
             
             return events[0]
