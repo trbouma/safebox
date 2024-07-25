@@ -49,13 +49,24 @@ class Wallet:
         self.privkey_hex    =   self.k.private_key_hex()
         
         new_name = generate()
+        print(new_name)
+
+        for i in range(len(new_name)):
+            if new_name[i].lower() == "of":
+                if i >=1:
+                    pet_name = new_name[i-2] + new_name[i-1] 
+                else:
+                    pet_name = new_name[i-1]                
+                break
+
+
         hotel_name = hotel_names.get_hotel_name()
-        nostr_profile = nostrProfile(   name=new_name[2],
+        nostr_profile = nostrProfile(   name=pet_name,
                                         display_name=' '.join(n.capitalize() for n in new_name),
                                         about = f"Resident of {hotel_name}" )
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
-        init_index["root"] = new_name[2]
+        init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
         print(out)
         return self.k.private_key_bech32()
