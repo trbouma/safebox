@@ -305,6 +305,17 @@ files = [
 ]
 
 [[package]]
+name = "coolname"
+version = "2.2.0"
+description = "Random name and slug generator"
+optional = false
+python-versions = "*"
+files = [
+    {file = "coolname-2.2.0-py2.py3-none-any.whl", hash = "sha256:4d1563186cfaf71b394d5df4c744f8c41303b6846413645e31d31915cdeb13e8"},
+    {file = "coolname-2.2.0.tar.gz", hash = "sha256:6c5d5731759104479e7ca195a9b64f7900ac5bead40183c09323c7d0be9e75c7"},
+]
+
+[[package]]
 name = "cryptography"
 version = "43.0.0"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
@@ -437,6 +448,17 @@ files = [
     {file = "frozenlist-1.4.1-cp39-cp39-win_amd64.whl", hash = "sha256:e6a20a581f9ce92d389a8c7d7c3dd47c81fd5d6e655c8dddf341e14aa48659d0"},
     {file = "frozenlist-1.4.1-py3-none-any.whl", hash = "sha256:04ced3e6a46b4cfffe20f9ae482818e34eba9b5fb0ce4056e4cc9b6e212d09b7"},
     {file = "frozenlist-1.4.1.tar.gz", hash = "sha256:c037a86e8513059a2613aaba4d817bb90b9d9b6b69aace3ce9c877e8c8ed402b"},
+]
+
+[[package]]
+name = "hotel-names"
+version = "0.0.1"
+description = "Generate random hotel names"
+optional = false
+python-versions = "*"
+files = [
+    {file = "hotel_names-0.0.1-py3-none-any.whl", hash = "sha256:b9881278e3dfc86c7dfa7fe7f7750b5c7c670b87f593738c8bf109c8b5fe80bb"},
+    {file = "hotel_names-0.0.1.tar.gz", hash = "sha256:d37e413e3add50764f1f806c415467fe674d5a18aac823079b5e0fa1186c1686"},
 ]
 
 [[package]]
@@ -981,4 +1003,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.4"
-content-hash = "4133af9adebf146563a2da0e180a7a7ea50157beaca4004a756b49ab1defd709"
+content-hash = "5ac9a07fc2b9e0fa625368c7117a3e5177e865b706fe04a83d1fb82489677fcc"

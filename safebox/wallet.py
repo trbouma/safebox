@@ -1,6 +1,9 @@
 from typing import Any, Dict, List, Optional, Union
 import asyncio, json
 
+from hotel_names import hotel_names
+from coolname import generate, generate_slug
+
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
@@ -38,7 +41,36 @@ class Wallet:
             init_index = "[{\"root\":\"init\"}]"
             self.set_index_info(init_index)
 
-  
+    def create_profile(self):
+        init_index = {}
+        self.k= Keys()
+        self.pubkey_bech32  =   self.k.public_key_bech32()
+        self.pubkey_hex     =   self.k.public_key_hex()
+        self.privkey_hex    =   self.k.private_key_hex()
+        
+        new_name = generate()
+        hotel_name = hotel_names.get_hotel_name()
+        nostr_profile = nostrProfile(   name=new_name[2],
+                                        display_name=' '.join(n.capitalize() for n in new_name),
+                                        about = f"Resident of {hotel_name}" )
+        out = asyncio.run(self._async_create_profile(nostr_profile))
+        # init_index = "[{\"root\":\"init\"}]"
+        init_index["root"] = new_name[2]
+        self.set_index_info(json.dumps(init_index))
+        print(out)
+        return self.k.private_key_bech32()
+
+    async def _async_create_profile(self, nostr_profile: nostrProfile):
+        async with ClientPool(self.relays) as c:
+            profile = json.dumps(nostr_profile.model_dump_json())
+            print(profile)
+        # async with Client(relay) as c:
+            n_msg = Event(kind=0,
+                        content=profile,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+        return "ok"
 
     def get_profile(self) -> nostrProfile:
         
@@ -50,28 +82,32 @@ class Wallet:
         }]
         
         profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
+        
         if profile:
-            nostr_profile = nostrProfile(name           = profile.get('name', 'Not Set'),
-                                        display_name   = profile.get('display_name', 'Not Set'),
-                                        about          = profile.get('about', "Not Set" ),
-                                        nip05          = profile.get('nip05', "Not Set" ),
-                                        banner         = profile.get('banner', "Not Set" ),
-                                        website        = profile.get('website', "Not Set" ),
-                                        lud16          = profile.get('lud16', "Not Set" ),
+            profile_obj = json.loads(profile)
+           
+            nostr_profile = nostrProfile(name          = profile_obj.get('name', 'Not Set'),
+                                        display_name   = profile_obj.get('display_name', 'Not Set'),
+                                        about          = profile_obj.get('about', "Not Set" ),
+                                        nip05          = profile_obj.get('nip05', "Not Set" ),
+                                        banner         = profile_obj.get('banner', "Not Set" ),
+                                        website        = profile_obj.get('website', "Not Set" ),
+                                        lud16          = profile_obj.get('lud16', "Not Set" ),
 
                                         )
 
         
         
-        return nostr_profile
+        return profile_obj
     
     async def async_query_client_profile(self, relay: str, filter: List[dict]):
     # does a one off query to relay prints the events and exits
-    
-        async with ClientPool([relay, 'wss://relay.damus.io']) as c:
-        # async with Client(relay) as c:
+        print("are we here", self.relays)
+        async with ClientPool(self.relays) as c:        
             events = await c.query(filter)
-            return json.loads(events[0].content)
+            json_obj = json.loads(events[0].content)
+            print("json_obj", json_obj)
+            return json_obj
            
     def get_post(self):
         
@@ -222,7 +258,7 @@ class Wallet:
         asyncio.run(self._async_set_index_info(index_info))  
     
     async def _async_set_index_info(self, index_info: str):
-
+        
         print("the latest index info", index_info)
         my_enc = NIP44Encrypt(self.k)
         index_info_encrypt = my_enc.encrypt(index_info,to_pub_k=self.pubkey_hex)

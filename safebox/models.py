@@ -16,13 +16,13 @@ class BIP329Enum(Enum):
 
 
 class nostrProfile(BaseModel):
-    name:           str|None=None
-    display_name:   str|None=None
-    about:          str|None=None
-    picture:        str|None=None
-    nip05:          str|None=None
-    banner:         str|None=None
-    website:        str|None=None
+    name:           str = "Not set"
+    display_name:   str = "Not set"
+    about:          str = "Not set"
+    picture:        str = "Not set"
+    nip05:          str = "Not set"
+    banner:         str = "Not set"
+    website:        str = "Not set"
 
 
 

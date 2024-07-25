@@ -15,6 +15,8 @@ click = "^8.1.7"
 wheel = "^0.43.0"
 pyyaml = "^6.0.1"
 pydantic = "^2.8.2"
+hotel-names = "^0.0.1"
+coolname = "^2.2.0"
 
 [tool.poetry.scripts]
 npcache = "safebox.cli:cli"

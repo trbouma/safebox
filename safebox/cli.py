@@ -32,6 +32,9 @@ NSEC    = config_obj['nsec']
 MINTS   = config_obj['mints']
 WALLET  = config_obj['wallet']
 
+def write_config():
+     with open(file_path, 'w') as file:        
+        yaml.dump(config_obj, file)
 
 
 
@@ -40,8 +43,20 @@ def cli():
     pass
 
 @click.command()
-def info():
+@click.pass_context
+def info(ctx):
     click.echo("This is safebox")
+    click.echo(ctx.obj)
+
+@click.command(help="create a new safebox")
+def create():
+    click.echo("Creating a new safebox")
+    wallet_obj = Wallet(NSEC, RELAYS)
+    config_obj['nsec'] = wallet_obj.create_profile()
+    click.echo(f"nsec: {config_obj['nsec']}")
+    write_config()
+    
+
 
 @click.command(help="set local config options")
 @click.option('--nsec', '-n', default=None, help='set nsec')
@@ -96,7 +111,14 @@ def set(nsec, relays, mints, wallet):
 def profile():
     wallet = Wallet(NSEC, RELAYS)
     nostr_profile = wallet.get_profile()
-    click.echo(f"nostr profile: {nostr_profile}")
+    click.echo(f"npub: {str(wallet.pubkey_bech32)}")
+    click.echo(f"nsec: {str(wallet.k.private_key_bech32())}")
+    click.echo("-"*80)
+    for key, value in nostr_profile.items():
+        
+        click.echo(f"{str(key).ljust(15)}: {value}")
+    click.echo("-"*80)
+
 
 @click.command(help='help for getwalletinfo')
 @click.option('--wallet', '-w', default = None, help='wallet name')
@@ -174,6 +196,7 @@ def additem():
     click.echo(index_out)
 
 cli.add_command(info)
+cli.add_command(create)
 cli.add_command(profile)
 cli.add_command(set)
 cli.add_command(getwalletinfo)
