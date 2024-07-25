@@ -52,7 +52,7 @@ class Wallet:
         print(new_name)
 
         for i in range(len(new_name)):
-            if new_name[i].lower() == "of":
+            if new_name[i].lower() in ["of","from"]:
                 if i >=1:
                     pet_name = new_name[i-2] + new_name[i-1] 
                 else:
