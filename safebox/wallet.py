@@ -73,7 +73,7 @@ class Wallet:
         return "ok"
 
     def get_profile(self) -> nostrProfile:
-        
+        profile_obj = {}
         nostr_profile = None
         FILTER = [{
             'limit': 1,
