@@ -63,7 +63,8 @@ class Wallet:
         hotel_name = hotel_names.get_hotel_name()
         nostr_profile = nostrProfile(   name=pet_name,
                                         display_name=' '.join(n.capitalize() for n in new_name),
-                                        about = f"Resident of {hotel_name}" )
+                                        about = f"Resident of {hotel_name}",
+                                         picture=f"https://robohash.org/{pet_name}/?set=set4" )
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
