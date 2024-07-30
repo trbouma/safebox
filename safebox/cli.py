@@ -55,6 +55,7 @@ def create():
     config_obj['nsec'] = wallet_obj.create_profile()
     click.echo(f"nsec: {config_obj['nsec']}")
     write_config()
+    click.echo(wallet_obj.get_post())
     
 
 
@@ -118,7 +119,7 @@ def profile():
         
         click.echo(f"{str(key).ljust(15)}: {value}")
     click.echo("-"*80)
-
+    click.echo(wallet.get_post())
 
 @click.command(help='help for getwalletinfo')
 @click.option('--wallet', '-w', default = None, help='wallet name')
@@ -169,6 +170,13 @@ def setwalletinfo(wallet, mints, jsons):
     relay_array = config_obj['relays']
     wallet_obj.set_wallet_info(wallet_name, mint_array,relays=relay_array, wallet_info=wallet_info)
 
+@click.command(help='Do a post')
+@click.option('-message','-m', default='hello world')
+def post(message):
+    click.echo(message)
+    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj.send_post(message)
+
 @click.command(help='help for setindexinfo')
 @click.option('--jsons', '-j', default = '{}', help='json string')
 def setindexinfo(jsons):
@@ -198,6 +206,8 @@ def additem():
 cli.add_command(info)
 cli.add_command(create)
 cli.add_command(profile)
+cli.add_command(post)
+
 cli.add_command(set)
 cli.add_command(getwalletinfo)
 cli.add_command(setwalletinfo)

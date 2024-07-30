@@ -70,6 +70,9 @@ class Wallet:
         init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
         print(out)
+        hello_msg = f"Hello World from {pet_name}!"
+        print(hello_msg)
+        asyncio.run(self._async_send_post(hello_msg)) 
         return self.k.private_key_bech32()
 
     async def _async_create_profile(self, nostr_profile: nostrProfile):
@@ -125,7 +128,7 @@ class Wallet:
         
         
         FILTER = [{
-            'limit': 1,
+            'limit': 10,
             'authors': [self.pubkey_hex],
             'kinds': [1]
         }]
@@ -135,16 +138,21 @@ class Wallet:
     
     async def query_client_post(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
-    
+        posts = ""
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
             events = await c.query(filter)
-            return events[0].content
+            
+            for each in events:
+                posts += str(each.content) +"\n"
+                
+           
+            return posts
 
     def send_post(self,text):
-        asyncio.run(self.do_post(text))  
+        asyncio.run(self._async_send_post(text))  
     
-    async def do_post(self, text:str):
+    async def _async_send_post(self, text:str):
         """
             Example showing how to post a text note (Kind 1) to relay
         """
