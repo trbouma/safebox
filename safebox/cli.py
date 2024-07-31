@@ -173,7 +173,7 @@ def setwalletinfo(wallet, mints, jsons):
     wallet_obj.set_wallet_info(wallet_name, mint_array,relays=relay_array, wallet_info=wallet_info)
 
 @click.command(help='Do a post')
-@click.option('-message','-m', default='hello world')
+@click.option('--message','-m', default='hello world')
 def post(message):
     click.echo(message)
     wallet_obj = Wallet(NSEC, RELAYS)

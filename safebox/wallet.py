@@ -66,6 +66,7 @@ class Wallet:
                                         display_name=' '.join(n.capitalize() for n in new_name),
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
+                                        lud16= f"{self.pubkey_bech32}@openbalance.app"
                                          )
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
@@ -79,7 +80,8 @@ class Wallet:
 
     async def _async_create_profile(self, nostr_profile: nostrProfile):
         async with ClientPool(self.relays) as c:
-            profile = json.dumps(nostr_profile.model_dump_json())
+            profile = nostr_profile.model_dump_json()
+            
             print(profile)
       
             n_msg = Event(kind=0,
@@ -89,7 +91,7 @@ class Wallet:
             c.publish(n_msg)
         return "ok"
 
-    def get_profile(self) -> nostrProfile:
+    def get_profile(self):
         profile_obj = {}
         nostr_profile = None
         FILTER = [{
@@ -100,8 +102,9 @@ class Wallet:
         
         profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
         
+        print(f"profile {type(profile)}")
         if profile:
-            profile_obj = json.loads(profile)
+            profile_obj = profile
            
             nostr_profile = nostrProfile(name          = profile_obj.get('name', 'Not Set'),
                                         display_name   = profile_obj.get('display_name', 'Not Set'),
@@ -117,14 +120,22 @@ class Wallet:
         
         return profile_obj
     
-    async def async_query_client_profile(self, relay: str, filter: List[dict]):
+    async def async_query_client_profile(self, relay: str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
-        print("are we here", self.relays)
+        json_obj = {}
+        print("are we here today", self.relays)
         async with ClientPool(self.relays) as c:        
             events = await c.query(filter)
-            json_obj = json.loads(events[0].content)
-            print("json_obj", json_obj)
-            return json_obj
+            
+        json_str = events[0].content
+        print("json_str", json_str)
+        # json_obj = json.loads(json_str)
+        json_obj = json.loads(json_str)
+       
+        print("json_obj", json_obj)
+        
+        return json_obj
+        
            
     def get_post(self):
         
