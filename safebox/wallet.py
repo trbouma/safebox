@@ -418,12 +418,14 @@ class Wallet:
     async def _async_get_proofs(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
         proofs = ""
+        
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
             events = await c.query(filter)
             
+            
             for each in events:
-                proofs += str(each.content) +"\n"
+                proofs += str(each.content) +"\n\n"
                 
            
             return proofs

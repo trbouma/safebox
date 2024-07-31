@@ -120,6 +120,8 @@ def profile():
         click.echo(f"{str(key).ljust(15)}: {value}")
     click.echo("-"*80)
     click.echo(wallet.get_post())
+    click.echo("-"*80)
+    click.echo(wallet.get_proofs())
 
 @click.command(help='help for getwalletinfo')
 @click.option('--wallet', '-w', default = None, help='wallet name')
