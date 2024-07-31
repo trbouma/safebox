@@ -203,6 +203,21 @@ def additem():
     index_out = wallet_obj.add_item(safe_box_item)
     click.echo(index_out)
 
+@click.command(help="Deposit funds into wallet")
+@click.argument('amount')
+def deposit(amount: int):
+    click.echo(f"amount: {amount}")
+    wallet_obj = Wallet(NSEC, RELAYS)
+    msg_out = wallet_obj.deposit(amount)
+    click.echo(msg_out)
+
+@click.command(help="List proofs")
+def proofs():
+    
+    wallet_obj = Wallet(NSEC, RELAYS)
+    msg_out = wallet_obj.get_proofs()
+    click.echo(msg_out)
+
 cli.add_command(info)
 cli.add_command(create)
 cli.add_command(profile)
@@ -214,6 +229,8 @@ cli.add_command(setwalletinfo)
 cli.add_command(setindexinfo)
 cli.add_command(index)
 cli.add_command(additem)
+cli.add_command(deposit)
+cli.add_command(proofs)
 
 
 if __name__ == "__main__":

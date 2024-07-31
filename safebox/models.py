@@ -23,7 +23,11 @@ class nostrProfile(BaseModel):
     nip05:          str = "Not set"
     banner:         str = "Not set"
     website:        str = "Not set"
+    lud16:          str = "npub@openbalance.app"
 
+class mintRequest(BaseModel):
+    unit:       str = "sat"
+    amount:     int = 0    
 
 
 class SafeboxItem(BaseModel):

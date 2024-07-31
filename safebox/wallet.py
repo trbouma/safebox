@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
-import asyncio, json
+import asyncio, json, requests
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -9,7 +9,8 @@ from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
-from safebox.models import nostrProfile, SafeboxItem
+from safebox.models import nostrProfile, SafeboxItem, mintRequest
+
 
 class Wallet:
     k: Keys
@@ -64,7 +65,8 @@ class Wallet:
         nostr_profile = nostrProfile(   name=pet_name,
                                         display_name=' '.join(n.capitalize() for n in new_name),
                                         about = f"Resident of {hotel_name}",
-                                         picture=f"https://robohash.org/{pet_name}/?set=set4" )
+                                        picture=f"https://robohash.org/{pet_name}/?set=set4",
+                                         )
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
@@ -79,7 +81,7 @@ class Wallet:
         async with ClientPool(self.relays) as c:
             profile = json.dumps(nostr_profile.model_dump_json())
             print(profile)
-        # async with Client(relay) as c:
+      
             n_msg = Event(kind=0,
                         content=profile,
                         pub_key=self.pubkey_hex)
@@ -369,3 +371,59 @@ class Wallet:
             print(n_msg.data())
             c.publish(n_msg)
             # await asyncio.sleep(1)
+    def deposit(self, amount:int):
+        url = "https://mint.nimo.cash/v1/mint/quote/bolt11"
+        headers = { "Content-Type": "application/json"}
+        mint_request = mintRequest(amount=amount)
+        mint_request_dump = mint_request.model_dump()
+        payload_json = mint_request.model_dump_json()
+        response = requests.post(url, data=payload_json, headers=headers)
+        
+         
+        
+        self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
+
+        return f"You deposited {amount} {payload_json}!"
+    
+    def add_tokens(self,text):
+        asyncio.run(self._async_add_tokens(text))  
+    
+    async def _async_add_tokens(self, text:str):
+        """
+            Example showing how to post a text note (Kind 1) to relay
+        """
+
+        # rnd generate some keys
+        
+        async with ClientPool(self.relays) as c:
+        # async with Client(relay) as c:
+            n_msg = Event(kind=7375,
+                        content=text,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            # await asyncio.sleep(1)
+    def get_proofs(self):
+        
+        
+        FILTER = [{
+            'limit': 10,
+            'authors': [self.pubkey_hex],
+            'kinds': [7375]
+        }]
+        content =asyncio.run(self._async_get_proofs(FILTER))
+        
+        return content
+    
+    async def _async_get_proofs(self, filter: List[dict]):
+    # does a one off query to relay prints the events and exits
+        proofs = ""
+        async with ClientPool(self.relays) as c:
+        # async with Client(relay) as c:
+            events = await c.query(filter)
+            
+            for each in events:
+                proofs += str(each.content) +"\n"
+                
+           
+            return proofs
