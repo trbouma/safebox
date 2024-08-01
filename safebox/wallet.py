@@ -126,11 +126,14 @@ class Wallet:
         print("are we here today", self.relays)
         async with ClientPool(self.relays) as c:        
             events = await c.query(filter)
-            
-        json_str = events[0].content
-        print("json_str", json_str)
-        # json_obj = json.loads(json_str)
-        json_obj = json.loads(json_str)
+        try:    
+            json_str = events[0].content
+            print("json_str", json_str)
+            # json_obj = json.loads(json_str)
+            json_obj = json.loads(json_str)
+        except:
+            {"staus": "could not access profile"}
+            pass
        
         print("json_obj", json_obj)
         
@@ -404,12 +407,13 @@ class Wallet:
             Example showing how to post a text note (Kind 1) to relay
         """
 
-        # rnd generate some keys
+        my_enc = NIP44Encrypt(self.k)
+        payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=7375,
-                        content=text,
+                        content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
@@ -428,6 +432,7 @@ class Wallet:
     
     async def _async_get_proofs(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
+        my_enc = NIP44Encrypt(self.k)
         proofs = ""
         
         async with ClientPool(self.relays) as c:
@@ -436,7 +441,12 @@ class Wallet:
             
             
             for each in events:
-                proofs += str(each.content) +"\n\n"
+                try:
+                    content = my_enc.decrypt(each.content, self.pubkey_hex)
+                except:
+                    content = each.content
+
+                proofs += str(content) +"\n\n"
                 
            
             return proofs
