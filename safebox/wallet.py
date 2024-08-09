@@ -1,16 +1,31 @@
 from typing import Any, Dict, List, Optional, Union
 import asyncio, json, requests
+from time import sleep
+import secrets
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
+from binascii import unhexlify
 
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest
+from safebox.b_dhke import step1_alice, step3_alice
+from safebox.secp import PrivateKey, PublicKey
 
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, KeysetsResponse,KeysetsResponseKeyset
+
+def powers_of_2_sum(amount):
+    powers = []
+    while amount > 0:
+        power = 1
+        while power * 2 <= amount:
+            power *= 2
+        powers.append(power)
+        amount -= power
+    return sorted(powers)
 
 class Wallet:
     k: Keys
@@ -19,17 +34,19 @@ class Wallet:
     pubkey_hex: str
     privkey_hex: str
     relays: List[str]
+    mints: List[str]
     safe_box_items: List[SafeboxItem]
 
 
 
-    def __init__(self, nsec: str, relays: List[str]) -> None:
+    def __init__(self, nsec: str, relays: List[str], mints: List[str]) -> None:
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
             self.pubkey_hex     =   self.k.public_key_hex()
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
+            self.mints          =   mints
             self.safe_box_items = []
 
         else:
@@ -42,6 +59,16 @@ class Wallet:
             init_index = "[{\"root\":\"init\"}]"
             self.set_index_info(init_index)
 
+    def powers_of_2_sum(self, amount: int):
+        powers = []
+        while amount > 0:
+            power = 1
+            while power * 2 <= amount:
+                power *= 2
+            powers.append(power)
+            amount -= power
+        return sorted(powers)
+    
     def create_profile(self):
         init_index = {}
         self.k= Keys()
@@ -386,18 +413,94 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
     def deposit(self, amount:int):
-        url = "https://mint.nimo.cash/v1/mint/quote/bolt11"
+        url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+       
+        # url = "https://mint.nimo.cash/v1/mint/quote/bolt11"
         headers = { "Content-Type": "application/json"}
         mint_request = mintRequest(amount=amount)
         mint_request_dump = mint_request.model_dump()
         payload_json = mint_request.model_dump_json()
         response = requests.post(url, data=payload_json, headers=headers)
+        mint_quote = mintQuote(**response.json())
         
-         
+        invoice = response.json()['request']
+        quote = response.json()['quote']
+        print(f"Please pay invoice: {mint_quote.request}") 
+        print(self.powers_of_2_sum(int(amount)))
         
-        self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
+        # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
+        self.check_quote(quote)
+        keyset_url = f"{self.mints[0]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
 
-        return f"You deposited {amount} {payload_json}!"
+        keysets_obj = KeysetsResponse(**response.json())
+
+        print("id:", keysets_obj.keysets[0].id)
+
+        blinded_messages=[]
+        blinded_values =[]
+        powers_of_2 = powers_of_2_sum(int(amount))
+        
+        
+        for each in powers_of_2:
+            secret = secrets.token_hex(32)
+            B_, r = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
+            
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex()
+                                                        ).model_dump()
+                                    )
+        print("blinded values, blinded messages:", blinded_values, blinded_messages)
+        mint_url = f"{self.mints[0]}/v1/mint/bolt11"
+
+        blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
+        print(blinded_message)
+        request_body = {
+                            "quote"     : quote,
+                            "outputs"   : blinded_messages
+                        }
+        print(request_body)
+        response = requests.post(mint_url, json=request_body, headers=headers)
+        promises = response.json()['signatures']
+        print("promises:", promises)
+
+        
+        mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+        response = requests.get(mint_key_url, headers=headers)
+        keys = response.json()["keysets"][0]["keys"]
+        # print(keys)
+        proofs = []
+        i = 0
+        
+        for each in promises:
+            pub_key_c = PublicKey()
+            print("each:", each['C_'])
+            pub_key_c.deserialize(unhexlify(each['C_']))
+            promise_amount = each['amount']
+            A = keys[str(int(promise_amount))]
+            # A = keys[str(j)]
+            pub_key_a = PublicKey()
+            pub_key_a.deserialize(unhexlify(A))
+            r = blinded_values[i][1]
+            print(pub_key_c, promise_amount,A, r)
+            C = step3_alice(pub_key_c,r,pub_key_a)
+            proof = {   "amount": promise_amount,
+                        "id": keyset,
+                        "secret": blinded_values[i][2],
+                        "C":    C.serialize().hex()
+                        }
+            proofs.append(proof)
+            print(proofs)
+            i+=1
+            
+            
+
+
+
+        return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}"
     
     def add_tokens(self,text):
         asyncio.run(self._async_add_tokens(text))  
@@ -450,3 +553,21 @@ class Wallet:
                 
            
             return proofs
+    
+    def check_quote(self, quote):
+        print("check quote", quote)
+        url = f"https://mint.nimo.cash/v1/mint/quote/bolt11/{quote}"
+        headers = { "Content-Type": "application/json"}
+        response = requests.get(url, headers=headers)
+        print("response", response.json)
+        mint_quote = mintQuote(**response.json())
+        print("mint_quote:", mint_quote.paid)
+        
+        while mint_quote.paid == False:
+            print("waiting for payment...")
+            sleep(3)
+            response = requests.get(url, headers=headers)
+            mint_quote = mintQuote(**response.json())
+        print(f"invoice is paid! {mint_quote.state}")   
+
+        

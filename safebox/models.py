@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Union
 import hashlib
 from binascii import hexlify
 from enum import Enum
@@ -29,6 +30,31 @@ class mintRequest(BaseModel):
     unit:       str = "sat"
     amount:     int = 0    
 
+class mintQuote(BaseModel):
+    quote:      str
+    request:    str
+    paid:       bool
+    state:      str
+    expiry:     int|None = None
+
+class KeysetsResponseKeyset(BaseModel):
+    id: str
+    unit: str
+    active: bool
+
+
+class KeysetsResponse(BaseModel):
+    keysets: list[KeysetsResponseKeyset]
+
+class BlindedMessage(BaseModel):
+    """
+    Blinded message or blinded secret or "output" which is to be signed by the mint
+    """
+
+    amount: int
+    id: str  # Keyset id
+    B_: str  # Hex-encoded blinded message
+    witness: Union[str, None] = None  # witnesses (used for P2PK with SIG_ALL)
 
 class SafeboxItem(BaseModel):
     name:           str|None=None

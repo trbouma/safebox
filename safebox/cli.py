@@ -110,7 +110,7 @@ def set(nsec, relays, mints, wallet):
 @click.command()
 # @click.option('--nsec', '-n', help='nsec for wallet')
 def profile():
-    wallet = Wallet(NSEC, RELAYS)
+    wallet = Wallet(NSEC, RELAYS, MINTS)
     nostr_profile = wallet.get_profile()
     click.echo(f"npub: {str(wallet.pubkey_bech32)}")
     click.echo(f"nsec: {str(wallet.k.private_key_bech32())}")
@@ -209,9 +209,10 @@ def additem():
 @click.argument('amount')
 def deposit(amount: int):
     click.echo(f"amount: {amount}")
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     msg_out = wallet_obj.deposit(amount)
     click.echo(msg_out)
+    
 
 @click.command(help="List proofs")
 def proofs():
