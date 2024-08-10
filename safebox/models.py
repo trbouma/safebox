@@ -3,6 +3,7 @@ from typing import Union
 import hashlib
 from binascii import hexlify
 from enum import Enum
+from datetime import datetime
 
 class BIP329Enum(Enum):
     TYPE_TX     =   "tx"
@@ -15,6 +16,50 @@ class BIP329Enum(Enum):
     TYPE_NOTE   =   "note"
     TYPE_PROOF  =   "proof"
 
+class DLEQ(BaseModel):
+    """
+    Discrete Log Equality (DLEQ) Proof
+    """
+
+    e: str
+    s: str
+
+
+class DLEQWallet(BaseModel):
+    """
+    Discrete Log Equality (DLEQ) Proof
+    """
+
+    e: str
+    s: str
+    r: str  # blinding_factor, unknown to mint but sent from wallet to wallet for DLEQ proof
+    
+class Proof(BaseModel):
+    """
+    Value token
+    """
+
+    # NOTE: None for backwards compatibility for old clients that do not include the keyset id < 0.3
+    id: Union[None, str] = ""
+    amount: int = 0
+    secret: str = ""  # secret or message to be blinded and signed
+    C: str = ""  # signature on secret, unblinded by wallet
+    dleq: Union[DLEQWallet, None] = None  # DLEQ proof
+    witness: Union[None, str] = ""  # witness for spending condition
+
+    # whether this proof is reserved for sending, used for coin management in the wallet
+    reserved: Union[None, bool] = False
+    # unique ID of send attempt, used for grouping pending tokens in the wallet
+    send_id: Union[None, str] = ""
+    time_created: Union[None, datetime, str] = ""
+    time_reserved: Union[None, datetime, str] = ""
+    derivation_path: Union[None, str] = ""  # derivation path of the proof
+    mint_id: Union[None, str] = (
+        None  # holds the id of the mint operation that created this proof
+    )
+    melt_id: Union[None, str] = (
+        None  # holds the id of the melt operation that destroyed this proof
+    )
 
 class nostrProfile(BaseModel):
     name:           str = "Not set"

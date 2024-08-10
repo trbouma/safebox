@@ -15,7 +15,7 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, KeysetsResponse,KeysetsResponseKeyset
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, KeysetsResponse,KeysetsResponseKeyset, Proof
 
 def powers_of_2_sum(amount):
     powers = []
@@ -48,6 +48,10 @@ class Wallet:
             self.relays         =   relays
             self.mints          =   mints
             self.safe_box_items = []
+            self.proofs: List[Proof] = []
+            self.balance: int = 0
+
+            self._load_proofs()
 
         else:
             print("Error")
@@ -317,6 +321,10 @@ class Wallet:
             
             return event_select
         
+    def get_proofs(self):
+        
+        return self.proofs
+    
     def set_index_info(self,index_info: str):
         asyncio.run(self._async_set_index_info(index_info))  
     
@@ -495,6 +503,8 @@ class Wallet:
             proofs.append(proof)
             print(proofs)
             i+=1
+        
+        self.add_proofs(json.dumps(proofs))
             
             
 
@@ -502,10 +512,10 @@ class Wallet:
 
         return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}"
     
-    def add_tokens(self,text):
-        asyncio.run(self._async_add_tokens(text))  
+    def add_proofs(self,text):
+        asyncio.run(self._async_add_proofs(text))  
     
-    async def _async_add_tokens(self, text:str):
+    async def _async_add_proofs(self, text:str):
         """
             Example showing how to post a text note (Kind 1) to relay
         """
@@ -521,7 +531,8 @@ class Wallet:
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
             # await asyncio.sleep(1)
-    def get_proofs(self):
+    
+    def _load_proofs(self):
         
         
         FILTER = [{
@@ -529,11 +540,11 @@ class Wallet:
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
-        content =asyncio.run(self._async_get_proofs(FILTER))
+        content =asyncio.run(self._async_load_proofs(FILTER))
         
         return content
     
-    async def _async_get_proofs(self, filter: List[dict]):
+    async def _async_load_proofs(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
         my_enc = NIP44Encrypt(self.k)
         proofs = ""
@@ -543,17 +554,40 @@ class Wallet:
             events = await c.query(filter)
             
             
-            for each in events:
+            for each_event in events:
                 try:
-                    content = my_enc.decrypt(each.content, self.pubkey_hex)
+                    content = my_enc.decrypt(each_event.content, self.pubkey_hex)
+                    content_json = json.loads(content)
+                    # print("event_id:", each_event.id)
+                    for each_content in content_json:
+                        
+                        proof = Proof(**each_content)
+                        self.proofs.append(proof)
+                        # print(proof.amount, proof.secret)
+                        
                 except:
                     content = each.content
 
+                
                 proofs += str(content) +"\n\n"
+            
+            balance = 0
+            for each in self.proofs:
+                # print(each.amount, each.secret)
+                balance += each.amount
+            self.balance = balance
+            # print("balance:", balance)
+            # print("proofs:", len(self.proofs))
+
+                
                 
            
             return proofs
     
+    def delete_proofs(self):
+        pass
+        
+
     def check_quote(self, quote):
         print("check quote", quote)
         url = f"https://mint.nimo.cash/v1/mint/quote/bolt11/{quote}"

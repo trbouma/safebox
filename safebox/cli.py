@@ -51,7 +51,7 @@ def info(ctx):
 @click.command(help="create a new safebox")
 def create():
     click.echo("Creating a new safebox")
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     config_obj['nsec'] = wallet_obj.create_profile()
     click.echo(f"nsec: {config_obj['nsec']}")
     write_config()
@@ -121,7 +121,7 @@ def profile():
     click.echo("-"*80)
     click.echo(wallet.get_post())
     click.echo("-"*80)
-    click.echo(wallet.get_proofs())
+    # click.echo(wallet.get_proofs())
 
 @click.command(help='help for getwalletinfo')
 @click.option('--wallet', '-w', default = None, help='wallet name')
@@ -217,9 +217,11 @@ def deposit(amount: int):
 @click.command(help="List proofs")
 def proofs():
     
-    wallet_obj = Wallet(NSEC, RELAYS)
-    msg_out = wallet_obj.get_proofs()
-    click.echo(msg_out)
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    # msg_out = wallet_obj.get_proofs()
+    # wallet_obj.delete_proofs()
+    # click.echo(msg_out)
+    click.echo(wallet_obj.balance)
 
 cli.add_command(info)
 cli.add_command(create)
