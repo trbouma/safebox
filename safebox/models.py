@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, List
 import hashlib
 from binascii import hexlify
 from enum import Enum
@@ -33,7 +33,7 @@ class DLEQWallet(BaseModel):
     e: str
     s: str
     r: str  # blinding_factor, unknown to mint but sent from wallet to wallet for DLEQ proof
-    
+
 class Proof(BaseModel):
     """
     Value token
@@ -60,6 +60,14 @@ class Proof(BaseModel):
     melt_id: Union[None, str] = (
         None  # holds the id of the melt operation that destroyed this proof
     )
+
+class eventProofs(BaseModel):
+    id:         str = "Not set"  
+    proofs:     List[Proof] = []     
+
+class proofEvents(BaseModel):
+      
+  event_proofs:     List[eventProofs] = []    
 
 class nostrProfile(BaseModel):
     name:           str = "Not set"

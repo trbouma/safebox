@@ -14,8 +14,9 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
 from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
+from safebox.lightning import lightning_address_pay
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, KeysetsResponse,KeysetsResponseKeyset, Proof
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, eventProofs, proofEvents, KeysetsResponse
 
 def powers_of_2_sum(amount):
     powers = []
@@ -36,6 +37,10 @@ class Wallet:
     relays: List[str]
     mints: List[str]
     safe_box_items: List[SafeboxItem]
+    proofs: List[Proof]
+    events: int
+    balance: int
+    proof_events: proofEvents 
 
 
 
@@ -50,6 +55,7 @@ class Wallet:
             self.safe_box_items = []
             self.proofs: List[Proof] = []
             self.balance: int = 0
+            self.proof_events = proofEvents()
 
             self._load_proofs()
 
@@ -104,7 +110,7 @@ class Wallet:
         init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
         print(out)
-        hello_msg = f"Hello World from {pet_name}!"
+        hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
         asyncio.run(self._async_send_post(hello_msg)) 
         return self.k.private_key_bech32()
@@ -552,24 +558,29 @@ class Wallet:
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
             events = await c.query(filter)
-            
+            self.events = len(events)
             
             for each_event in events:
+                # print(type(each_event.id), each_event.id)
+                event_proofs = eventProofs(id=each_event.id)
                 try:
                     content = my_enc.decrypt(each_event.content, self.pubkey_hex)
                     content_json = json.loads(content)
                     # print("event_id:", each_event.id)
+                    
                     for each_content in content_json:
                         
                         proof = Proof(**each_content)
                         self.proofs.append(proof)
+                        event_proofs.proofs.append(proof)
                         # print(proof.amount, proof.secret)
-                        
+                    self.proof_events.event_proofs.append(event_proofs)          
                 except:
                     content = each.content
 
                 
                 proofs += str(content) +"\n\n"
+                
             
             balance = 0
             for each in self.proofs:
@@ -602,6 +613,40 @@ class Wallet:
             sleep(3)
             response = requests.get(url, headers=headers)
             mint_quote = mintQuote(**response.json())
-        print(f"invoice is paid! {mint_quote.state}")   
+        print(f"invoice is paid! {mint_quote.state}") 
 
+    def payout(self, lnaddress):
+        lightning_address_pay(lnaddress)
+        
+
+        asyncio.run(self._async_delete_events())
+
+    async def _async_delete_events(self):
+        """
+            Example showing how to post a text note (Kind 1) to relay
+        """
+
+        tags = []
+        for each_event in self.proof_events.event_proofs:
+            tags.append(["e",each_event.id])
+            print(each_event.id)
+            for each_proof in each_event.proofs:
+                print(each_proof.id, each_proof.amount)
+        print(tags)
+        
+        async with ClientPool(self.relays) as c:
+        
+            n_msg = Event(kind=Event.KIND_DELETE,
+                        content=None,
+                        pub_key=self.pubkey_hex,
+                        tags=tags)
+            n_msg.sign(self.privkey_hex)
+            # c.publish(n_msg)
+            # await asyncio.sleep(1)
+
+    def swap(self):
+        for each_proof_event in self.proof_events:
+            print(each_proof_event)
+            
+        return "swap"
         

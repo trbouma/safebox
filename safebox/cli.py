@@ -6,6 +6,7 @@ from safebox.wallet import Wallet
 from safebox.models import nostrProfile, SafeboxItem
 from datetime import datetime
 from safebox.wallet import Wallet
+from safebox.lightning import lightning_address_pay
 
 relays  = ["wss://nostr-pub.wellorder.net", "wss://relay.damus.io"]
 mints   = ["https://8333.space:8333"]
@@ -176,7 +177,7 @@ def setwalletinfo(wallet, mints, jsons):
 @click.option('--message','-m', default='hello world')
 def post(message):
     click.echo(message)
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     wallet_obj.send_post(message)
 
 @click.command(help='help for setindexinfo')
@@ -214,6 +215,17 @@ def deposit(amount: int):
     click.echo(msg_out)
     
 
+@click.command(help="Payout funds to lightning address")
+@click.option('--lnaddress','-l', default='trbouma@walletofsatoshi.com')
+
+def payout(lnaddress: str):
+    click.echo(f"Pay out to: {lnaddress}")
+    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
+    wallet_obj.payout(lnaddress)
+    
+    
+    #click.echo(msg_out)
+
 @click.command(help="List proofs")
 def proofs():
     
@@ -221,7 +233,17 @@ def proofs():
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    click.echo(wallet_obj.balance)
+    click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
+    click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
+
+@click.command(help="Swap proofs")
+def swap():
+    
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    # msg_out = wallet_obj.get_proofs()
+    # wallet_obj.delete_proofs()
+    # click.echo(msg_out)
+    click.echo(wallet_obj.swap())
 
 cli.add_command(info)
 cli.add_command(create)
@@ -229,6 +251,7 @@ cli.add_command(profile)
 cli.add_command(post)
 
 cli.add_command(set)
+cli.add_command(payout)
 cli.add_command(getwalletinfo)
 cli.add_command(setwalletinfo)
 cli.add_command(setindexinfo)
@@ -236,6 +259,7 @@ cli.add_command(index)
 cli.add_command(additem)
 cli.add_command(deposit)
 cli.add_command(proofs)
+cli.add_command(swap)
 
 
 if __name__ == "__main__":
