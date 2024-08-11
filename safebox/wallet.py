@@ -16,7 +16,7 @@ from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, eventProofs, proofEvents, KeysetsResponse
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse
 
 def powers_of_2_sum(amount):
     powers = []
@@ -562,7 +562,7 @@ class Wallet:
             
             for each_event in events:
                 # print(type(each_event.id), each_event.id)
-                event_proofs = eventProofs(id=each_event.id)
+                proof_event = proofEvent(id=each_event.id)
                 try:
                     content = my_enc.decrypt(each_event.content, self.pubkey_hex)
                     content_json = json.loads(content)
@@ -572,9 +572,9 @@ class Wallet:
                         
                         proof = Proof(**each_content)
                         self.proofs.append(proof)
-                        event_proofs.proofs.append(proof)
+                        proof_event.proofs.append(proof)
                         # print(proof.amount, proof.secret)
-                    self.proof_events.event_proofs.append(event_proofs)          
+                    self.proof_events.proof_events.append(proof_event)          
                 except:
                     content = each.content
 
@@ -619,15 +619,15 @@ class Wallet:
         lightning_address_pay(lnaddress)
         
 
-        asyncio.run(self._async_delete_events())
+        asyncio.run(self._async_delete_proof_events())
 
-    async def _async_delete_events(self):
+    async def _async_delete_proof_events(self):
         """
             Example showing how to post a text note (Kind 1) to relay
         """
 
         tags = []
-        for each_event in self.proof_events.event_proofs:
+        for each_event in self.proof_events.proof_events:
             tags.append(["e",each_event.id])
             print(each_event.id)
             for each_proof in each_event.proofs:
@@ -641,12 +641,95 @@ class Wallet:
                         pub_key=self.pubkey_hex,
                         tags=tags)
             n_msg.sign(self.privkey_hex)
-            # c.publish(n_msg)
+            c.publish(n_msg)
             # await asyncio.sleep(1)
 
     def swap(self):
-        for each_proof_event in self.proof_events:
-            print(each_proof_event)
+        swap_amount =0
+        count = 0
+        
+        headers = { "Content-Type": "application/json"}
+        keyset_url = f"{self.mints[0]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        swap_url = f"{self.mints[0]}/v1/swap"
+
+        swap_proofs = []
+        blinded_values =[]
+        blinded_messages = []
+        for each in self.proof_events.proof_events:
+            # print(each.id)
+            for each_proof in each.proofs:
+                # print(each_proof.amount)
+                swap_amount+=each_proof.amount
+                swap_proofs.append(each_proof.model_dump())
+                
+                count +=1
+        
+        powers_of_2 = self.powers_of_2_sum(swap_amount)
+        print("total:", swap_amount,count, powers_of_2)   
+        for each in powers_of_2:
+            secret = secrets.token_hex(32)
+            B_, r = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
             
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex()
+                                                        ).model_dump()
+                                    )
+        
+        data_to_send = {
+                        "inputs":   swap_proofs,
+                        "outputs": blinded_messages
+                        
+        }
+       
+        print(data_to_send)
+        try:
+            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+            print(response.json())
+            promises = response.json()['signatures']
+            print("promises:", promises)
+
+        
+            mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(keys)
+            proofs = []
+            i = 0
+        
+            for each in promises:
+                pub_key_c = PublicKey()
+                print("each:", each['C_'])
+                pub_key_c.deserialize(unhexlify(each['C_']))
+                promise_amount = each['amount']
+                A = keys[str(int(promise_amount))]
+                # A = keys[str(j)]
+                pub_key_a = PublicKey()
+                pub_key_a.deserialize(unhexlify(A))
+                r = blinded_values[i][1]
+                print(pub_key_c, promise_amount,A, r)
+                C = step3_alice(pub_key_c,r,pub_key_a)
+                proof = {   "amount": promise_amount,
+                        "id": keyset,
+                        "secret": blinded_values[i][2],
+                        "C":    C.serialize().hex()
+                        }
+                proofs.append(proof)
+                print(proofs)
+                i+=1
+        
+            # delete old proofs
+            asyncio.run(self._async_delete_proof_events())
+            self.add_proofs(json.dumps(proofs))
+            self._load_proofs()
+            
+        except:
+            ValueError('test')
+        
+        # print(request_body)    
         return "swap"
         

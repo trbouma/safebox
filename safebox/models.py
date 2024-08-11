@@ -60,14 +60,18 @@ class Proof(BaseModel):
     melt_id: Union[None, str] = (
         None  # holds the id of the melt operation that destroyed this proof
     )
+   
 
-class eventProofs(BaseModel):
+class Proofs(BaseModel):
+    proofs: List[Proof] = []
+
+class proofEvent(BaseModel):
     id:         str = "Not set"  
     proofs:     List[Proof] = []     
 
 class proofEvents(BaseModel):
       
-  event_proofs:     List[eventProofs] = []    
+  proof_events:     List[proofEvent] = []    
 
 class nostrProfile(BaseModel):
     name:           str = "Not set"
@@ -107,7 +111,7 @@ class BlindedMessage(BaseModel):
     amount: int
     id: str  # Keyset id
     B_: str  # Hex-encoded blinded message
-    witness: Union[str, None] = None  # witnesses (used for P2PK with SIG_ALL)
+   
 
 class SafeboxItem(BaseModel):
     name:           str|None=None
