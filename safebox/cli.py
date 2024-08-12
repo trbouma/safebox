@@ -246,6 +246,14 @@ def proofs():
         click.echo(f"id: {each.id} amount: {each.amount} secret: {each.secret}")
     click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
 
+@click.command(help="Show balance")
+def balance():
+    
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+
+    click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
+
+
 @click.command(help="Swap proofs")
 def swap():
     
@@ -269,6 +277,7 @@ cli.add_command(index)
 cli.add_command(additem)
 cli.add_command(deposit)
 cli.add_command(proofs)
+cli.add_command(balance)
 cli.add_command(swap)
 cli.add_command(delete)
 
