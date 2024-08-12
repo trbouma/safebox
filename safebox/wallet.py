@@ -16,7 +16,7 @@ from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse
 
 def powers_of_2_sum(amount):
     powers = []
@@ -58,6 +58,9 @@ class Wallet:
             self.proof_events = proofEvents()
 
             self._load_proofs()
+            
+            
+            
 
         else:
             print("Error")
@@ -501,16 +504,18 @@ class Wallet:
             r = blinded_values[i][1]
             print(pub_key_c, promise_amount,A, r)
             C = step3_alice(pub_key_c,r,pub_key_a)
-            proof = {   "amount": promise_amount,
-                        "id": keyset,
-                        "secret": blinded_values[i][2],
-                        "C":    C.serialize().hex()
-                        }
-            proofs.append(proof)
+            
+            proof = Proof ( amount= promise_amount,
+                           id = keyset,
+                           secret=blinded_values[i][2],
+                           C=C.serialize().hex()
+            )
+            proofs.append(proof.model_dump())
             print(proofs)
             i+=1
         
         self.add_proofs(json.dumps(proofs))
+        
             
             
 
@@ -537,7 +542,32 @@ class Wallet:
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
             # await asyncio.sleep(1)
+
+    def add_proof_event(self, proofs:List[Proof]):
+        asyncio.run(self._async_add_proof_event(proofs))  
     
+    async def _async_add_proof_event(self, proofs: List[Proof]):
+        """
+            Example showing how to post a text note (Kind 1) to relay
+        """
+        proofs_for_event = []
+        
+        for proof in proofs:
+            proofs_for_event.append(proof.model_dump())
+        
+        text = json.dumps(proofs_for_event)
+
+        my_enc = NIP44Encrypt(self.k)
+        payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
+        
+        async with ClientPool(self.relays) as c:
+        # async with Client(relay) as c:
+            n_msg = Event(kind=7375,
+                        content=payload_encrypt,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            # await asyncio.sleep(1) 
     def _load_proofs(self):
         
         
@@ -596,7 +626,7 @@ class Wallet:
             return proofs
     
     def delete_proofs(self):
-        pass
+        asyncio.run(self._async_delete_proof_events())
         
 
     def check_quote(self, quote):
@@ -615,11 +645,84 @@ class Wallet:
             mint_quote = mintQuote(**response.json())
         print(f"invoice is paid! {mint_quote.state}") 
 
-    def payout(self, lnaddress):
-        lightning_address_pay(lnaddress)
+    def pay(self, amount:int, lnaddress: str):
+
+        melt_quote_url = f"{self.mints[0]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.mints[0]}/v1/melt/bolt11"
+        
+        headers = { "Content-Type": "application/json"}
+        callback = lightning_address_pay(amount, lnaddress)
+        pr = callback['pr']
+        print(pr)
+        print(amount, lnaddress)
+        # need to get enough proofs to cover amount
+        data_to_send = {    "request": pr,
+                            "unit": "sat"
+
+                        }
+        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+        
+        post_melt_response = PostMeltQuoteResponse(**response.json())
+        print("mint response:", post_melt_response)
+
+        proofs_to_use = []
+        proof_amount = 0
+        amount_needed = amount + post_melt_response.fee_reserve
+        print("amount needed:", amount_needed)
+        if amount_needed >= self.balance:
+            print("insufficient balance")
+            return
+        while proof_amount <= amount_needed:
+            pay_proof = self.proofs.pop()
+            proofs_to_use.append(pay_proof)
+            proof_amount += pay_proof.amount
+            print("pop", pay_proof.amount)
+            
+        print("proofs to use", proofs_to_use)
+        print("remaining", self.proofs)
+
+        # Now need to do the melt
+        proofs_remaining = self.swap_for_payment(proofs_to_use, amount_needed)
         
 
+        print("proofs remaining:", proofs_remaining)
+        print(f"amount needed: {amount_needed}")
+        sum_proofs =0
+        spend_proofs = []
+        keep_proofs = []
+        for each in proofs_remaining:
+            
+            sum_proofs += each.amount
+            if sum_proofs <= amount_needed:
+                spend_proofs.append(each)
+                print(f"pay with {each.amount}, {each.secret}")
+            else:
+                keep_proofs.append(each)
+                print(f"keep {each.amount}, {each.secret}")
+        print("spend:",spend_proofs) 
+        print("keep:", keep_proofs) 
+
+        melt_proofs = []
+        for each_proof in spend_proofs:
+                melt_proofs.append(each_proof.model_dump())
+
+        data_to_send = {"quote": post_melt_response.quote,
+                      "inputs": melt_proofs }
+        
+        print(data_to_send)
+        print("we are here!!!")
+        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+        print(response.json())   
+        # delete old proofs
+        for each in keep_proofs:
+            self.proofs.append(each)
+        # print("self proofs", self.proofs)
         asyncio.run(self._async_delete_proof_events())
+        self.add_proof_event(self.proofs)
+        self._load_proofs()
+        
+
+        
 
     async def _async_delete_proof_events(self):
         """
@@ -629,10 +732,11 @@ class Wallet:
         tags = []
         for each_event in self.proof_events.proof_events:
             tags.append(["e",each_event.id])
-            print(each_event.id)
+            # print(each_event.id)
             for each_proof in each_event.proofs:
-                print(each_proof.id, each_proof.amount)
-        print(tags)
+                # print(each_proof.id, each_proof.amount)
+                pass
+        # print(tags)
         
         async with ClientPool(self.relays) as c:
         
@@ -656,6 +760,7 @@ class Wallet:
         swap_url = f"{self.mints[0]}/v1/swap"
 
         swap_proofs = []
+        blinded_swap_proofs = []
         blinded_values =[]
         blinded_messages = []
         for each in self.proof_events.proof_events:
@@ -667,6 +772,10 @@ class Wallet:
                 
                 count +=1
         
+        print("swap proofs:", swap_proofs)
+        r = PrivateKey()
+
+        # print("create blinded swap proofs")
         powers_of_2 = self.powers_of_2_sum(swap_amount)
         print("total:", swap_amount,count, powers_of_2)   
         for each in powers_of_2:
@@ -686,9 +795,122 @@ class Wallet:
                         
         }
        
-        print(data_to_send)
+        # print(data_to_send)
         try:
             response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+            # print(response.json())
+            promises = response.json()['signatures']
+            # print("promises:", promises)
+
+        
+            mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(keys)
+            proofs = []
+            i = 0
+        
+            for each in promises:
+                pub_key_c = PublicKey()
+                # print("each:", each['C_'])
+                pub_key_c.deserialize(unhexlify(each['C_']))
+                promise_amount = each['amount']
+                A = keys[str(int(promise_amount))]
+                # A = keys[str(j)]
+                pub_key_a = PublicKey()
+                pub_key_a.deserialize(unhexlify(A))
+                r = blinded_values[i][1]
+                # print(pub_key_c, promise_amount,A, r)
+                C = step3_alice(pub_key_c,r,pub_key_a)
+                proof = {   "amount": promise_amount,
+                        "id": keyset,
+                        "secret": blinded_values[i][2],
+                        "C":    C.serialize().hex()
+                        }
+                proofs.append(proof)
+                # print(proofs)
+                i+=1
+        
+            # delete old proofs
+            asyncio.run(self._async_delete_proof_events())
+            self.add_proofs(json.dumps(proofs))
+            self._load_proofs()
+            
+        except:
+            ValueError('test')
+        
+        # print(request_body)    
+        return "swap"
+    
+    def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
+        # create proofs to melt, and proofs_remaining
+
+        swap_amount =0
+        count = 0
+        
+        headers = { "Content-Type": "application/json"}
+        keyset_url = f"{self.mints[0]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        swap_url = f"{self.mints[0]}/v1/swap"
+
+        swap_proofs = []
+        blinded_values =[]
+        blinded_messages = []
+        proofs = []
+        proofs_to_melt = []
+        proofs_remaing = []
+        # Figure out proofs_to_use_amount
+        proofs_to_use_amount = 0
+        for each in proofs_to_use:
+            proofs_to_use_amount += each.amount
+       
+        powers_of_2_payment = self.powers_of_2_sum(payment_amount)
+        
+
+        for each in powers_of_2_payment:
+            secret = secrets.token_hex(32)
+            B_, r = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
+            
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex()
+                                                        ).model_dump()
+                                    )
+        if proofs_to_use_amount > payment_amount:
+            powers_of_2_leftover = self.powers_of_2_sum(proofs_to_use_amount- payment_amount)
+            for each in powers_of_2_leftover:
+                secret = secrets.token_hex(32)
+                B_, r = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+            
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex()
+                                                        ).model_dump()
+                                    )
+
+        proofs_to_send =[]
+        for each in proofs_to_use:
+            proofs_to_send.append(each.model_dump())
+
+        data_to_send = {
+                        "inputs":  proofs_to_send,
+                        "outputs": blinded_messages
+                        
+        }
+
+        # print(powers_of_2_payment, powers_of_2_leftover)
+        # print(proofs_to_use)
+        # print(blinded_messages)
+        # print(data_to_send)
+
+        try:
+            print("are we here?")
+            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+            
             print(response.json())
             promises = response.json()['signatures']
             print("promises:", promises)
@@ -698,7 +920,7 @@ class Wallet:
             response = requests.get(mint_key_url, headers=headers)
             keys = response.json()["keysets"][0]["keys"]
             # print(keys)
-            proofs = []
+            
             i = 0
         
             for each in promises:
@@ -713,23 +935,22 @@ class Wallet:
                 r = blinded_values[i][1]
                 print(pub_key_c, promise_amount,A, r)
                 C = step3_alice(pub_key_c,r,pub_key_a)
-                proof = {   "amount": promise_amount,
-                        "id": keyset,
-                        "secret": blinded_values[i][2],
-                        "C":    C.serialize().hex()
-                        }
+                
+                proof = Proof(  amount=promise_amount,
+                                id=keyset,
+                                secret=blinded_values[i][2],
+                                C=C.serialize().hex() )
+                
                 proofs.append(proof)
-                print(proofs)
+                # print(proofs)
                 i+=1
-        
-            # delete old proofs
-            asyncio.run(self._async_delete_proof_events())
-            self.add_proofs(json.dumps(proofs))
-            self._load_proofs()
-            
         except:
             ValueError('test')
         
-        # print(request_body)    
-        return "swap"
+        for each in proofs:
+            print(each.amount)
+        # now need break out proofs for payment and proofs remaining
+
+        return proofs
+        
         

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Union, List
+from typing import Union, List, Optional
 import hashlib
 from binascii import hexlify
 from enum import Enum
@@ -111,7 +111,28 @@ class BlindedMessage(BaseModel):
     amount: int
     id: str  # Keyset id
     B_: str  # Hex-encoded blinded message
-   
+
+class BlindedSignature(BaseModel):
+    """
+    Blinded signature or "promise" which is the signature on a `BlindedMessage`
+    """
+
+    id: str
+    amount: int
+    C_: str  # Hex-encoded signature
+    dleq: Optional[DLEQ] = None  # DLEQ proof
+
+
+    
+class PostMeltQuoteResponse(BaseModel):
+    quote: str  # quote id
+    amount: int  # input amount
+    fee_reserve: int  # input fee reserve
+    paid: bool  # whether the request has been paid # DEPRECATED as per NUT PR #136
+    state: str  # state of the quote
+    expiry: Optional[int]  # expiry of the quote
+    payment_preimage: Optional[str] = None  # payment preimage
+    change: Union[List[BlindedSignature], None] = None 
 
 class SafeboxItem(BaseModel):
     name:           str|None=None

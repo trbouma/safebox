@@ -216,15 +216,23 @@ def deposit(amount: int):
     
 
 @click.command(help="Payout funds to lightning address")
-@click.option('--lnaddress','-l', default='trbouma@walletofsatoshi.com')
+@click.argument('amount', default=21)
+@click.argument('lnaddress', default='trbouma@openbalance.app')
 
-def payout(lnaddress: str):
-    click.echo(f"Pay out to: {lnaddress}")
+
+def pay(amount,lnaddress: str):
+    click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    wallet_obj.payout(lnaddress)
+    wallet_obj.pay(amount,lnaddress)
     
     
     #click.echo(msg_out)
+
+@click.command(help='Delete proofs')
+def delete():
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj.delete_proofs()
+    
 
 @click.command(help="List proofs")
 def proofs():
@@ -234,6 +242,8 @@ def proofs():
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
     click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
+    for each in wallet_obj.proofs:
+        click.echo(f"id: {each.id} amount: {each.amount} secret: {each.secret}")
     click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
 
 @click.command(help="Swap proofs")
@@ -251,7 +261,7 @@ cli.add_command(profile)
 cli.add_command(post)
 
 cli.add_command(set)
-cli.add_command(payout)
+cli.add_command(pay)
 cli.add_command(getwalletinfo)
 cli.add_command(setwalletinfo)
 cli.add_command(setindexinfo)
@@ -260,6 +270,7 @@ cli.add_command(additem)
 cli.add_command(deposit)
 cli.add_command(proofs)
 cli.add_command(swap)
+cli.add_command(delete)
 
 
 if __name__ == "__main__":
