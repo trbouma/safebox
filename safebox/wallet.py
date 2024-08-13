@@ -438,11 +438,12 @@ class Wallet:
         mint_request_dump = mint_request.model_dump()
         payload_json = mint_request.model_dump_json()
         response = requests.post(url, data=payload_json, headers=headers)
+        # print(response.json())
         mint_quote = mintQuote(**response.json())
-        
+        # print(mint_quote)
         invoice = response.json()['request']
         quote = response.json()['quote']
-        print(f"Please pay invoice: {mint_quote.request}") 
+        print(f"Please pay invoice: {invoice}") 
         print(self.powers_of_2_sum(int(amount)))
         
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
@@ -631,10 +632,10 @@ class Wallet:
 
     def check_quote(self, quote):
         print("check quote", quote)
-        url = f"https://mint.nimo.cash/v1/mint/quote/bolt11/{quote}"
+        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{quote}"
         headers = { "Content-Type": "application/json"}
         response = requests.get(url, headers=headers)
-        print("response", response.json)
+        print("response", response.json())
         mint_quote = mintQuote(**response.json())
         print("mint_quote:", mint_quote.paid)
         
@@ -643,7 +644,7 @@ class Wallet:
             sleep(3)
             response = requests.get(url, headers=headers)
             mint_quote = mintQuote(**response.json())
-        print(f"invoice is paid! {mint_quote.state}") 
+        print(f"invoice is paid! {mint_quote.paid}") 
 
     def pay(self, amount:int, lnaddress: str):
 
@@ -661,7 +662,7 @@ class Wallet:
 
                         }
         response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        
+        print("post melt response:", response.json())
         post_melt_response = PostMeltQuoteResponse(**response.json())
         print("mint response:", post_melt_response)
 

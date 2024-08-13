@@ -90,8 +90,8 @@ class mintRequest(BaseModel):
 class mintQuote(BaseModel):
     quote:      str
     request:    str
-    paid:       bool
-    state:      str
+    paid:       bool = False
+    state:      str = 'UNPAID'    
     expiry:     int|None = None
 
 class KeysetsResponseKeyset(BaseModel):
@@ -129,7 +129,7 @@ class PostMeltQuoteResponse(BaseModel):
     amount: int  # input amount
     fee_reserve: int  # input fee reserve
     paid: bool  # whether the request has been paid # DEPRECATED as per NUT PR #136
-    state: str  # state of the quote
+    state: str  = "" # state of the quote
     expiry: Optional[int]  # expiry of the quote
     payment_preimage: Optional[str] = None  # payment preimage
     change: Union[List[BlindedSignature], None] = None 
