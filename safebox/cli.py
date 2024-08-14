@@ -125,7 +125,7 @@ def profile():
     # click.echo(wallet.get_proofs())
 
 @click.command(help='help for getwalletinfo')
-@click.option('--label', '-l', default = "default", help='wallet name')
+@click.argument('label', default = "default")
 def getwalletinfo(label):
     
     
@@ -135,7 +135,7 @@ def getwalletinfo(label):
         wallet_info = wallet_obj.get_wallet_info(label)
 
     except:
-        wallet_info = "No wallet found!"
+        wallet_info = "No label found!"
     
     click.echo(wallet_info)
 
@@ -157,9 +157,9 @@ def setwalletinfo(label, mints, jsons):
     
     wallet_info_now = f"test time {datetime.now()}"
     if jsons != None:
-        wallet_info = jsons
+        label_info = jsons
     else:
-        wallet_info = "{'test':'test'}"
+        label_info = "{'test':'test'}"
 
     if wallet != None:
         wallet_name = wallet
@@ -168,7 +168,7 @@ def setwalletinfo(label, mints, jsons):
         print("wallet_name", wallet)
     
     relay_array = config_obj['relays']
-    wallet_obj.set_wallet_info(label, mint_array,relays=relay_array, wallet_info=wallet_info)
+    wallet_obj.set_wallet_info(label, mint_array,relays=relay_array, label_info=label_info)
 
 @click.command(help='Do a post')
 @click.option('--message','-m', default='hello world')

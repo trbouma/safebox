@@ -103,8 +103,9 @@ class Wallet:
 
 
         hotel_name = hotel_names.get_hotel_name()
+        display_name = ' '.join(n.capitalize() for n in new_name)
         nostr_profile = nostrProfile(   name=pet_name,
-                                        display_name=' '.join(n.capitalize() for n in new_name),
+                                        display_name=display_name,
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
                                         lud16= f"{self.pubkey_bech32}@openbalance.app"
@@ -113,7 +114,9 @@ class Wallet:
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
-        self.set_wallet_info("default", mints=self.mints, relays=self.relays, wallet_info=pet_name)
+        self.set_wallet_info(label="default", label_info=display_name)
+        self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+        self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
@@ -226,18 +229,18 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def set_wallet_info(self,label: str, mints: List[str], relays: List[str],wallet_info: str):
-        asyncio.run(self._async_set_wallet_info(label, mints, relays,wallet_info))  
+    def set_wallet_info(self,label: str,label_info: str):
+        asyncio.run(self._async_set_wallet_info(label,label_info))  
     
-    async def _async_set_wallet_info(self, label:str, mints: List[str], relays: List[str], wallet_info: str):
+    async def _async_set_wallet_info(self, label:str, label_info: str):
 
         m = hashlib.sha256()
         m.update(label.encode())
         label_name_hash = m.digest().hex()
         
-        print("the latest wallet info", wallet_info)
+        print("the latest wallet info", label_info)
         my_enc = NIP44Encrypt(self.k)
-        wallet_info_encrypt = my_enc.encrypt(wallet_info,to_pub_k=self.pubkey_hex)
+        wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
        
         # print(wallet_info_encrypt)
@@ -302,7 +305,7 @@ class Wallet:
         except:    
             decrypt_d = "Nothing"
 
-        return "event " + event.id + " " + decrypt_content +" "+ "d tag:" + orig_d
+        return decrypt_content
     
     async def _async_get_wallet_info(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
@@ -439,6 +442,78 @@ class Wallet:
             print(n_msg.data())
             c.publish(n_msg)
             # await asyncio.sleep(1)
+    
+    def _mint_proofs(self, quote:str, amount:int):
+        print("mint proofs")
+        keyset_url = f"{self.mints[0]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        keysets_obj = KeysetsResponse(**response.json())
+
+        print("id:", keysets_obj.keysets[0].id)
+
+        blinded_messages=[]
+        blinded_values =[]
+        powers_of_2 = powers_of_2_sum(int(amount))
+        
+        
+        for each in powers_of_2:
+            secret = secrets.token_hex(32)
+            B_, r = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
+            
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex()
+                                                        ).model_dump()
+                                    )
+        print("blinded values, blinded messages:", blinded_values, blinded_messages)
+        mint_url = f"{self.mints[0]}/v1/mint/bolt11"
+
+        blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
+        print(blinded_message)
+        request_body = {
+                            "quote"     : quote,
+                            "outputs"   : blinded_messages
+                        }
+        print(request_body)
+        response = requests.post(mint_url, json=request_body, headers=headers)
+        promises = response.json()['signatures']
+        print("promises:", promises)
+
+        
+        mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+        response = requests.get(mint_key_url, headers=headers)
+        keys = response.json()["keysets"][0]["keys"]
+        # print(keys)
+        proofs = []
+        i = 0
+        
+        for each in promises:
+            pub_key_c = PublicKey()
+            print("each:", each['C_'])
+            pub_key_c.deserialize(unhexlify(each['C_']))
+            promise_amount = each['amount']
+            A = keys[str(int(promise_amount))]
+            # A = keys[str(j)]
+            pub_key_a = PublicKey()
+            pub_key_a.deserialize(unhexlify(A))
+            r = blinded_values[i][1]
+            print(pub_key_c, promise_amount,A, r)
+            C = step3_alice(pub_key_c,r,pub_key_a)
+            
+            proof = Proof ( amount= promise_amount,
+                           id = keyset,
+                           secret=blinded_values[i][2],
+                           C=C.serialize().hex()
+            )
+            proofs.append(proof.model_dump())
+            print(proofs)
+            i+=1
+        
+        self.add_proofs(json.dumps(proofs))
+    
     def deposit(self, amount:int):
         url = f"{self.mints[0]}/v1/mint/quote/bolt11"
        
@@ -456,9 +531,13 @@ class Wallet:
         print(f"Please pay invoice: {invoice}") 
         print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
-        
+        self.set_wallet_info(label="quote", label_info=quote)
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
         self.check_quote(quote)
+
+        # TODO this is after quote has been paid - refactor into function
+        # self._mint_proofs(quote,amount)
+
         keyset_url = f"{self.mints[0]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
@@ -643,7 +722,11 @@ class Wallet:
 
     def check_quote(self, quote):
         print("check quote", quote)
-        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{quote}"
+        #TODO error handling
+        event_quote_info = self.get_wallet_info("quote")
+        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{event_quote_info}"
+        
+        print("event quote info:", event_quote_info)
         headers = { "Content-Type": "application/json"}
         response = requests.get(url, headers=headers)
         print("response", response.json())
