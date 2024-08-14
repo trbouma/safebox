@@ -168,7 +168,7 @@ def setwalletinfo(label, mints, jsons):
         print("wallet_name", wallet)
     
     relay_array = config_obj['relays']
-    wallet_obj.set_wallet_info(label, mint_array,relays=relay_array, label_info=label_info)
+    wallet_obj.set_wallet_info(label, label_info=label_info)
 
 @click.command(help='Do a post')
 @click.option('--message','-m', default='hello world')
@@ -210,13 +210,17 @@ def deposit(amount: int):
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     msg_out = wallet_obj.deposit(amount)
     click.echo(msg_out)
+    click.echo(f"Please run {__name__.split(".")[0]} check to see if invoice is paid")
     
+@click.command(help="Check for payment")
+def check():
+    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
+    msg_out = wallet_obj.check()
+    click.echo(msg_out)
 
 @click.command(help="Payout funds to lightning address")
 @click.argument('amount', default=21)
 @click.argument('lnaddress', default='trbouma@openbalance.app')
-
-
 def pay(amount,lnaddress: str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
@@ -277,6 +281,8 @@ cli.add_command(proofs)
 cli.add_command(balance)
 cli.add_command(swap)
 cli.add_command(delete)
+cli.add_command(check)
+
 
 
 if __name__ == "__main__":

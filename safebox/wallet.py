@@ -235,7 +235,9 @@ class Wallet:
     async def _async_set_wallet_info(self, label:str, label_info: str):
 
         m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
         m.update(label.encode())
+                 
         label_name_hash = m.digest().hex()
         
         print("the latest wallet info", label_info)
@@ -272,6 +274,7 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
         m.update(label.encode())
         label_hash = m.digest().hex()
         
@@ -445,6 +448,7 @@ class Wallet:
     
     def _mint_proofs(self, quote:str, amount:int):
         print("mint proofs")
+        headers = { "Content-Type": "application/json"}
         keyset_url = f"{self.mints[0]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
@@ -513,6 +517,10 @@ class Wallet:
             i+=1
         
         self.add_proofs(json.dumps(proofs))
+
+    def check(self):
+        quote = self.get_wallet_info("quote")
+        return quote
     
     def deposit(self, amount:int):
         url = f"{self.mints[0]}/v1/mint/quote/bolt11"
@@ -533,86 +541,13 @@ class Wallet:
         # add quote as a replaceable event
         self.set_wallet_info(label="quote", label_info=quote)
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
-        self.check_quote(quote)
+        quote=self.check_quote()
 
         # TODO this is after quote has been paid - refactor into function
-        # self._mint_proofs(quote,amount)
-
-        keyset_url = f"{self.mints[0]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
-
-        keysets_obj = KeysetsResponse(**response.json())
-
-        print("id:", keysets_obj.keysets[0].id)
-
-        blinded_messages=[]
-        blinded_values =[]
-        powers_of_2 = powers_of_2_sum(int(amount))
-        
-        
-        for each in powers_of_2:
-            secret = secrets.token_hex(32)
-            B_, r = step1_alice(secret)
-            blinded_values.append((B_,r, secret))
-            
-            blinded_messages.append(    BlindedMessage( amount=each,
-                                                        id=keyset,
-                                                        B_=B_.serialize().hex()
-                                                        ).model_dump()
-                                    )
-        print("blinded values, blinded messages:", blinded_values, blinded_messages)
-        mint_url = f"{self.mints[0]}/v1/mint/bolt11"
-
-        blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
-        print(blinded_message)
-        request_body = {
-                            "quote"     : quote,
-                            "outputs"   : blinded_messages
-                        }
-        print(request_body)
-        response = requests.post(mint_url, json=request_body, headers=headers)
-        promises = response.json()['signatures']
-        print("promises:", promises)
-
-        
-        mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
-        response = requests.get(mint_key_url, headers=headers)
-        keys = response.json()["keysets"][0]["keys"]
-        # print(keys)
-        proofs = []
-        i = 0
-        
-        for each in promises:
-            pub_key_c = PublicKey()
-            print("each:", each['C_'])
-            pub_key_c.deserialize(unhexlify(each['C_']))
-            promise_amount = each['amount']
-            A = keys[str(int(promise_amount))]
-            # A = keys[str(j)]
-            pub_key_a = PublicKey()
-            pub_key_a.deserialize(unhexlify(A))
-            r = blinded_values[i][1]
-            print(pub_key_c, promise_amount,A, r)
-            C = step3_alice(pub_key_c,r,pub_key_a)
-            
-            proof = Proof ( amount= promise_amount,
-                           id = keyset,
-                           secret=blinded_values[i][2],
-                           C=C.serialize().hex()
-            )
-            proofs.append(proof.model_dump())
-            print(proofs)
-            i+=1
-        
-        self.add_proofs(json.dumps(proofs))
-        
-            
-            
+        self._mint_proofs(quote,amount)
 
 
-
-        return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}"
+        return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
     def add_proofs(self,text):
         asyncio.run(self._async_add_proofs(text))  
@@ -720,8 +655,8 @@ class Wallet:
         asyncio.run(self._async_delete_proof_events())
         
 
-    def check_quote(self, quote):
-        print("check quote", quote)
+    def check_quote(self):
+        # print("check quote", quote)
         #TODO error handling
         event_quote_info = self.get_wallet_info("quote")
         url = f"{self.mints[0]}/v1/mint/quote/bolt11/{event_quote_info}"
@@ -739,6 +674,7 @@ class Wallet:
             response = requests.get(url, headers=headers)
             mint_quote = mintQuote(**response.json())
         print(f"invoice is paid! {mint_quote.paid}") 
+        return event_quote_info
 
     def pay(self, amount:int, lnaddress: str):
 
