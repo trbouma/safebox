@@ -50,7 +50,7 @@ def info(ctx):
     click.echo(ctx.obj)
 
 @click.command(help="create a new safebox")
-def create():
+def new():
     click.echo("Creating a new safebox")
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     config_obj['nsec'] = wallet_obj.create_profile()
@@ -125,18 +125,14 @@ def profile():
     # click.echo(wallet.get_proofs())
 
 @click.command(help='help for getwalletinfo')
-@click.option('--wallet', '-w', default = None, help='wallet name')
-def getwalletinfo(wallet):
-    if wallet != None:
-        print(wallet)
-    else:
-        print(WALLET)
-        wallet = WALLET
+@click.option('--label', '-l', default = "default", help='wallet name')
+def getwalletinfo(label):
     
-    wallet_obj = Wallet(NSEC, RELAYS)
+    
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
 
     try:
-        wallet_info = wallet_obj.get_wallet_info(d_tag=wallet)
+        wallet_info = wallet_obj.get_wallet_info(label)
 
     except:
         wallet_info = "No wallet found!"
@@ -144,11 +140,12 @@ def getwalletinfo(wallet):
     click.echo(wallet_info)
 
 @click.command(help='help for setwalletinfo')
-@click.option('--wallet', '-w', default = None, help='wallet name')
+@click.argument('label', default='default')
+# @click.option('--label', '-l', default = "default", help='label name')
 @click.option('--mints', '-m', help='list of mints')
 @click.option('--jsons', '-j', help='json string')
-def setwalletinfo(wallet, mints, jsons):
-    wallet_obj = Wallet(NSEC, RELAYS)
+def setwalletinfo(label, mints, jsons):
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
     if mints != None:
@@ -171,7 +168,7 @@ def setwalletinfo(wallet, mints, jsons):
         print("wallet_name", wallet)
     
     relay_array = config_obj['relays']
-    wallet_obj.set_wallet_info(wallet_name, mint_array,relays=relay_array, wallet_info=wallet_info)
+    wallet_obj.set_wallet_info(label, mint_array,relays=relay_array, wallet_info=wallet_info)
 
 @click.command(help='Do a post')
 @click.option('--message','-m', default='hello world')
@@ -264,7 +261,7 @@ def swap():
     click.echo(wallet_obj.swap())
 
 cli.add_command(info)
-cli.add_command(create)
+cli.add_command(new)
 cli.add_command(profile)
 cli.add_command(post)
 

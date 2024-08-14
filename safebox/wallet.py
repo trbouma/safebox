@@ -6,6 +6,7 @@ import secrets
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
 from binascii import unhexlify
+import hashlib
 
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
@@ -112,6 +113,7 @@ class Wallet:
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
+        self.set_wallet_info("default", mints=self.mints, relays=self.relays, wallet_info=pet_name)
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
@@ -224,25 +226,25 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def set_wallet_info(self,wallet_name: str, mints: List[str], relays: List[str],wallet_info: str):
-        asyncio.run(self._async_set_wallet_info(wallet_name, mints, relays,wallet_info))  
+    def set_wallet_info(self,label: str, mints: List[str], relays: List[str],wallet_info: str):
+        asyncio.run(self._async_set_wallet_info(label, mints, relays,wallet_info))  
     
-    async def _async_set_wallet_info(self, wallet_name:str, mints: List[str], relays: List[str], wallet_info: str):
+    async def _async_set_wallet_info(self, label:str, mints: List[str], relays: List[str], wallet_info: str):
 
+        m = hashlib.sha256()
+        m.update(label.encode())
+        label_name_hash = m.digest().hex()
+        
         print("the latest wallet info", wallet_info)
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(wallet_info,to_pub_k=self.pubkey_hex)
+        # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
        
+        # print(wallet_info_encrypt)
+
+        tags = [['d',label_name_hash]]
         
 
-        tags = [['d',wallet_name]]
-        
-        if mints != None:
-            for each in mints:
-                tags.append(["mint", each if 'https://' in each else 'https://'+each])
-        if relays != None:
-            for each in relays:
-                tags.append(["relay", each if 'wss://' in each else 'wss://'+each])
 
         # print(tags)
        
@@ -263,23 +265,30 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def get_wallet_info(self, d_tag:str=None):
+    def get_wallet_info(self, label:str=None):
         my_enc = NIP44Encrypt(self.k)
+
+        m = hashlib.sha256()
+        m.update(label.encode())
+        label_hash = m.digest().hex()
+        
+        # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
         
         DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
             'kinds': [37375],
-            'd':d_tag
+            'd':label_hash
             
         }]
         event =asyncio.run(self._async_get_wallet_info(FILTER))
         
         # print(event.data())
         decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-        # print("tags", event.tags)
-        encrypt_d = "None"
+        
+        print("tags", event.tags)
+        # encrypt_d = "None"
         for each in event.tags:
             
             if each[0] == 'd':
@@ -297,9 +306,10 @@ class Wallet:
     
     async def _async_get_wallet_info(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
-        # print("filter", filter[0]['d'])
+        print("filter", filter[0]['d'])
         my_enc = NIP44Encrypt(self.k)
         target_tag = filter[0]['d']
+        print("target tag:", target_tag)
         event_select = None
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
@@ -315,10 +325,10 @@ class Wallet:
                
                 try:
                     # print("EACH!!: ", each.data())
-                    # print("TAG: ", each.tags)
+                    # print("TAGS: ", each.tags)
                     for each_tag in each.tags:
                         if each_tag[0] == 'd':
-                            print(each_tag[1])
+                            # print(each_tag[1])
                             if each_tag[1] == target_tag:
                                 # print("MATCH HELLO!!")
                                 event_select = each                   
@@ -445,6 +455,7 @@ class Wallet:
         quote = response.json()['quote']
         print(f"Please pay invoice: {invoice}") 
         print(self.powers_of_2_sum(int(amount)))
+        # add quote as a replaceable event
         
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
         self.check_quote(quote)
