@@ -126,7 +126,7 @@ def profile():
 
 @click.command(help='help for getwalletinfo')
 @click.argument('label', default = "default")
-def getwalletinfo(label):
+def get(label):
     
     
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
@@ -139,12 +139,14 @@ def getwalletinfo(label):
     
     click.echo(wallet_info)
 
-@click.command(help='help for setwalletinfo')
+@click.command(help='help for put')
 @click.argument('label', default='default')
+@click.argument('label_info', default='hello')
 # @click.option('--label', '-l', default = "default", help='label name')
 @click.option('--mints', '-m', help='list of mints')
-@click.option('--jsons', '-j', help='json string')
-def setwalletinfo(label, mints, jsons):
+
+def put(label, mints, label_info):
+    jsons=None
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
@@ -156,10 +158,7 @@ def setwalletinfo(label, mints, jsons):
         mint_array = config_obj['mints']
     
     wallet_info_now = f"test time {datetime.now()}"
-    if jsons != None:
-        label_info = jsons
-    else:
-        label_info = "{'test':'test'}"
+    
 
     if wallet != None:
         wallet_name = wallet
@@ -271,8 +270,8 @@ cli.add_command(post)
 
 cli.add_command(set)
 cli.add_command(pay)
-cli.add_command(getwalletinfo)
-cli.add_command(setwalletinfo)
+cli.add_command(get)
+cli.add_command(put)
 cli.add_command(setindexinfo)
 cli.add_command(index)
 cli.add_command(additem)
