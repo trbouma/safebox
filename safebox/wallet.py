@@ -610,7 +610,7 @@ class Wallet:
     # does a one off query to relay prints the events and exits
         my_enc = NIP44Encrypt(self.k)
         proofs = ""
-        
+        self.proofs = []
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
             events = await c.query(filter)
@@ -636,7 +636,7 @@ class Wallet:
 
                 
                 proofs += str(content) +"\n\n"
-                
+
             
             balance = 0
             for each in self.proofs:
@@ -647,7 +647,9 @@ class Wallet:
             # print("proofs:", len(self.proofs))
 
                 
-                
+            # print("let's dedup proofs just in case")
+            #TODO this is to mitigate some dup errors reading from multiple relays
+            self.proofs = list(set(self.proofs))     
            
             return proofs
     
@@ -803,7 +805,7 @@ class Wallet:
                 
                 count +=1
         
-        print("swap proofs:", swap_proofs)
+        # print("swap proofs:", swap_proofs)
         r = PrivateKey()
 
         # print("create blinded swap proofs")
@@ -870,8 +872,14 @@ class Wallet:
         except:
             ValueError('test')
         
-        # print(request_body)    
-        return "swap"
+        # print(request_body) 
+        # refresh balance
+        
+        swap_balance = 0
+        for each in self.proofs:
+            swap_balance += each.amount
+        print(len(self.proofs)) 
+        return f"swap ok sats {swap_balance}"
     
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
