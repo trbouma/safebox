@@ -47,7 +47,7 @@ def cli():
 @click.pass_context
 def info(ctx):
     click.echo("This is safebox")
-    click.echo(ctx.obj)
+    wallet_obj = Wallet(NSEC)
 
 @click.command(help="create a new safebox")
 def new():

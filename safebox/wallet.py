@@ -17,7 +17,7 @@ from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 
 def powers_of_2_sum(amount):
     powers = []
@@ -45,7 +45,7 @@ class Wallet:
 
 
 
-    def __init__(self, nsec: str, relays: List[str], mints: List[str]) -> None:
+    def __init__(self, nsec: str, relays: List[str]|None=None, mints: List[str]|None=None) -> None:
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
@@ -58,11 +58,15 @@ class Wallet:
             self.balance: int = 0
             self.proof_events = proofEvents()
 
+            
+            
+            if self.relays == None:
+                self.relays = json.loads(self.get_wallet_info("relays"))
+            if self.mints == None:            
+               self.mints = json.loads(self.get_wallet_info("mints"))
+
             self._load_proofs()
             
-            
-            
-
         else:
             print("Error")
 
@@ -293,7 +297,7 @@ class Wallet:
         # print(event.data())
         decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
         
-        print("tags", event.tags)
+        # print("tags", event.tags)
         # encrypt_d = "None"
         for each in event.tags:
             
@@ -312,10 +316,10 @@ class Wallet:
     
     async def _async_get_wallet_info(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
-        print("filter", filter[0]['d'])
+        # print("filter", filter[0]['d'])
         my_enc = NIP44Encrypt(self.k)
         target_tag = filter[0]['d']
-        print("target tag:", target_tag)
+        #print("target tag:", target_tag)
         event_select = None
         async with ClientPool(self.relays) as c:
         # async with Client(relay) as c:
@@ -519,8 +523,9 @@ class Wallet:
         self.add_proofs(json.dumps(proofs))
 
     def check(self):
-        quote = self.get_wallet_info("quote")
-        return quote
+        msg_out = self._check_quote()
+       
+        return msg_out
     
     def deposit(self, amount:int):
         url = f"{self.mints[0]}/v1/mint/quote/bolt11"
@@ -539,12 +544,16 @@ class Wallet:
         print(f"Please pay invoice: {invoice}") 
         print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
-        self.set_wallet_info(label="quote", label_info=quote)
+
+        wallet_quote = walletQuote(quote=quote,amount=amount)
+        label_info = json.dumps(wallet_quote.model_dump())
+        print(label_info)
+        self.set_wallet_info(label="quote", label_info=label_info)
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
-        quote=self.check_quote()
+        # quote=self.check_quote()
 
         # TODO this is after quote has been paid - refactor into function
-        self._mint_proofs(quote,amount)
+        # self._mint_proofs(quote,amount)
 
 
         return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
@@ -657,11 +666,17 @@ class Wallet:
         asyncio.run(self._async_delete_proof_events())
         
 
-    def check_quote(self):
+    def _check_quote(self):
         # print("check quote", quote)
         #TODO error handling
+           
+        
+         
         event_quote_info = self.get_wallet_info("quote")
-        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{event_quote_info}"
+        event_quote_info_json = json.loads(event_quote_info)
+        event_quote_info_obj = walletQuote(**event_quote_info_json)
+
+        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{event_quote_info_obj.quote}"
         
         print("event quote info:", event_quote_info)
         headers = { "Content-Type": "application/json"}
@@ -676,6 +691,7 @@ class Wallet:
             response = requests.get(url, headers=headers)
             mint_quote = mintQuote(**response.json())
         print(f"invoice is paid! {mint_quote.paid}") 
+        self._mint_proofs(event_quote_info_obj.quote,event_quote_info_obj.amount)
         return event_quote_info
 
     def pay(self, amount:int, lnaddress: str):

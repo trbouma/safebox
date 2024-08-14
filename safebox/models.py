@@ -69,6 +69,10 @@ class proofEvent(BaseModel):
     id:         str = "Not set"  
     proofs:     List[Proof] = []     
 
+class walletQuote(BaseModel):
+    quote:          str   
+    amount:         int
+
 class proofEvents(BaseModel):
       
   proof_events:     List[proofEvent] = []    
