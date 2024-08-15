@@ -545,8 +545,11 @@ class Wallet:
         print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
 
+        wallet_quote_list =[]
         wallet_quote = walletQuote(quote=quote,amount=amount)
-        label_info = json.dumps(wallet_quote.model_dump())
+        wallet_quote_list.append(wallet_quote.model_dump())
+        # label_info = json.dumps(wallet_quote.model_dump())
+        label_info = json.dumps(wallet_quote_list)
         print(label_info)
         self.set_wallet_info(label="quote", label_info=label_info)
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
@@ -671,28 +674,34 @@ class Wallet:
         #TODO error handling
            
         
-         
-        event_quote_info = self.get_wallet_info("quote")
-        event_quote_info_json = json.loads(event_quote_info)
-        event_quote_info_obj = walletQuote(**event_quote_info_json)
+        event_quotes = [] 
+        event_quote_info_list = self.get_wallet_info("quote")
+        event_quote_info_list_json = json.loads(event_quote_info_list)
+        for each in event_quote_info_list_json:
+            event_quotes.append(walletQuote(**each))
 
-        url = f"{self.mints[0]}/v1/mint/quote/bolt11/{event_quote_info_obj.quote}"
-        
-        print("event quote info:", event_quote_info)
-        headers = { "Content-Type": "application/json"}
-        response = requests.get(url, headers=headers)
-        print("response", response.json())
-        mint_quote = mintQuote(**response.json())
-        print("mint_quote:", mint_quote.paid)
-        
-        while mint_quote.paid == False:
-            print("waiting for payment...")
-            sleep(3)
+        # event_quote_info_obj = walletQuote(**event_quote_info_json)
+
+        for each_quote in event_quotes:
+            url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
+            
+            
+            print("event quote info:", each_quote)
+            headers = { "Content-Type": "application/json"}
             response = requests.get(url, headers=headers)
+            print("response", response.json())
             mint_quote = mintQuote(**response.json())
-        print(f"invoice is paid! {mint_quote.paid}") 
-        self._mint_proofs(event_quote_info_obj.quote,event_quote_info_obj.amount)
-        return event_quote_info
+            print("mint_quote:", mint_quote.paid)
+            
+            while mint_quote.paid == False:
+                print("waiting for payment...")
+                sleep(3)
+                response = requests.get(url, headers=headers)
+                mint_quote = mintQuote(**response.json())
+            print(f"invoice is paid! {mint_quote.paid}") 
+            self._mint_proofs(each_quote.quote,each_quote.amount)
+        
+        return event_quotes
 
     def pay(self, amount:int, lnaddress: str):
 
@@ -718,10 +727,10 @@ class Wallet:
         proof_amount = 0
         amount_needed = amount + post_melt_response.fee_reserve
         print("amount needed:", amount_needed)
-        if amount_needed >= self.balance:
+        if amount_needed > self.balance:
             print("insufficient balance")
             return
-        while proof_amount <= amount_needed:
+        while proof_amount < amount_needed:
             pay_proof = self.proofs.pop()
             proofs_to_use.append(pay_proof)
             proof_amount += pay_proof.amount
