@@ -77,6 +77,9 @@ class Wallet:
             init_index = "[{\"root\":\"init\"}]"
             self.set_index_info(init_index)
 
+    def __repr__(self):
+        return f"wallet has {self.balance} sats"
+    
     def powers_of_2_sum(self, amount: int):
         powers = []
         while amount > 0:
