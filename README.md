@@ -15,19 +15,13 @@ Initial implementation will be a Python class that is invoked by a command line 
 
 The initial use case will be holding Cashu tokens for the purposes of accepting and sending payments via Lighting and Nostr.
 
-You can install via pip. Make sure you have a virtual enviroment set up first
-```
-python3 -m venv .venv
-source .venv/bin/activate
-pip install git+https://github.com/trbouma/safebox.git
-safebox info
-```
 
 
-Alternatively, if you have Poetry installed, you can do the following:
+
+If you have Poetry installed, you can do the following:
 ```
-poetry new safebox
-cd safebox
+poetry new sbtest
+cd sbtest
 poetry add git+https://github.com/trbouma/safebox.git
 poetry shell
 safebox --help
@@ -44,8 +38,10 @@ safebox set --nsec <nsec> # Warning don't use your nsec you use as your identity
 ```
 You can add other relays and mints. For example to add relays:
 ```
-safebox set --relays relay.damus.io,pub-nostr.wellorder.net
+safebox set --relays pub-nostr.wellorder.net
+safebox set --mints mint.belgianbitcoinembassy.org
 ```
+
 Don't bother adding the `https://` or `wss://` prefixes - they are added automtically. For a list of relays or mints specify the list separated by a comma (no spaces)
 
 
