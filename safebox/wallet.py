@@ -151,7 +151,7 @@ class Wallet:
         
         profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
         
-        print(f"profile {type(profile)}")
+        # print(f"profile {type(profile)}")
         if profile:
             profile_obj = profile
            
@@ -172,19 +172,19 @@ class Wallet:
     async def async_query_client_profile(self, relay: str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
-        print("are we here today", self.relays)
+        # print("are we here today", self.relays)
         async with ClientPool(self.relays) as c:        
             events = await c.query(filter)
         try:    
             json_str = events[0].content
-            print("json_str", json_str)
+            # print("json_str", json_str)
             # json_obj = json.loads(json_str)
             json_obj = json.loads(json_str)
         except:
             {"staus": "could not access profile"}
             pass
        
-        print("json_obj", json_obj)
+        # print("json_obj", json_obj)
         
         return json_obj
         
