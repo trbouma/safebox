@@ -50,8 +50,8 @@ def info(ctx):
     wallet_obj = Wallet(NSEC,RELAYS,MINTS)
     print(wallet_obj)
 
-@click.command(help="create a new safebox")
-def new():
+@click.command(help="initialize a new safebox")
+def init():
     click.echo("Creating a new safebox")
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     config_obj['nsec'] = wallet_obj.create_profile()
@@ -264,8 +264,18 @@ def swap():
     # click.echo(msg_out)
     click.echo(wallet_obj.swap())
 
+@click.command(help="Receive cashu token")
+@click.argument('token')
+def receive(token):
+    
+    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    # msg_out = wallet_obj.get_proofs()
+    # wallet_obj.delete_proofs()
+    # click.echo(msg_out)
+    click.echo(wallet_obj.receive_token(token))
+
 cli.add_command(info)
-cli.add_command(new)
+cli.add_command(init)
 cli.add_command(profile)
 cli.add_command(post)
 
@@ -282,6 +292,7 @@ cli.add_command(balance)
 cli.add_command(swap)
 cli.add_command(delete)
 cli.add_command(check)
+cli.add_command(receive)
 
 
 

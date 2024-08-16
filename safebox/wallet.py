@@ -18,7 +18,7 @@ from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
-
+from safebox.models import TokenV3
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -247,7 +247,7 @@ class Wallet:
                  
         label_name_hash = m.digest().hex()
         
-        print("the latest wallet info", label_info)
+        print(label, label_info)
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
@@ -273,7 +273,7 @@ class Wallet:
             #                         to_pub_k=self.pubkey_hex)
             
             n_msg.sign(self.privkey_hex)
-            print(n_msg.data())
+            # print(n_msg.data())
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
@@ -329,7 +329,7 @@ class Wallet:
             
             events = await c.query(filter)
             
-            print(f"37375 events: {len(events)}")
+            # print(f"37375 events: {len(events)}")
 
             
 
@@ -1019,5 +1019,26 @@ class Wallet:
         # now need break out proofs for payment and proofs remaining
 
         return proofs
+    
+    def receive_token(self,cashu_token: str):
+        headers = { "Content-Type": "application/json"}
+        token_amount =0
+        try:
+            token_obj = TokenV3.deserialize(cashu_token)
+        except:
+            return "bad token"
+        for each in token_obj.token:
+            print(each.mint)
+            for each_proof in each.proofs:
+                token_amount += each_proof.amount
+                print(each_proof.id, each_proof.amount,each_proof.secret)
+        
+            melt_quote_url = f"{each.mint}/v1/melt/quote/bolt11"
+            melt_url = f"{each.mint}/v1/melt/bolt11"
+
+            print(token_amount,melt_quote_url, melt_url)
+        
+           
+        return "test"
         
         
