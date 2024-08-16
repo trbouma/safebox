@@ -1023,6 +1023,8 @@ class Wallet:
     def receive_token(self,cashu_token: str):
         headers = { "Content-Type": "application/json"}
         token_amount =0
+        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+
         try:
             token_obj = TokenV3.deserialize(cashu_token)
         except:
@@ -1038,7 +1040,110 @@ class Wallet:
 
             print(token_amount,melt_quote_url, melt_url)
         
-           
+       
+
+
+        # Step 1 - create a mint request from the home mint corresponding to the amount in the token
+        
+        # Step 2 - create  melt quote request from the mint in the token
+            # need to calculate amount to receive based on fee reserve
+        
+        # Step 3 - do steps 1 and 2 again Adjust everything accordingly based on the quotes
+
+        # Step 4 - create the proofs
+        
+        # Step 1 - create mint request
+        mint_request = mintRequest(amount=token_amount)
+        mint_request_dump = mint_request.model_dump()
+        payload_json = mint_request.model_dump_json()
+        response = requests.post(url=receive_url, data=payload_json, headers=headers)
+        
+        mint_quote = mintQuote(**response.json())
+        # print(mint_quote)
+        mint_invoice = response.json()['request']
+        mint_quote = response.json()['quote']
+        print(mint_invoice, mint_quote)
+
+        # Step 2 - create melt request
+        data_to_send = {    "request": mint_invoice,
+                            "unit": "sat"
+
+                        }
+        post_melt_response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+        print("token sending melt response:", post_melt_response.json())
+        post_melt_response_obj = PostMeltQuoteResponse(**post_melt_response.json())
+        
+        
+        print("mint melt response:", post_melt_response_obj)
+
+
+        amount_to_receive = token_amount - post_melt_response_obj.fee_reserve
+        print("amount to receive:", amount_to_receive)
+
+
+        # Step 3 - do steps 1 and 2 again Adjust everything accordingly based on the quotes
+        # Step 1 repeated
+        receive_mint_request = mintRequest(amount=amount_to_receive)
+        receive_mint_request_dump = receive_mint_request.model_dump()
+        receive_payload_json = receive_mint_request.model_dump_json()
+        receive_response = requests.post(url=receive_url, data=receive_payload_json, headers=headers)
+        
+        receive_mint_quote = mintQuote(**receive_response.json())
+        # print(mint_quote)
+        receive_mint_invoice = receive_response.json()['request']
+        receive_mint_quote = receive_response.json()['quote']
+        print("adjusted:", receive_mint_invoice, receive_mint_quote)
+
+        # Step 2 repeated
+        melt_data_to_send = {   "request": receive_mint_invoice,
+                                "unit": "sat"
+
+                        }
+        melt_response = requests.post(url=melt_quote_url, json=melt_data_to_send,headers=headers)
+        print("token sending melt response:", melt_response.json())
+        post_melt_response = PostMeltQuoteResponse(**melt_response.json())
+        print("mint melt response:", post_melt_response.quote)
+
+       
+        check_amount = amount_to_receive + post_melt_response.fee_reserve
+        print("check amount:", check_amount, token_amount)
+        assert(check_amount == token_amount)
+
+        # Step 4 - generate the proofs_to_use
+        token_proofs_to_use = []
+        token_proof_amount = 0
+        
+        for each in token_obj.token:
+            melt_url = f"{each.mint}/v1/melt/bolt11"
+            print(each.mint)
+            for each_proof in each.proofs:
+                token_proofs_to_use.append(each_proof.model_dump())
+         
+            print(f"proofs to use with ", token_proofs_to_use)
+
+            # Step 4a create the outputs to receive
+            powers_of_2_sum = self.powers_of_2_sum(amount_to_receive)
+            powers_of_2_sum_change = self.powers_of_2_sum(token_amount-amount_to_receive)
+            concat_list = powers_of_2_sum + powers_of_2_sum_change
+        
+            print("amount of proofs to melt", powers_of_2_sum, amount_to_receive)
+            print("concatenated list ", concat_list)
+            print("melt url ", melt_url)
+            # Now build the inputs and outputs for the melt_url
+            data_to_send = {    "quote": post_melt_response.quote,
+                                "inputs": token_proofs_to_use }
+        
+            print(data_to_send)
+            # print("we are here!!!")
+            response = requests.post(url=melt_url,json=data_to_send,headers=headers)
+            print(response.json())
+        
+            # Now we need to check the receive mint to issue proofs
+            print("receive mint quote", receive_mint_quote)
+
+            self._mint_proofs(receive_mint_quote,amount_to_receive)
+            
+
         return "test"
         
         
