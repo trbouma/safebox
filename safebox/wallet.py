@@ -706,14 +706,15 @@ class Wallet:
         
         return event_quotes
 
-    def pay(self, amount:int, lnaddress: str):
+    def pay(self, amount:int, lnaddress: str, comment: str = "Paid!"):
 
         melt_quote_url = f"{self.mints[0]}/v1/melt/quote/bolt11"
         melt_url = f"{self.mints[0]}/v1/melt/bolt11"
         
         headers = { "Content-Type": "application/json"}
-        callback = lightning_address_pay(amount, lnaddress)
+        callback = lightning_address_pay(amount, lnaddress,comment=comment)
         pr = callback['pr']
+        
         print(pr)
         print(amount, lnaddress)
         # need to get enough proofs to cover amount

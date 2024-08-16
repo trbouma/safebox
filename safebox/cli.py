@@ -221,10 +221,11 @@ def check():
 @click.command(help="Payout funds to lightning address")
 @click.argument('amount', default=21)
 @click.argument('lnaddress', default='trbouma@openbalance.app')
-def pay(amount,lnaddress: str):
+@click.option('--comment','-c', default='Paid!')
+def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    wallet_obj.pay(amount,lnaddress)
+    wallet_obj.pay(amount,lnaddress,comment)
     
     
     #click.echo(msg_out)
