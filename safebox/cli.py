@@ -149,9 +149,11 @@ def put(label, label_info):
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
 
-    
+    if label in ["mints", "relay", "quote", "passphrase"]:
+        click.echo("Warning! This label is reserved for system use.")    
 
-    wallet_obj.set_wallet_info(label, label_info=label_info)
+    if click.confirm('Do you want to continue?'):    
+     wallet_obj.set_wallet_info(label, label_info=label_info)
 
 @click.command(help='Do a post')
 @click.option('--message','-m', default='hello world')

@@ -110,7 +110,8 @@ class Wallet:
                                         display_name=display_name,
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
-                                        lud16= f"{self.pubkey_bech32}@npub.cash"
+                                        lud16= f"{self.pubkey_bech32}@npub.cash",
+                                        website=f"https://npub.cash/pay/{self.pubkey_bech32}"
                                          )
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
