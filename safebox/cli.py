@@ -113,17 +113,13 @@ def set(nsec, relays, mints, wallet):
 # @click.option('--nsec', '-n', help='nsec for wallet')
 def profile():
     wallet = Wallet(NSEC, RELAYS, MINTS)
-    nostr_profile = wallet.get_profile()
-    click.echo(f"npub: {str(wallet.pubkey_bech32)}")
-    click.echo(f"nsec: {str(wallet.k.private_key_bech32())}")
-    click.echo("-"*80)
-    for key, value in nostr_profile.items():
-        
-        click.echo(f"{str(key).ljust(15)}: {value}")
-    click.echo("-"*80)
+    
+    
+    click.echo(wallet.get_profile())
     click.echo(wallet.get_post())
-    click.echo("-"*80)
-    # click.echo(wallet.get_proofs())
+    
+
+
 
 @click.command(help='help for getwalletinfo')
 @click.argument('label', default = "default")

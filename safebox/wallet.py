@@ -70,12 +70,7 @@ class Wallet:
         else:
             print("Error")
 
-        # Create wallet profile event if no
-        index = self.get_index_info()
-        if index == None:
-            
-            init_index = "[{\"root\":\"init\"}]"
-            self.set_index_info(init_index)
+
 
     def __repr__(self):
         return f"wallet has {self.balance} sats"
@@ -169,8 +164,21 @@ class Wallet:
                                         )
 
         
+        out_string =  "-"*80  
+        out_string += f"\nProfile Information for: {nostr_profile.display_name}"
+        out_string += "\n"+ "-"*80  
+        out_string += f"\nnpub: {str(self.pubkey_bech32)}"
+        out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
+        out_string += "\n"+ "-"*80    
+    
+        for key, value in nostr_profile.__dict__.items():        
+            out_string += f"\n{str(key).ljust(15)}: {value}"
         
-        return profile_obj
+        out_string += "\n"+ "-"*80  
+        out_string += f"\nMints {self.mints}"
+        out_string += f"\nRelays {self.relays}"
+        out_string += "\n"+ "-"*80  
+        return out_string
     
     async def async_query_client_profile(self, relay: str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
