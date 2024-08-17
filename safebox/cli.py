@@ -7,6 +7,7 @@ from safebox.models import nostrProfile, SafeboxItem
 from datetime import datetime
 from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
+from time import sleep
 
 relays  = ["wss://nostr-pub.wellorder.net"]
 mints   = ["https://mint.belgianbitcoinembassy.org"]
@@ -193,14 +194,19 @@ def additem():
 def deposit(amount: int):
     click.echo(f"amount: {amount}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    msg_out = wallet_obj.deposit(amount)
-    click.echo(msg_out)
-    click.echo(f"Please run {__name__.split(".")[0]} check to see if invoice is paid")
+    cli_quote = wallet_obj.deposit(amount)
+    click.echo(cli_quote)
+    # wallet_obj.check(cli_quote.quote)
+
+
+
+    click.echo(f"Please run {__name__.split(".")[0]} check {cli_quote.quote} to see if invoice is paid")
     
 @click.command(help="Check for payment")
-def check():
+@click.argument('quote')
+def check(quote:str):
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    msg_out = wallet_obj.check()
+    msg_out = wallet_obj.check(quote)
     click.echo(msg_out)
 
 @click.command(help="Payout funds to lightning address")

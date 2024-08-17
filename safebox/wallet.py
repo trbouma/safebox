@@ -18,7 +18,7 @@ from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
-from safebox.models import TokenV3
+from safebox.models import TokenV3, cliQuote
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -534,12 +534,12 @@ class Wallet:
         
         self.add_proofs(json.dumps(proofs))
 
-    def check(self):
-        msg_out = self._check_quote()
+    def check(self, quote:str):
+        
        
-        return msg_out
+        return self._check_quote(quote)
     
-    def deposit(self, amount:int):
+    def deposit(self, amount:int)->cliQuote:
         url = f"{self.mints[0]}/v1/mint/quote/bolt11"
        
         # url = "https://mint.nimo.cash/v1/mint/quote/bolt11"
@@ -558,6 +558,12 @@ class Wallet:
         # add quote as a replaceable event
 
         wallet_quote_list =[]
+        
+        wallet_quote_list_str = self.get_wallet_info("quote")
+        wallet_quote_list_json = json.loads(wallet_quote_list_str)
+        for each in wallet_quote_list_json:
+            wallet_quote_list.append(each)
+        
         wallet_quote = walletQuote(quote=quote,amount=amount)
         wallet_quote_list.append(wallet_quote.model_dump())
         # label_info = json.dumps(wallet_quote.model_dump())
@@ -570,8 +576,9 @@ class Wallet:
         # TODO this is after quote has been paid - refactor into function
         # self._mint_proofs(quote,amount)
 
-
-        return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
+         
+        return cliQuote(invoice=invoice, quote=quote)
+        # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
     def add_proofs(self,text):
         asyncio.run(self._async_add_proofs(text))  
@@ -681,7 +688,7 @@ class Wallet:
         asyncio.run(self._async_delete_proof_events())
         
 
-    def _check_quote(self):
+    def _check_quote(self, quote:str):
         # print("check quote", quote)
         #TODO error handling
            
@@ -695,6 +702,11 @@ class Wallet:
         # event_quote_info_obj = walletQuote(**event_quote_info_json)
 
         for each_quote in event_quotes:
+            
+            
+            # if each_quote.quote == quote:
+            print("WE GOT A WINNER!")
+            print("each_quote:", each_quote, quote)
             url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
             
             
@@ -704,16 +716,19 @@ class Wallet:
             print("response", response.json())
             mint_quote = mintQuote(**response.json())
             print("mint_quote:", mint_quote.paid)
+            if mint_quote.paid == True:
+                self._mint_proofs(each_quote.quote,each_quote.amount)
+
+                #TODO Need to remove quote from array. Just reset the record for now..
+                my_list = [x.model_dump() for x in event_quotes if x != each_quote]
+                    
+                self.set_wallet_info(label="quote", label_info=json.dumps(my_list))
+                    
+                    
+                return mint_quote.paid
             
-            while mint_quote.paid == False:
-                print("waiting for payment...")
-                sleep(3)
-                response = requests.get(url, headers=headers)
-                mint_quote = mintQuote(**response.json())
-            print(f"invoice is paid! {mint_quote.paid}") 
-            self._mint_proofs(each_quote.quote,each_quote.amount)
-        
-        return event_quotes
+        return False
+    
 
     def pay(self, amount:int, lnaddress: str, comment: str = "Paid!"):
 

@@ -100,6 +100,11 @@ class mintQuote(BaseModel):
     state:      str = 'UNPAID'    
     expiry:     int|None = None
 
+class cliQuote(BaseModel):
+    invoice:    str
+    quote:      str
+
+
 class KeysetsResponseKeyset(BaseModel):
     id: str
     unit: str
