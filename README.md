@@ -30,12 +30,40 @@ You can see the help for each command, for example
 ```
 safebox set --help
 ```
-
-Before you start using, you need to set your nsec. 
+To create a new safebox:
+```
+safebox init
+```
+To see how your safebox has been created on nostr.  
+```
+safebox profile
+```
+If it is successful, you will see something like below: a fancy memorable name, the profile information and an `#introduction` post.
 
 ```
-safebox set --nsec <nsec> # Warning don't use your nsec you use as your identity!
+--------------------------------------------------------------------------------
+Profile Information for: Abstract Sticky Macaw Of Debate
+--------------------------------------------------------------------------------
+npub: npub1yryug4wku085eu0y85y4csy6x8tjgph55qq33npj0yt4a9mg3fcs48p6fk
+nsec: nsec1y2zltqrn0ayhm8v73zlurqd5kaur09dj6lyddvjxxx5dz8fyphsq9wvnke
+--------------------------------------------------------------------------------
+name           : stickymacaw
+display_name   : Abstract Sticky Macaw Of Debate
+about          : Resident of Fancy Sea Spa
+picture        : Not set
+nip05          : Not set
+banner         : Not set
+website        : Not set
+lud16          : Not set
+--------------------------------------------------------------------------------
+Mints ['https://mint.belgianbitcoinembassy.org']
+Relays ['wss://nostr-pub.wellorder.net']
+--------------------------------------------------------------------------------
+Hello World from stickymacaw! #introductions
+
 ```
+
+
 You can add other relays and mints. For example to add relays:
 ```
 safebox set --relays pub-nostr.wellorder.net

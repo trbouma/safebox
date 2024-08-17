@@ -8,8 +8,8 @@ from datetime import datetime
 from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
 
-relays  = ["wss://nostr-pub.wellorder.net", "wss://relay.damus.io"]
-mints   = ["https://8333.space:8333"]
+relays  = ["wss://nostr-pub.wellorder.net"]
+mints   = ["https://mint.belgianbitcoinembassy.org"]
 wallet  = "default" 
 
 home_directory = os.path.expanduser('~')
@@ -24,7 +24,8 @@ if os.path.exists(file_path):
     with open(file_path, 'r') as file:
         config_obj = yaml.safe_load(file)
 else:
-    config_obj = {'nsec': 'notset', 'relays': relays, "mints": mints, "wallet": wallet}
+   
+    config_obj = {'nsec': Keys().private_key_bech32(), 'relays': relays, "mints": mints, "wallet": wallet}
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
@@ -112,7 +113,7 @@ def set(nsec, relays, mints, wallet):
 @click.command()
 # @click.option('--nsec', '-n', help='nsec for wallet')
 def profile():
-    wallet = Wallet(NSEC, RELAYS, MINTS)
+    wallet = Wallet(nsec=NSEC,relays=RELAYS)
     
     
     click.echo(wallet.get_profile())
@@ -126,7 +127,7 @@ def profile():
 def get(label):
     
     
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(NSEC, RELAYS)
 
     try:
         wallet_info = wallet_obj.get_wallet_info(label)
@@ -139,31 +140,17 @@ def get(label):
 @click.command(help='help for put')
 @click.argument('label', default='default')
 @click.argument('label_info', default='hello')
-# @click.option('--label', '-l', default = "default", help='label name')
-@click.option('--mints', '-m', help='list of mints')
 
-def put(label, mints, label_info):
+
+
+def put(label, label_info):
     jsons=None
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(NSEC, RELAYS)
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
-    if mints != None:
-        mint_array = str(mints).replace(" ","").split(',')
-        # click.echo(mints if "https://" in mint else "https://"+mint)
-        click.echo(mint_array)
-    else:
-        mint_array = config_obj['mints']
-    
-    wallet_info_now = f"test time {datetime.now()}"
+
     
 
-    if wallet != None:
-        wallet_name = wallet
-    else:
-        wallet_name = config_obj['wallet']
-        print("wallet_name", wallet)
-    
-    relay_array = config_obj['relays']
     wallet_obj.set_wallet_info(label, label_info=label_info)
 
 @click.command(help='Do a post')
