@@ -157,7 +157,8 @@ def put(label, label_info):
      wallet_obj.set_wallet_info(label, label_info=label_info)
 
 @click.command(help='Do a post')
-@click.option('--message','-m', default='hello world')
+@click.argument('message', default="Hello, World!")
+
 def post(message):
     click.echo(message)
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
@@ -203,10 +204,10 @@ def deposit(amount: int):
     click.echo(f"Please run {__name__.split(".")[0]} check {cli_quote.quote} to see if invoice is paid")
     
 @click.command(help="Check for payment")
-@click.argument('quote')
-def check(quote:str):
+
+def check():
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    msg_out = wallet_obj.check(quote)
+    msg_out = wallet_obj.check()
     click.echo(msg_out)
 
 @click.command(help="Payout funds to lightning address")

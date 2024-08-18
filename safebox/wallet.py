@@ -535,10 +535,10 @@ class Wallet:
         
         self.add_proofs(json.dumps(proofs))
 
-    def check(self, quote:str):
+    def check(self):
         
        
-        return self._check_quote(quote)
+        return self._check_quote()
     
     def deposit(self, amount:int)->cliQuote:
         url = f"{self.mints[0]}/v1/mint/quote/bolt11"
@@ -689,7 +689,7 @@ class Wallet:
         asyncio.run(self._async_delete_proof_events())
         
 
-    def _check_quote(self, quote:str):
+    def _check_quote(self):
         # print("check quote", quote)
         #TODO error handling
            
@@ -705,9 +705,7 @@ class Wallet:
         for each_quote in event_quotes:
             
             
-            # if each_quote.quote == quote:
-            print("WE GOT A WINNER!")
-            print("each_quote:", each_quote, quote)
+
             url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
             
             
