@@ -120,6 +120,7 @@ class Wallet:
         self.set_wallet_info(label="default", label_info=display_name)
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
+        self.set_wallet_info(label="quote", label_info='[]')
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
