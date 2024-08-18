@@ -124,6 +124,7 @@ class BlindedMessage(BaseModel):
     amount: int
     id: str  # Keyset id
     B_: str  # Hex-encoded blinded message
+    Y: str = "" # hex-encoded hash to curve
 
 class BlindedSignature(BaseModel):
     """

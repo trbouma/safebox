@@ -77,7 +77,7 @@ def step1_alice(
     Y: PublicKey = hash_to_curve(secret_msg.encode("utf-8"))
     r = blinding_factor or PrivateKey()
     B_: PublicKey = Y + r.pubkey  # type: ignore
-    return B_, r
+    return B_, r, Y
 
 
 def step2_bob(B_: PublicKey, a: PrivateKey) -> Tuple[PublicKey, PrivateKey, PrivateKey]:

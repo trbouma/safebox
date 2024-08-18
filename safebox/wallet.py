@@ -497,18 +497,20 @@ class Wallet:
         
         for each in powers_of_2:
             secret = secrets.token_hex(32)
-            B_, r = step1_alice(secret)
+            B_, r, Y = step1_alice(secret)
             blinded_values.append((B_,r, secret))
             
             blinded_messages.append(    BlindedMessage( amount=each,
                                                         id=keyset,
-                                                        B_=B_.serialize().hex()
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
                                                         ).model_dump()
+                                                        
                                     )
         # print("blinded values, blinded messages:", blinded_values, blinded_messages)
         mint_url = f"{self.mints[0]}/v1/mint/bolt11"
 
-        blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
+        # blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
         # print(blinded_message)
         request_body = {
                             "quote"     : quote,
@@ -546,7 +548,8 @@ class Wallet:
             proof = Proof ( amount= promise_amount,
                            id = keyset,
                            secret=blinded_values[i][2],
-                           C=C.serialize().hex()
+                           C=C.serialize().hex(),
+                           Y=Y.serialize().hex()
             )
             proofs.append(proof.model_dump())
             print(proofs)
@@ -888,12 +891,13 @@ class Wallet:
         print("total:", swap_amount,count, powers_of_2)   
         for each in powers_of_2:
             secret = secrets.token_hex(32)
-            B_, r = step1_alice(secret)
+            B_, r, Y = step1_alice(secret)
             blinded_values.append((B_,r, secret))
             
             blinded_messages.append(    BlindedMessage( amount=each,
                                                         id=keyset,
-                                                        B_=B_.serialize().hex()
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
                                                         ).model_dump()
                                     )
         
@@ -985,24 +989,26 @@ class Wallet:
 
         for each in powers_of_2_payment:
             secret = secrets.token_hex(32)
-            B_, r = step1_alice(secret)
+            B_, r, Y = step1_alice(secret)
             blinded_values.append((B_,r, secret))
             
             blinded_messages.append(    BlindedMessage( amount=each,
                                                         id=keyset,
-                                                        B_=B_.serialize().hex()
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
                                                         ).model_dump()
                                     )
         if proofs_to_use_amount > payment_amount:
             powers_of_2_leftover = self.powers_of_2_sum(proofs_to_use_amount- payment_amount)
             for each in powers_of_2_leftover:
                 secret = secrets.token_hex(32)
-                B_, r = step1_alice(secret)
+                B_, r, Y = step1_alice(secret)
                 blinded_values.append((B_,r, secret))
             
                 blinded_messages.append(    BlindedMessage( amount=each,
                                                         id=keyset,
-                                                        B_=B_.serialize().hex()
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
                                                         ).model_dump()
                                     )
 
