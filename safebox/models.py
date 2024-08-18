@@ -74,6 +74,7 @@ class proofEvent(BaseModel):
 class walletQuote(BaseModel):
     quote:          str   
     amount:         int
+    invoice:        str = ""
 
 class proofEvents(BaseModel):
       

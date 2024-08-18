@@ -196,12 +196,9 @@ def deposit(amount: int):
     click.echo(f"amount: {amount}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     cli_quote = wallet_obj.deposit(amount)
-    click.echo(cli_quote)
-    # wallet_obj.check(cli_quote.quote)
+    click.echo(f"\n\nPlease pay invoice: {cli_quote.invoice}") 
 
-
-
-    click.echo(f"Please run {__name__.split(".")[0]} check {cli_quote.quote} to see if invoice is paid")
+    click.echo(f"\n\nPlease run {__name__.split(".")[0]} check to see if invoice is paid")
     
 @click.command(help="Check for payment")
 

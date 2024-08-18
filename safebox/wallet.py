@@ -257,7 +257,7 @@ class Wallet:
                  
         label_name_hash = m.digest().hex()
         
-        print(label, label_info)
+        # print(label, label_info)
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
@@ -554,8 +554,8 @@ class Wallet:
         # print(mint_quote)
         invoice = response.json()['request']
         quote = response.json()['quote']
-        print(f"Please pay invoice: {invoice}") 
-        print(self.powers_of_2_sum(int(amount)))
+        # print(f"Please pay invoice: {invoice}") 
+        # print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
 
         wallet_quote_list =[]
@@ -565,11 +565,11 @@ class Wallet:
         for each in wallet_quote_list_json:
             wallet_quote_list.append(each)
         
-        wallet_quote = walletQuote(quote=quote,amount=amount)
+        wallet_quote = walletQuote(quote=quote,amount=amount, invoice=invoice)
         wallet_quote_list.append(wallet_quote.model_dump())
         # label_info = json.dumps(wallet_quote.model_dump())
         label_info = json.dumps(wallet_quote_list)
-        print(label_info)
+        # print(label_info)
         self.set_wallet_info(label="quote", label_info=label_info)
         # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
         # quote=self.check_quote()
