@@ -196,7 +196,7 @@ def deposit(amount: int):
     click.echo(f"amount: {amount}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     cli_quote = wallet_obj.deposit(amount)
-    click.echo(f"\n\nPlease pay invoice: {cli_quote.invoice}") 
+    click.echo(f"\n\nPlease pay invoice:\n {cli_quote.invoice}") 
 
     click.echo(f"\n\nPlease run {__name__.split(".")[0]} check to see if invoice is paid")
     
@@ -240,7 +240,7 @@ def proofs():
 @click.command(help="Show balance")
 def balance():
     
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(NSEC, RELAYS)
 
     click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
 

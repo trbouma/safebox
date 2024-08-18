@@ -45,6 +45,7 @@ class Proof(BaseModel):
     id: Union[None, str] = ""
     amount: int = 0
     secret: str = ""  # secret or message to be blinded and signed
+    Y: str = ""  # hash_to_curve(secret)
     C: str = ""  # signature on secret, unblinded by wallet
     dleq: Union[DLEQWallet, None] = None  # DLEQ proof
     witness: Union[None, str] = ""  # witness for spending condition

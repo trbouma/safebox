@@ -58,12 +58,30 @@ class Wallet:
             self.balance: int = 0
             self.proof_events = proofEvents()
 
+            if mints == None:
+                try:           
+                    more_mints_str = self.get_wallet_info("mints")
+                    # print("mints:", more_mints_str)
+                    #FIXME something weird below with the json string
+                    more_mints_obj = json.loads(more_mints_str.replace("'","\""))
+                    # print("mints obj:", more_mints_obj)
+                    self.mints = more_mints_obj
+                    # print(self.mints)
+                except:
+                    pass
             
+            #Check to see if there are more relays than what was providee
+            try:
+                more_relays_str = self.get_wallet_info("relays")
+                more_relays_json = json.loads(more_relays_str)
+                
+                self.relays = list(set(relays + more_relays_json))
+                
+                pass
+            except:
+                pass
             
-            if self.relays == None:
-                self.relays = json.loads(self.get_wallet_info("relays"))
-            if self.mints == None:            
-               self.mints = json.loads(self.get_wallet_info("mints"))
+
 
             self._load_proofs()
             
@@ -121,6 +139,7 @@ class Wallet:
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
         self.set_wallet_info(label="quote", label_info='[]')
+        self.set_wallet_info(label="index", label_info='{}')
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
@@ -149,21 +168,18 @@ class Wallet:
             'kinds': [0]
         }]
         
-        profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
+        try:
+            profile =asyncio.run(self.async_query_client_profile(self.relays,FILTER))
+        except:
+            out_string = "No profile found!"
+            return out_string
         
-        # print(f"profile {type(profile)}")
+        print(f"profile {type(profile)}")
         if profile:
             profile_obj = profile
+            nostr_profile = nostrProfile(**profile)
            
-            nostr_profile = nostrProfile(name          = profile_obj.get('name', 'Not Set'),
-                                        display_name   = profile_obj.get('display_name', 'Not Set'),
-                                        about          = profile_obj.get('about', "Not Set" ),
-                                        nip05          = profile_obj.get('nip05', "Not Set" ),
-                                        banner         = profile_obj.get('banner', "Not Set" ),
-                                        website        = profile_obj.get('website', "Not Set" ),
-                                        lud16          = profile_obj.get('lud16', "Not Set" ),
 
-                                        )
 
         
         out_string =  "-"*80  
@@ -464,7 +480,7 @@ class Wallet:
             # await asyncio.sleep(1)
     
     def _mint_proofs(self, quote:str, amount:int):
-        print("mint proofs")
+        # print("mint proofs")
         headers = { "Content-Type": "application/json"}
         keyset_url = f"{self.mints[0]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
@@ -472,7 +488,7 @@ class Wallet:
 
         keysets_obj = KeysetsResponse(**response.json())
 
-        print("id:", keysets_obj.keysets[0].id)
+        # print("id:", keysets_obj.keysets[0].id)
 
         blinded_messages=[]
         blinded_values =[]
@@ -489,19 +505,22 @@ class Wallet:
                                                         B_=B_.serialize().hex()
                                                         ).model_dump()
                                     )
-        print("blinded values, blinded messages:", blinded_values, blinded_messages)
+        # print("blinded values, blinded messages:", blinded_values, blinded_messages)
         mint_url = f"{self.mints[0]}/v1/mint/bolt11"
 
         blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
-        print(blinded_message)
+        # print(blinded_message)
         request_body = {
                             "quote"     : quote,
                             "outputs"   : blinded_messages
                         }
-        print(request_body)
-        response = requests.post(mint_url, json=request_body, headers=headers)
-        promises = response.json()['signatures']
-        print("promises:", promises)
+        # print(request_body)
+        try:
+            response = requests.post(mint_url, json=request_body, headers=headers)
+            promises = response.json()['signatures']
+            # print("promises:", promises)
+        except:
+            return False
 
         
         mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
@@ -513,7 +532,7 @@ class Wallet:
         
         for each in promises:
             pub_key_c = PublicKey()
-            print("each:", each['C_'])
+            # print("each:", each['C_'])
             pub_key_c.deserialize(unhexlify(each['C_']))
             promise_amount = each['amount']
             A = keys[str(int(promise_amount))]
@@ -521,7 +540,7 @@ class Wallet:
             pub_key_a = PublicKey()
             pub_key_a.deserialize(unhexlify(A))
             r = blinded_values[i][1]
-            print(pub_key_c, promise_amount,A, r)
+            # print(pub_key_c, promise_amount,A, r)
             C = step3_alice(pub_key_c,r,pub_key_a)
             
             proof = Proof ( amount= promise_amount,
@@ -534,6 +553,7 @@ class Wallet:
             i+=1
         
         self.add_proofs(json.dumps(proofs))
+        return True
 
     def check(self):
         
@@ -692,6 +712,7 @@ class Wallet:
     def _check_quote(self):
         # print("check quote", quote)
         #TODO error handling
+        success_for_all = True
            
         
         event_quotes = [] 
@@ -709,24 +730,26 @@ class Wallet:
             url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
             
             
-            print("event quote info:", each_quote)
+            # print("event quote info:", each_quote)
             headers = { "Content-Type": "application/json"}
             response = requests.get(url, headers=headers)
-            print("response", response.json())
+            # print("response", response.json())
             mint_quote = mintQuote(**response.json())
-            print("mint_quote:", mint_quote.paid)
+            # print("mint_quote:", mint_quote.paid)
             if mint_quote.paid == True:
-                self._mint_proofs(each_quote.quote,each_quote.amount)
+                success_mint = self._mint_proofs(each_quote.quote,each_quote.amount)
 
-                #TODO Need to remove quote from array. Just reset the record for now..
-                my_list = [x.model_dump() for x in event_quotes if x != each_quote]
+                # Remove quote from array. Just reset the record for now.
+                if success_mint:
+                    my_list = [x.model_dump() for x in event_quotes if x != each_quote]                    
+                    self.set_wallet_info(label="quote", label_info=json.dumps(my_list))
                     
-                self.set_wallet_info(label="quote", label_info=json.dumps(my_list))
                     
-                    
-                return mint_quote.paid
+                # return mint_quote.paid
+            else:
+                success_for_all = False
             
-        return False
+        return success_for_all
     
 
     def pay(self, amount:int, lnaddress: str, comment: str = "Paid!"):
