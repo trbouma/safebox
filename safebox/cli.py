@@ -112,12 +112,12 @@ def set(nsec, relays, mints, wallet):
 
 
 @click.command()
-# @click.option('--nsec', '-n', help='nsec for wallet')
-def profile():
+@click.option('--replicate/--no-replicate', default= False)
+def profile(replicate):
     wallet = Wallet(nsec=NSEC,relays=RELAYS)
     
-    
-    click.echo(wallet.get_profile())
+    # click.echo(replicate)
+    click.echo(wallet.get_profile(replicate))
     click.echo(wallet.get_post())
     
 
@@ -131,12 +131,12 @@ def get(label):
     wallet_obj = Wallet(NSEC, RELAYS)
 
     try:
-        wallet_info = wallet_obj.get_wallet_info(label)
+        safebox_info = wallet_obj.get_wallet_info(label)
 
     except:
-        wallet_info = "No label found!"
+        safebox_info = "No label found!"
     
-    click.echo(wallet_info)
+    click.echo(safebox_info)
 
 @click.command(help='help for put')
 @click.argument('label', default='default')
@@ -150,7 +150,7 @@ def put(label, label_info):
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
 
-    if label in ["mints", "relay", "quote", "passphrase"]:
+    if label in ["mints", "relay", "quote", "passphrase", "profile"]:
         click.echo("Warning! This label is reserved for system use.")    
 
     if click.confirm('Do you want to continue?'):    
@@ -164,22 +164,9 @@ def post(message):
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     wallet_obj.send_post(message)
 
-@click.command(help='help for setindexinfo')
-@click.option('--jsons', '-j', default = '{}', help='json string')
-def setindexinfo(jsons):
-    click.echo("setindex info")
-    wallet_obj = Wallet(NSEC, RELAYS)
-    wallet_obj.set_index_info(jsons)
 
-@click.command(help='help for getindexinfo')
-def index():
-    click.echo("getindex info")
-    wallet_obj = Wallet(NSEC, RELAYS)
-    index_out = wallet_obj.get_index_info()
-    if index_out:
-        click.echo(index_out)
-    else:
-        click.echo("No index!")
+
+
 
 
 
@@ -266,8 +253,8 @@ cli.add_command(set)
 cli.add_command(pay)
 cli.add_command(get)
 cli.add_command(put)
-cli.add_command(setindexinfo)
-cli.add_command(index)
+
+
 
 cli.add_command(deposit)
 cli.add_command(proofs)

@@ -45,7 +45,7 @@ class Wallet:
 
 
 
-    def __init__(self, nsec: str, relays: List[str]|None=None, mints: List[str]|None=None) -> None:
+    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None) -> None:
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
@@ -58,23 +58,28 @@ class Wallet:
             self.balance: int = 0
             self.proof_events = proofEvents()
 
-            if mints == None:
-                self.mints = json.loads(self.get_wallet_info(label="mints"))
-            else:
-                self.mints = mints
-                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+            try:
+                if mints == None:
+                    self.mints = json.loads(self.get_wallet_info(label="mints"))
+                else:
+                    self.mints = mints
+                    self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
             
            
-            #Check to see if there are more relays than what was providee
-            try:
-                more_relays_str = self.get_wallet_info("relays")
-                more_relays_json = json.loads(more_relays_str)
+                #Check to see if there are more relays than what was provided
+                try:
+                    more_relays_str = self.get_wallet_info("relays")
+                    more_relays_json = json.loads(more_relays_str)
                 
-                self.relays = list(set(relays + more_relays_json))
+                    self.relays = list(set(relays + more_relays_json))
+                    self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
                 
-                pass
+                    pass
+                except:
+                    pass
             except:
-                pass
+                print("could not boot from relay")
+                return
             
 
 
@@ -156,7 +161,7 @@ class Wallet:
             c.publish(n_msg)
         return "ok"
 
-    def get_profile(self):
+    def get_profile(self, replicate:bool=False):
         profile_obj = {}
         nostr_profile = None
         FILTER = [{
@@ -193,6 +198,22 @@ class Wallet:
         out_string += f"\nMints {self.mints}"
         out_string += f"\nRelays {self.relays}"
         out_string += "\n"+ "-"*80  
+
+        #TODO this has to be put into a function (repeats create_profile code)
+        if replicate:
+            print("replicate")
+            init_index = {}
+            init_index["root"] = nostr_profile.name
+            self.set_index_info(json.dumps(init_index))
+            out = asyncio.run(self._async_create_profile(nostr_profile))
+            # self.set_index_info(json.dumps(init_index))
+            self.set_wallet_info(label="default", label_info=nostr_profile.display_name)
+            self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
+            self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+            self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
+            self.set_wallet_info(label="quote", label_info='[]')
+            self.set_wallet_info(label="index", label_info='{}')
+
         return out_string
     
     async def async_query_client_profile(self, relay: str, filter: List[dict]): 
@@ -324,7 +345,7 @@ class Wallet:
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
         except:
-            return f"Could not retrieve info for: {label}"
+            return f"Could not retrieve info for: {label}. Does a record exist?"
         
         # print("tags", event.tags)
         # encrypt_d = "None"
@@ -380,6 +401,7 @@ class Wallet:
             return event_select
         
     def get_proofs(self):
+        #TODO add in a group by keyset
         
         return self.proofs
     
@@ -1055,7 +1077,7 @@ class Wallet:
             print(each.mint)
             for each_proof in each.proofs:
                 token_amount += each_proof.amount
-                print(each_proof.id, each_proof.amount,each_proof.secret)
+                print("received proof: ", each.mint, each_proof.id, each_proof.amount,each_proof.secret)
         
             melt_quote_url = f"{each.mint}/v1/melt/quote/bolt11"
             melt_url = f"{each.mint}/v1/melt/bolt11"
