@@ -150,10 +150,11 @@ class Wallet:
         async with ClientPool(self.relays) as c:
             profile = nostr_profile.model_dump_json()
             
-            print(profile)
+            profile_str = json.dumps(profile)
+            print(profile_str)
       
             n_msg = Event(kind=0,
-                        content=profile,
+                        content=profile_str,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
@@ -174,10 +175,10 @@ class Wallet:
             out_string = "No profile found!"
             return out_string
         
-        print(f"profile {type(profile)}")
+        # print(f"profile {type(profile)}")
         if profile:
-            profile_obj = profile
-            nostr_profile = nostrProfile(**profile)
+            profile_obj = json.loads(profile)
+            nostr_profile = nostrProfile(**profile_obj)
            
 
 
