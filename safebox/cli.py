@@ -181,14 +181,7 @@ def index():
     else:
         click.echo("No index!")
 
-@click.command(help='help for getindexinfo')
-def additem():
-    click.echo("add safebox item")
-    safe_box_item = SafeboxItem(name="test",type="note",description="test")
-    print(safe_box_item.gethash())
-    wallet_obj = Wallet(NSEC, RELAYS)
-    index_out = wallet_obj.add_item(safe_box_item)
-    click.echo(index_out)
+
 
 @click.command(help="Deposit funds into wallet")
 @click.argument('amount')
@@ -275,7 +268,7 @@ cli.add_command(get)
 cli.add_command(put)
 cli.add_command(setindexinfo)
 cli.add_command(index)
-cli.add_command(additem)
+
 cli.add_command(deposit)
 cli.add_command(proofs)
 cli.add_command(balance)

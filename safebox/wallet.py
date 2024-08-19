@@ -442,38 +442,7 @@ class Wallet:
             
             return events[0]
 
-    def add_item(self, safe_box_item: SafeboxItem):
-        asyncio.run(self._async_add_item(safe_box_item)) 
-
-        return safe_box_item.model_dump()
-
-    async def _async_add_item(self, safe_box_item: SafeboxItem):
-
-        
-        my_enc = NIP44Encrypt(self.k)
-
-        payload = json.dumps(safe_box_item.model_dump())
-        
-        
-        payload_encrypt = my_enc.encrypt(payload,to_pub_k=self.pubkey_hex)
-        
-        tags = [['d',safe_box_item.get_d_tag(self.pubkey_hex)]]
-      
-
-        async with ClientPool(self.relays) as c:
-        # async with Client(relay) as c:
-            n_msg = Event(kind=37375,
-                        content=payload_encrypt,
-                        pub_key=self.pubkey_hex,
-                        tags=tags)
-            
-            # n_msg = my_enc.encrypt_event(evt=n_msg,
-            #                         to_pub_k=self.pubkey_hex)
-            
-            n_msg.sign(self.privkey_hex)
-            print(n_msg.data())
-            c.publish(n_msg)
-            # await asyncio.sleep(1)
+   
     
     def _mint_proofs(self, quote:str, amount:int):
         # print("mint proofs")
