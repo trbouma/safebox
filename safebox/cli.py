@@ -54,7 +54,7 @@ def info(ctx):
 
 @click.command(help="initialize a new safebox")
 def init():
-    click.echo("Creating a new safebox")
+    click.echo(f"Creating a new safebox with {MINTS}")
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     config_obj['nsec'] = wallet_obj.create_profile()
     click.echo(f"nsec: {config_obj['nsec']}")

@@ -52,24 +52,19 @@ class Wallet:
             self.pubkey_hex     =   self.k.public_key_hex()
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
-            self.mints          =   mints
+            # self.mints          =   mints
             self.safe_box_items = []
             self.proofs: List[Proof] = []
             self.balance: int = 0
             self.proof_events = proofEvents()
 
             if mints == None:
-                try:           
-                    more_mints_str = self.get_wallet_info("mints")
-                    # print("mints:", more_mints_str)
-                    #FIXME something weird below with the json string
-                    more_mints_obj = json.loads(more_mints_str.replace("'","\""))
-                    # print("mints obj:", more_mints_obj)
-                    self.mints = more_mints_obj
-                    # print(self.mints)
-                except:
-                    pass
+                self.mints = json.loads(self.get_wallet_info(label="mints"))
+            else:
+                self.mints = mints
+                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
             
+           
             #Check to see if there are more relays than what was providee
             try:
                 more_relays_str = self.get_wallet_info("relays")
