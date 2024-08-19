@@ -131,6 +131,7 @@ class Wallet:
         init_index["root"] = pet_name
         self.set_index_info(json.dumps(init_index))
         self.set_wallet_info(label="default", label_info=display_name)
+        self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
         self.set_wallet_info(label="quote", label_info='[]')
@@ -320,7 +321,10 @@ class Wallet:
         event =asyncio.run(self._async_get_wallet_info(FILTER))
         
         # print(event.data())
-        decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        try:
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        except:
+            return f"Could not retrieve info for: {label}"
         
         # print("tags", event.tags)
         # encrypt_d = "None"
