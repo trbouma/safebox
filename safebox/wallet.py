@@ -1368,8 +1368,7 @@ class Wallet:
         blinded_values =[]
         blinded_messages = []
         proofs = []
-        proofs_to_melt = []
-        proofs_remaing = []
+        
         # Figure out proofs_to_use_amount
         proofs_to_use_amount = 0
         for each in proofs_to_use:
