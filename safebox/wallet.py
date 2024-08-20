@@ -1167,7 +1167,7 @@ class Wallet:
             for each in powers_of_2:
                 secret = secrets.token_hex(32)
                 B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret))
+                blinded_values.append((B_,r, secret,Y))
                 
                 blinded_messages.append(    BlindedMessage( amount=each,
                                                             id=each_keyset,
@@ -1206,12 +1206,14 @@ class Wallet:
                     pub_key_a = PublicKey()
                     pub_key_a.deserialize(unhexlify(A))
                     r = blinded_values[i][1]
+                    Y = blinded_values[i][3]
                     # print(pub_key_c, promise_amount,A, r)
                     C = step3_alice(pub_key_c,r,pub_key_a)
                     proof = {   "amount": promise_amount,
                             "id": each_keyset,
                             "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex()
+                            "C":    C.serialize().hex(),
+                            "Y":    Y.serialize().hex()
                             }
                     proofs.append(proof)
                     # print(proofs)
