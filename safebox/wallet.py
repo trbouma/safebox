@@ -18,7 +18,7 @@ from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
-from safebox.models import TokenV3, cliQuote
+from safebox.models import TokenV3, cliQuote, proofsByKeyset
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -57,6 +57,7 @@ class Wallet:
             self.proofs: List[Proof] = []
             self.balance: int = 0
             self.proof_events = proofEvents()
+            self.trusted_mints = {}
 
             try:
                 if mints == None:
@@ -65,7 +66,7 @@ class Wallet:
                     self.mints = mints
                     self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
             
-           
+                
                 #Check to see if there are more relays than what was provided
                 try:
                     more_relays_str = self.get_wallet_info("relays")
@@ -81,6 +82,18 @@ class Wallet:
                 print("could not boot from relay")
                 return
             
+            headers = { "Content-Type": "application/json"}
+            keyset_url = f"{self.mints[0]}/v1/keysets"
+
+            try:
+                self.trusted_mints = json.loads(self.get_wallet_info("trusted_mints"))
+            except:
+                # initialize first trusted keyset to mint
+
+                response = requests.get(keyset_url, headers=headers)
+                keyset = response.json()['keysets'][0]['id']
+                self.trusted_mints[keyset] = self.mints[0]
+                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
 
 
             self._load_proofs()
@@ -701,7 +714,26 @@ class Wallet:
     
     def delete_proofs(self):
         asyncio.run(self._async_delete_proof_events())
+
+    def _proofs_by_keyset(self):
+        all_proofs = {}
+        keyset_amounts = {}
+        for each in self.proofs:
+            # print(each.id)
+            if each.id not in all_proofs:                
+                all_proofs[each.id] = [each]
+            else:
+                all_proofs[each.id].append(each)  
         
+        # calculate amounts for each keyset
+        for key in all_proofs: 
+            amount=0
+            for each in all_proofs[key]:
+                amount +=each.amount        
+            keyset_amounts[key]=amount
+        print(keyset_amounts)
+        return all_proofs, keyset_amounts
+
 
     def _check_quote(self):
         # print("check quote", quote)
@@ -824,7 +856,150 @@ class Wallet:
         self._load_proofs()
         
 
+    def pay_multi(self, amount:int, lnaddress: str, comment: str = "Paid!"):
+        print("pay from multiple mints")
+        available_amount = 0
+        chosen_keyset = None
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        for each in keyset_amounts:
+            available_amount += keyset_amounts[each]
         
+        
+        print("available amount:", available_amount)
+        if available_amount < amount:
+            print("insufficient balance. you need more funds!")
+            return
+        
+        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+            print(key, keyset_amounts[key])
+            if keyset_amounts[key] >= amount:
+                chosen_keyset = key
+                break
+        if not chosen_keyset:
+            print("insufficient balance in any one keyset, you need to swap!") 
+            return   
+        
+        print("chosen keyset for payment", chosen_keyset)
+        # Now do the pay routine
+        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        print(melt_quote_url,melt_url)
+        headers = { "Content-Type": "application/json"}
+        callback = lightning_address_pay(amount, lnaddress,comment=comment)
+        pr = callback['pr']        
+        print(pr)
+        print(amount, lnaddress)
+        data_to_send = {    "request": pr,
+                            "unit": "sat"
+
+                        }
+        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+        print("post melt response:", response.json())
+        post_melt_response = PostMeltQuoteResponse(**response.json())
+        print("mint response:", post_melt_response)
+        proofs_to_use = []
+        proof_amount = 0
+        amount_needed = amount + post_melt_response.fee_reserve
+        print("amount needed:", amount_needed)
+        if amount_needed > keyset_amounts[chosen_keyset]:
+            print("insufficient balance in keyset. you need to swap, or use another keyset")
+            chosen_keyset = None
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                print(key, keyset_amounts[key])
+                if keyset_amounts[key] >= amount_needed:
+                    chosen_keyset = key
+                    print("new chosen keyset", key)
+                    break
+            if not chosen_keyset:
+                print("you don't have a sufficient balance in a keyset, you need to swap")
+                return
+            
+            # Set to new mints and redo the calls
+            melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+            melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+            print(melt_quote_url,melt_url)
+            callback = lightning_address_pay(amount, lnaddress,comment=comment)
+            pr = callback['pr']        
+            print(pr)
+            print(amount, lnaddress)
+            data_to_send = {    "request": pr,
+                            "unit": "sat"
+
+                        }
+            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+            print("post melt response:", response.json())
+            post_melt_response = PostMeltQuoteResponse(**response.json())
+            print("mint response:", post_melt_response)
+
+            if not chosen_keyset:
+                print("insufficient balance in any one keyset, you need to swap!") 
+                return 
+            
+        # Print now we should be all set to go
+        print("---we have a sufficient mint---")
+        print(melt_quote_url,melt_url, post_melt_response)
+        proofs_to_use = []
+        proof_amount = 0
+        proofs_from_keyset = keyset_proofs[chosen_keyset]
+        while proof_amount < amount_needed:
+            pay_proof = proofs_from_keyset.pop()
+            proofs_to_use.append(pay_proof)
+            proof_amount += pay_proof.amount
+            print("pop", pay_proof.amount)
+            
+        print("proofs to use:", proofs_to_use)
+        print("remaining", proofs_from_keyset)
+        # Continue implementing from line 818 swap_for_payment may need a parameter
+         # Now need to do the melt
+        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+        
+
+        print("proofs remaining:", proofs_remaining)
+        print(f"amount needed: {amount_needed}")
+        # Implement from line 824
+        sum_proofs =0
+        spend_proofs = []
+        keep_proofs = []
+        for each in proofs_remaining:
+            
+            sum_proofs += each.amount
+            if sum_proofs <= amount_needed:
+                spend_proofs.append(each)
+                print(f"pay with {each.amount}, {each.secret}")
+            else:
+                keep_proofs.append(each)
+                print(f"keep {each.amount}, {each.secret}")
+        print("spend:",spend_proofs) 
+        print("keep:", keep_proofs)
+        melt_proofs = []
+        for each_proof in spend_proofs:
+                melt_proofs.append(each_proof.model_dump())
+
+        data_to_send = {"quote": post_melt_response.quote,
+                      "inputs": melt_proofs }
+        
+        print(data_to_send)
+        print("we are here!!!")
+        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+        print(response.json())   
+        # add keep proofs back into selected keyset proofs
+        for each in keep_proofs:
+            proofs_from_keyset.append(each)
+        # print("self proofs", self.proofs)
+        # need to reassign back into 
+        keyset_proofs[chosen_keyset]= proofs_from_keyset
+        # OK - now need to put proofs back into a flat lish
+        post_payment_proofs = []
+        for key in keyset_proofs:
+            each_proofs = keyset_proofs[key]
+            for each_proof in each_proofs:
+                post_payment_proofs.append(each_proof)
+        self.proofs = post_payment_proofs
+        asyncio.run(self._async_delete_proof_events())
+        self.add_proof_event(self.proofs)
+        self._load_proofs()
+
+
 
     async def _async_delete_proof_events(self):
         """
@@ -855,101 +1030,211 @@ class Wallet:
         count = 0
         
         headers = { "Content-Type": "application/json"}
+        
         keyset_url = f"{self.mints[0]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.mints[0]}/v1/swap"
 
-        swap_proofs = []
-        blinded_swap_proofs = []
-        blinded_values =[]
-        blinded_messages = []
-        for each in self.proof_events.proof_events:
-            # print(each.id)
-            for each_proof in each.proofs:
-                # print(each_proof.amount)
-                swap_amount+=each_proof.amount
-                swap_proofs.append(each_proof.model_dump())
-                
-                count +=1
-        
-        # print("swap proofs:", swap_proofs)
-        r = PrivateKey()
-
-        # print("create blinded swap proofs")
-        powers_of_2 = self.powers_of_2_sum(swap_amount)
-        print("total:", swap_amount,count, powers_of_2)   
-        for each in powers_of_2:
-            secret = secrets.token_hex(32)
-            B_, r, Y = step1_alice(secret)
-            blinded_values.append((B_,r, secret))
+        for each in self.trusted_mints:
             
-            blinded_messages.append(    BlindedMessage( amount=each,
-                                                        id=keyset,
-                                                        B_=B_.serialize().hex(),
-                                                        Y = Y.serialize().hex(),
-                                                        ).model_dump()
-                                    )
-        
-        data_to_send = {
-                        "inputs":   swap_proofs,
-                        "outputs": blinded_messages
-                        
-        }
-       
-        # print(data_to_send)
-        try:
-            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-            # print(response.json())
-            promises = response.json()['signatures']
-            # print("promises:", promises)
+            keyset_each = each
+            keyset_url_each = self.trusted_mints[each]
+            print(keyset, keyset_url_each)
 
         
-            mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
-            # print(keys)
-            proofs = []
-            i = 0
+
+            swap_proofs = []
+            blinded_swap_proofs = []
+            blinded_values =[]
+            blinded_messages = []
+            for each in self.proof_events.proof_events:
+                # print(each.id)
+                for each_proof in each.proofs:
+                    # print(each_proof.amount)
+                    swap_amount+=each_proof.amount
+                    swap_proofs.append(each_proof.model_dump())
+                    
+                    count +=1
+            
+            # print("swap proofs:", swap_proofs)
+            r = PrivateKey()
+
+            # print("create blinded swap proofs")
+            powers_of_2 = self.powers_of_2_sum(swap_amount)
+            print("total:", swap_amount,count, powers_of_2)   
+            for each in powers_of_2:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+                
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                            id=keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                        )
+            
+            data_to_send = {
+                            "inputs":   swap_proofs,
+                            "outputs": blinded_messages
+                            
+            }
         
-            for each in promises:
-                pub_key_c = PublicKey()
-                # print("each:", each['C_'])
-                pub_key_c.deserialize(unhexlify(each['C_']))
-                promise_amount = each['amount']
-                A = keys[str(int(promise_amount))]
-                # A = keys[str(j)]
-                pub_key_a = PublicKey()
-                pub_key_a.deserialize(unhexlify(A))
-                r = blinded_values[i][1]
-                # print(pub_key_c, promise_amount,A, r)
-                C = step3_alice(pub_key_c,r,pub_key_a)
-                proof = {   "amount": promise_amount,
-                        "id": keyset,
-                        "secret": blinded_values[i][2],
-                        "C":    C.serialize().hex()
-                        }
-                proofs.append(proof)
-                # print(proofs)
-                i+=1
+            # print(data_to_send)
+            try:
+                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                # print(response.json())
+                promises = response.json()['signatures']
+                # print("promises:", promises)
+
+            
+                mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+                response = requests.get(mint_key_url, headers=headers)
+                keys = response.json()["keysets"][0]["keys"]
+                # print(keys)
+                proofs = []
+                i = 0
+            
+                for each in promises:
+                    pub_key_c = PublicKey()
+                    # print("each:", each['C_'])
+                    pub_key_c.deserialize(unhexlify(each['C_']))
+                    promise_amount = each['amount']
+                    A = keys[str(int(promise_amount))]
+                    # A = keys[str(j)]
+                    pub_key_a = PublicKey()
+                    pub_key_a.deserialize(unhexlify(A))
+                    r = blinded_values[i][1]
+                    # print(pub_key_c, promise_amount,A, r)
+                    C = step3_alice(pub_key_c,r,pub_key_a)
+                    proof = {   "amount": promise_amount,
+                            "id": keyset,
+                            "secret": blinded_values[i][2],
+                            "C":    C.serialize().hex()
+                            }
+                    proofs.append(proof)
+                    # print(proofs)
+                    i+=1
+            
+                # delete old proofs
+                asyncio.run(self._async_delete_proof_events())
+                self.add_proofs(json.dumps(proofs))
+                self._load_proofs()
+                
+            except:
+                ValueError('test')
+            
+            # print(request_body) 
+            # refresh balance
+            
+            swap_balance = 0
+            for each in self.proofs:
+                swap_balance += each.amount
+            print(len(self.proofs)) 
         
+        return f"swap ok sats "
+    
+    def swap_multi(self):
+        headers = { "Content-Type": "application/json"}
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        combined_proofs = []
+        print("need to do swap by keyset")
+        for each_keyset in keyset_proofs:
+            
+            each_keyset_url = self.trusted_mints[each_keyset]
+            print(each_keyset,each_keyset_url)
+            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            print(swap_url)
+            swap_proofs = []
+            blinded_swap_proofs = []
+            blinded_values =[]
+            blinded_messages = []
+            swap_amount =0
+            count = 0
+            for each_proof in keyset_proofs[each_keyset]:
+                print(each_proof.amount)
+                swap_amount+=each_proof.amount
+                swap_proofs.append(each_proof.model_dump())                    
+                count +=1
+                # print("swap proofs:", swap_proofs)
+            r = PrivateKey()
+
+            # print("create blinded swap proofs")
+            powers_of_2 = self.powers_of_2_sum(swap_amount)
+            print("total:", swap_amount,count, powers_of_2)
+            for each in powers_of_2:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+                
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                            id=each_keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                        )
+            data_to_send = {
+                            "inputs":   swap_proofs,
+                            "outputs": blinded_messages
+                            
+            }
+        
+            # print(data_to_send)
+            try:
+                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                # print(response.json())
+                promises = response.json()['signatures']
+                # print("promises:", promises)
+
+            
+                mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+                response = requests.get(mint_key_url, headers=headers)
+                keys = response.json()["keysets"][0]["keys"]
+                # print(keys)
+                proofs = []
+                i = 0
+            
+                for each in promises:
+                    pub_key_c = PublicKey()
+                    # print("each:", each['C_'])
+                    pub_key_c.deserialize(unhexlify(each['C_']))
+                    promise_amount = each['amount']
+                    A = keys[str(int(promise_amount))]
+                    # A = keys[str(j)]
+                    pub_key_a = PublicKey()
+                    pub_key_a.deserialize(unhexlify(A))
+                    r = blinded_values[i][1]
+                    # print(pub_key_c, promise_amount,A, r)
+                    C = step3_alice(pub_key_c,r,pub_key_a)
+                    proof = {   "amount": promise_amount,
+                            "id": each_keyset,
+                            "secret": blinded_values[i][2],
+                            "C":    C.serialize().hex()
+                            }
+                    proofs.append(proof)
+                    # print(proofs)
+                    i+=1
+            
+                combined_proofs = combined_proofs + proofs
+
+                
+            except:
+                ValueError('test')
+            
+            # print(request_body) 
+            # refresh balance
+            
+            swap_balance = 0
+            for each in self.proofs:
+                swap_balance += each.amount
+            print(len(self.proofs))
             # delete old proofs
             asyncio.run(self._async_delete_proof_events())
-            self.add_proofs(json.dumps(proofs))
+            self.add_proofs(json.dumps(combined_proofs))
             self._load_proofs()
-            
-        except:
-            ValueError('test')
-        
-        # print(request_body) 
-        # refresh balance
-        
-        swap_balance = 0
-        for each in self.proofs:
-            swap_balance += each.amount
-        print(len(self.proofs)) 
-        return f"swap ok sats {swap_balance}"
+        return "ok"
     
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
@@ -1063,7 +1348,120 @@ class Wallet:
         # now need break out proofs for payment and proofs remaining
 
         return proofs
-    
+
+    def swap_for_payment_multi(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
+        # create proofs to melt, and proofs_remaining
+
+        swap_amount =0
+        count = 0
+        
+        headers = { "Content-Type": "application/json"}
+        keyset_url = f"{self.trusted_mints[keyset_to_use]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        swap_url = f"{self.trusted_mints[keyset_to_use]}/v1/swap"
+
+        swap_proofs = []
+        blinded_values =[]
+        blinded_messages = []
+        proofs = []
+        proofs_to_melt = []
+        proofs_remaing = []
+        # Figure out proofs_to_use_amount
+        proofs_to_use_amount = 0
+        for each in proofs_to_use:
+            proofs_to_use_amount += each.amount
+       
+        powers_of_2_payment = self.powers_of_2_sum(payment_amount)
+        
+
+        for each in powers_of_2_payment:
+            secret = secrets.token_hex(32)
+            B_, r, Y = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
+            
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
+                                                        ).model_dump()
+                                    )
+        if proofs_to_use_amount > payment_amount:
+            powers_of_2_leftover = self.powers_of_2_sum(proofs_to_use_amount- payment_amount)
+            for each in powers_of_2_leftover:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+            
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
+                                                        ).model_dump()
+                                    )
+
+        proofs_to_send =[]
+        for each in proofs_to_use:
+            proofs_to_send.append(each.model_dump())
+
+        data_to_send = {
+                        "inputs":  proofs_to_send,
+                        "outputs": blinded_messages
+                        
+        }
+
+        # print(powers_of_2_payment, powers_of_2_leftover)
+        # print(proofs_to_use)
+        # print(blinded_messages)
+        # print(data_to_send)
+
+        try:
+            print("are we here?")
+            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+            
+            print(response.json())
+            promises = response.json()['signatures']
+            print("promises:", promises)
+
+        
+            mint_key_url = f"{self.trusted_mints[keyset_to_use]}/v1/keys/{keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(keys)
+            
+            i = 0
+        
+            for each in promises:
+                pub_key_c = PublicKey()
+                print("each:", each['C_'])
+                pub_key_c.deserialize(unhexlify(each['C_']))
+                promise_amount = each['amount']
+                A = keys[str(int(promise_amount))]
+                # A = keys[str(j)]
+                pub_key_a = PublicKey()
+                pub_key_a.deserialize(unhexlify(A))
+                r = blinded_values[i][1]
+                print(pub_key_c, promise_amount,A, r)
+                C = step3_alice(pub_key_c,r,pub_key_a)
+                
+                proof = Proof(  amount=promise_amount,
+                                id=keyset,
+                                secret=blinded_values[i][2],
+                                C=C.serialize().hex() )
+                
+                proofs.append(proof)
+                # print(proofs)
+                i+=1
+        except:
+            ValueError('test')
+        
+        for each in proofs:
+            print(each.amount)
+        # now need break out proofs for payment and proofs remaining
+
+        return proofs
+        
     def receive_token(self,cashu_token: str):
         headers = { "Content-Type": "application/json"}
         token_amount =0
@@ -1189,5 +1587,29 @@ class Wallet:
             
 
         return "test"
+    
+    def accept_token(self,cashu_token: str):
+        headers = { "Content-Type": "application/json"}
+        token_amount =0
+        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+
+        try:
+            token_obj = TokenV3.deserialize(cashu_token)
+        except:
+            return "bad token"
+        proofs=[]
+        for each in token_obj.token:
+            print(each.mint)
+            for each_proof in each.proofs:
+                proofs.append(each_proof.model_dump())
+                id = each_proof.id
+                self.trusted_mints[id]=each.mint
+            
+        print(self.trusted_mints)
+        self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))    
+        # print(proofs)
+            
+        
+        self.add_proofs(json.dumps(proofs))
         
         

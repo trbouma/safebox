@@ -81,6 +81,10 @@ class proofEvents(BaseModel):
       
   proof_events:     List[proofEvent] = []    
 
+class proofsByKeyset(BaseModel):
+    id: str
+    proofs: List[Proof]
+
 class nostrProfile(BaseModel):
     name:           str = "Not set"
     display_name:   str = "Not set"

@@ -45,7 +45,7 @@ def write_config():
 def cli():
     pass
 
-@click.command()
+@click.command(help='display info')
 @click.pass_context
 def info(ctx):
     click.echo("This is safebox. Retrieving wallet...")
@@ -111,7 +111,7 @@ def set(nsec, relays, mints, wallet):
         yaml.dump(config_obj, file)
 
 
-@click.command()
+@click.command(help='display nostr profile')
 @click.option('--replicate/--no-replicate', default= False)
 def profile(replicate):
     wallet = Wallet(nsec=NSEC,relays=RELAYS)
@@ -123,7 +123,7 @@ def profile(replicate):
 
 
 
-@click.command(help='help for getwalletinfo')
+@click.command(help='get a private wallet record')
 @click.argument('label', default = "default")
 def get(label):
     
@@ -170,7 +170,7 @@ def post(message):
 
 
 
-@click.command(help="Deposit funds into wallet")
+@click.command(help="deposit funds into wallet via lightning invoice")
 @click.argument('amount')
 def deposit(amount: int):
     click.echo(f"amount: {amount}")
@@ -194,7 +194,7 @@ def check():
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    wallet_obj.pay(amount,lnaddress,comment)
+    wallet_obj.pay_multi(amount,lnaddress,comment)
     
     
     #click.echo(msg_out)
@@ -205,7 +205,7 @@ def delete():
     wallet_obj.delete_proofs()
     
 
-@click.command(help="List proofs")
+@click.command(help="list proofs")
 def proofs():
     
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
@@ -216,8 +216,11 @@ def proofs():
     for each in wallet_obj.proofs:
         click.echo(f"id: {each.id} amount: {each.amount} secret: {each.secret}")
     click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
+    click.echo("Proofs by keyset")
+    wallet_obj._proofs_by_keyset()
 
-@click.command(help="Show balance")
+
+@click.command(help="show balance")
 def balance():
     
     wallet_obj = Wallet(NSEC, RELAYS)
@@ -225,14 +228,14 @@ def balance():
     click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
 
 
-@click.command(help="Swap proofs")
+@click.command(help="swap proofs for new proofs")
 def swap():
     
     wallet_obj = Wallet(NSEC, RELAYS, MINTS)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    click.echo(wallet_obj.swap())
+    click.echo(wallet_obj.swap_multi())
 
 @click.command(help="Receive cashu token")
 @click.argument('token')
@@ -243,6 +246,16 @@ def receive(token):
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
     click.echo(wallet_obj.receive_token(token))
+
+@click.command(help="Accept cashu token")
+@click.argument('token')
+def accept(token):
+    
+    wallet_obj = Wallet(NSEC, RELAYS)
+    # msg_out = wallet_obj.get_proofs()
+    # wallet_obj.delete_proofs()
+    # click.echo(msg_out)
+    click.echo(wallet_obj.accept_token(token))
 
 cli.add_command(info)
 cli.add_command(init)
@@ -263,6 +276,7 @@ cli.add_command(swap)
 cli.add_command(delete)
 cli.add_command(check)
 cli.add_command(receive)
+cli.add_command(accept)
 
 
 
