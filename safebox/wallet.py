@@ -1140,13 +1140,34 @@ class Wallet:
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
-        print("need to do swap by keyset")
+        
+        # Let's check all the proofs before we do anything
+
+        for each_keyset in keyset_proofs:
+            check = []
+            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            for each_proof in keyset_proofs[each_keyset]:
+                check.append(each_proof.Y)
+
+            # print(mint_verify_url, check)
+            Ys = {"Ys": check}
+            response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
+            check_response = response.json()
+            proofs_to_check = check_response['states']
+            for each_proof in proofs_to_check:
+                # assert each_proof['state'] == "UNSPENT"
+                print(each_proof['state'])
+                
+        # return
+        # All the proofs are verified, we are good to go for the swap    
+
+ 
         for each_keyset in keyset_proofs:
             
             each_keyset_url = self.trusted_mints[each_keyset]
-            print(each_keyset,each_keyset_url)
+            # print(each_keyset,each_keyset_url)
             swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
-            print(swap_url)
+            # print(swap_url)
             swap_proofs = []
             blinded_swap_proofs = []
             blinded_values =[]
@@ -1154,7 +1175,7 @@ class Wallet:
             swap_amount =0
             count = 0
             for each_proof in keyset_proofs[each_keyset]:
-                print(each_proof.amount)
+                # print(each_proof.amount)
                 swap_amount+=each_proof.amount
                 swap_proofs.append(each_proof.model_dump())                    
                 count +=1
@@ -1163,7 +1184,7 @@ class Wallet:
 
             # print("create blinded swap proofs")
             powers_of_2 = self.powers_of_2_sum(swap_amount)
-            print("total:", swap_amount,count, powers_of_2)
+            # print("total:", swap_amount,count, powers_of_2)
             for each in powers_of_2:
                 secret = secrets.token_hex(32)
                 B_, r, Y = step1_alice(secret)
@@ -1231,12 +1252,13 @@ class Wallet:
             swap_balance = 0
             for each in self.proofs:
                 swap_balance += each.amount
-            print(len(self.proofs))
+            # print(len(self.proofs))
             # delete old proofs
             asyncio.run(self._async_delete_proof_events())
             self.add_proofs(json.dumps(combined_proofs))
             self._load_proofs()
-        return "ok"
+        
+        return "multi swap ok"
     
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
@@ -1306,7 +1328,7 @@ class Wallet:
         # print(data_to_send)
 
         try:
-            print("are we here?")
+            # print("are we here?")
             response = requests.post(url=swap_url, json=data_to_send, headers=headers)
             
             print(response.json())
@@ -1608,9 +1630,10 @@ class Wallet:
             
         print(self.trusted_mints)
         self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))    
-        # print(proofs)
+        print(proofs)
             
-        
+        #TODO Need to swap before adding
+
         self.add_proofs(json.dumps(proofs))
         
         
