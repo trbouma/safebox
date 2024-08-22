@@ -24,7 +24,33 @@ poetry new sbtest
 cd sbtest
 poetry add git+https://github.com/trbouma/safebox.git
 poetry shell
+
+```
+General help. Warning - everything is not fully implemented yet!
+``` 
 safebox --help
+Usage: safebox [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  accept   Accept cashu token
+  balance  show balance
+  check    Check for payment
+  delete   Delete proofs
+  deposit  deposit funds into wallet via lightning invoice
+  get      get a private wallet record
+  info     display info
+  init     initialize a new safebox
+  pay      Payout funds to lightning address
+  post     Do a post
+  profile  display nostr profile
+  proofs   list proofs
+  put      help for put
+  receive  Receive cashu token
+  set      set local config options
+  swap     swap proofs for new proofs
 ```
 You can see the help for each command, for example
 ```
@@ -61,6 +87,27 @@ Relays ['wss://nostr-pub.wellorder.net']
 --------------------------------------------------------------------------------
 Hello World from stickymacaw! #introductions
 
+```
+You deposit funds
+```
+safebox deposit 21
+# Pay the invoice and then run the follow
+safebox check invoice
+```
+You can pay to a lightning address
+```
+safebox pay 19 creampanther1@primal.net -c "This is from safebox!! "
+# Check your balance
+safebook balance
+# Check your proofs
+safebook proofs
+```
+You can put and retrieve secret information!
+```
+safebox put mypassphrase "The wolf howls at midnight"
+Do you want to continue? [y/N]: Y
+safebox get mypassphrase
+The wolf howls at night
 ```
 
 

@@ -941,6 +941,7 @@ class Wallet:
         self.add_proof_event(self.proofs)
         self._load_proofs()
         
+        
 
     def pay_multi(self, amount:int, lnaddress: str, comment: str = "Paid!"):
         print("pay from multiple mints")

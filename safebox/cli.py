@@ -192,6 +192,7 @@ def check(param):
     elif param == "dm":
         click.echo("check DMs")
         msg_out = wallet_obj.get_dm()
+        
         click.echo(msg_out)
 
 @click.command(help="Payout funds to lightning address")
@@ -202,6 +203,7 @@ def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     wallet_obj.pay_multi(amount,lnaddress,comment)
+    wallet_obj.swap_multi()
     
     
     #click.echo(msg_out)
