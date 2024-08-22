@@ -56,6 +56,15 @@ You can see the help for each command, for example
 ```
 safebox set --help
 ```
+You need to set some boot relays and mints, first. For example to add relays:
+```
+safebox set --relays pub-nostr.wellorder.net
+safebox set --mints mint.belgianbitcoinembassy.org
+```
+
+Don't bother adding the `https://` or `wss://` prefixes - they are added automtically. For a list of relays or mints specify the list separated by a comma (no spaces)
+
+
 To create a new safebox:
 ```
 safebox init
@@ -111,13 +120,7 @@ The wolf howls at night
 ```
 
 
-You can add other relays and mints. For example to add relays:
-```
-safebox set --relays pub-nostr.wellorder.net
-safebox set --mints mint.belgianbitcoinembassy.org
-```
 
-Don't bother adding the `https://` or `wss://` prefixes - they are added automtically. For a list of relays or mints specify the list separated by a comma (no spaces)
 
 
 
