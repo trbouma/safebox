@@ -155,6 +155,7 @@ class Wallet:
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
         self.set_wallet_info(label="quote", label_info='[]')
         self.set_wallet_info(label="index", label_info='{}')
+        self.set_wallet_info(label="last_dm", label_info='0')
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
@@ -1720,6 +1721,7 @@ class Wallet:
         #TODO Need to swap before adding
 
         self.add_proofs(json.dumps(proofs))
+        # just swap all of the proofs
         self.swap_multi()
         
         
