@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Union
 import asyncio, json, requests
 from time import sleep
 import secrets
+from datetime import datetime
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -141,7 +142,7 @@ class Wallet:
                                         display_name=display_name,
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
-                                        lud16= f"{self.pubkey_bech32}@npub.cash",
+                                        lud16= f"{self.pubkey_bech32}@openbalance.app",
                                         website=f"https://npub.cash/pay/{self.pubkey_bech32}"
                                          )
         out = asyncio.run(self._async_create_profile(nostr_profile))
@@ -201,6 +202,7 @@ class Wallet:
         out_string += f"\nProfile Information for: {nostr_profile.display_name}"
         out_string += "\n"+ "-"*80  
         out_string += f"\nnpub: {str(self.pubkey_bech32)}"
+        out_string += f"\npubhex: {str(self.pubkey_hex)}"
         out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
         out_string += "\n"+ "-"*80    
     
@@ -253,6 +255,7 @@ class Wallet:
         
         
         FILTER = [{
+            'authors': "78733951a0435da2644aa5dbe6230cc0624844132a6fe213e59170bcc7dd3870",
             'limit': 10,
             'authors': [self.pubkey_hex],
             'kinds': [1]
@@ -273,6 +276,88 @@ class Wallet:
                 
            
             return posts
+
+    def get_dm(self):
+        
+        
+        tags = ["#p", self.pubkey_hex]
+        last_dm = float(self.get_wallet_info("last_dm"))
+        print(datetime.fromtimestamp(float(last_dm)))
+        dm_filter = [{
+            
+            'limit': 12,                       
+            'kinds': [4],
+            '#p'  :  [self.pubkey_hex],
+            'since': last_dm + 1
+            
+        }]
+        last_dm, tokens =asyncio.run(self.query_client_dm(dm_filter))
+        print(tokens)
+        for each in  tokens:
+            self.accept_token(each)
+        
+        msg_out = "ok"
+        self.set_wallet_info("last_dm", json.dumps(last_dm))
+        return last_dm
+    
+    async def query_client_dm(self, filter: List[dict]):
+    # does a one off query to relay prints the events and exits
+        my_enc = NIP4Encrypt(self.k)
+        posts = ""
+        tags = []
+        tokens =[]
+        
+        last_update = 0
+        print("filterxx:", filter)
+        async with ClientPool(self.relays) as c:
+        # async with Client(relay) as c:
+            events: List[Event] = await c.query(filter)
+            print("events", events)
+            
+            for each in events:
+                try:
+                    decrypt_content = my_enc.decrypt_event(each)
+                except:
+                    print("no go")
+                print(each.id, each.created_at.timestamp(), decrypt_content.content )
+                last_update = each.created_at.timestamp() if each.created_at.timestamp() > last_update else last_update
+                print(datetime.fromtimestamp(last_update),)
+
+                array_token = decrypt_content.content.splitlines()
+                
+                for each in array_token:
+                    if each.startswith("cashuA"):
+                        print("found")
+                        token = each
+                        tokens.append(token)
+                        break
+                
+                
+                
+        print(last_update)    
+        return last_update, tokens          
+            
+       
+    async def delete_dms(self, tags):
+         async with ClientPool(self.relays) as c:
+            print("hello")
+            n_msg = Event(kind=Event.KIND_DELETE,
+                        content=None,
+                        pub_key=self.pubkey_hex,
+                        tags=tags)
+            print("dm tags",tags)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            print("hello again")   
+
+            
+                
+                   
+                
+                
+                
+        
+
 
     def send_post(self,text):
         asyncio.run(self._async_send_post(text))  
@@ -1155,8 +1240,8 @@ class Wallet:
             check_response = response.json()
             proofs_to_check = check_response['states']
             for each_proof in proofs_to_check:
-                # assert each_proof['state'] == "UNSPENT"
-                print(each_proof['state'])
+                assert each_proof['state'] == "UNSPENT"
+                # print(each_proof['state'])
                 
         # return
         # All the proofs are verified, we are good to go for the swap    
@@ -1635,5 +1720,6 @@ class Wallet:
         #TODO Need to swap before adding
 
         self.add_proofs(json.dumps(proofs))
+        self.swap_multi()
         
         

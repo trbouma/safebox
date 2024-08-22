@@ -161,7 +161,7 @@ def put(label, label_info):
 
 def post(message):
     click.echo(message)
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(NSEC, RELAYS)
     wallet_obj.send_post(message)
 
 
@@ -181,11 +181,18 @@ def deposit(amount: int):
     click.echo(f"\n\nPlease run {__name__.split(".")[0]} check to see if invoice is paid")
     
 @click.command(help="Check for payment")
+@click.argument('param')
 
-def check():
-    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
-    msg_out = wallet_obj.check()
-    click.echo(msg_out)
+def check(param):
+    wallet_obj = Wallet(NSEC, RELAYS)
+    if param == "invoice":
+        click.echo("check invoice")        
+        msg_out = wallet_obj.check()
+        click.echo(msg_out)
+    elif param == "dm":
+        click.echo("check DMs")
+        msg_out = wallet_obj.get_dm()
+        click.echo(msg_out)
 
 @click.command(help="Payout funds to lightning address")
 @click.argument('amount', default=21)
@@ -201,14 +208,16 @@ def pay(amount,lnaddress: str, comment:str):
 
 @click.command(help='Delete proofs')
 def delete():
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
-    wallet_obj.delete_proofs()
+    if click.confirm("Are you really sure?"):
+        click.echo("Deleting proofs...")
+        wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+        wallet_obj.delete_proofs()
     
 
 @click.command(help="list proofs")
 def proofs():
     
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(NSEC, RELAYS)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
