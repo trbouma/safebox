@@ -178,7 +178,7 @@ def deposit(amount: int):
     cli_quote = wallet_obj.deposit(amount)
     click.echo(f"\n\nPlease pay invoice:\n {cli_quote.invoice}") 
 
-    click.echo(f"\n\nPlease run {__name__.split(".")[0]} check to see if invoice is paid")
+    # click.echo(f"\n\nPlease run {__name__.split(".")[0]} check to see if invoice is paid")
     
 @click.command(help="Check for payment")
 @click.argument('param')
