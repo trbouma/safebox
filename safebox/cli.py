@@ -203,7 +203,7 @@ def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(NSEC, RELAYS,MINTS)
     wallet_obj.pay_multi(amount,lnaddress,comment)
-    wallet_obj.swap_multi()
+    wallet_obj.swap_multi_each()
     
     
     #click.echo(msg_out)
