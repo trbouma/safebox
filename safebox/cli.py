@@ -258,6 +258,7 @@ def swap():
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
     click.echo(wallet_obj.swap_multi_each())
+    click.echo(wallet_obj.swap_multi_consolidate())
 
 @click.command(help="Receive cashu token")
 @click.argument('token')

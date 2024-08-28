@@ -1223,7 +1223,9 @@ class Wallet:
         
         return f"swap ok sats "
     
-    def swap_multi(self):
+    def swap_multi_consolidate(self):
+        #TODO run swap_multi_each first to get rid of any potential doublespends
+        #TODO figure out how to catch doublespends in this routine
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
@@ -1327,13 +1329,15 @@ class Wallet:
                     # print(proofs)
                     i+=1
             
-                combined_proofs = combined_proofs + proofs
+                
 
                 
             except:
                 ValueError('duplicate proofs')
-                return "duplicate proofs"
+                # return "duplicate proofs"
+                proofs = []
             
+            combined_proofs = combined_proofs + proofs
             # print(request_body) 
             # refresh balance
             
@@ -1404,12 +1408,13 @@ class Wallet:
                             "outputs": blinded_messages
                             
                 }
+                proofs = []
                 try:
                     response = requests.post(url=swap_url, json=data_to_send, headers=headers)
                     # print(response.json())
                     promises = response.json()['signatures']
                     print("promises:", promises)
-                    proofs = []
+                    
                     i = 0
             
                     for each in promises:
@@ -1434,13 +1439,15 @@ class Wallet:
                         proofs.append(proof)
                         print(proofs)
                         i+=1
-                        combined_proofs = combined_proofs + proofs
+                        
                     
                     
 
                 except:
                     ValueError("duplicate proofs")
                     print("duplicate proof, ignore")
+
+                combined_proofs = combined_proofs + proofs
 
         asyncio.run(self._async_delete_proof_events())
         self.add_proofs(json.dumps(combined_proofs))
@@ -1861,10 +1868,46 @@ class Wallet:
         print("proofs to use:", proofs_to_use)
         print("remaining", proofs_from_keyset)
         print("chosen keyset for payment", chosen_keyset)
-        # proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+        
+        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+        
+
+        print("proofs remaining:", proofs_remaining)
+        print(f"amount needed: {amount}")
+        # Implement from line 824
+        sum_proofs =0
+        spend_proofs = []
+        keep_proofs = []
+        for each in proofs_remaining:
+            
+            sum_proofs += each.amount
+            if sum_proofs <= amount:
+                spend_proofs.append(each)
+                print(f"pay with {each.amount}, {each.secret}")
+            else:
+                keep_proofs.append(each)
+                print(f"keep {each.amount}, {each.secret}")
+        print("spend:",spend_proofs) 
+        print("keep:", keep_proofs)
+
+        for each in keep_proofs:
+            proofs_from_keyset.append(each)
+        # print("self proofs", self.proofs)
+        # need to reassign back into 
+        keyset_proofs[chosen_keyset]= proofs_from_keyset
+        # OK - now need to put proofs back into a flat lish
+        post_payment_proofs = []
+        for key in keyset_proofs:
+            each_proofs = keyset_proofs[key]
+            for each_proof in each_proofs:
+                post_payment_proofs.append(each_proof)
+        self.proofs = post_payment_proofs
+        # asyncio.run(self._async_delete_proof_events())
+        # self.add_proof_event(self.proofs)
+        # self._load_proofs()
         
         tokens = TokenV3Token(mint=self.trusted_mints[chosen_keyset],
-                                        proofs=proofs_to_use)
+                                        proofs=spend_proofs)
         
         v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
         # print("proofs remaining:", proofs_remaining)
