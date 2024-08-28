@@ -1830,6 +1830,8 @@ class Wallet:
         #TODO Need to swap before adding
 
         self.add_proofs(json.dumps(proofs))
+        self.swap_multi_each()
+        self.swap_multi_consolidate()
         # just swap all of the proofs
         # self.swap_multi()
 
@@ -1902,9 +1904,9 @@ class Wallet:
             for each_proof in each_proofs:
                 post_payment_proofs.append(each_proof)
         self.proofs = post_payment_proofs
-        # asyncio.run(self._async_delete_proof_events())
-        # self.add_proof_event(self.proofs)
-        # self._load_proofs()
+        asyncio.run(self._async_delete_proof_events())
+        self.add_proof_event(self.proofs)
+        self._load_proofs()
         
         tokens = TokenV3Token(mint=self.trusted_mints[chosen_keyset],
                                         proofs=spend_proofs)
