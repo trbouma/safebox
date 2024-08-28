@@ -208,6 +208,17 @@ def pay(amount,lnaddress: str, comment:str):
     
     #click.echo(msg_out)
 
+@click.command(help="Issue token amount")
+@click.argument('amount', default=1)
+def issue(amount:int):
+    click.echo(f"Issue token amount: {amount}")
+    wallet_obj = Wallet(NSEC, RELAYS)
+    click.echo(wallet_obj.issue_token(amount))
+    
+    
+    
+    
+
 @click.command(help='Delete proofs')
 def delete():
     if click.confirm("Are you really sure?"):
@@ -246,7 +257,7 @@ def swap():
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    click.echo(wallet_obj.swap_multi())
+    click.echo(wallet_obj.swap_multi_each())
 
 @click.command(help="Receive cashu token")
 @click.argument('token')
@@ -288,6 +299,7 @@ cli.add_command(delete)
 cli.add_command(check)
 cli.add_command(receive)
 cli.add_command(accept)
+cli.add_command(issue)
 
 
 

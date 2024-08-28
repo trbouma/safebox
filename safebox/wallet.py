@@ -19,7 +19,7 @@ from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
-from safebox.models import TokenV3, cliQuote, proofsByKeyset
+from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -1331,7 +1331,8 @@ class Wallet:
 
                 
             except:
-                ValueError('test')
+                ValueError('duplicate proofs')
+                return "duplicate proofs"
             
             # print(request_body) 
             # refresh balance
@@ -1346,7 +1347,107 @@ class Wallet:
             self._load_proofs()
         
         return "multi swap ok"
-    
+
+    def swap_multi_each(self):
+        headers = { "Content-Type": "application/json"}
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        combined_proofs = []
+        
+        # Let's check all the proofs before we do anything
+
+        for each_keyset in keyset_proofs:
+            check = []
+            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            for each_proof in keyset_proofs[each_keyset]:
+                check.append(each_proof.Y)
+
+            # print(mint_verify_url, check)
+            Ys = {"Ys": check}
+            response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
+            check_response = response.json()
+            proofs_to_check = check_response['states']
+            for each_proof in proofs_to_check:
+                assert each_proof['state'] == "UNSPENT"
+                # print(each_proof['state'])
+                
+        # return
+        # All the proofs are verified, we are good to go for the swap   
+        # In multi_each we are going to swap for each proof 
+
+ 
+        for each_keyset in keyset_proofs:
+            
+            each_keyset_url = self.trusted_mints[each_keyset]
+
+            mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(each_keyset,each_keyset_url)
+            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            
+            for each_proof in keyset_proofs[each_keyset]:
+                print(each_proof.amount)
+                blinded_values =[]
+                blinded_messages = []
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret,Y))
+                
+                blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
+                                                            id=each_keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                        )
+                data_to_send = {
+                            "inputs":   [each_proof.model_dump()],
+                            "outputs": blinded_messages
+                            
+                }
+                try:
+                    response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                    # print(response.json())
+                    promises = response.json()['signatures']
+                    print("promises:", promises)
+                    proofs = []
+                    i = 0
+            
+                    for each in promises:
+                        pub_key_c = PublicKey()
+                        # print("each:", each['C_'])
+                        pub_key_c.deserialize(unhexlify(each['C_']))
+                        promise_amount = each['amount']
+                        A = keys[str(int(promise_amount))]
+                        # A = keys[str(j)]
+                        pub_key_a = PublicKey()
+                        pub_key_a.deserialize(unhexlify(A))
+                        r = blinded_values[i][1]
+                        Y = blinded_values[i][3]
+                        # print(pub_key_c, promise_amount,A, r)
+                        C = step3_alice(pub_key_c,r,pub_key_a)
+                        proof = {   "amount": promise_amount,
+                            "id": each_keyset,
+                            "secret": blinded_values[i][2],
+                            "C":    C.serialize().hex(),
+                            "Y":    Y.serialize().hex()
+                            }
+                        proofs.append(proof)
+                        print(proofs)
+                        i+=1
+                        combined_proofs = combined_proofs + proofs
+                    
+                    
+
+                except:
+                    ValueError("duplicate proofs")
+                    print("duplicate proof, ignore")
+
+        asyncio.run(self._async_delete_proof_events())
+        self.add_proofs(json.dumps(combined_proofs))
+        self._load_proofs()            
+        
+        return "multi swap ok"
+        
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
 
@@ -1723,6 +1824,50 @@ class Wallet:
 
         self.add_proofs(json.dumps(proofs))
         # just swap all of the proofs
-        self.swap_multi()
+        # self.swap_multi()
+
+    def issue_token(self, amount:int):
+        print("issue token")
+        available_amount = 0
+        chosen_keyset = None
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        for each in keyset_amounts:
+            available_amount += keyset_amounts[each]
         
+        
+        print("available amount:", available_amount)
+        if available_amount < amount:
+            print("insufficient balance. you need more funds!")
+            return
+        
+        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+            print(key, keyset_amounts[key])
+            if keyset_amounts[key] >= amount:
+                chosen_keyset = key
+                break
+        if not chosen_keyset:
+            print("insufficient balance in any one keyset, you need to swap!") 
+            return   
+        
+        proofs_to_use = []
+        proof_amount = 0
+        proofs_from_keyset = keyset_proofs[chosen_keyset]
+        while proof_amount < amount:
+            pay_proof = proofs_from_keyset.pop()
+            proofs_to_use.append(pay_proof)
+            proof_amount += pay_proof.amount
+            print(f"pop proof amount of {pay_proof.amount} from {chosen_keyset}")
+            
+        print("proofs to use:", proofs_to_use)
+        print("remaining", proofs_from_keyset)
+        print("chosen keyset for payment", chosen_keyset)
+        # proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+        
+        tokens = TokenV3Token(mint=self.trusted_mints[chosen_keyset],
+                                        proofs=proofs_to_use)
+        
+        v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
+        # print("proofs remaining:", proofs_remaining)
+        
+        return v3_token.serialize()   
         

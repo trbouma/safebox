@@ -36,6 +36,41 @@ class DLEQWallet(BaseModel):
     s: str
     r: str  # blinding_factor, unknown to mint but sent from wallet to wallet for DLEQ proof
 
+class HTLCWitness(BaseModel):
+    preimage: Optional[str] = None
+    signature: Optional[str] = None
+
+    @classmethod
+    def from_witness(cls, witness: str):
+        return cls(**json.loads(witness))
+
+
+class P2SHWitness(BaseModel):
+    """
+    Unlocks P2SH spending condition of a Proof
+    """
+
+    script: str
+    signature: str
+    address: Union[str, None] = None
+
+    @classmethod
+    def from_witness(cls, witness: str):
+        return cls(**json.loads(witness))
+
+
+class P2PKWitness(BaseModel):
+    """
+    Unlocks P2PK spending condition of a Proof
+    """
+
+    signatures: List[str]
+
+    @classmethod
+    def from_witness(cls, witness: str):
+        return cls(**json.loads(witness))
+
+
 class Proof(BaseModel):
     """
     Value token
@@ -63,6 +98,54 @@ class Proof(BaseModel):
     melt_id: Union[None, str] = (
         None  # holds the id of the melt operation that destroyed this proof
     )
+
+    @classmethod
+    def from_dict(cls, proof_dict: dict):
+        if proof_dict.get("dleq") and isinstance(proof_dict["dleq"], str):
+            proof_dict["dleq"] = DLEQWallet(**json.loads(proof_dict["dleq"]))
+        else:
+            # overwrite the empty string with None
+            proof_dict["dleq"] = None
+        c = cls(**proof_dict)
+        return c
+
+    def to_dict(self, include_dleq=False):
+        # necessary fields
+        return_dict = dict(id=self.id, amount=self.amount, secret=self.secret, C=self.C)
+
+        # optional fields
+        if include_dleq:
+            assert self.dleq, "DLEQ proof is missing"
+            return_dict["dleq"] = self.dleq.dict()  # type: ignore
+
+        if self.witness:
+            return_dict["witness"] = self.witness
+
+        return return_dict
+
+    def to_dict_no_dleq(self):
+        # dictionary without the fields that don't need to be send to Carol
+        return dict(id=self.id, amount=self.amount, secret=self.secret, C=self.C)
+
+    def to_dict_no_secret(self):
+        # dictionary but without the secret itself
+        return dict(id=self.id, amount=self.amount, C=self.C)
+
+    def __getitem__(self, key):
+        return self.__getattribute__(key)
+
+    def __setitem__(self, key, val):
+        self.__setattr__(key, val)
+
+    @property
+    def p2pksigs(self) -> List[str]:
+        assert self.witness, "Witness is missing for p2pk signature"
+        return P2PKWitness.from_witness(self.witness).signatures
+
+    @property
+    def htlcpreimage(self) -> Union[str, None]:
+        assert self.witness, "Witness is missing for htlc preimage"
+        return HTLCWitness.from_witness(self.witness).preimage
    
 
 class Proofs(BaseModel):
