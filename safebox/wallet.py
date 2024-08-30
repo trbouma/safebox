@@ -1240,12 +1240,15 @@ class Wallet:
 
             # print(mint_verify_url, check)
             Ys = {"Ys": check}
-            response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-            check_response = response.json()
-            proofs_to_check = check_response['states']
-            for each_proof in proofs_to_check:
-                assert each_proof['state'] == "UNSPENT"
-                # print(each_proof['state'])
+            try:
+                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
+                check_response = response.json()
+                proofs_to_check = check_response['states']
+                for each_proof in proofs_to_check:
+                    assert each_proof['state'] == "UNSPENT"
+                    # print(each_proof['state'])
+            except:
+                return f"there is a problem with {self.trusted_mints[each_keyset]}"
                 
         # return
         # All the proofs are verified, we are good to go for the swap    
@@ -1367,12 +1370,15 @@ class Wallet:
 
             # print(mint_verify_url, check)
             Ys = {"Ys": check}
-            response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-            check_response = response.json()
-            proofs_to_check = check_response['states']
-            for each_proof in proofs_to_check:
-                assert each_proof['state'] == "UNSPENT"
-                # print(each_proof['state'])
+            try:
+                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
+                check_response = response.json()
+                proofs_to_check = check_response['states']
+                for each_proof in proofs_to_check:
+                    assert each_proof['state'] == "UNSPENT"
+                    # print(each_proof['state'])
+            except:
+                return f"there is a problem with the mint {self.trusted_mints[each_keyset]}"
                 
         # return
         # All the proofs are verified, we are good to go for the swap   
