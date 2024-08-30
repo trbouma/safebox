@@ -9,6 +9,7 @@ from coolname import generate, generate_slug
 from binascii import unhexlify
 import hashlib
 
+
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
@@ -16,7 +17,7 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
 from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
-from safebox.lightning import lightning_address_pay
+from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset
@@ -30,6 +31,10 @@ def powers_of_2_sum(amount):
         amount -= power
     return sorted(powers)
 
+
+
+
+    return "hello"
 class Wallet:
     k: Keys
     nsec: str
@@ -1921,4 +1926,55 @@ class Wallet:
         # print("proofs remaining:", proofs_remaining)
         
         return v3_token.serialize()   
+
+    def zap(self, amount:int, event_id): 
+        tags = ["#e", event_id]
         
+        zap_filter = [{  
+            'ids'  :  [event_id]          
+            
+        }]
+        json_out = asyncio.run(self._async_query_zap(amount, zap_filter))
+        return f"zap {amount} to event: {event_id} {json_out}"   
+    
+    async def _async_query_zap(self, amount:int, filter: List[dict]): 
+    # does a one off query to relay prints the events and exits
+        json_obj = {}
+        # print("are we here today", self.relays)
+        async with ClientPool(self.relays) as c:        
+            events = await c.query(filter)
+        try:
+            event = events[0]  
+            print(event)  
+            json_str =   f"{event.id}  {event.pub_key}  {event.content}"
+            print("json_str", json_str)
+            # json_obj = json.loads(json_str)
+            # json_obj = json.loads(json_str)
+        except:
+            {"staus": "could not access profile"}
+            pass
+       
+        profile_filter =  [{
+            'limit': 1,
+            'authors': [event.pub_key],
+            'kinds': [0]
+        }]    
+        async with ClientPool(self.relays) as c:        
+            events_profile = await c.query(profile_filter)
+        try:
+            print("getting profile")
+            event_profile = events_profile[0]  
+            print(event)  
+            profile_str =   event_profile.content
+            print("profile", profile_str)
+            profile_obj = json.loads(profile_str)
+            lnaddress = profile_obj['lud16']
+            print(lnaddress, lnaddress_to_lnurl(lnaddress))
+            zap_info = lightning_address_pay(amount,lnaddress)
+            print("zap_info", zap_info)
+        except:
+            {"status": "could not access profile"}
+            print("could not get profile")
+            pass
+        
+        return json_str

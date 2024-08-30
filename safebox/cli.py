@@ -214,6 +214,14 @@ def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
     wallet_obj = Wallet(NSEC, RELAYS)
     click.echo(wallet_obj.issue_token(amount))
+
+@click.command(help="Zap amount to event")
+@click.argument('amount', default=1)
+@click.argument('event_id')
+def zap(amount:int, event_id):
+    click.echo(f"Zap amount: {amount} to {event_id}")
+    wallet_obj = Wallet(NSEC, RELAYS)
+    click.echo(wallet_obj.zap(amount,event_id))
     
     
     
@@ -301,6 +309,7 @@ cli.add_command(check)
 cli.add_command(receive)
 cli.add_command(accept)
 cli.add_command(issue)
+cli.add_command(zap)
 
 
 

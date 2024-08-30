@@ -3,6 +3,7 @@ import asyncio, base64, io, re
 import datetime, hashlib, urllib, uuid
 import binascii
 import os
+from bech32 import bech32_encode, convertbits
 
 def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made!"):
     
@@ -32,3 +33,12 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
 
     ln_return = requests.get(ln_parms.json()['callback'],params=data_to_send)
     return ln_return.json()
+
+def lnaddress_to_lnurl(lnaddress):
+    domain = lnaddress.split('@')[1]
+    name = lnaddress.split('@')[0]
+    url = f"https://{domain}/.well-known/lnurlp/{name}"
+    url_bytes = url.encode('utf-8')
+    data = convertbits(url_bytes, 8, 5)
+    lnurl = bech32_encode("lnurl", data)
+    return lnurl
