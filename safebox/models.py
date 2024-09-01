@@ -6,6 +6,7 @@ from binascii import hexlify
 from enum import Enum
 from datetime import datetime
 import json, base64
+from monstr.event.event import Event
 
 class BIP329Enum(Enum):
     TYPE_TX     =   "tx"
@@ -481,3 +482,15 @@ class TokenV4(BaseModel):
         if self.d:
             return_dict.update(dict(d=self.d))
         # mint
+
+class Zevent(Event):
+    def to_dict(self):
+        return {    "id"        : self.id,
+                    "pubkey"    : self.pub_key,
+                    "created_at" : int(self.created_at.timestamp()),
+                    "kind"      : self.kind,
+                    "tags"      : self.tags.tags,
+                    "content"   : self.content, 
+                    "sig"       : self.sig
+
+        }

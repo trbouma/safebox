@@ -218,10 +218,11 @@ def issue(amount:int):
 @click.command(help="Zap amount to event")
 @click.argument('amount', default=1)
 @click.argument('event_id')
-def zap(amount:int, event_id):
+@click.option('--comment','-c', default='Zap from a safebox!')
+def zap(amount:int, event_id,comment):
     click.echo(f"Zap amount: {amount} to {event_id}")
     wallet_obj = Wallet(NSEC, RELAYS)
-    click.echo(wallet_obj.zap(amount,event_id))
+    click.echo(wallet_obj.zap(amount,event_id,comment))
     
     
     

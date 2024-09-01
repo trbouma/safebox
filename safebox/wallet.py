@@ -3,6 +3,7 @@ import asyncio, json, requests
 from time import sleep
 import secrets
 from datetime import datetime
+import urllib.parse
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -17,10 +18,10 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
 from safebox.b_dhke import step1_alice, step3_alice
 from safebox.secp import PrivateKey, PublicKey
-from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl
+from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
-from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset
+from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -1927,17 +1928,17 @@ class Wallet:
         
         return v3_token.serialize()   
 
-    def zap(self, amount:int, event_id): 
+    def zap(self, amount:int, event_id, comment): 
         tags = ["#e", event_id]
         
         zap_filter = [{  
             'ids'  :  [event_id]          
             
         }]
-        json_out = asyncio.run(self._async_query_zap(amount, zap_filter))
+        json_out = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
         return f"zap {amount} to event: {event_id} {json_out}"   
     
-    async def _async_query_zap(self, amount:int, filter: List[dict]): 
+    async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
         # print("are we here today", self.relays)
@@ -1954,6 +1955,9 @@ class Wallet:
             {"staus": "could not access profile"}
             pass
        
+        if event == None:
+            return "no event"
+        
         profile_filter =  [{
             'limit': 1,
             'authors': [event.pub_key],
@@ -1972,9 +1976,37 @@ class Wallet:
             print(lnaddress, lnaddress_to_lnurl(lnaddress))
             zap_info = lightning_address_pay(amount,lnaddress)
             print("zap_info", zap_info)
+            
         except:
             {"status": "could not access profile"}
             print("could not get profile")
             pass
+        
+        # Now we can create zap request
+        print("create zap request")
+        tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
+                    ["relays"] + self.relays,
+                    ["amount",str(amount*1000)],
+                    ["p",event.pub_key],
+                    ["e",filter[0]['ids'][0]]
+                ]
+        zap_request = Zevent(
+                            kind=9734,
+                            content=comment,
+                            tags = tags,
+                            pub_key=self.pubkey_hex                            
+                            )
+        zap_request.sign(self.privkey_hex)
+        print("is valid:", zap_request.is_valid())
+        print(zap_request, zap_request.tags, zap_request.id)
+        print("serialize:", zap_request.serialize())
+        print("to_dict:", zap_request.to_dict())
+        zap_dict= zap_request.to_dict()
+        print("zap_dict:",zap_dict )
+        
+        zap_test = Event().load(zap_dict)
+        print("zap_test.id:", zap_test.id)
+        print("zap test", zap_test, zap_test.is_valid())
+        zap_address_pay(amount,lnaddress,zap_dict)
         
         return json_str
