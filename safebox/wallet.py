@@ -949,7 +949,12 @@ class Wallet:
         
         
 
-    def pay_multi(self, amount:int, lnaddress: str, comment: str = "Paid!"):
+    def pay_multi(  self, 
+                    amount:int, 
+                    lnaddress: str, 
+                    comment: str = "Paid!"): 
+                    
+        
         print("pay from multiple mints")
         available_amount = 0
         chosen_keyset = None
@@ -980,6 +985,154 @@ class Wallet:
         headers = { "Content-Type": "application/json"}
         callback = lightning_address_pay(amount, lnaddress,comment=comment)
         pr = callback['pr']        
+        print(pr)
+        print(amount, lnaddress)
+        data_to_send = {    "request": pr,
+                            "unit": "sat"
+
+                        }
+        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+        print("post melt response:", response.json())
+        post_melt_response = PostMeltQuoteResponse(**response.json())
+        print("mint response:", post_melt_response)
+        proofs_to_use = []
+        proof_amount = 0
+        amount_needed = amount + post_melt_response.fee_reserve
+        print("amount needed:", amount_needed)
+        if amount_needed > keyset_amounts[chosen_keyset]:
+            print("insufficient balance in keyset. you need to swap, or use another keyset")
+            chosen_keyset = None
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                print(key, keyset_amounts[key])
+                if keyset_amounts[key] >= amount_needed:
+                    chosen_keyset = key
+                    print("new chosen keyset", key)
+                    break
+            if not chosen_keyset:
+                print("you don't have a sufficient balance in a keyset, you need to swap")
+                return
+            
+            # Set to new mints and redo the calls
+            melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+            melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+            print(melt_quote_url,melt_url)
+            callback = lightning_address_pay(amount, lnaddress,comment=comment)
+            pr = callback['pr']        
+            print(pr)
+            print(amount, lnaddress)
+            data_to_send = {    "request": pr,
+                            "unit": "sat"
+
+                        }
+            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+            print("post melt response:", response.json())
+            post_melt_response = PostMeltQuoteResponse(**response.json())
+            print("mint response:", post_melt_response)
+
+            if not chosen_keyset:
+                print("insufficient balance in any one keyset, you need to swap!") 
+                return 
+            
+        # Print now we should be all set to go
+        print("---we have a sufficient mint---")
+        print(melt_quote_url,melt_url, post_melt_response)
+        proofs_to_use = []
+        proof_amount = 0
+        proofs_from_keyset = keyset_proofs[chosen_keyset]
+        while proof_amount < amount_needed:
+            pay_proof = proofs_from_keyset.pop()
+            proofs_to_use.append(pay_proof)
+            proof_amount += pay_proof.amount
+            print("pop", pay_proof.amount)
+            
+        print("proofs to use:", proofs_to_use)
+        print("remaining", proofs_from_keyset)
+        # Continue implementing from line 818 swap_for_payment may need a parameter
+         # Now need to do the melt
+        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+        
+
+        print("proofs remaining:", proofs_remaining)
+        print(f"amount needed: {amount_needed}")
+        # Implement from line 824
+        sum_proofs =0
+        spend_proofs = []
+        keep_proofs = []
+        for each in proofs_remaining:
+            
+            sum_proofs += each.amount
+            if sum_proofs <= amount_needed:
+                spend_proofs.append(each)
+                print(f"pay with {each.amount}, {each.secret}")
+            else:
+                keep_proofs.append(each)
+                print(f"keep {each.amount}, {each.secret}")
+        print("spend:",spend_proofs) 
+        print("keep:", keep_proofs)
+        melt_proofs = []
+        for each_proof in spend_proofs:
+                melt_proofs.append(each_proof.model_dump())
+
+        data_to_send = {"quote": post_melt_response.quote,
+                      "inputs": melt_proofs }
+        
+        print(data_to_send)
+        print("we are here!!!")
+        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+        print(response.json())   
+        # add keep proofs back into selected keyset proofs
+        for each in keep_proofs:
+            proofs_from_keyset.append(each)
+        # print("self proofs", self.proofs)
+        # need to reassign back into 
+        keyset_proofs[chosen_keyset]= proofs_from_keyset
+        # OK - now need to put proofs back into a flat lish
+        post_payment_proofs = []
+        for key in keyset_proofs:
+            each_proofs = keyset_proofs[key]
+            for each_proof in each_proofs:
+                post_payment_proofs.append(each_proof)
+        self.proofs = post_payment_proofs
+        asyncio.run(self._async_delete_proof_events())
+        self.add_proof_event(self.proofs)
+        self._load_proofs()
+
+    def pay_multi_invoice(  self, 
+                    amount:int, 
+                    lnaddress: str, 
+                    comment: str = "Paid!"): 
+                    
+        
+        print("pay from multiple mints")
+        available_amount = 0
+        chosen_keyset = None
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        for each in keyset_amounts:
+            available_amount += keyset_amounts[each]
+        
+        
+        print("available amount:", available_amount)
+        if available_amount < amount:
+            print("insufficient balance. you need more funds!")
+            return
+        
+        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+            print(key, keyset_amounts[key])
+            if keyset_amounts[key] >= amount:
+                chosen_keyset = key
+                break
+        if not chosen_keyset:
+            print("insufficient balance in any one keyset, you need to swap!") 
+            return   
+        
+        print("chosen keyset for payment", chosen_keyset)
+        # Now do the pay routine
+        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        print(melt_quote_url,melt_url)
+        headers = { "Content-Type": "application/json"}
+        # callback = lightning_address_pay(amount, lnaddress,comment=comment)
+        pr = lnaddress        
         print(pr)
         print(amount, lnaddress)
         data_to_send = {    "request": pr,
@@ -1935,8 +2088,9 @@ class Wallet:
             'ids'  :  [event_id]          
             
         }]
-        json_out = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
-        return f"zap {amount} to event: {event_id} {json_out}"   
+        pr = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+        self.pay_multi_invoice(amount,pr)
+        return f"zap {amount} to event: {event_id} {pr}"   
     
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
@@ -2007,6 +2161,8 @@ class Wallet:
         zap_test = Event().load(zap_dict)
         print("zap_test.id:", zap_test.id)
         print("zap test", zap_test, zap_test.is_valid())
-        zap_address_pay(amount,lnaddress,zap_dict)
+        pr = zap_address_pay(amount,lnaddress,zap_dict)
+        print("pay this invoice from the safebox:",pr)
         
-        return json_str
+        
+        return pr

@@ -83,5 +83,7 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
                         }
         ln_return = requests.get(zap_parms['callback'],params=data_to_send)
         print(ln_return.json())
+        pr = ln_return.json()['pr']
+        
 
-    return "test"
+    return pr
