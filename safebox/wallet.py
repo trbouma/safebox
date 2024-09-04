@@ -179,7 +179,7 @@ class Wallet:
         return self.k.private_key_bech32()
 
     async def _async_create_profile(self, nostr_profile: nostrProfile):
-        async with ClientPool([self.home_relay]+ self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
             profile = nostr_profile.model_dump_json()
             
             profile_str = json.dumps(profile)
@@ -202,7 +202,7 @@ class Wallet:
         }]
         
         try:
-            profile =asyncio.run(self.async_query_client_profile([self.home_relay]+ self.relays,FILTER))
+            profile =asyncio.run(self.async_query_client_profile([self.home_relay],FILTER))
         except:
             out_string = "No profile found!"
             return out_string
@@ -228,6 +228,7 @@ class Wallet:
         
         out_string += "\n"+ "-"*80  
         out_string += f"\nMints {self.mints}"
+        out_string += f"\nHome Relay {self.home_relay}"
         out_string += f"\nRelays {self.relays}"
         out_string += "\n"+ "-"*80  
 
@@ -421,7 +422,7 @@ class Wallet:
        
        
 
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=37375,
                         content=wallet_info_encrypt,
@@ -486,7 +487,7 @@ class Wallet:
         target_tag = filter[0]['d']
         #print("target tag:", target_tag)
         event_select = None
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             
             events = await c.query(filter)
@@ -530,7 +531,7 @@ class Wallet:
         index_info_encrypt = my_enc.encrypt(index_info,to_pub_k=self.pubkey_hex)
     
 
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=17375,
                         content=index_info_encrypt,
@@ -573,7 +574,7 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
         
         event_select = None
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             
             events = await c.query(filter)
@@ -721,7 +722,7 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=7375,
                         content=payload_encrypt,
@@ -747,7 +748,7 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=7375,
                         content=payload_encrypt,
@@ -772,7 +773,7 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
         proofs = ""
         self.proofs = []
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             events = await c.query(filter)
             self.events = len(events)
@@ -1271,7 +1272,7 @@ class Wallet:
                 pass
         # print(tags)
         
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        async with ClientPool([self.home_relay]) as c:
         
             n_msg = Event(kind=Event.KIND_DELETE,
                         content=None,

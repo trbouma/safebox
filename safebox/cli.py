@@ -184,7 +184,7 @@ def post(message):
 @click.argument('amount')
 def deposit(amount: int):
     click.echo(f"amount: {amount}")
-    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     cli_quote = wallet_obj.deposit(amount)
     click.echo(f"\n\nPlease pay invoice:\n {cli_quote.invoice}") 
 
@@ -194,7 +194,7 @@ def deposit(amount: int):
 @click.argument('param')
 
 def check(param):
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
     if param == "invoice":
         click.echo("check invoice")        
         msg_out = wallet_obj.check()
@@ -231,7 +231,7 @@ def issue(amount:int):
 @click.option('--comment','-c', default='Zap from a safebox!')
 def zap(amount:int, event_id,comment):
     click.echo(f"Zap amount: {amount} to {event_id}")
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY)
     click.echo(wallet_obj.zap(amount,event_id,comment))
     
     
@@ -242,14 +242,14 @@ def zap(amount:int, event_id,comment):
 def delete():
     if click.confirm("Are you really sure?"):
         click.echo("Deleting proofs...")
-        wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+        wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAYsa)
         wallet_obj.delete_proofs()
     
 
 @click.command(help="list proofs")
 def proofs():
     
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
@@ -264,7 +264,7 @@ def proofs():
 @click.command(help="show balance")
 def balance():
     
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
 
     click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
 
@@ -272,7 +272,7 @@ def balance():
 @click.command(help="swap proofs for new proofs")
 def swap():
     
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
