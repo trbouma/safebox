@@ -2090,6 +2090,7 @@ class Wallet:
         }]
         pr = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
         self.pay_multi_invoice(amount,pr)
+        self.swap_multi_consolidate()
         return f"zap {amount} to event: {event_id} {pr}"   
     
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
