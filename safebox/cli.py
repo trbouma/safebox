@@ -34,6 +34,7 @@ RELAYS  = config_obj['relays']
 NSEC    = config_obj['nsec']
 MINTS   = config_obj['mints']
 WALLET  = config_obj['wallet']
+HOME_RELAY = config_obj['home_relay']
 
 def write_config():
      with open(file_path, 'w') as file:        
@@ -55,7 +56,7 @@ def info(ctx):
 @click.command(help="initialize a new safebox")
 def init():
     click.echo(f"Creating a new safebox with {MINTS}")
-    wallet_obj = Wallet(NSEC, RELAYS, MINTS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
     config_obj['nsec'] = wallet_obj.create_profile()
     click.echo(f"nsec: {config_obj['nsec']}")
     write_config()
@@ -66,16 +67,25 @@ def init():
 @click.command(help="set local config options")
 @click.option('--nsec', '-n', default=None, help='set nsec')
 @click.option('--relays', '-r', default=None, help='set relays')
+@click.option('--home', '-h', default=None, help='set home relay')
 @click.option('--mints', '-m', default=None, help='set mints')
 @click.option('--wallet', '-w', default=None, help='set wallet')
-def set(nsec, relays, mints, wallet):
-    if nsec == None and relays == None and mints == None and wallet==None:
+def set(nsec, home, relays, mints, wallet):
+    
+    if nsec == None and relays == None and mints == None and home == None and wallet==None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
         return
    
 
     if nsec != None:
         config_obj['nsec']=nsec
+
+    
+    if home != None:
+        home_relay = home if "wss://" in home else f"wss://{home}"
+        print("home relay", home_relay)
+        config_obj['home_relay']=home_relay
+    
     if relays != None:
         print("relays:", relays)
         relay_array = str(relays).replace(" ","").split(',')
@@ -114,7 +124,7 @@ def set(nsec, relays, mints, wallet):
 @click.command(help='display nostr profile')
 @click.option('--replicate/--no-replicate', default= False)
 def profile(replicate):
-    wallet = Wallet(nsec=NSEC,relays=RELAYS)
+    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY)
     
     # click.echo(replicate)
     click.echo(wallet.get_profile(replicate))
@@ -128,7 +138,7 @@ def profile(replicate):
 def get(label):
     
     
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
 
     try:
         safebox_info = wallet_obj.get_wallet_info(label)
