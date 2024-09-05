@@ -166,7 +166,7 @@ def get(label):
 
 def put(label, label_info):
     jsons=None
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
     # click.echo(wallet.get_wallet_info())
     click.echo(wallet)
 
