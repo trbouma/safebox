@@ -12,6 +12,7 @@ from time import sleep
 relays  = ["wss://nostr-pub.wellorder.net"]
 mints   = ["https://mint.belgianbitcoinembassy.org"]
 wallet  = "default" 
+home_relay = "wss://relay.magiccity.live"
 
 home_directory = os.path.expanduser('~')
 cli_directory = '.safebox'
@@ -26,7 +27,11 @@ if os.path.exists(file_path):
         config_obj = yaml.safe_load(file)
 else:
    
-    config_obj = {'nsec': Keys().private_key_bech32(), 'relays': relays, "mints": mints, "wallet": wallet}
+    config_obj = {  'nsec': Keys().private_key_bech32(), 
+                    'relays': relays, 
+                    "home_relay": home_relay,
+                    "mints": mints, 
+                    "wallet": wallet}
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
