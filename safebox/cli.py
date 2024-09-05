@@ -9,7 +9,8 @@ from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
 from time import sleep
 
-relays  = [ "wss://nostr-pub.wellorder.net", 
+relays  = [ "wss://relay.nimo.cash",
+            "wss://nostr-pub.wellorder.net", 
             "wss://relay.damus.io", 
             "wss://relay.primal.net",
             "wss://nos.lol"
