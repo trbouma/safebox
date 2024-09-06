@@ -235,7 +235,7 @@ def issue(amount:int):
     wallet_obj = Wallet(NSEC, RELAYS)
     click.echo(wallet_obj.issue_token(amount))
 
-@click.command(help="Zap amount to event")
+@click.command(help="Zap amount to event or to recipient")
 @click.argument('amount', default=1)
 # @click.argument('event_id')
 @click.option('--event','-e', default=None)
