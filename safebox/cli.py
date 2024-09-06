@@ -237,12 +237,21 @@ def issue(amount:int):
 
 @click.command(help="Zap amount to event")
 @click.argument('amount', default=1)
-@click.argument('event_id')
-@click.option('--comment','-c', default='Zap from a safebox!')
-def zap(amount:int, event_id,comment):
-    click.echo(f"Zap amount: {amount} to {event_id}")
+# @click.argument('event_id')
+@click.option('--event','-e', default=None)
+@click.option('--npub','-n', default=None)
+@click.option('--comment','-c', default='Zap!')
+def zap(amount:int, event,npub, comment):
+    if npub:
+        click.echo("Zap to recipient {npub}, ignore event")
+        return
+    if event == None:
+        click.echo("Need an event!")
+        return
+
+    click.echo(f"Zap amount: {amount} to {event}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY)
-    click.echo(wallet_obj.zap(amount,event_id,comment))
+    click.echo(wallet_obj.zap(amount,event,comment))
     
     
     

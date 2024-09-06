@@ -2107,6 +2107,7 @@ class Wallet:
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
+        event = None
         # print("are we here today", self.relays)
         async with ClientPool([self.home_relay]+self.relays) as c:        
             events = await c.query(filter)
@@ -2122,7 +2123,7 @@ class Wallet:
             pass
        
         if event == None:
-            return "no event"
+            raise Exception("no event")
         
         profile_filter =  [{
             'limit': 1,
