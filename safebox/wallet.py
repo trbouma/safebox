@@ -50,10 +50,11 @@ class Wallet:
     events: int
     balance: int
     proof_events: proofEvents 
+    replicate: bool
 
 
 
-    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None) -> None:
+    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None, replicate = False) -> None:
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
@@ -67,6 +68,7 @@ class Wallet:
             self.proof_events = proofEvents()
             self.trusted_mints = {}
             self.home_relay = None
+            self.replicate = replicate
             
 
             try:
@@ -192,7 +194,7 @@ class Wallet:
             c.publish(n_msg)
         return "ok"
 
-    def get_profile(self, replicate:bool=False):
+    def get_profile(self):
         profile_obj = {}
         nostr_profile = None
         FILTER = [{
@@ -233,19 +235,10 @@ class Wallet:
         out_string += "\n"+ "-"*80  
 
         #TODO this has to be put into a function (repeats create_profile code)
-        if replicate:
-            print("replicate")
-            init_index = {}
-            init_index["root"] = nostr_profile.name
-            self.set_index_info(json.dumps(init_index))
-            out = asyncio.run(self._async_create_profile(nostr_profile))
-            # self.set_index_info(json.dumps(init_index))
-            self.set_wallet_info(label="default", label_info=nostr_profile.display_name)
-            self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
-            self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
-            self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
-            self.set_wallet_info(label="quote", label_info='[]')
-            self.set_wallet_info(label="index", label_info='{}')
+        if self.replicate:
+            print("REPLICATE")
+
+
 
         return out_string
     
@@ -268,7 +261,40 @@ class Wallet:
         
         return json_obj
         
-           
+    def replicate_safebox(self, relays = List[str]):
+        
+        print("replicate relays:", relays)
+
+        FILTER = [{
+            'limit': 1,
+            'authors': [self.pubkey_hex],
+            'kinds': [0]
+        }]
+        
+        try:
+            profile =asyncio.run(self.async_query_client_profile([self.home_relay],FILTER))
+        except:
+            out_string = "No profile found!"
+            return out_string
+        
+        profile_str = json.dumps(profile)
+        out_msg = asyncio.run(self._async_store_event(profile_str,0,relays))
+
+        return out_msg + profile_str 
+    
+    async def _async_store_event(self, event_content_str:str, event_kind: int, relays: List[str]):
+
+        async with ClientPool(relays) as c:
+      
+            print(event_content_str)
+      
+            n_msg = Event(kind=event_kind,
+                        content=event_content_str,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+        return "ok"
+
     def get_post(self):
         
         
@@ -416,10 +442,6 @@ class Wallet:
 
         tags = [['d',label_name_hash]]
         
-
-
-        # print(tags)
-       
        
 
         async with ClientPool([self.home_relay]) as c:

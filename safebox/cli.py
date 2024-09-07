@@ -18,6 +18,7 @@ relays  = [ "wss://relay.nimo.cash",
 mints   = ["https://mint.belgianbitcoinembassy.org"]
 wallet  = "default" 
 home_relay = "wss://relay.magiccity.live"
+replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 
 home_directory = os.path.expanduser('~')
 cli_directory = '.safebox'
@@ -36,7 +37,8 @@ else:
                     'relays': relays, 
                     "home_relay": home_relay,
                     "mints": mints, 
-                    "wallet": wallet}
+                    "wallet": wallet,
+                    "replicate_relays": replicate_relays}
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
@@ -45,6 +47,7 @@ NSEC    = config_obj['nsec']
 MINTS   = config_obj['mints']
 WALLET  = config_obj['wallet']
 HOME_RELAY = config_obj['home_relay']
+REPLICATE_RELAYS = config_obj['replicate_relays']
 
 def write_config():
      with open(file_path, 'w') as file:        
@@ -134,12 +137,20 @@ def set(nsec, home, relays, mints, wallet):
 @click.command(help='display nostr profile')
 @click.option('--replicate/--no-replicate', default= False)
 def profile(replicate):
-    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY)
+    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,replicate=replicate)
     
     # click.echo(replicate)
-    click.echo(wallet.get_profile(replicate))
+    click.echo(wallet.get_profile())
     click.echo(wallet.get_post())
+
+@click.command(help='replicate safebox data to other relays')
+def replicate():
+    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY)
     
+    click.echo(wallet.replicate_safebox(REPLICATE_RELAYS))
+    # click.echo(replicate)
+    
+       
 
 
 
@@ -209,7 +220,7 @@ def check(param):
         click.echo("check invoice")        
         msg_out = wallet_obj.check()
         click.echo(msg_out)
-    elif param == "dm":
+    elif param == "ecash":
         click.echo("check DMs")
         msg_out = wallet_obj.get_dm()
         
@@ -221,7 +232,7 @@ def check(param):
 @click.option('--comment','-c', default='Paid!')
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
-    wallet_obj = Wallet(NSEC, RELAYS,MINTS)
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
     wallet_obj.pay_multi(amount,lnaddress,comment)
     wallet_obj.swap_multi_each()
     
@@ -261,7 +272,7 @@ def zap(amount:int, event,npub, comment):
 def delete():
     if click.confirm("Are you really sure?"):
         click.echo("Deleting proofs...")
-        wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAYsa)
+        wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
         wallet_obj.delete_proofs()
     
 
@@ -321,6 +332,7 @@ def accept(token):
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(profile)
+cli.add_command(replicate)
 cli.add_command(post)
 
 cli.add_command(set)
