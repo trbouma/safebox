@@ -149,6 +149,9 @@ class Proof(BaseModel):
         return HTLCWitness.from_witness(self.witness).preimage
    
 
+class WalletConfig(BaseModel):
+    kind_cashu: int = 0
+
 class Proofs(BaseModel):
     proofs: List[Proof] = []
 

@@ -4,6 +4,7 @@ from time import sleep
 import secrets
 from datetime import datetime
 import urllib.parse
+import random
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -22,6 +23,8 @@ from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_add
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
+from safebox.models import WalletConfig
+
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -69,6 +72,7 @@ class Wallet:
             self.trusted_mints = {}
             self.home_relay = None
             self.replicate = replicate
+            self.wallet_config = None
             
 
             try:
@@ -114,6 +118,14 @@ class Wallet:
                 self.trusted_mints[keyset] = self.mints[0]
                 self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
 
+            try:
+                self.wallet_config = WalletConfig(**json.loads(self.get_wallet_info("wallet_config")))
+                print("wallet_config:",self.wallet_config)
+            except:
+                self.wallet_config = WalletConfig(kind_cashu = random.randint(1000,6999))
+                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
+                # print("new wallet_config:",self.wallet_config)
+                
 
             self._load_proofs()
             
@@ -137,6 +149,7 @@ class Wallet:
     
     def create_profile(self):
         init_index = {}
+        wallet_info = {}
         self.k= Keys()
         self.pubkey_bech32  =   self.k.public_key_bech32()
         self.pubkey_hex     =   self.k.public_key_hex()
@@ -144,6 +157,9 @@ class Wallet:
         
         new_name = generate()
         print(new_name)
+
+
+
 
         for i in range(len(new_name)):
             if new_name[i].lower() in ["of","from"]:
@@ -169,6 +185,9 @@ class Wallet:
         # self.set_index_info(json.dumps(init_index))
         self.set_wallet_info(label="default", label_info=display_name)
         self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
+        
+        self.wallet_config = WalletConfig(kind_cashu = random.randint(1000,9999))                
+        self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
         self.set_wallet_info(label="quote", label_info='[]')
@@ -792,7 +811,7 @@ class Wallet:
 
         async with ClientPool(write_relays) as c:
         # async with Client(relay) as c:
-            n_msg = Event(kind=7375,
+            n_msg = Event(kind=self.wallet_config.kind_cashu,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
@@ -818,7 +837,7 @@ class Wallet:
         
         async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
-            n_msg = Event(kind=7375,
+            n_msg = Event(kind=self.wallet_config.kind_cashu,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
@@ -830,7 +849,7 @@ class Wallet:
         FILTER = [{
             'limit': 10,
             'authors': [self.pubkey_hex],
-            'kinds': [7375]
+            'kinds': [self.wallet_config.kind_cashu]
         }]
         content =asyncio.run(self._async_load_proofs(FILTER))
         

@@ -255,7 +255,7 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('amount', default=1)
 def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     click.echo(wallet_obj.issue_token(amount))
 
 @click.command(help="Zap amount to event or to recipient")
