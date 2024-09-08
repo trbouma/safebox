@@ -166,7 +166,7 @@ class Wallet:
         out = asyncio.run(self._async_create_profile(nostr_profile))
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
-        self.set_index_info(json.dumps(init_index))
+        # self.set_index_info(json.dumps(init_index))
         self.set_wallet_info(label="default", label_info=display_name)
         self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
@@ -277,10 +277,48 @@ class Wallet:
             out_string = "No profile found!"
             return out_string
         
-        profile_str = json.dumps(profile)
-        out_msg = asyncio.run(self._async_store_event(profile_str,0,relays))
 
-        return out_msg + profile_str 
+
+        # self.set_wallet_info(label="default", label_info="test")
+        # self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
+       
+        # replicate the reserved records
+
+        self.set_wallet_info(label="home_relay", label_info=json.dumps(self.home_relay), relays=relays)
+
+        default = self.get_wallet_info(label="default")
+        self.set_wallet_info(label="default", label_info=default, relays=relays)
+        
+        mints = self.get_wallet_info(label="mints")
+        self.set_wallet_info(label="mints", label_info=mints,relays=relays)
+        
+        read_relays = self.get_wallet_info(label="relays")
+        self.set_wallet_info(label="relays", label_info=read_relays, relays=relays)
+        
+        trusted_mints = self.get_wallet_info(label="trusted_mints")
+        self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints), relays=relays)
+        
+        profile = self.get_wallet_info(label="profile")
+        self.set_wallet_info(label="profile", label_info=profile, relays=relays)
+        
+        quote = self.get_wallet_info(label="quote")
+        self.set_wallet_info(label="quote", label_info=quote, relays=relays)
+        
+        index = self.get_wallet_info(label="index")
+        self.set_wallet_info(label="index", label_info=index, relays=relays)
+        
+        last_dm = self.get_wallet_info(label="last_dm")
+        self.set_wallet_info(label="last_dm", label_info=last_dm, relays=relays)
+        
+        
+
+        replicate_proofs = []
+        for each in self.proofs:
+            each_dump = each.model_dump()
+            replicate_proofs.append(each_dump)
+        print("now need to replicate the proofs", replicate_proofs)
+        self.add_proofs(json.dumps(replicate_proofs), relays=relays)
+        return profile 
     
     async def _async_store_event(self, event_content_str:str, event_kind: int, relays: List[str]):
 
@@ -422,10 +460,10 @@ class Wallet:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def set_wallet_info(self,label: str,label_info: str):
+    def set_wallet_info(self,label: str,label_info: str, relays: List[str]=None):
         asyncio.run(self._async_set_wallet_info(label,label_info))  
     
-    async def _async_set_wallet_info(self, label:str, label_info: str):
+    async def _async_set_wallet_info(self, label:str, label_info: str, relays:List[str]=None):
 
         m = hashlib.sha256()
         m.update(self.privkey_hex.encode())
@@ -442,9 +480,12 @@ class Wallet:
 
         tags = [['d',label_name_hash]]
         
-       
+        if relays:
+            write_relays = relays
+        else:
+            write_relays = [self.home_relay]
 
-        async with ClientPool([self.home_relay]) as c:
+        async with ClientPool(write_relays) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=37375,
                         content=wallet_info_encrypt,
@@ -733,10 +774,10 @@ class Wallet:
         return cliQuote(invoice=invoice, quote=quote)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
-    def add_proofs(self,text):
-        asyncio.run(self._async_add_proofs(text))  
+    def add_proofs(self,text, relays: List[str]=None):
+        asyncio.run(self._async_add_proofs(text, relays))  
     
-    async def _async_add_proofs(self, text:str):
+    async def _async_add_proofs(self, text:str, relays: List[str]=None):
         """
             Example showing how to post a text note (Kind 1) to relay
         """
@@ -744,7 +785,12 @@ class Wallet:
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
-        async with ClientPool([self.home_relay]) as c:
+        if relays == None:
+            write_relays = [self.home_relay]
+        else:
+            write_relays = relays
+
+        async with ClientPool(write_relays) as c:
         # async with Client(relay) as c:
             n_msg = Event(kind=7375,
                         content=payload_encrypt,

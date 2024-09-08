@@ -83,9 +83,10 @@ def init():
 @click.option('--home', '-h', default=None, help='set home relay')
 @click.option('--mints', '-m', default=None, help='set mints')
 @click.option('--wallet', '-w', default=None, help='set wallet')
-def set(nsec, home, relays, mints, wallet):
+@click.option('--xrelays', '-x', default=None, help='set replicate relays')
+def set(nsec, home, relays, mints, wallet, xrelays):
     
-    if nsec == None and relays == None and mints == None and home == None and wallet==None:
+    if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
         return
    
@@ -109,6 +110,17 @@ def set(nsec, home, relays, mints, wallet):
         config_obj['relays']=relay_array_wss
     else:
        config_obj['relays']=RELAYS 
+
+    if xrelays != None:
+        print("replicate relays:", xrelays)
+        relay_array = str(xrelays).replace(" ","").split(',')
+        relay_array_wss = []
+        for each in relay_array:
+            relay_array_wss.append(each if "wss://" in each else "wss://"+each)
+        print(relay_array_wss)
+        config_obj['replicate_relays']=relay_array_wss
+    else:
+       config_obj['replicate_relays']=REPLICATE_RELAYS 
 
     if mints != None:
         
@@ -135,9 +147,9 @@ def set(nsec, home, relays, mints, wallet):
 
 
 @click.command(help='display nostr profile')
-@click.option('--replicate/--no-replicate', default= False)
-def profile(replicate):
-    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,replicate=replicate)
+
+def profile():
+    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,mints=MINTS)
     
     # click.echo(replicate)
     click.echo(wallet.get_profile())
@@ -146,7 +158,7 @@ def profile(replicate):
 @click.command(help='replicate safebox data to other relays')
 def replicate():
     wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY)
-    
+    print(REPLICATE_RELAYS)
     click.echo(wallet.replicate_safebox(REPLICATE_RELAYS))
     # click.echo(replicate)
     
@@ -221,7 +233,7 @@ def check(param):
         msg_out = wallet_obj.check()
         click.echo(msg_out)
     elif param == "ecash":
-        click.echo("check DMs")
+        click.echo("check for ecash")
         msg_out = wallet_obj.get_dm()
         
         click.echo(msg_out)
