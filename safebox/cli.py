@@ -158,7 +158,7 @@ def profile():
 @click.command(help='replicate safebox data to other relays')
 def replicate():
     wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY)
-    print(REPLICATE_RELAYS)
+    print("REPLICATE RELAYS:", REPLICATE_RELAYS)
     click.echo(wallet.replicate_safebox(REPLICATE_RELAYS))
     # click.echo(replicate)
     
