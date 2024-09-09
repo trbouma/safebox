@@ -199,8 +199,12 @@ class Wallet:
         asyncio.run(self._async_send_post(hello_msg)) 
         return self.k.private_key_bech32()
 
-    async def _async_create_profile(self, nostr_profile: nostrProfile):
-        async with ClientPool([self.home_relay]) as c:
+    async def _async_create_profile(self, nostr_profile: nostrProfile, replicate_relays: List[str]=None):
+        if replicate_relays:
+            write_relays = replicate_relays
+        else:
+            write_relays = [self.home_relay]
+        async with ClientPool(write_relays) as c:
             profile = nostr_profile.model_dump_json()
             
             profile_str = json.dumps(profile)
@@ -292,6 +296,9 @@ class Wallet:
         
         try:
             profile =asyncio.run(self.async_query_client_profile([self.home_relay],FILTER))
+            profile_obj = nostrProfile(**json.loads(profile))
+            print(profile_obj)
+            asyncio.run(self._async_create_profile(profile_obj, replicate_relays=relays))
         except:
             out_string = "No profile found!"
             return out_string
@@ -303,10 +310,17 @@ class Wallet:
        
         # replicate the reserved records
 
-        self.set_wallet_info(label="home_relay", label_info=json.dumps(self.home_relay), relays=relays)
+        profile = self.get_wallet_info(label="profile")
+        print("replicate profile:", profile)
+        self.set_wallet_info(label="profile", label_info=profile, relays=relays)
+
+        # self.set_wallet_info(label="home_relay", label_info=json.dumps(self.home_relay), relays=relays)
 
         default = self.get_wallet_info(label="default")
         self.set_wallet_info(label="default", label_info=default, relays=relays)
+
+        wallet_config = self.get_wallet_info(label="wallet_config")
+        self.set_wallet_info(label="wallet_config", label_info=wallet_config, relays=relays)
         
         mints = self.get_wallet_info(label="mints")
         self.set_wallet_info(label="mints", label_info=mints,relays=relays)
@@ -317,9 +331,6 @@ class Wallet:
         trusted_mints = self.get_wallet_info(label="trusted_mints")
         self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints), relays=relays)
         
-        profile = self.get_wallet_info(label="profile")
-        self.set_wallet_info(label="profile", label_info=profile, relays=relays)
-        
         quote = self.get_wallet_info(label="quote")
         self.set_wallet_info(label="quote", label_info=quote, relays=relays)
         
@@ -329,8 +340,6 @@ class Wallet:
         last_dm = self.get_wallet_info(label="last_dm")
         self.set_wallet_info(label="last_dm", label_info=last_dm, relays=relays)
         
-        
-
         replicate_proofs = []
         for each in self.proofs:
             each_dump = each.model_dump()
@@ -810,7 +819,7 @@ class Wallet:
             write_relays = relays
 
         async with ClientPool(write_relays) as c:
-        # async with Client(relay) as c:
+            print("add proofs with kind:", self.wallet_config.kind_cashu)
             n_msg = Event(kind=self.wallet_config.kind_cashu,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
