@@ -19,6 +19,7 @@ hotel-names = "^0.0.1"
 coolname = "^2.2.0"
 requests = "^2.32.3"
 bech32 = "^1.2.0"
+mnemonic = "^0.21"
 
 [tool.poetry.scripts]
 npcache = "safebox.cli:cli"

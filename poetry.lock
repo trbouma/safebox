@@ -882,6 +882,17 @@ files = [
 traitlets = "*"
 
 [[package]]
+name = "mnemonic"
+version = "0.21"
+description = "Implementation of Bitcoin BIP-0039"
+optional = false
+python-versions = ">=3.8.1"
+files = [
+    {file = "mnemonic-0.21-py3-none-any.whl", hash = "sha256:72dc9de16ec5ef47287237b9b6943da11647a03fe7cf1f139fc3d7c4a7439288"},
+    {file = "mnemonic-0.21.tar.gz", hash = "sha256:1fe496356820984f45559b1540c80ff10de448368929b9c60a2b55744cc88acf"},
+]
+
+[[package]]
 name = "monstr"
 version = "0.1.9"
 description = "Monstr: Python Nostr module. Python code for working with nostr."
@@ -1825,4 +1836,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.4"
-content-hash = "81c0c1c213a07657915e891a24631e6f1df908ee8664d4ce52208e23706ab6b4"
+content-hash = "9f77299cb3ae0eeb3778077422430130642ce14053eb1199c48e6b06a49b5aa5"
