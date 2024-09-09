@@ -151,6 +151,7 @@ class Proof(BaseModel):
 
 class WalletConfig(BaseModel):
     kind_cashu: int = 0
+    user_records: List[str] = None
 
 class Proofs(BaseModel):
     proofs: List[Proof] = []

@@ -54,6 +54,8 @@ class Wallet:
     balance: int
     proof_events: proofEvents 
     replicate: bool
+    RESERVED_RECORDS: List[str]
+    
 
 
 
@@ -73,6 +75,15 @@ class Wallet:
             self.home_relay = None
             self.replicate = replicate
             self.wallet_config = None
+            self.RESERVED_RECORDS = [   "default",
+                                        "profile",
+                                        "wallet_config",
+                                        "home_relay",
+                                        "trusted_mints",
+                                        "relays",
+                                        "quote",
+                                        "user_records"
+                        ]
             
 
             try:
@@ -329,15 +340,19 @@ class Wallet:
         self.set_wallet_info(label="relays", label_info=read_relays, relays=relays)
         
         trusted_mints = self.get_wallet_info(label="trusted_mints")
+        print("trusted mints to replicate:", trusted_mints)
         self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints), relays=relays)
         
         quote = self.get_wallet_info(label="quote")
-        self.set_wallet_info(label="quote", label_info=quote, relays=relays)
+        print("quote to replicate:", quote)
+        self.set_wallet_info(label="quote", label_info=quote,relays=relays)
         
         index = self.get_wallet_info(label="index")
+        print("index to replicate:", index)
         self.set_wallet_info(label="index", label_info=index, relays=relays)
         
         last_dm = self.get_wallet_info(label="last_dm")
+        print("last_dm to replicate:", last_dm)
         self.set_wallet_info(label="last_dm", label_info=last_dm, relays=relays)
         
         replicate_proofs = []
