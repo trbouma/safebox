@@ -268,7 +268,7 @@ def issue(amount:int):
 # @click.argument('event_id')
 @click.option('--event','-e', default=None)
 @click.option('--npub','-n', default=None)
-@click.option('--comment','-c', default='Zap!')
+@click.option('--comment','-c', default='⚡️')
 def zap(amount:int, event,npub, comment):
     if npub:
         click.echo("Zap to recipient {npub}, ignore event")

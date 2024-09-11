@@ -2159,10 +2159,12 @@ class Wallet:
         except:
             return "bad token"
         proofs=[]
+        proof_obj_list: List[Proof] = []
         for each in token_obj.token:
             print(each.mint)
             for each_proof in each.proofs:
                 proofs.append(each_proof.model_dump())
+                proof_obj_list.append(each_proof)
                 id = each_proof.id
                 self.trusted_mints[id]=each.mint
             
@@ -2172,11 +2174,13 @@ class Wallet:
             
         #TODO Need to swap before adding
         print("XXXXX accept token")
-        self.add_proofs(json.dumps(proofs))
-        # self.swap_multi_each()
-        self.swap_multi_consolidate()
-        # just swap all of the proofs
-        # self.swap_multi()
+        # self.swap_multi_consolidate()
+        
+        # self.add_proofs(json.dumps(proofs))
+        self.add_proofs_obj(proof_obj_list)
+        # self.swap_multi_consolidate()
+        
+
 
     def issue_token(self, amount:int):
         print("issue token")
