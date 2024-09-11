@@ -18,7 +18,7 @@ from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 
-from safebox.b_dhke import step1_alice, step3_alice
+from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
 
@@ -132,9 +132,9 @@ class Wallet:
 
             try:
                 self.wallet_config = WalletConfig(**json.loads(self.get_wallet_info("wallet_config")))
-                print("wallet_config:",self.wallet_config)
+                print("ok wallet_config:",self.wallet_config)
             except:
-                self.wallet_config = WalletConfig(kind_cashu = 7000)
+                self.wallet_config = WalletConfig(kind_cashu = 7375)
                 self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
                 # print("new wallet_config:",self.wallet_config)
                 
@@ -198,7 +198,7 @@ class Wallet:
         self.set_wallet_info(label="default", label_info=display_name)
         self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
         
-        self.wallet_config = WalletConfig(kind_cashu = random.randint(1000,9999))                
+        self.wallet_config = WalletConfig(kind_cashu = 7375)                
         self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
@@ -363,7 +363,8 @@ class Wallet:
             each_dump = each.model_dump()
             replicate_proofs.append(each_dump)
         print("now need to replicate the proofs", replicate_proofs)
-        self.add_proofs(json.dumps(replicate_proofs), replicate_relays=replicate_relays)
+        # self.add_proofs(json.dumps(replicate_proofs), replicate_relays=replicate_relays)
+        self.add_proofs_obj(self.proofs, replicate_relays=replicate_proofs)
         return profile 
     
     async def _async_store_event(self, event_content_str:str, event_kind: int, relays: List[str]):
@@ -746,6 +747,7 @@ class Wallet:
         keys = response.json()["keysets"][0]["keys"]
         # print(keys)
         proofs = []
+        proof_objs = []
         i = 0
         
         for each in promises:
@@ -768,10 +770,14 @@ class Wallet:
                            Y=Y.serialize().hex()
             )
             proofs.append(proof.model_dump())
+            proof_objs.append(proof)
             print(proofs)
             i+=1
         
-        self.add_proofs(json.dumps(proofs))
+        # self.add_proofs(json.dumps(proofs))
+        print("adding deposit proof objects")
+        self.add_proofs_obj(proof_objs)
+        
         return True
 
     def check(self):
@@ -822,14 +828,32 @@ class Wallet:
     
     def add_proofs(self,text, replicate_relays: List[str]=None):
         # make sure have latest kind
+        print("get rid of this function")
 
         asyncio.run(self._async_add_proofs(text, replicate_relays))  
+
+    def add_proofs_obj(self,proofs_arg: List[Proofs], replicate_relays: List[str]=None):
+        # make sure have latest kind
+        #TODO this is a workaround
+
+
+
+        proofs_to_store = json.dump
+        for each in proofs_arg:
+            pass
+            proof_to_store = [each.model_dump()]
+            text = json.dumps(proof_to_store)
+            asyncio.run(self._async_add_proofs(text, replicate_relays))
+        
+        return
+
+
     
     async def _async_add_proofs(self, text:str, replicate_relays: List[str]=None):
         """
             Example showing how to post a text note (Kind 1) to relay
         """
-
+        print("length of proof text:", len(text), text)
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
@@ -1178,6 +1202,7 @@ class Wallet:
         print("remaining", proofs_from_keyset)
         # Continue implementing from line 818 swap_for_payment may need a parameter
          # Now need to do the melt
+       
         proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
         
 
@@ -1203,7 +1228,7 @@ class Wallet:
                 melt_proofs.append(each_proof.model_dump())
 
         data_to_send = {"quote": post_melt_response.quote,
-                      "inputs": melt_proofs }
+                    "inputs": melt_proofs }
         
         print(data_to_send)
         print("we are here!!!")
@@ -1221,9 +1246,12 @@ class Wallet:
             each_proofs = keyset_proofs[key]
             for each_proof in each_proofs:
                 post_payment_proofs.append(each_proof)
+          
+        
         self.proofs = post_payment_proofs
         asyncio.run(self._async_delete_proof_events())
-        self.add_proof_event(self.proofs)
+        # self.add_proof_event(self.proofs)
+        self.add_proofs_obj(post_payment_proofs)
         self._load_proofs()
 
     def pay_multi_invoice(  self, 
@@ -1371,7 +1399,7 @@ class Wallet:
                 post_payment_proofs.append(each_proof)
         self.proofs = post_payment_proofs
         asyncio.run(self._async_delete_proof_events())
-        self.add_proof_event(self.proofs)
+        self.add_proofs_obj(post_payment_proofs)
         self._load_proofs()
 
 
@@ -1401,6 +1429,7 @@ class Wallet:
             # await asyncio.sleep(1)
 
     def swap(self):
+        #TODO This function is no longer used
         swap_amount =0
         count = 0
         
@@ -1495,6 +1524,7 @@ class Wallet:
             
                 # delete old proofs
                 asyncio.run(self._async_delete_proof_events())
+                print("XXXXX swap")
                 self.add_proofs(json.dumps(proofs))
                 self._load_proofs()
                 
@@ -1517,6 +1547,7 @@ class Wallet:
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
+        combined_proof_objs =[]
         
         # Let's check all the proofs before we do anything
 
@@ -1595,6 +1626,7 @@ class Wallet:
                 keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
                 proofs = []
+                proof_objs = []
                 i = 0
             
                 for each in promises:
@@ -1617,6 +1649,14 @@ class Wallet:
                             "Y":    Y.serialize().hex()
                             }
                     proofs.append(proof)
+                    proof_obj = Proof(amount=promise_amount,
+                                      id=each_keyset,
+                                      secret=blinded_values[i][2],
+                                      C=C.serialize().hex(),
+                                      Y = Y.serialize().hex()
+                                      )
+                    proof_objs.append(proof_obj)
+
                     # print(proofs)
                     i+=1
             
@@ -1629,6 +1669,7 @@ class Wallet:
                 proofs = []
             
             combined_proofs = combined_proofs + proofs
+            combined_proof_objs = combined_proof_objs + proof_objs
             # print(request_body) 
             # refresh balance
             
@@ -1638,7 +1679,8 @@ class Wallet:
             # print(len(self.proofs))
             # delete old proofs
             asyncio.run(self._async_delete_proof_events())
-            self.add_proofs(json.dumps(combined_proofs))
+            # self.add_proofs(json.dumps(combined_proofs))
+            self.add_proofs_obj(combined_proof_objs)
             self._load_proofs()
         
         return "multi swap ok"
@@ -1744,6 +1786,7 @@ class Wallet:
                 combined_proofs = combined_proofs + proofs
 
         asyncio.run(self._async_delete_proof_events())
+        print("XXXXX swap multi each")
         self.add_proofs(json.dumps(combined_proofs))
         self._load_proofs()            
         
@@ -1954,19 +1997,25 @@ class Wallet:
                 pub_key_a = PublicKey()
                 pub_key_a.deserialize(unhexlify(A))
                 r = blinded_values[i][1]
+                secret_msg = blinded_values[i][2]
+                Y: PublicKey = hash_to_curve(secret_msg.encode("utf-8"))
                 print(pub_key_c, promise_amount,A, r)
                 C = step3_alice(pub_key_c,r,pub_key_a)
                 
                 proof = Proof(  amount=promise_amount,
                                 id=keyset,
-                                secret=blinded_values[i][2],
-                                C=C.serialize().hex() )
+                                secret=secret_msg,
+                                C=C.serialize().hex(),
+                                Y = Y.serialize().hex()
+                              
+                                 
+                                )
                 
                 proofs.append(proof)
                 # print(proofs)
                 i+=1
-        except:
-            ValueError('test')
+        except Exception as e:
+            print(e)
         
         for each in proofs:
             print(each.amount)
@@ -2122,9 +2171,9 @@ class Wallet:
         print(proofs)
             
         #TODO Need to swap before adding
-
+        print("XXXXX accept token")
         self.add_proofs(json.dumps(proofs))
-        self.swap_multi_each()
+        # self.swap_multi_each()
         self.swap_multi_consolidate()
         # just swap all of the proofs
         # self.swap_multi()
@@ -2210,6 +2259,52 @@ class Wallet:
         
         return v3_token.serialize()   
 
+    def testpay(self, amount:int):
+        amount_needed = amount
+        print("pay from multiple mints")
+        available_amount = 0
+        chosen_keyset = None
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        for each in keyset_amounts:
+            available_amount += keyset_amounts[each]
+        
+        
+        print("available amount:", available_amount)
+        if available_amount < amount:
+            print("insufficient balance. you need more funds!")
+            return
+        
+        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+            print(key, keyset_amounts[key])
+            if keyset_amounts[key] >= amount:
+                chosen_keyset = key
+                break
+        if not chosen_keyset:
+            print("insufficient balance in any one keyset, you need to swap!") 
+            return   
+        
+        print("chosen keyset for payment", chosen_keyset)
+        # Now do the pay routine
+        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        print(melt_quote_url,melt_url)
+        headers = { "Content-Type": "application/json"}
+        
+        proofs_to_use = []
+        proof_amount = 0
+        proofs_from_keyset = keyset_proofs[chosen_keyset]
+        while proof_amount < amount_needed:
+            pay_proof = proofs_from_keyset.pop()
+            proofs_to_use.append(pay_proof)
+            proof_amount += pay_proof.amount
+            print("pop", pay_proof.amount)
+            
+        print("proofs to use:", proofs_to_use)
+        print("remaining", proofs_from_keyset)
+        
+        return "test"
+
+    
     def zap(self, amount:int, event_id, comment): 
         tags = ["#e", event_id]
         
@@ -2219,7 +2314,7 @@ class Wallet:
         }]
         pr = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
         self.pay_multi_invoice(amount,pr)
-        self.swap_multi_consolidate()
+        # self.swap_multi_consolidate()
         return f"zap {amount} to event: {event_id} {pr}"   
     
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 

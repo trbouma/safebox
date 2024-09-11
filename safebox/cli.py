@@ -246,10 +246,15 @@ def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
     wallet_obj.pay_multi(amount,lnaddress,comment)
-    wallet_obj.swap_multi_each()
+    # wallet_obj.swap_multi_consolidate()
+
+@click.command(help="Test pay amount")
+@click.argument('amount', default=21)
+def testpay(amount):
     
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    click.echo(wallet_obj.testpay(amount=amount))
     
-    #click.echo(msg_out)
 
 @click.command(help="Issue token amount")
 @click.argument('amount', default=1)
@@ -318,7 +323,7 @@ def swap():
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    click.echo(wallet_obj.swap_multi_each())
+    # click.echo(wallet_obj.swap_multi_each())
     click.echo(wallet_obj.swap_multi_consolidate())
 
 @click.command(help="Receive cashu token")
@@ -364,6 +369,7 @@ cli.add_command(receive)
 cli.add_command(accept)
 cli.add_command(issue)
 cli.add_command(zap)
+cli.add_command(testpay)
 
 
 
