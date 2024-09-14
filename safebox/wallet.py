@@ -556,16 +556,19 @@ class Wallet:
         label_hash = m.digest().hex()
         
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
-        
+        # a_tag = ["a", label_hash]
+        # print("a_tag:",a_tag)
         DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
-            'kinds': [37375],
-            'd':label_hash
+            'kinds': [37375]
+            
             
         }]
-        event =asyncio.run(self._async_get_wallet_info(FILTER))
+
+        # print("are we here?", label_hash)
+        event =asyncio.run(self._async_get_wallet_info(FILTER, label_hash))
         
         # print(event.data())
         try:
@@ -590,12 +593,14 @@ class Wallet:
 
         return decrypt_content
     
-    async def _async_get_wallet_info(self, filter: List[dict]):
+    async def _async_get_wallet_info(self, filter: List[dict],label_hash):
     # does a one off query to relay prints the events and exits
         # print("filter", filter[0]['d'])
         my_enc = NIP44Encrypt(self.k)
-        target_tag = filter[0]['d']
-        #print("target tag:", target_tag)
+        # target_tag = filter[0]['d']
+        target_tag = label_hash
+        
+        # print("target tag:", target_tag)
         event_select = None
         async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
