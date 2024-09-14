@@ -63,7 +63,7 @@ def cli():
 @click.pass_context
 def info(ctx):
     click.echo("This is safebox. Retrieving wallet...")
-    wallet_obj = Wallet(NSEC,RELAYS,MINTS)
+    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS, home_relay=HOME_RELAY)
     print(wallet_obj)
 
 @click.command(help="initialize a new safebox")
