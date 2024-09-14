@@ -204,7 +204,7 @@ def put(label, label_info):
 
 def post(message):
     click.echo(message)
-    wallet_obj = Wallet(NSEC, RELAYS)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
     wallet_obj.send_post(message)
 
 
