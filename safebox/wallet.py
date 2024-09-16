@@ -138,6 +138,12 @@ class Wallet:
             # print("init quote:", self.quote)
         except:
             self.quote = []
+
+        try:
+            user_records= json.loads(self.wallet_reserved_records['user_records'])
+            # print("init quote:", self.quote)
+        except:
+            self.wallet_reserved_records['user_records'] = '[]'
         
        
             
@@ -649,7 +655,7 @@ class Wallet:
             print("this is a reserved record")
             return self.wallet_reserved_records[record_name]
         else:
-            return record_name
+            return self.wallet_reserved_records[record_name]
    
     def get_proofs(self):
         #TODO add in a group by keyset
@@ -719,7 +725,20 @@ class Wallet:
             
             return events[0]
 
-   
+    def put_record(self,record_name, record_value):
+        print("reserved records:", self.RESERVED_RECORDS)
+        if record_name in self.RESERVED_RECORDS:
+            print("careful this is a reserved record")
+            return record_name
+        else:
+            print("this is a user record")
+            user_records = json.loads(self.wallet_reserved_records['user_records'])
+            user_records.append(record_name)
+            user_records = sorted(list(set(user_records)))
+            self.set_wallet_info('user_records',json.dumps(user_records))
+            self.set_wallet_info(record_name,record_value)
+            print(user_records)
+            return record_name
     
     def _mint_proofs(self, quote:str, amount:int):
         # print("mint proofs")
