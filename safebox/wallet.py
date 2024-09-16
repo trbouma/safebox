@@ -135,15 +135,13 @@ class Wallet:
 
         try:
             self.quote = json.loads(self.wallet_reserved_records['quote'])
-            print("init quote:", self.quote)
+            # print("init quote:", self.quote)
         except:
             self.quote = []
         
        
             
-# To here
-        print("load record events")
-        # self._load_record_events()
+
 
             
         
@@ -941,7 +939,7 @@ class Wallet:
             reverse_hash = {}        
             record_events = await c.query(filter)
             
-            print(f"record  events: {len(record_events)}")
+            print(f"load record  events: {len(record_events)}")
             for each in self.RESERVED_RECORDS:
                 m = hashlib.sha256()
                 m.update(self.privkey_hex.encode())
@@ -960,7 +958,7 @@ class Wallet:
                                 decrypt_content = my_enc.decrypt(each_record.content, self.pubkey_hex)
                             except:
                                 decrypt_content = "could not decrpyt"
-                            print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
+                            # print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
                             self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
                     
             print(self.wallet_reserved_records)
