@@ -24,7 +24,7 @@ from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_add
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
-from safebox.models import WalletConfig
+from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 
 def powers_of_2_sum(amount):
     powers = []
@@ -56,6 +56,7 @@ class Wallet:
     proof_events: proofEvents 
     replicate: bool
     RESERVED_RECORDS: List[str]
+    wallet_reserved_records: object
     
 
 
@@ -80,69 +81,77 @@ class Wallet:
                                         "profile",
                                         "wallet_config",
                                         "home_relay",
+                                        "mints",
                                         "trusted_mints",
                                         "relays",
                                         "quote",
                                         "user_records"
                         ]
+            self.wallet_reserved_records = {}
+        else:
+            return "Need nsec" 
+
+        print("load records")
+
+        if home_relay == None:
+            print("need a home relay to boot")
+            return None
+        else:
+            self.home_relay = home_relay
+         
+        self._load_record_events()
+        print(self.wallet_reserved_records)
+        if mints == None:
             
-
-            try:
-                if home_relay == None:
-                    self.home_relay = json.loads(self.get_wallet_info(label="home_relay"))
-                else:
-                    self.home_relay = home_relay
-                    self.set_wallet_info(label="home_relay", label_info=json.dumps(self.home_relay))
-                
-                if mints == None:
-                    self.mints = json.loads(self.get_wallet_info(label="mints"))
-                else:
-                    self.mints = mints
-                    self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
-            
-
-                
-                #Check to see if there are more relays than what was provided
-                try:
-                    more_relays_str = self.get_wallet_info("relays")
-                    more_relays_json = json.loads(more_relays_str)
-                
-                    self.relays = list(set(relays + more_relays_json))
-                    self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
-                
-                    pass
-                except:
-                    pass
-            except:
-                print("could not boot from relay")
-                return
-            
-            headers = { "Content-Type": "application/json"}
-            keyset_url = f"{self.mints[0]}/v1/keysets"
-
-            try:
-                self.trusted_mints = json.loads(self.get_wallet_info("trusted_mints"))
-            except:
-                # initialize first trusted keyset to mint
-
-                response = requests.get(keyset_url, headers=headers)
-                keyset = response.json()['keysets'][0]['id']
-                self.trusted_mints[keyset] = self.mints[0]
-                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-
-            try:
-                self.wallet_config = WalletConfig(**json.loads(self.get_wallet_info("wallet_config")))
-                print("ok wallet_config:",self.wallet_config)
-            except:
-                self.wallet_config = WalletConfig(kind_cashu = 7375)
-                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
-                # print("new wallet_config:",self.wallet_config)
-                
-
-            self._load_proofs()
+            self.mints = json.loads(self.wallet_reserved_records['mints'])
             
         else:
-            print("Error")
+            self.mints = mints
+            self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+
+        if relays == None:
+            self.relays = json.loads(self.wallet_reserved_records['relays'])
+        else:
+            self.relays = relays
+            self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
+
+        headers = { "Content-Type": "application/json"}
+        keyset_url = f"{self.mints[0]}/v1/keysets"
+        try:
+            self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
+        except:
+            response = requests.get(keyset_url, headers=headers)
+            keyset = response.json()['keysets'][0]['id']
+            self.trusted_mints[keyset] = self.mints[0]
+            self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+
+        try:
+            self.wallet_config = WalletConfig(**json.loads(self.wallet_reserved_records["wallet_config"]))
+            print("ok wallet_config:",self.wallet_config)
+        except:
+            self.wallet_config = WalletConfig(kind_cashu = 7375)
+            self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
+            # print("new wallet_config:",self.wallet_config)
+
+        try:
+            self.quote = json.loads(self.wallet_reserved_records['quote'])
+            print("init quote:", self.quote)
+        except:
+            self.quote = []
+        
+       
+            
+# To here
+        print("load record events")
+        # self._load_record_events()
+
+            
+        
+        
+        print("load proofs")
+        self._load_proofs()
+            
+        
 
 
 
@@ -558,6 +567,7 @@ class Wallet:
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
         # a_tag = ["a", label_hash]
         # print("a_tag:",a_tag)
+        print("getting:", label)
         DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
@@ -600,14 +610,14 @@ class Wallet:
         # target_tag = filter[0]['d']
         target_tag = label_hash
         
-        # print("target tag:", target_tag)
+        print("target tag:", target_tag)
         event_select = None
         async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
             
             events = await c.query(filter)
             
-            # print(f"37375 events: {len(events)}")
+            print(f"37375 events: {len(events)}")
 
             
 
@@ -631,6 +641,14 @@ class Wallet:
             
             return event_select
         
+    def get_record(self,record_name):
+        print("reserved records:", self.RESERVED_RECORDS)
+        if record_name in self.RESERVED_RECORDS:
+            print("this is a reserved record")
+            return self.wallet_reserved_records[record_name]
+        else:
+            return record_name
+   
     def get_proofs(self):
         #TODO add in a group by keyset
         
@@ -903,6 +921,50 @@ class Wallet:
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
             # await asyncio.sleep(1) 
+    
+    def _load_record_events(self):
+        FILTER = [{
+            'limit': 100,
+            'authors': [self.pubkey_hex],
+            'kinds': [37375]
+        }]
+        content =asyncio.run(self._async_load_record_events(FILTER))
+        
+        return content
+    
+    async def _async_load_record_events(self, filter: List[dict]):
+    # does a query for record events, does not decrypt
+       
+        async with ClientPool([self.home_relay]) as c:
+            my_enc = NIP44Encrypt(self.k)
+            # get reserved records  
+            reverse_hash = {}        
+            record_events = await c.query(filter)
+            
+            print(f"record  events: {len(record_events)}")
+            for each in self.RESERVED_RECORDS:
+                m = hashlib.sha256()
+                m.update(self.privkey_hex.encode())
+                m.update(each.encode())
+                label_hash = m.digest().hex()
+                # print(each, label_hash)
+                reverse_hash[label_hash]=each
+                # print("reverse_hash:", reverse_hash)               
+            
+            
+                for each_record in record_events:                
+                    for each_tag in each_record.tags:            
+                        if each_tag[0] == 'd':
+                            # print("found!", each_tag)
+                            try:
+                                decrypt_content = my_enc.decrypt(each_record.content, self.pubkey_hex)
+                            except:
+                                decrypt_content = "could not decrpyt"
+                            print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
+                            self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
+                    
+            print(self.wallet_reserved_records)
+
     def _load_proofs(self):
         
         
@@ -992,8 +1054,11 @@ class Wallet:
            
         
         event_quotes = [] 
-        event_quote_info_list = self.get_wallet_info("quote")
+        # event_quote_info_list = self.get_wallet_info("quote")
+        event_quote_info_list = self.wallet_reserved_records["quote"]
         event_quote_info_list_json = json.loads(event_quote_info_list)
+        print(event_quote_info_list_json)
+        event_quote_info_list_json = self.quote
         for each in event_quote_info_list_json:
             event_quotes.append(walletQuote(**each))
 

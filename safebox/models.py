@@ -153,6 +153,13 @@ class WalletConfig(BaseModel):
     kind_cashu: int = 0
     user_records: List[str] = []
 
+class WalletRecord(BaseModel):
+    record_name: str
+    record_obj: object
+
+class WalletReservedRecords(BaseModel):
+    records: List[WalletRecord]=[]
+
 class Proofs(BaseModel):
     proofs: List[Proof] = []
 

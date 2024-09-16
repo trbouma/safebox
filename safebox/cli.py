@@ -63,8 +63,8 @@ def cli():
 @click.pass_context
 def info(ctx):
     click.echo("This is safebox. Retrieving wallet...")
-    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS, home_relay=HOME_RELAY)
-    print(wallet_obj)
+    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    # print(wallet_obj)
 
 @click.command(help="initialize a new safebox")
 def init():
@@ -170,11 +170,13 @@ def replicate():
 @click.argument('label', default = "default")
 def get(label):
     
-    
+    safebox_info = "None"
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
 
     try:
-        safebox_info = wallet_obj.get_wallet_info(label)
+        # safebox_info = wallet_obj.get_wallet_info(label)
+        safebox_info = wallet_obj.get_record(label)
+        pass
 
     except:
         safebox_info = "No label found!"
