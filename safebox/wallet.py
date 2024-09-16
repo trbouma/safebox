@@ -91,7 +91,7 @@ class Wallet:
         else:
             return "Need nsec" 
 
-        print("load records")
+        # print("load records")
 
         if home_relay == None:
             print("need a home relay to boot")
@@ -100,7 +100,7 @@ class Wallet:
             self.home_relay = home_relay
          
         self._load_record_events()
-        print(self.wallet_reserved_records)
+        # print(self.wallet_reserved_records)
         if mints == None:
             
             self.mints = json.loads(self.wallet_reserved_records['mints'])
@@ -127,7 +127,7 @@ class Wallet:
 
         try:
             self.wallet_config = WalletConfig(**json.loads(self.wallet_reserved_records["wallet_config"]))
-            print("ok wallet_config:",self.wallet_config)
+            # print("ok wallet_config:",self.wallet_config)
         except:
             self.wallet_config = WalletConfig(kind_cashu = 7375)
             self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
@@ -148,13 +148,17 @@ class Wallet:
         
         print("load proofs")
         self._load_proofs()
+
+        return None
             
         
 
 
 
     def __repr__(self):
-        return f"wallet has {self.balance} sats"
+        out_str = json.dumps(self.wallet_reserved_records)
+
+        return out_str
     
     def powers_of_2_sum(self, amount: int):
         powers = []
@@ -939,7 +943,7 @@ class Wallet:
             reverse_hash = {}        
             record_events = await c.query(filter)
             
-            print(f"load record  events: {len(record_events)}")
+            # print(f"load record  events: {len(record_events)}")
             for each in self.RESERVED_RECORDS:
                 m = hashlib.sha256()
                 m.update(self.privkey_hex.encode())
@@ -961,7 +965,7 @@ class Wallet:
                             # print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
                             self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
                     
-            print(self.wallet_reserved_records)
+            # print(self.wallet_reserved_records)
 
     def _load_proofs(self):
         
