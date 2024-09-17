@@ -222,6 +222,7 @@ class Wallet:
         self.set_wallet_info(label="quote", label_info='[]')
         self.set_wallet_info(label="index", label_info='{}')
         self.set_wallet_info(label="last_dm", label_info='0')
+        self.set_wallet_info(label="user_records", label_info='[]')
         print(out)
         hello_msg = f"Hello World from {pet_name}! #introductions"
         print(hello_msg)
