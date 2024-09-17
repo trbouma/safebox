@@ -21,6 +21,7 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
+from safebox.nostr import bech32_to_hex, hex_to_bech32
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
@@ -2402,7 +2403,9 @@ class Wallet:
 
     
     def zap(self, amount:int, event_id, comment): 
-        tags = ["#e", event_id]
+        
+        if event_id.startswith("note"):
+            event_id = bech32_to_hex(event_id)
         
         zap_filter = [{  
             'ids'  :  [event_id]          
@@ -2416,6 +2419,7 @@ class Wallet:
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
+        zap_splits = []
         event = None
         # print("are we here today", self.relays)
         async with ClientPool([self.home_relay]+self.relays) as c:        
@@ -2423,7 +2427,7 @@ class Wallet:
         try:
             event = events[0]  
             print(event)  
-            json_str =   f"{event.id}  {event.pub_key}  {event.content}"
+            json_str =   f"{event.id}  {event.pub_key}  {event.content} {event.tags}"
             print("json_str", json_str)
             # json_obj = json.loads(json_str)
             # json_obj = json.loads(json_str)
@@ -2434,6 +2438,11 @@ class Wallet:
         if event == None:
             raise Exception("no event")
         
+        for each in event.tags:
+            if each[0] == "zap":
+                zap_splits.append((each[1],each[2],each[3]))
+        print("zap splits:", zap_splits)
+
         profile_filter =  [{
             'limit': 1,
             'authors': [event.pub_key],
