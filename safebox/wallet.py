@@ -6,6 +6,7 @@ from datetime import datetime
 import urllib.parse
 import random
 from mnemonic import Mnemonic
+import bolt11
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -1348,11 +1349,13 @@ class Wallet:
         self._load_proofs()
 
     def pay_multi_invoice(  self, 
-                    amount:int, 
-                    lnaddress: str, 
+                     
+                    lninvoice: str, 
                     comment: str = "Paid!"): 
                     
-        
+        # decode amount from invoice
+        ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
+
         print("pay from multiple mints")
         available_amount = 0
         chosen_keyset = None
@@ -1362,13 +1365,13 @@ class Wallet:
         
         
         print("available amount:", available_amount)
-        if available_amount < amount:
+        if available_amount < ln_amount:
             print("insufficient balance. you need more funds!")
             return
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             print(key, keyset_amounts[key])
-            if keyset_amounts[key] >= amount:
+            if keyset_amounts[key] >= ln_amount:
                 chosen_keyset = key
                 break
         if not chosen_keyset:
@@ -1382,9 +1385,9 @@ class Wallet:
         print(melt_quote_url,melt_url)
         headers = { "Content-Type": "application/json"}
         # callback = lightning_address_pay(amount, lnaddress,comment=comment)
-        pr = lnaddress        
+        pr = lninvoice        
         print(pr)
-        print(amount, lnaddress)
+        print(ln_amount, lninvoice)
         data_to_send = {    "request": pr,
                             "unit": "sat"
 
@@ -1395,7 +1398,7 @@ class Wallet:
         print("mint response:", post_melt_response)
         proofs_to_use = []
         proof_amount = 0
-        amount_needed = amount + post_melt_response.fee_reserve
+        amount_needed = ln_amount + post_melt_response.fee_reserve
         print("amount needed:", amount_needed)
         if amount_needed > keyset_amounts[chosen_keyset]:
             print("insufficient balance in keyset. you need to swap, or use another keyset")
@@ -1414,10 +1417,10 @@ class Wallet:
             melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
             print(melt_quote_url,melt_url)
-            callback = lightning_address_pay(amount, lnaddress,comment=comment)
+            callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
             pr = callback['pr']        
             print(pr)
-            print(amount, lnaddress)
+            print(ln_amount, lninvoice)
             data_to_send = {    "request": pr,
                             "unit": "sat"
 
@@ -2413,7 +2416,7 @@ class Wallet:
         }]
         prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
         for each_pr in prs:
-            self.pay_multi_invoice(amount,each_pr)
+            self.pay_multi_invoice(each_pr)
             out_msg+=f"\nzap {amount} to event: {event_id} {each_pr}"
        
         
@@ -2451,6 +2454,8 @@ class Wallet:
 
         prs = []
         for each_zap in zaps_to_send:
+            zap_amount = int(amount * float(each_zap[2]))
+            zap_amount = 1 if zap_amount ==0 else zap_amount
             profile_filter =  [{
                 'limit': 1,
                 'authors': [each_zap[0]],
@@ -2478,7 +2483,7 @@ class Wallet:
             print("create zap request")
             tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
                         ["relays"] + self.relays,
-                        ["amount",str(amount*1000)],
+                        ["amount",str(zap_amount*1000)],
                         ["p",each_zap[0]],
                         ["e",filter[0]['ids'][0]]
                     ]
@@ -2499,7 +2504,7 @@ class Wallet:
             zap_test = Event().load(zap_dict)
             print("zap_test.id:", zap_test.id)
             print("zap test", zap_test, zap_test.is_valid())
-            pr,_,_ = zap_address_pay(amount,lnaddress,zap_dict)
+            pr,_,_ = zap_address_pay(zap_amount,lnaddress,zap_dict)
             print("pay this invoice from the safebox:",pr)
             prs.append(pr)
         
