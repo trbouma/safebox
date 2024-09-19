@@ -2448,7 +2448,7 @@ class Wallet:
             if each[0] == "zap":
                 zaps_to_send.append((each[1],each[2],each[3]))
         if zaps_to_send == []:
-            zaps_to_send =[(event.pub_key,None,None)]
+            zaps_to_send =[(event.pub_key,None,1)]
         
         print("zaps to send:", zaps_to_send)
 
