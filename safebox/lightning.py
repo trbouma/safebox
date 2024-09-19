@@ -15,8 +15,11 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
     try:    
            
         ln_parms = requests.get(url_to_call)
+        lnparms_obj = ln_parms.json()
+        allows_nostr = lnparms_obj.get("allowsNostr", False)
+        nostr_pubkey = lnparms_obj.get("nostrPubkey", None)
         
-        
+        print("ln_parms", ln_parms.json())
 
         # print("lightning address pay callback: multiplier", ln_parms.json()['currency']['multiplier'])
 
@@ -86,4 +89,4 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
         pr = ln_return.json()['pr']
         
 
-    return pr
+    return pr, allows_nostr,nostr_pubkey

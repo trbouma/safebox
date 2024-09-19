@@ -2403,7 +2403,7 @@ class Wallet:
 
     
     def zap(self, amount:int, event_id, comment): 
-        
+        out_msg = ""
         if event_id.startswith("note"):
             event_id = bech32_to_hex(event_id)
         
@@ -2411,15 +2411,18 @@ class Wallet:
             'ids'  :  [event_id]          
             
         }]
-        pr = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
-        self.pay_multi_invoice(amount,pr)
-        # self.swap_multi_consolidate()
-        return f"zap {amount} to event: {event_id} {pr}"   
+        prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+        for each_pr in prs:
+            self.pay_multi_invoice(amount,each_pr)
+            out_msg+=f"\nzap {amount} to event: {event_id} {each_pr}"
+       
+        
+        return out_msg   
     
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
-        zap_splits = []
+        zaps_to_send = []
         event = None
         # print("are we here today", self.relays)
         async with ClientPool([self.home_relay]+self.relays) as c:        
@@ -2440,60 +2443,64 @@ class Wallet:
         
         for each in event.tags:
             if each[0] == "zap":
-                zap_splits.append((each[1],each[2],each[3]))
-        print("zap splits:", zap_splits)
+                zaps_to_send.append((each[1],each[2],each[3]))
+        if zaps_to_send == []:
+            zaps_to_send =[(event.pub_key,None,None)]
+        
+        print("zaps to send:", zaps_to_send)
 
-        profile_filter =  [{
-            'limit': 1,
-            'authors': [event.pub_key],
-            'kinds': [0]
-        }]    
-        async with ClientPool([self.home_relay]+self.relays) as c:        
-            events_profile = await c.query(profile_filter)
-        try:
-            print("getting profile")
-            event_profile = events_profile[0]  
-            print(event)  
-            profile_str =   event_profile.content
-            print("profile", profile_str)
-            profile_obj = json.loads(profile_str)
-            lnaddress = profile_obj['lud16']
-            print(lnaddress, lnaddress_to_lnurl(lnaddress))
-            zap_info = lightning_address_pay(amount,lnaddress)
-            print("zap_info", zap_info)
+        prs = []
+        for each_zap in zaps_to_send:
+            profile_filter =  [{
+                'limit': 1,
+                'authors': [each_zap[0]],
+                'kinds': [0]
+            }]    
+            async with ClientPool([self.home_relay]+self.relays) as c:        
+                events_profile = await c.query(profile_filter)
+            try:
+                print("getting profile")
+                event_profile = events_profile[0]  
+                print(event)  
+                profile_str =   event_profile.content
+                print("profile", profile_str)
+                profile_obj = json.loads(profile_str)
+                lnaddress = profile_obj['lud16']
+                print(lnaddress, lnaddress_to_lnurl(lnaddress))
+
+                
+            except:
+                {"status": "could not access profile"}
+                print("could not get profile")
+                pass
             
-        except:
-            {"status": "could not access profile"}
-            print("could not get profile")
-            pass
+            # Now we can create zap request
+            print("create zap request")
+            tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
+                        ["relays"] + self.relays,
+                        ["amount",str(amount*1000)],
+                        ["p",each_zap[0]],
+                        ["e",filter[0]['ids'][0]]
+                    ]
+            zap_request = Zevent(
+                                kind=9734,
+                                content=comment,
+                                tags = tags,
+                                pub_key=self.pubkey_hex                            
+                                )
+            zap_request.sign(self.privkey_hex)
+            print("is valid:", zap_request.is_valid())
+            print(zap_request, zap_request.tags, zap_request.id)
+            print("serialize:", zap_request.serialize())
+            print("to_dict:", zap_request.to_dict())
+            zap_dict= zap_request.to_dict()
+            print("zap_dict:",zap_dict )
+            
+            zap_test = Event().load(zap_dict)
+            print("zap_test.id:", zap_test.id)
+            print("zap test", zap_test, zap_test.is_valid())
+            pr,_,_ = zap_address_pay(amount,lnaddress,zap_dict)
+            print("pay this invoice from the safebox:",pr)
+            prs.append(pr)
         
-        # Now we can create zap request
-        print("create zap request")
-        tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
-                    ["relays"] + self.relays,
-                    ["amount",str(amount*1000)],
-                    ["p",event.pub_key],
-                    ["e",filter[0]['ids'][0]]
-                ]
-        zap_request = Zevent(
-                            kind=9734,
-                            content=comment,
-                            tags = tags,
-                            pub_key=self.pubkey_hex                            
-                            )
-        zap_request.sign(self.privkey_hex)
-        print("is valid:", zap_request.is_valid())
-        print(zap_request, zap_request.tags, zap_request.id)
-        print("serialize:", zap_request.serialize())
-        print("to_dict:", zap_request.to_dict())
-        zap_dict= zap_request.to_dict()
-        print("zap_dict:",zap_dict )
-        
-        zap_test = Event().load(zap_dict)
-        print("zap_test.id:", zap_test.id)
-        print("zap test", zap_test, zap_test.is_valid())
-        pr = zap_address_pay(amount,lnaddress,zap_dict)
-        print("pay this invoice from the safebox:",pr)
-        
-        
-        return pr
+        return prs
