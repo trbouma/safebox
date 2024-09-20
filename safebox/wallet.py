@@ -178,20 +178,18 @@ class Wallet:
             amount -= power
         return sorted(powers)
     
-    def create_profile(self):
+    def create_profile(self, nostr_profile_create: bool=False, keepkey:bool=False):
         init_index = {}
         wallet_info = {}
-        self.k= Keys()
-        self.pubkey_bech32  =   self.k.public_key_bech32()
-        self.pubkey_hex     =   self.k.public_key_hex()
-        self.privkey_hex    =   self.k.private_key_hex()
+
+        if keepkey==False:
+            self.k= Keys()
+            self.pubkey_bech32  =   self.k.public_key_bech32()
+            self.pubkey_hex     =   self.k.public_key_hex()
+            self.privkey_hex    =   self.k.private_key_hex()
         
         new_name = generate()
         print(new_name)
-
-
-
-
         for i in range(len(new_name)):
             if new_name[i].lower() in ["of","from"]:
                 if i >=1:
@@ -210,7 +208,13 @@ class Wallet:
                                         lud16= f"{self.pubkey_bech32}@openbalance.app",
                                         website=f"https://npub.cash/pay/{self.pubkey_bech32}"
                                          )
-        out = asyncio.run(self._async_create_profile(nostr_profile))
+        if nostr_profile_create:
+            out = asyncio.run(self._async_create_profile(nostr_profile))
+            hello_msg = f"Hello World from {pet_name}! #introductions"
+            print(hello_msg)
+            asyncio.run(self._async_send_post(hello_msg))
+            print(out)
+
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = pet_name
         # self.set_index_info(json.dumps(init_index))
@@ -225,10 +229,8 @@ class Wallet:
         self.set_wallet_info(label="index", label_info='{}')
         self.set_wallet_info(label="last_dm", label_info='0')
         self.set_wallet_info(label="user_records", label_info='[]')
-        print(out)
-        hello_msg = f"Hello World from {pet_name}! #introductions"
-        print(hello_msg)
-        asyncio.run(self._async_send_post(hello_msg)) 
+        
+ 
         return self.k.private_key_bech32()
 
     async def _async_create_profile(self, nostr_profile: nostrProfile, replicate_relays: List[str]=None):
@@ -253,22 +255,11 @@ class Wallet:
         profile_obj = {}
         nostr_profile = None
         mnemo = Mnemonic("english")
-        FILTER = [{
-            'limit': 1,
-            'authors': [self.pubkey_hex],
-            'kinds': [0]
-        }]
         
-        try:
-            profile =asyncio.run(self.async_query_client_profile([self.home_relay],FILTER))
-        except:
-            out_string = "No profile found!"
-            return out_string
-        
-        # print(f"profile {type(profile)}")
-        if profile:
-            profile_obj = json.loads(profile)
-            nostr_profile = nostrProfile(**profile_obj)
+       
+        profile = self.wallet_reserved_records["profile"]
+        profile_obj = json.loads(profile)
+        nostr_profile = nostrProfile(**profile_obj)
            
 
 
