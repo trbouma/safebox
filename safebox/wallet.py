@@ -256,14 +256,18 @@ class Wallet:
         nostr_profile = None
         mnemo = Mnemonic("english")
         
-       
-        profile = self.wallet_reserved_records["profile"]
+        try:
+            FILTER = [{
+            'limit': 1,
+            'authors': [self.pubkey_hex],
+            'kinds': [0]
+            }]
+            profile = asyncio.run(self._async_query_client_profile(FILTER))
+        except:        
+            profile = self.wallet_reserved_records["profile"]
+        
         profile_obj = json.loads(profile)
         nostr_profile = nostrProfile(**profile_obj)
-           
-
-
-        
         out_string =  "-"*80  
         out_string += f"\nProfile Information for: {nostr_profile.display_name}"
         out_string += "\n"+ "-"*80  
@@ -290,7 +294,7 @@ class Wallet:
 
         return out_string
     
-    async def async_query_client_profile(self, relay: str, filter: List[dict]): 
+    async def _async_query_client_profile(self, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
         # print("are we here today", self.relays)
@@ -307,7 +311,7 @@ class Wallet:
        
         # print("json_obj", json_obj)
         
-        return json_obj
+        return json_str
         
     def replicate_safebox(self, replicate_relays = List[str]):
         

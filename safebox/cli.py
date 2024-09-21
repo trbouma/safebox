@@ -68,8 +68,8 @@ def info(ctx):
     click.echo(info)
 
 @click.command(help="initialize a new safebox")
-@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Create Profile.")
-@click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key.")
+@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
+@click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 def init(profile, keepkey):
     click.echo(f"Creating a new safebox with {MINTS}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
