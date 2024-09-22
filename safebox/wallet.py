@@ -867,7 +867,12 @@ class Wallet:
          
         return cliQuote(invoice=invoice, quote=quote)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
-    
+    def withdraw(self, lninvoice:str):
+
+        msg_out = self.pay_multi_invoice(lninvoice=lninvoice)
+        
+        return msg_out
+
     def add_proofs(self,text, replicate_relays: List[str]=None):
         # make sure have latest kind
         print("get rid of this function")
@@ -988,7 +993,7 @@ class Wallet:
         
         
         FILTER = [{
-            'limit': 10,
+            'limit': 1024,
             'authors': [self.pubkey_hex],
             'kinds': [self.wallet_config.kind_cashu]
         }]
@@ -1349,7 +1354,10 @@ class Wallet:
                     comment: str = "Paid!"): 
                     
         # decode amount from invoice
-        ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
+        try:
+            ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
+        except Exception as e:
+            return f"error {e}"
 
         print("pay from multiple mints")
         available_amount = 0

@@ -228,6 +228,17 @@ def deposit(amount: int):
     click.echo(f"\n\nPlease pay invoice:\n {cli_quote.invoice}") 
 
     click.echo(f"\n\nPlease run safebox check invoice check to see if invoice is paid")
+
+@click.command(help="withdraw funds from wallet via lightning invoice")
+@click.argument('invoice')
+
+def withdraw(invoice: str):
+    click.echo(f"invoice: {invoice}")
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    cli_out = wallet_obj.withdraw(invoice)
+    click.echo(cli_out) 
+
+ 
     
 @click.command(help="Check for payment")
 @click.argument('param')
@@ -366,6 +377,7 @@ cli.add_command(put)
 
 
 cli.add_command(deposit)
+cli.add_command(withdraw)
 cli.add_command(proofs)
 cli.add_command(balance)
 cli.add_command(swap)
