@@ -1329,11 +1329,19 @@ class Wallet:
         response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
         print(response.json()) 
         payment_json = response.json()
-        if payment_json['paid']:
-            print("paid ok")
+        #TODO Need to do some error checking
         print("need to do some error checking")  
         # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
         # add keep proofs back into selected keyset proofs
+        if payment_json.get("paid",False):        
+            print("lightning paid ok")
+        else:
+            print("payment did not go through") 
+            # Add back in spend proofs
+            for each in spend_proofs:   
+                proofs_from_keyset.append(each)
+        
+
         for each in keep_proofs:
             proofs_from_keyset.append(each)
         # print("self proofs", self.proofs)
@@ -1819,7 +1827,7 @@ class Wallet:
         # return
         # All the proofs are verified, we are good to go for the swap   
         # In multi_each we are going to swap for each proof 
-        #FIXME do a fix on the events here
+        
  
         for each_keyset in keyset_proofs:
             
