@@ -334,14 +334,19 @@ def balance():
 
 
 @click.command(help="swap proofs for new proofs")
-def swap():
+@click.option("--consolidate","-c", is_flag=True, show_default=True, default=False, help="Consolidate proofs")
+def swap(consolidate):
     
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    # click.echo(wallet_obj.swap_multi_each())
-    click.echo(wallet_obj.swap_multi_consolidate())
+    
+    if consolidate:
+        click.echo("Consolidate proofs")
+        click.echo(wallet_obj.swap_multi_consolidate())
+    else:
+        click.echo(wallet_obj.swap_multi_each())
 
 @click.command(help="Receive cashu token")
 @click.argument('token')

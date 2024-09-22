@@ -1325,9 +1325,14 @@ class Wallet:
                     "inputs": melt_proofs }
         
         print(data_to_send)
-        print("we are here!!!")
+        print("Lightning payment we are here!!!")
         response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        print(response.json())   
+        print(response.json()) 
+        payment_json = response.json()
+        if payment_json['paid']:
+            print("paid ok")
+        print("need to do some error checking")  
+        # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
         # add keep proofs back into selected keyset proofs
         for each in keep_proofs:
             proofs_from_keyset.append(each)
@@ -1785,9 +1790,11 @@ class Wallet:
         return "multi swap ok"
 
     def swap_multi_each(self):
+        #TODO this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
+        combined_proof_objs =[]
         
         # Let's check all the proofs before we do anything
 
@@ -1812,7 +1819,7 @@ class Wallet:
         # return
         # All the proofs are verified, we are good to go for the swap   
         # In multi_each we are going to swap for each proof 
-
+        #FIXME do a fix on the events here
  
         for each_keyset in keyset_proofs:
             
@@ -1844,6 +1851,7 @@ class Wallet:
                             
                 }
                 proofs = []
+                proof_objs = []
                 try:
                     response = requests.post(url=swap_url, json=data_to_send, headers=headers)
                     # print(response.json())
@@ -1873,6 +1881,13 @@ class Wallet:
                             }
                         proofs.append(proof)
                         print(proofs)
+                        proof_obj = Proof(amount=promise_amount,
+                                      id=each_keyset,
+                                      secret=blinded_values[i][2],
+                                      C=C.serialize().hex(),
+                                      Y = Y.serialize().hex()
+                                      )
+                        proof_objs.append(proof_obj)
                         i+=1
                         
                     
@@ -1883,11 +1898,15 @@ class Wallet:
                     print("duplicate proof, ignore")
 
                 combined_proofs = combined_proofs + proofs
+                combined_proof_objs = combined_proof_objs + proof_objs
 
         asyncio.run(self._async_delete_proof_events())
         print("XXXXX swap multi each")
-        self.add_proofs(json.dumps(combined_proofs))
-        self._load_proofs()            
+        self.add_proofs_obj(combined_proof_objs)
+        
+        self._load_proofs()
+        
+                   
         
         return "multi swap ok"
         
