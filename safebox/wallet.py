@@ -247,7 +247,7 @@ class Wallet:
                 print(profile_str)
       
                 n_msg = Event(kind=0,
-                        content=profile_str,
+                        content=profile,
                         pub_key=self.pubkey_hex)
                 n_msg.sign(self.privkey_hex)
                 c.publish(n_msg)
