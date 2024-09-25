@@ -239,17 +239,21 @@ class Wallet:
         else:
             write_relays = [self.home_relay]
         async with ClientPool(write_relays) as c:
-            profile = nostr_profile.model_dump_json()
+            out_msg = "ok"
+            try:
+                profile = nostr_profile.model_dump_json()
             
-            profile_str = json.dumps(profile)
-            print(profile_str)
+                profile_str = json.dumps(profile)
+                print(profile_str)
       
-            n_msg = Event(kind=0,
+                n_msg = Event(kind=0,
                         content=profile_str,
                         pub_key=self.pubkey_hex)
-            n_msg.sign(self.privkey_hex)
-            c.publish(n_msg)
-        return "ok"
+                n_msg.sign(self.privkey_hex)
+                c.publish(n_msg)
+            except:
+                out_msg = "error"
+        return out_msg
 
     def get_profile(self):
         profile_obj = {}
@@ -264,7 +268,7 @@ class Wallet:
             }]
             profile = asyncio.run(self._async_query_client_profile(FILTER))
         except:        
-            profile = self.wallet_reserved_records["profile"]
+            profile = self.wallet_reserved_records.get("profile", "{}")
         
         profile_obj = json.loads(profile)
         nostr_profile = nostrProfile(**profile_obj)
@@ -558,7 +562,7 @@ class Wallet:
             #                         to_pub_k=self.pubkey_hex)
             
             n_msg.sign(self.privkey_hex)
-            # print(n_msg.data())
+            # print("label, event id:", label, n_msg.id)
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
@@ -900,7 +904,7 @@ class Wallet:
         """
             Example showing how to post a text note (Kind 1) to relay
         """
-        print("length of proof text:", len(text), text)
+        # print("length of proof text:", len(text), text)
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
@@ -912,7 +916,7 @@ class Wallet:
 
 
         async with ClientPool(write_relays) as c:
-            print("add proofs with kind:", self.wallet_config.kind_cashu)
+            # print("add proofs with kind:", self.wallet_config.kind_cashu)
             n_msg = Event(kind=self.wallet_config.kind_cashu,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
@@ -973,7 +977,7 @@ class Wallet:
                 label_hash = m.digest().hex()
                 # print(each, label_hash)
                 reverse_hash[label_hash]=each
-                # print("reverse_hash:", reverse_hash)               
+                             
             
             
                 for each_record in record_events:                
@@ -985,7 +989,11 @@ class Wallet:
                             except:
                                 decrypt_content = "could not decrpyt"
                             # print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
-                            self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
+                            
+                            reserved_record_label = reverse_hash.get(each_tag[1])
+                            if reverse_hash.get(each_tag[1]):
+                                self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
+                                # print(f"load {reverse_hash.get(each_tag[1])}:{each_tag[1]},{decrypt_content}")  
                     
             # print(self.wallet_reserved_records)
 
@@ -1202,7 +1210,7 @@ class Wallet:
                     comment: str = "Paid!"): 
                     
         
-        print("pay from multiple mints")
+        # print("pay from multiple mints")
         available_amount = 0
         chosen_keyset = None
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
@@ -1216,7 +1224,7 @@ class Wallet:
             return
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            print(key, keyset_amounts[key])
+            # print(key, keyset_amounts[key])
             if keyset_amounts[key] >= amount:
                 chosen_keyset = key
                 break
@@ -1228,20 +1236,20 @@ class Wallet:
         # Now do the pay routine
         melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
         melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
-        print(melt_quote_url,melt_url)
+        # print(melt_quote_url,melt_url)
         headers = { "Content-Type": "application/json"}
         callback = lightning_address_pay(amount, lnaddress,comment=comment)
         pr = callback['pr']        
-        print(pr)
+        # print(pr)
         print(amount, lnaddress)
         data_to_send = {    "request": pr,
                             "unit": "sat"
 
                         }
         response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        print("post melt response:", response.json())
+        # print("post melt response:", response.json())
         post_melt_response = PostMeltQuoteResponse(**response.json())
-        print("mint response:", post_melt_response)
+        # print("mint response:", post_melt_response)
         proofs_to_use = []
         proof_amount = 0
         amount_needed = amount + post_melt_response.fee_reserve
@@ -1250,7 +1258,7 @@ class Wallet:
             print("insufficient balance in keyset. you need to swap, or use another keyset")
             chosen_keyset = None
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                print(key, keyset_amounts[key])
+                # print(key, keyset_amounts[key])
                 if keyset_amounts[key] >= amount_needed:
                     chosen_keyset = key
                     print("new chosen keyset", key)
@@ -1262,19 +1270,19 @@ class Wallet:
             # Set to new mints and redo the calls
             melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
-            print(melt_quote_url,melt_url)
+            # print(melt_quote_url,melt_url)
             callback = lightning_address_pay(amount, lnaddress,comment=comment)
             pr = callback['pr']        
-            print(pr)
+            # print(pr)
             print(amount, lnaddress)
             data_to_send = {    "request": pr,
                             "unit": "sat"
 
                         }
             response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-            print("post melt response:", response.json())
+            # print("post melt response:", response.json())
             post_melt_response = PostMeltQuoteResponse(**response.json())
-            print("mint response:", post_melt_response)
+            # print("mint response:", post_melt_response)
 
             if not chosen_keyset:
                 print("insufficient balance in any one keyset, you need to swap!") 
@@ -1282,7 +1290,7 @@ class Wallet:
             
         # Print now we should be all set to go
         print("---we have a sufficient mint---")
-        print(melt_quote_url,melt_url, post_melt_response)
+        # print(melt_quote_url,melt_url, post_melt_response)
         proofs_to_use = []
         proof_amount = 0
         proofs_from_keyset = keyset_proofs[chosen_keyset]
@@ -1290,18 +1298,18 @@ class Wallet:
             pay_proof = proofs_from_keyset.pop()
             proofs_to_use.append(pay_proof)
             proof_amount += pay_proof.amount
-            print("pop", pay_proof.amount)
+            # print("pop", pay_proof.amount)
             
-        print("proofs to use:", proofs_to_use)
-        print("remaining", proofs_from_keyset)
+        # print("proofs to use:", proofs_to_use)
+        # print("remaining", proofs_from_keyset)
         # Continue implementing from line 818 swap_for_payment may need a parameter
          # Now need to do the melt
        
         proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
         
 
-        print("proofs remaining:", proofs_remaining)
-        print(f"amount needed: {amount_needed}")
+        # print("proofs remaining:", proofs_remaining)
+        # print(f"amount needed: {amount_needed}")
         # Implement from line 824
         sum_proofs =0
         spend_proofs = []
@@ -1840,7 +1848,7 @@ class Wallet:
             swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
             
             for each_proof in keyset_proofs[each_keyset]:
-                print(each_proof.amount)
+                # print(each_proof.amount)
                 blinded_values =[]
                 blinded_messages = []
                 secret = secrets.token_hex(32)
@@ -1864,7 +1872,7 @@ class Wallet:
                     response = requests.post(url=swap_url, json=data_to_send, headers=headers)
                     # print(response.json())
                     promises = response.json()['signatures']
-                    print("promises:", promises)
+                    # print("promises:", promises)
                     
                     i = 0
             
@@ -1888,7 +1896,7 @@ class Wallet:
                             "Y":    Y.serialize().hex()
                             }
                         proofs.append(proof)
-                        print(proofs)
+                        # print(proofs)
                         proof_obj = Proof(amount=promise_amount,
                                       id=each_keyset,
                                       secret=blinded_values[i][2],
@@ -2101,9 +2109,9 @@ class Wallet:
             print("are we here?")
             response = requests.post(url=swap_url, json=data_to_send, headers=headers)
             
-            print(response.json())
+            # print(response.json())
             promises = response.json()['signatures']
-            print("promises:", promises)
+            # print("promises:", promises)
 
         
             mint_key_url = f"{self.trusted_mints[keyset_to_use]}/v1/keys/{keyset}"
@@ -2115,7 +2123,7 @@ class Wallet:
         
             for each in promises:
                 pub_key_c = PublicKey()
-                print("each:", each['C_'])
+                # print("each:", each['C_'])
                 pub_key_c.deserialize(unhexlify(each['C_']))
                 promise_amount = each['amount']
                 A = keys[str(int(promise_amount))]
@@ -2144,7 +2152,8 @@ class Wallet:
             print(e)
         
         for each in proofs:
-            print(each.amount)
+            pass
+            # print(each.amount)
         # now need break out proofs for payment and proofs remaining
 
         return proofs
