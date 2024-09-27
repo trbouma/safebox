@@ -8,6 +8,7 @@ from datetime import datetime
 from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
 from time import sleep
+import qrcode
 
 relays  = [ "wss://relay.nimo.cash",
             "wss://nostr-pub.wellorder.net", 
@@ -222,10 +223,13 @@ def post(message):
 @click.command(help="deposit funds into wallet via lightning invoice")
 @click.argument('amount')
 def deposit(amount: int):
+    qr = qrcode.QRCode()
     click.echo(f"amount: {amount}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     cli_quote = wallet_obj.deposit(amount)
-    click.echo(f"\n\nPlease pay invoice:\n {cli_quote.invoice}") 
+    qr.add_data(cli_quote.invoice)
+    click.echo(f"\n\nPlease pay invoice:\n{cli_quote.invoice}\n") 
+    click.echo(f"\n\{qr.print_ascii()}\n") 
 
     click.echo(f"\n\nPlease run safebox check invoice check to see if invoice is paid")
 

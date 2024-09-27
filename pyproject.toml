@@ -21,6 +21,7 @@ requests = "^2.32.3"
 bech32 = "^1.2.0"
 mnemonic = "^0.21"
 bolt11 = "^2.1.0"
+qrcode = "^7.4.2"
 
 [tool.poetry.scripts]
 npcache = "safebox.cli:cli"

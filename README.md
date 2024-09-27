@@ -17,8 +17,9 @@ The initial use case will be holding Cashu tokens for the purposes of accepting 
 
 
 
+Detailed install instructions are being developed [here](./INSTALL.md).
 
-If you have Poetry installed, you can do the following:
+In the meantime, f you have Poetry installed, you can do the following:
 ```
 poetry new sbtest
 cd sbtest
@@ -26,6 +27,12 @@ poetry add git+https://github.com/trbouma/safebox.git
 poetry shell
 
 ```
+If you are feeling wreckless and want the latest code, do this `poetry add` instead
+```
+poetry add git+https://github.com/trbouma/safebox.git#latest-development
+```
+
+
 General help. Warning - everything is not fully implemented yet!
 ``` 
 safebox --help
