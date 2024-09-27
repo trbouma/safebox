@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10.4"
+python = "<3.14,>=3.8.1"
 monstr = "^0.1.9"
 asyncio = "^3.4.3"
 logging = "^0.4.9.6"
@@ -32,6 +32,7 @@ npurse = "safebox.cli:cli"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
+pyinstaller = "^6.10.0"
 
 [build-system]
 requires = ["poetry-core"]

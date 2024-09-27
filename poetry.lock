@@ -152,6 +152,17 @@ dev = ["attribution (==1.7.0)", "black (==24.2.0)", "coverage[toml] (==7.4.1)", 
 docs = ["sphinx (==7.2.6)", "sphinx-mdinclude (==0.5.3)"]
 
 [[package]]
+name = "altgraph"
+version = "0.17.4"
+description = "Python graph (network) package"
+optional = false
+python-versions = "*"
+files = [
+    {file = "altgraph-0.17.4-py2.py3-none-any.whl", hash = "sha256:642743b4750de17e655e6711601b077bc6598dbfa3ba5fa2b2a35ce12b508dff"},
+    {file = "altgraph-0.17.4.tar.gz", hash = "sha256:1b5afbb98f6c4dcadb2e2ae6ab9fa994bbb8c1d75f4fa96d340f9437ae454406"},
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 description = "Reusable constraint types to use with typing.Annotated"
@@ -161,6 +172,9 @@ files = [
     {file = "annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53"},
     {file = "annotated_types-0.7.0.tar.gz", hash = "sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89"},
 ]
+
+[package.dependencies]
+typing-extensions = {version = ">=4.0.0", markers = "python_version < \"3.9\""}
 
 [[package]]
 name = "appnope"
@@ -244,6 +258,17 @@ dev = ["cloudpickle", "hypothesis", "mypy (>=1.11.1)", "pre-commit", "pympler", 
 docs = ["cogapp", "furo", "myst-parser", "sphinx", "sphinx-notfound-page", "sphinxcontrib-towncrier", "towncrier (<24.7)"]
 tests = ["cloudpickle", "hypothesis", "mypy (>=1.11.1)", "pympler", "pytest (>=4.3.0)", "pytest-mypy-plugins", "pytest-xdist[psutil]"]
 tests-mypy = ["mypy (>=1.11.1)", "pytest-mypy-plugins"]
+
+[[package]]
+name = "backcall"
+version = "0.2.0"
+description = "Specifications for callback functions passed in to an API"
+optional = false
+python-versions = "*"
+files = [
+    {file = "backcall-0.2.0-py2.py3-none-any.whl", hash = "sha256:fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255"},
+    {file = "backcall-0.2.0.tar.gz", hash = "sha256:5cbdbf27be5e7cfadb448baf0aa95508f91f2bbc6c6437cd9cd06e2a4c215e1e"},
+]
 
 [[package]]
 name = "base58"
@@ -844,20 +869,6 @@ files = [
 ]
 
 [[package]]
-name = "exceptiongroup"
-version = "1.2.2"
-description = "Backport of PEP 654 (exception groups)"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "exceptiongroup-1.2.2-py3-none-any.whl", hash = "sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b"},
-    {file = "exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc"},
-]
-
-[package.extras]
-test = ["pytest (>=6)"]
-
-[[package]]
 name = "executing"
 version = "2.0.1"
 description = "Get the currently executing AST node of a frame, and other information"
@@ -980,6 +991,29 @@ files = [
 ]
 
 [[package]]
+name = "importlib-metadata"
+version = "8.5.0"
+description = "Read metadata from Python packages"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "importlib_metadata-8.5.0-py3-none-any.whl", hash = "sha256:45e54197d28b7a7f1559e60b95e7c567032b602131fbd588f1497f47880aa68b"},
+    {file = "importlib_metadata-8.5.0.tar.gz", hash = "sha256:71522656f0abace1d072b9e5481a48f07c138e00f079c38c8f883823f9c26bd7"},
+]
+
+[package.dependencies]
+zipp = ">=3.20"
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1)"]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+enabler = ["pytest-enabler (>=2.2)"]
+perf = ["ipython"]
+test = ["flufl.flake8", "importlib-resources (>=1.3)", "jaraco.test (>=5.4)", "packaging", "pyfakefs", "pytest (>=6,!=8.1.*)", "pytest-perf (>=0.9.2)"]
+type = ["pytest-mypy"]
+
+[[package]]
 name = "ipykernel"
 version = "6.29.5"
 description = "IPython Kernel for Jupyter"
@@ -1014,41 +1048,42 @@ test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio 
 
 [[package]]
 name = "ipython"
-version = "8.26.0"
+version = "8.12.3"
 description = "IPython: Productive Interactive Computing"
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.8"
 files = [
-    {file = "ipython-8.26.0-py3-none-any.whl", hash = "sha256:e6b347c27bdf9c32ee9d31ae85defc525755a1869f14057e900675b9e8d6e6ff"},
-    {file = "ipython-8.26.0.tar.gz", hash = "sha256:1cec0fbba8404af13facebe83d04436a7434c7400e59f47acf467c64abd0956c"},
+    {file = "ipython-8.12.3-py3-none-any.whl", hash = "sha256:b0340d46a933d27c657b211a329d0be23793c36595acf9e6ef4164bc01a1804c"},
+    {file = "ipython-8.12.3.tar.gz", hash = "sha256:3910c4b54543c2ad73d06579aa771041b7d5707b033bd488669b4cf544e3b363"},
 ]
 
 [package.dependencies]
+appnope = {version = "*", markers = "sys_platform == \"darwin\""}
+backcall = "*"
 colorama = {version = "*", markers = "sys_platform == \"win32\""}
 decorator = "*"
-exceptiongroup = {version = "*", markers = "python_version < \"3.11\""}
 jedi = ">=0.16"
 matplotlib-inline = "*"
-pexpect = {version = ">4.3", markers = "sys_platform != \"win32\" and sys_platform != \"emscripten\""}
-prompt-toolkit = ">=3.0.41,<3.1.0"
+pexpect = {version = ">4.3", markers = "sys_platform != \"win32\""}
+pickleshare = "*"
+prompt-toolkit = ">=3.0.30,<3.0.37 || >3.0.37,<3.1.0"
 pygments = ">=2.4.0"
 stack-data = "*"
-traitlets = ">=5.13.0"
-typing-extensions = {version = ">=4.6", markers = "python_version < \"3.12\""}
+traitlets = ">=5"
+typing-extensions = {version = "*", markers = "python_version < \"3.10\""}
 
 [package.extras]
-all = ["ipython[black,doc,kernel,matplotlib,nbconvert,nbformat,notebook,parallel,qtconsole]", "ipython[test,test-extra]"]
+all = ["black", "curio", "docrepr", "ipykernel", "ipyparallel", "ipywidgets", "matplotlib", "matplotlib (!=3.2.0)", "nbconvert", "nbformat", "notebook", "numpy (>=1.21)", "pandas", "pytest (<7)", "pytest (<7.1)", "pytest-asyncio", "qtconsole", "setuptools (>=18.5)", "sphinx (>=1.3)", "sphinx-rtd-theme", "stack-data", "testpath", "trio", "typing-extensions"]
 black = ["black"]
-doc = ["docrepr", "exceptiongroup", "intersphinx-registry", "ipykernel", "ipython[test]", "matplotlib", "setuptools (>=18.5)", "sphinx (>=1.3)", "sphinx-rtd-theme", "sphinxcontrib-jquery", "tomli", "typing-extensions"]
+doc = ["docrepr", "ipykernel", "matplotlib", "pytest (<7)", "pytest (<7.1)", "pytest-asyncio", "setuptools (>=18.5)", "sphinx (>=1.3)", "sphinx-rtd-theme", "stack-data", "testpath", "typing-extensions"]
 kernel = ["ipykernel"]
-matplotlib = ["matplotlib"]
 nbconvert = ["nbconvert"]
 nbformat = ["nbformat"]
 notebook = ["ipywidgets", "notebook"]
 parallel = ["ipyparallel"]
 qtconsole = ["qtconsole"]
-test = ["packaging", "pickleshare", "pytest", "pytest-asyncio (<0.22)", "testpath"]
-test-extra = ["curio", "ipython[test]", "matplotlib (!=3.2.0)", "nbformat", "numpy (>=1.23)", "pandas", "trio"]
+test = ["pytest (<7.1)", "pytest-asyncio", "testpath"]
+test-extra = ["curio", "matplotlib (!=3.2.0)", "nbformat", "numpy (>=1.21)", "pandas", "pytest (<7.1)", "pytest-asyncio", "testpath", "trio"]
 
 [[package]]
 name = "jedi"
@@ -1081,6 +1116,7 @@ files = [
 ]
 
 [package.dependencies]
+importlib-metadata = {version = ">=4.8.3", markers = "python_version < \"3.10\""}
 jupyter-core = ">=4.12,<5.0.dev0 || >=5.1.dev0"
 python-dateutil = ">=2.8.2"
 pyzmq = ">=23.0"
@@ -1120,6 +1156,20 @@ python-versions = "*"
 files = [
     {file = "logging-0.4.9.6.tar.gz", hash = "sha256:26f6b50773f085042d301085bd1bf5d9f3735704db9f37c1ce6d8b85c38f2417"},
 ]
+
+[[package]]
+name = "macholib"
+version = "1.16.3"
+description = "Mach-O header analysis and editing"
+optional = false
+python-versions = "*"
+files = [
+    {file = "macholib-1.16.3-py2.py3-none-any.whl", hash = "sha256:0e315d7583d38b8c77e815b1ecbdbf504a8258d8b3e17b61165c6feb60d18f2c"},
+    {file = "macholib-1.16.3.tar.gz", hash = "sha256:07ae9e15e8e4cd9a788013d81f5908b3609aa76f9b1421bae9c4d7606ec86a30"},
+]
+
+[package.dependencies]
+altgraph = ">=0.17"
 
 [[package]]
 name = "matplotlib-inline"
@@ -1304,6 +1354,17 @@ qa = ["flake8 (==5.0.4)", "mypy (==0.971)", "types-setuptools (==67.2.0.1)"]
 testing = ["docopt", "pytest"]
 
 [[package]]
+name = "pefile"
+version = "2024.8.26"
+description = "Python PE parsing module"
+optional = false
+python-versions = ">=3.6.0"
+files = [
+    {file = "pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"},
+    {file = "pefile-2024.8.26.tar.gz", hash = "sha256:3ff6c5d8b43e8c37bb6e6dd5085658d658a7a0bdcd20b6a07b1fcfc1c4e9d632"},
+]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 description = "Pexpect allows easy control of interactive console applications."
@@ -1316,6 +1377,17 @@ files = [
 
 [package.dependencies]
 ptyprocess = ">=0.5"
+
+[[package]]
+name = "pickleshare"
+version = "0.7.5"
+description = "Tiny 'shelve'-like database with concurrency support"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pickleshare-0.7.5-py2.py3-none-any.whl", hash = "sha256:9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56"},
+    {file = "pickleshare-0.7.5.tar.gz", hash = "sha256:87683d47965c1da65cdacaf31c8441d12b8044cdec9aca500cd78fc2c683afca"},
+]
 
 [[package]]
 name = "platformdirs"
@@ -1591,6 +1663,57 @@ files = [
 windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
+name = "pyinstaller"
+version = "6.10.0"
+description = "PyInstaller bundles a Python application and all its dependencies into a single package."
+optional = false
+python-versions = "<3.14,>=3.8"
+files = [
+    {file = "pyinstaller-6.10.0-py3-none-macosx_10_13_universal2.whl", hash = "sha256:d60fb22859e11483af735aec115fdde09467cdbb29edd9844839f2c920b748c0"},
+    {file = "pyinstaller-6.10.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:46d75359668993ddd98630a3669dc5249f3c446e35239b43bc7f4155bc574748"},
+    {file = "pyinstaller-6.10.0-py3-none-manylinux2014_i686.whl", hash = "sha256:3398a98fa17d47ccb31f8779ecbdacec025f7adb2f22757a54b706ac8b4fe906"},
+    {file = "pyinstaller-6.10.0-py3-none-manylinux2014_ppc64le.whl", hash = "sha256:e9989f354ae4ed8a3bec7bdb37ae0d170751d6520e500f049c7cd0632d31d5c3"},
+    {file = "pyinstaller-6.10.0-py3-none-manylinux2014_s390x.whl", hash = "sha256:b7c90c91921b3749083115b28f30f40abf2bb481ceff196d2b2ce0eaa2b3d429"},
+    {file = "pyinstaller-6.10.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:6cf876d7d93b8b4f28d1ad57fa24645cf43119c79e985dd5e5f7a801245e6f53"},
+    {file = "pyinstaller-6.10.0-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:db05e3f2f10f9f78c56f1fb163d9cb453433429fe4281218ebaf1ebfd39ba942"},
+    {file = "pyinstaller-6.10.0-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:28eca3817f176fdc19747e1afcf434f13bb9f17a644f611be2c5a61b1f498ed7"},
+    {file = "pyinstaller-6.10.0-py3-none-win32.whl", hash = "sha256:703e041718987e46ba0568a2c71ecf2459fddef57cf9edf3efeed4a53e3dae3f"},
+    {file = "pyinstaller-6.10.0-py3-none-win_amd64.whl", hash = "sha256:95b55966e563e8b8f31a43882aea10169e9a11fdf38e626d86a2907b640c0701"},
+    {file = "pyinstaller-6.10.0-py3-none-win_arm64.whl", hash = "sha256:308e0a8670c9c9ac0cebbf1bbb492e71b6675606f2ec78bc4adfc830d209e087"},
+    {file = "pyinstaller-6.10.0.tar.gz", hash = "sha256:143840f8056ff7b910bf8f16f6cd92cc10a6c2680bb76d0a25d558d543d21270"},
+]
+
+[package.dependencies]
+altgraph = "*"
+importlib-metadata = {version = ">=4.6", markers = "python_version < \"3.10\""}
+macholib = {version = ">=1.8", markers = "sys_platform == \"darwin\""}
+packaging = ">=22.0"
+pefile = {version = ">=2022.5.30", markers = "sys_platform == \"win32\""}
+pyinstaller-hooks-contrib = ">=2024.8"
+pywin32-ctypes = {version = ">=0.2.1", markers = "sys_platform == \"win32\""}
+setuptools = ">=42.0.0"
+
+[package.extras]
+completion = ["argcomplete"]
+hook-testing = ["execnet (>=1.5.0)", "psutil", "pytest (>=2.7.3)"]
+
+[[package]]
+name = "pyinstaller-hooks-contrib"
+version = "2024.8"
+description = "Community maintained hooks for PyInstaller"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pyinstaller_hooks_contrib-2024.8-py3-none-any.whl", hash = "sha256:0057fe9a5c398d3f580e73e58793a1d4a8315ca91c3df01efea1c14ed557825a"},
+    {file = "pyinstaller_hooks_contrib-2024.8.tar.gz", hash = "sha256:29b68d878ab739e967055b56a93eb9b58e529d5b054fbab7a2f2bacf80cef3e2"},
+]
+
+[package.dependencies]
+importlib-metadata = {version = ">=4.6", markers = "python_version < \"3.10\""}
+packaging = ">=22.0"
+setuptools = ">=42.0.0"
+
+[[package]]
 name = "pypng"
 version = "0.20220715.0"
 description = "Pure Python library for saving and loading PNG images"
@@ -1636,6 +1759,17 @@ files = [
     {file = "pywin32-306-cp38-cp38-win_amd64.whl", hash = "sha256:e8ac1ae3601bee6ca9f7cb4b5363bf1c0badb935ef243c4733ff9a393b1690c0"},
     {file = "pywin32-306-cp39-cp39-win32.whl", hash = "sha256:e25fd5b485b55ac9c057f67d94bc203f3f6595078d1fb3b458c9c28b7153a802"},
     {file = "pywin32-306-cp39-cp39-win_amd64.whl", hash = "sha256:39b61c15272833b5c329a2989999dcae836b1eed650252ab1b7bfbe1d59f30f4"},
+]
+
+[[package]]
+name = "pywin32-ctypes"
+version = "0.2.3"
+description = "A (partial) reimplementation of pywin32 using ctypes/cffi"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "pywin32-ctypes-0.2.3.tar.gz", hash = "sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755"},
+    {file = "pywin32_ctypes-0.2.3-py3-none-any.whl", hash = "sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8"},
 ]
 
 [[package]]
@@ -1901,6 +2035,26 @@ files = [
 cffi = ">=1.3.0"
 
 [[package]]
+name = "setuptools"
+version = "75.1.0"
+description = "Easily download, build, install, upgrade, and uninstall Python packages"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "setuptools-75.1.0-py3-none-any.whl", hash = "sha256:35ab7fd3bcd95e6b7fd704e4a1539513edad446c097797f2985e0e4b960772f2"},
+    {file = "setuptools-75.1.0.tar.gz", hash = "sha256:d59a21b17a275fb872a9c3dae73963160ae079f1049ed956880cd7c09b120538"},
+]
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1)", "ruff (>=0.5.2)"]
+core = ["importlib-metadata (>=6)", "importlib-resources (>=5.10.2)", "jaraco.collections", "jaraco.functools", "jaraco.text (>=3.7)", "more-itertools", "more-itertools (>=8.8)", "packaging", "packaging (>=24)", "platformdirs (>=2.6.2)", "tomli (>=2.0.1)", "wheel (>=0.43.0)"]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "pygments-github-lexers (==0.0.5)", "pyproject-hooks (!=1.1)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-favicon", "sphinx-inline-tabs", "sphinx-lint", "sphinx-notfound-page (>=1,<2)", "sphinx-reredirects", "sphinxcontrib-towncrier", "towncrier (<24.7)"]
+enabler = ["pytest-enabler (>=2.2)"]
+test = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "ini2toml[lite] (>=0.14)", "jaraco.develop (>=7.21)", "jaraco.envs (>=2.2)", "jaraco.path (>=3.2.0)", "jaraco.test", "packaging (>=23.2)", "pip (>=19.1)", "pyproject-hooks (!=1.1)", "pytest (>=6,!=8.1.*)", "pytest-home (>=0.5)", "pytest-perf", "pytest-subprocess", "pytest-timeout", "pytest-xdist (>=3)", "tomli-w (>=1.0.0)", "virtualenv (>=13.0.0)", "wheel (>=0.44.0)"]
+type = ["importlib-metadata (>=7.0.2)", "jaraco.develop (>=7.21)", "mypy (==1.11.*)", "pytest-mypy"]
+
+[[package]]
 name = "six"
 version = "1.16.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -2121,7 +2275,26 @@ files = [
 idna = ">=2.0"
 multidict = ">=4.0"
 
+[[package]]
+name = "zipp"
+version = "3.20.2"
+description = "Backport of pathlib-compatible object wrapper for zip files"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "zipp-3.20.2-py3-none-any.whl", hash = "sha256:a817ac80d6cf4b23bf7f2828b7cabf326f15a001bea8b1f9b49631780ba28350"},
+    {file = "zipp-3.20.2.tar.gz", hash = "sha256:bc9eb26f4506fda01b81bcde0ca78103b6e62f991b381fec825435c836edbc29"},
+]
+
+[package.extras]
+check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1)"]
+cover = ["pytest-cov"]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+enabler = ["pytest-enabler (>=2.2)"]
+test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
+type = ["pytest-mypy"]
+
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.10.4"
-content-hash = "584ec122c7a62cde85ae66107d31a3a329f49c087e7ebf3eafe2c9b5afc265b8"
+python-versions = "<3.14,>=3.8.1"
+content-hash = "1ab4e72fa7ccb010eed9fd54074efe3f4016361506792efc14271cfd152b424c"
