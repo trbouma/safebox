@@ -20,9 +20,9 @@ relays  = [ "wss://relay.nimo.cash",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-mints   = ["https://mint.belgianbitcoinembassy.org"]
+mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-home_relay = "wss://relay.magiccity.live"
+home_relay = "wss://strfry.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 
 home_directory = os.path.expanduser('~')
@@ -77,14 +77,16 @@ def info(ctx):
 @click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 def init(profile, keepkey):
-    click.echo(f"Creating a new safebox with {MINTS}")
+    click.echo(f"Creating a new safebox with relay: {HOME_RELAY} and mint: {MINTS}")
+    
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
     if profile:
         click.echo("Create nostr profile")
     if keepkey:
         click.echo("Keep existing key")
     config_obj['nsec'] = wallet_obj.create_profile(profile,keepkey)
-    click.echo(f"nsec: {config_obj['nsec']}")
+    
+    click.echo(wallet_obj.get_profile())
     write_config()
     click.echo(wallet_obj.get_post())
     

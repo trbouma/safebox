@@ -192,7 +192,7 @@ class Wallet:
             self.privkey_hex    =   self.k.private_key_hex()
         
         new_name = generate()
-        print(new_name)
+        # print(new_name)
         for i in range(len(new_name)):
             if new_name[i].lower() in ["of","from"]:
                 if i >=1:
