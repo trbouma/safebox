@@ -121,6 +121,9 @@ class Wallet:
         keyset_url = f"{self.mints[0]}/v1/keysets"
         try:
             self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
+            keyset = response.json()['keysets'][0]['id']
+            self.trusted_mints[keyset] = self.mints[0]
+            self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
         except:
             response = requests.get(keyset_url, headers=headers)
             keyset = response.json()['keysets'][0]['id']

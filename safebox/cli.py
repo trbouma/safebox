@@ -9,6 +9,10 @@ from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
 from time import sleep
 import qrcode
+from safebox.constants import (
+    WELCOME_MSG
+
+)
 
 relays  = [ "wss://relay.nimo.cash",
             "wss://nostr-pub.wellorder.net", 
@@ -63,6 +67,7 @@ def cli():
 @click.command(help='display info')
 @click.pass_context
 def info(ctx):
+    click.echo(WELCOME_MSG)
     click.echo("This is safebox. Retrieving wallet...")
     info = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     # print(wallet_obj)
@@ -229,7 +234,7 @@ def deposit(amount: int):
     cli_quote = wallet_obj.deposit(amount)
     qr.add_data(cli_quote.invoice)
     click.echo(f"\n\nPlease pay invoice:\n{cli_quote.invoice}\n") 
-    click.echo(f"\n\{qr.print_ascii()}\n") 
+    click.echo(f"\n{qr.print_ascii()}\n") 
 
     click.echo(f"\n\nPlease run safebox check invoice check to see if invoice is paid")
 
@@ -269,8 +274,22 @@ def pay(amount,lnaddress: str, comment:str):
     wallet_obj.pay_multi(amount,lnaddress,comment)
     # wallet_obj.swap_multi_consolidate()
 
+
+
+@click.command(help="Send amount to npub")
+@click.argument('amount', default=21)
+@click.argument('npub', default=None)
+@click.option('--comment','-c', default='Paid!')
+@click.option('--relays','-r', default='relay.damus.io')
+def send(amount,npub: str, relays:str, comment:str):
+    click.echo(f"Send to: {amount} to {npub} via {relays}")
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    #wallet_obj.pay_multi(amount,lnaddress,comment)
+    # wallet_obj.swap_multi_consolidate()
+
 @click.command(help="Test pay amount")
 @click.argument('amount', default=21)
+
 def testpay(amount):
     
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
@@ -380,6 +399,7 @@ cli.add_command(post)
 
 cli.add_command(set)
 cli.add_command(pay)
+cli.add_command(send)
 cli.add_command(get)
 cli.add_command(put)
 
