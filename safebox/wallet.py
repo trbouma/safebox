@@ -157,7 +157,7 @@ class Wallet:
             
         
         
-        print("load proofs")
+        # print("load proofs")
         self._load_proofs()
 
         return None
@@ -428,6 +428,41 @@ class Wallet:
            
             return posts
 
+    def send_ecash_dm(self,amount: int, npub: str, ecash_relays:List[str]):
+        out_msg = "test"
+        token_amount = self.issue_token(amount=amount)
+        
+        out_msg= asyncio.run(self._async_send_ecash_dm(token_amount,npub, ecash_relays))
+        return out_msg
+    
+
+    async def _async_send_ecash_dm(self,token_amount: str, npub: str, ecash_relays:List[str]):
+        print("npub:", npub)
+        
+        my_enc = NIP4Encrypt(self.k)
+        k_to_send = Keys(pub_k=npub)
+        k_to_send_pubkey_hex = k_to_send.public_key_hex()
+        print("k_to_send:", k_to_send_pubkey_hex)
+        ecash_msg = token_amount
+        ecash_info_encrypt = my_enc.encrypt(ecash_msg,to_pub_k=k_to_send_pubkey_hex)
+
+        print("are we here?", ecash_relays)
+        async with ClientPool(ecash_relays) as c:
+            n_msg = Event(kind=Event.KIND_ENCRYPT,
+                      content=ecash_msg,
+                      pub_key=k_to_send_pubkey_hex)
+
+            # print("are we here_async?", ecash_relays)
+            # returns event we to_p_tag and content encrypted
+            n_msg = my_enc.encrypt_event(evt=n_msg,
+                                    to_pub_k=k_to_send_pubkey_hex)
+
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+        
+        return f"{token_amount} {ecash_msg} to {npub} {ecash_relays}"    
+    
+    
     def get_dm(self):
         
         
