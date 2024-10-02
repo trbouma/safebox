@@ -87,7 +87,9 @@ class Wallet:
                                         "trusted_mints",
                                         "relays",
                                         "quote",
-                                        "user_records"
+                                        "user_records",
+                                        "last_dm"
+                                        
                         ]
             self.wallet_reserved_records = {}
         else:
@@ -428,22 +430,22 @@ class Wallet:
            
             return posts
 
-    def send_ecash_dm(self,amount: int, npub: str, ecash_relays:List[str]):
+    def send_ecash_dm(self,amount: int, npub: str, ecash_relays:List[str], comment: str ="Sent!"):
         out_msg = "test"
         token_amount = self.issue_token(amount=amount)
-        
-        out_msg= asyncio.run(self._async_send_ecash_dm(token_amount,npub, ecash_relays))
+        token_msg = comment +"\n\n" + token_amount
+        out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays))
         return out_msg
     
 
-    async def _async_send_ecash_dm(self,token_amount: str, npub: str, ecash_relays:List[str]):
+    async def _async_send_ecash_dm(self,token_message: str, npub: str, ecash_relays:List[str]):
         print("npub:", npub)
         
         my_enc = NIP4Encrypt(self.k)
         k_to_send = Keys(pub_k=npub)
         k_to_send_pubkey_hex = k_to_send.public_key_hex()
         print("k_to_send:", k_to_send_pubkey_hex)
-        ecash_msg = token_amount
+        ecash_msg = token_message
         ecash_info_encrypt = my_enc.encrypt(ecash_msg,to_pub_k=k_to_send_pubkey_hex)
 
         print("are we here?", ecash_relays)
@@ -460,68 +462,90 @@ class Wallet:
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
         
-        return f"{token_amount} {ecash_msg} to {npub} {ecash_relays}"    
+        return f"{token_message} {ecash_msg} to {npub} {ecash_relays}"    
     
     
-    def get_dm(self):
+    def get_ecash_dm(self):
         
         
         tags = ["#p", self.pubkey_hex]
-        last_dm = float(self.get_wallet_info("last_dm"))
+        # last_dm = float(self.get_wallet_info("last_dm"))
+        last_dm = float(self.wallet_reserved_records['last_dm'])
+        # last_dm = 0
+        print("last dm in wallet:", last_dm)
         print(datetime.fromtimestamp(float(last_dm)))
         dm_filter = [{
             
             'limit': 12,                       
             'kinds': [4],
             '#p'  :  [self.pubkey_hex],
-            'since': last_dm + 1
+            'since': int(last_dm +1)
+            
+            
+            
+            
+            
+            
             
         }]
-        last_dm, tokens =asyncio.run(self.query_client_dm(dm_filter))
+        final_dm, tokens =asyncio.run(self._async_query_ecash_dm(dm_filter))
         print(tokens)
         for each in  tokens:
             self.accept_token(each)
         
-        msg_out = "ok"
-        self.set_wallet_info("last_dm", json.dumps(last_dm))
-        return last_dm
+        print(f"last dm is: {final_dm}")
+        self.set_wallet_info("last_dm", str(final_dm))
+        # self.swap_multi_each()
+        
+        return final_dm
     
-    async def query_client_dm(self, filter: List[dict]):
+    async def _async_query_ecash_dm(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
         my_enc = NIP4Encrypt(self.k)
         posts = ""
         tags = []
         tokens =[]
         
-        last_update = 0
+        last_dm = self.wallet_reserved_records['last_dm']
+        final_dm = int(last_dm)
         print("filterxx:", filter)
-        async with ClientPool([self.home_relay]+self.relays) as c:
+        relay_pool = [self.home_relay]+self.relays
+        print(relay_pool)
+        async with ClientPool(relay_pool) as c:
         # async with Client(relay) as c:
             events: List[Event] = await c.query(filter)
-            print("events", events)
-            
-            for each in events:
-                try:
-                    decrypt_content = my_enc.decrypt_event(each)
-                except:
-                    print("no go")
-                print(each.id, each.created_at.timestamp(), decrypt_content.content )
-                last_update = each.created_at.timestamp() if each.created_at.timestamp() > last_update else last_update
-                print(datetime.fromtimestamp(last_update),)
+            print("ecash events", events)
+            if events:
+                print("we got events!")
+                for each in events:
+                    try:
+                        decrypt_content = my_enc.decrypt_event(each)
+                    except:
+                        print("no go")
+                    
+                    print("message", each.id, each.created_at.timestamp(), decrypt_content.content )
+                    # last_dm = each.created_at.timestamp() if each.created_at.timestamp() > last_dm else last_dm
+                    # print("last event update", datetime.fromtimestamp(last_dm),)
 
-                array_token = decrypt_content.content.splitlines()
+                    dm_timestamp = int(each.created_at.timestamp())
+                    print ("final_dm, dm_timestamp:",final_dm, dm_timestamp)
+                    final_dm = dm_timestamp if dm_timestamp > final_dm else final_dm
+                    print ("final_dm, dm_timestamp:",final_dm, dm_timestamp)
+                    array_token = decrypt_content.content.splitlines()
+                    print("array_token:", array_token)
+                    
+                    for each in array_token:
+                        if each.startswith("cashuA"):
+                            print("found")
+                            token = each
+                            tokens.append(token)
+                            break
+            else:
+                print("no events!")    
                 
-                for each in array_token:
-                    if each.startswith("cashuA"):
-                        print("found")
-                        token = each
-                        tokens.append(token)
-                        break
                 
-                
-                
-        print(last_update)    
-        return last_update, tokens          
+        print("last update:", last_dm)    
+        return final_dm, tokens          
             
        
     async def delete_dms(self, tags):
@@ -768,7 +792,8 @@ class Wallet:
     def put_record(self,record_name, record_value):
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
-            print("careful this is a reserved record")
+            print("careful this is a reserved record.")
+            self.set_wallet_info(record_name,record_value)
             return record_name
         else:
             print("this is a user record")

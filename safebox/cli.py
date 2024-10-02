@@ -263,7 +263,7 @@ def check(param):
         click.echo(msg_out)
     elif param == "ecash":
         click.echo("check for ecash")
-        msg_out = wallet_obj.get_dm()
+        msg_out = wallet_obj.get_ecash_dm()
         
         click.echo(msg_out)
 
@@ -293,7 +293,7 @@ def send(amount,npub: str, relays:str, comment:str):
     
     click.echo(f"Send to: {amount} to {npub} via {ecash_relays}")
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
-    out_msg = wallet_obj.send_ecash_dm(amount=amount,npub=npub,ecash_relays=ecash_relays)
+    out_msg = wallet_obj.send_ecash_dm(amount=amount,npub=npub,ecash_relays=ecash_relays, comment=comment)
     click.echo(out_msg)
     #wallet_obj.pay_multi(amount,lnaddress,comment)
     # wallet_obj.swap_multi_consolidate()
