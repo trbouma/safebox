@@ -279,21 +279,21 @@ def pay(amount,lnaddress: str, comment:str):
 
 
 
-@click.command(help="Send amount to npub")
+@click.command(help="Send amount to nip05 address or npub")
 @click.argument('amount', default=21)
-@click.argument('npub', default=None)
+@click.argument('nrecipient', default=None)
 @click.option('--comment','-c', default='Paid!')
 @click.option('--relays','-r', default='strfry.openbalance.app')
-def send(amount,npub: str, relays:str, comment:str):
+def send(amount,nrecipient: str, relays:str, comment:str):
     ecash_relays = []
 
    
     for each in relays.split(","):
      ecash_relays.append("wss://"+each)
     
-    click.echo(f"Send to: {amount} to {npub} via {ecash_relays}")
+    click.echo(f"Send to: {amount} to {nrecipient} via {ecash_relays}")
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
-    out_msg = wallet_obj.send_ecash_dm(amount=amount,npub=npub,ecash_relays=ecash_relays, comment=comment)
+    out_msg = wallet_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment)
     click.echo(out_msg)
     #wallet_obj.pay_multi(amount,lnaddress,comment)
     # wallet_obj.swap_multi_consolidate()

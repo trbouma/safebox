@@ -22,7 +22,7 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
-from safebox.nostr import bech32_to_hex, hex_to_bech32
+from safebox.nostr import bech32_to_hex, hex_to_bech32, nip05_to_npub
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
@@ -430,11 +430,24 @@ class Wallet:
            
             return posts
 
-    def send_ecash_dm(self,amount: int, npub: str, ecash_relays:List[str], comment: str ="Sent!"):
-        out_msg = "test"
-        token_amount = self.issue_token(amount=amount)
-        token_msg = comment +"\n\n" + token_amount
-        out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays))
+    def send_ecash_dm(self,amount: int, nrecipient: str, ecash_relays:List[str], comment: str ="Sent!"):
+        relays = []
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+            else:
+                npub = nrecipient
+        except:
+            return "error"
+        try:
+            token_amount = self.issue_token(amount=amount)
+            token_msg = comment +"\n\n" + token_amount
+        except:
+            return "insufficient funds"
+        
+        out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
     
 
@@ -2450,8 +2463,13 @@ class Wallet:
                 post_payment_proofs.append(each_proof)
         self.proofs = post_payment_proofs
         asyncio.run(self._async_delete_proof_events())
-        self.add_proof_event(self.proofs)
+        
+        
+        self.add_proofs_obj(post_payment_proofs)
+        
         self._load_proofs()
+
+
         
         tokens = TokenV3Token(mint=self.trusted_mints[chosen_keyset],
                                         proofs=spend_proofs)
