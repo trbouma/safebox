@@ -3,6 +3,8 @@ Your own private portable safebox on nostr!
 
 *Just want to try it out? [Get the binary executables](https://github.com/trbouma/safebox-binaries).*
 
+*You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
+
 ## General Concept 
 
 Nostr Safebox is like those hotel safeboxes where you put your passport and money in while you are travelling. Digital travelling should be no different. You should be able to access your safebox whenever you need it - and get rid of it, when you no longer need it.
