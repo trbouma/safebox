@@ -2629,3 +2629,50 @@ class Wallet:
             prs.append(pr)
         
         return prs
+    
+    def share_record(self,record: str, nrecipient: str, share_relays:List[str], comment: str ="Sent!"):
+        
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+            else:
+                npub = nrecipient
+        except:
+            return "error"
+        
+        # Now let's get the record
+        out_record = self.get_wallet_info(record)
+
+        out_msg = f"{nrecipient} {npub}, {npub_hex}, {out_record}"
+
+        out_msg= asyncio.run(self._async_share_record(record_message=out_record,npub=npub, share_relays=share_relays ))
+        return out_msg
+    
+
+    async def _async_share_record(self,record_message: str, npub: str, share_relays:List[str]):
+        print("npub:", npub)
+        
+        my_enc = NIP4Encrypt(self.k)
+        k_to_send = Keys(pub_k=npub)
+        k_to_send_pubkey_hex = k_to_send.public_key_hex()
+        print("k_to_send:", k_to_send_pubkey_hex)
+        
+       
+
+        print("are we here?", share_relays)
+        async with ClientPool(share_relays) as c:
+            n_msg = Event(kind=Event.KIND_ENCRYPT,
+                      content=record_message,
+                      pub_key=k_to_send_pubkey_hex)
+
+            # print("are we here_async?", ecash_relays)
+            # returns event we to_p_tag and content encrypted
+            n_msg = my_enc.encrypt_event(evt=n_msg,
+                                    to_pub_k=k_to_send_pubkey_hex)
+
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+        
+        return f"{record_message}  to {npub} {share_relays}"   

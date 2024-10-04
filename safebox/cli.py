@@ -298,6 +298,24 @@ def send(amount,nrecipient: str, relays:str, comment:str):
     #wallet_obj.pay_multi(amount,lnaddress,comment)
     # wallet_obj.swap_multi_consolidate()
 
+
+@click.command(help="Share record to nip05 address or npub")
+@click.argument('record')
+@click.argument('nrecipient', default=None)
+@click.option('--comment','-c', default='Shared!')
+@click.option('--relays','-r', default='strfry.openbalance.app')
+def share (record,nrecipient: str, relays:str, comment:str):
+    share_relays = []
+
+   
+    for each in relays.split(","):
+     share_relays.append("wss://"+each)
+    
+    if click.confirm(f"Do you want to share {record} record to {nrecipient} via {share_relays}?"):    
+        wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+        out_msg = wallet_obj.share_record(record=record, nrecipient=nrecipient,share_relays=share_relays, comment=comment)
+        click.echo(out_msg)
+ 
 @click.command(help="Test pay amount")
 @click.argument('amount', default=21)
 
@@ -413,6 +431,7 @@ cli.add_command(pay)
 cli.add_command(send)
 cli.add_command(get)
 cli.add_command(put)
+cli.add_command(share)
 
 
 
