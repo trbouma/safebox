@@ -1,9 +1,11 @@
-# Nostr SafeBox
+# Nostr Safebox
 Your own private portable safebox on nostr!
+
+*Just want to try it out? [Get the binary executables](https://github.com/trbouma/safebox-binaries).*
 
 ## General Concept 
 
-Nostr SafeBox is like those hotel safeboxes where you put your passport and money in while you are travelling. Digital travelling should be no different. You should be able to access your safebox whenever you need it - and get rid of it, when you no longer need it.
+Nostr Safebox is like those hotel safeboxes where you put your passport and money in while you are travelling. Digital travelling should be no different. You should be able to access your safebox whenever you need it - and get rid of it, when you no longer need it.
 
 Still super-early - working on the concept of a ‘safebox’ for Nostr. It’s a generalization of the wallet concept for storing secure, private personal information.
 
