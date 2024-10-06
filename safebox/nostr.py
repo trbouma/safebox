@@ -2,6 +2,7 @@ import bech32
 import binascii
 import requests
 
+
 def hex_to_bech32(key_str: str, prefix='npub'):
     as_int = [int(key_str[i:i+2], 16) for i in range(0, len(key_str), 2)]
     data = bech32.convertbits(as_int, 8, 5)
@@ -30,3 +31,4 @@ def nip05_to_npub(nip05: str):
     except:
         relays = []    
     return pubkey, relays   
+

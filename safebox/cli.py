@@ -222,7 +222,19 @@ def post(message):
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
     wallet_obj.send_post(message)
 
+@click.command(help='Do a secure DM (NIP-17)')
+@click.argument('nrecipient', default=None)
+@click.argument('message', default="Hello,")
+@click.option('--relays','-r', default='strfry.openbalance.app')
 
+def dm(nrecipient,message, relays):
+    dm_relays = []   
+    for each in relays.split(","):
+        dm_relays.append("wss://"+each)
+
+    click.echo(f"Send to {nrecipient}: {message} via {dm_relays}")
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj.secure_dm(nrecipient=nrecipient,message=message, dm_relays=dm_relays)
 
 
 
@@ -425,6 +437,7 @@ cli.add_command(init)
 cli.add_command(profile)
 cli.add_command(replicate)
 cli.add_command(post)
+cli.add_command(dm)
 
 cli.add_command(set)
 cli.add_command(pay)

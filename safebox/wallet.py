@@ -18,6 +18,8 @@ from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
+from monstr.signing.signing import BasicKeySigner
+from monstr.giftwrap import GiftWrap
 
 from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
@@ -459,7 +461,7 @@ class Wallet:
         k_to_send_pubkey_hex = k_to_send.public_key_hex()
         print("k_to_send:", k_to_send_pubkey_hex)
         ecash_msg = token_message
-        ecash_info_encrypt = my_enc.encrypt(ecash_msg,to_pub_k=k_to_send_pubkey_hex)
+        # ecash_info_encrypt = my_enc.encrypt(ecash_msg,to_pub_k=k_to_send_pubkey_hex)
 
         print("are we here?", ecash_relays)
         async with ClientPool(ecash_relays) as c:
@@ -574,8 +576,37 @@ class Wallet:
             print("hello again")   
 
             
-                
-                   
+    def secure_dm(self,nrecipient:str, message: str, dm_relays: List[str]):
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+            else:
+                npub = nrecipient
+        except:
+            return "error"
+        print(npub,message)
+
+        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=relays+dm_relays))  
+    
+    async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
+       
+        my_gift = GiftWrap(BasicKeySigner(self.k))
+        relays = ['wss://strfry.openbalance.app']
+        async with ClientPool(relays) as c:
+
+
+            send_evt = Event(content=message,
+                         tags=[
+                             ['p', npub_hex]
+                         ])
+           
+            
+            wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+                                                  to_pub_k=npub_hex)
+            # wrapped_evt.sign(self.privkey_hex)
+            c.publish(wrapped_evt)
                 
                 
                 
@@ -2647,7 +2678,8 @@ class Wallet:
 
         out_msg = f"{nrecipient} {npub}, {npub_hex}, {out_record}"
 
-        out_msg= asyncio.run(self._async_share_record(record_message=out_record,npub=npub, share_relays=share_relays ))
+        # out_msg= asyncio.run(self._async_share_record(record_message=out_record,npub=npub, share_relays=share_relays ))
+        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=out_record,dm_relays=relays+ share_relays)) 
         return out_msg
     
 
