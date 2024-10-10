@@ -489,10 +489,10 @@ class Wallet:
         # last_dm = 0
         print("last dm in wallet:", last_dm)
         print(datetime.fromtimestamp(float(last_dm)))
+        #TODO need to figure out why the kind is not 1059
         dm_filter = [{
             
-            'limit': 12,                       
-            'kinds': [4],
+            'limit': 100, 
             '#p'  :  [self.pubkey_hex],
             'since': int(last_dm +1)
             
@@ -504,6 +504,7 @@ class Wallet:
             
         }]
         final_dm, tokens =asyncio.run(self._async_query_ecash_dm(dm_filter))
+        # final_dm, tokens =asyncio.run(self._async_query_secure_ecash_dm(dm_filter))
         print(tokens)
         for each in  tokens:
             self.accept_token(each)
@@ -538,7 +539,7 @@ class Wallet:
                     except:
                         print("no go")
                     
-                    print("message", each.id, each.created_at.timestamp(), decrypt_content.content )
+                    print("message", each.id, each.kind, each.created_at.timestamp(), decrypt_content.content )
                     # last_dm = each.created_at.timestamp() if each.created_at.timestamp() > last_dm else last_dm
                     # print("last event update", datetime.fromtimestamp(last_dm),)
 
@@ -561,7 +562,36 @@ class Wallet:
                 
         print("last update:", last_dm)    
         return final_dm, tokens          
-            
+
+    async def _async_query_secure_ecash_dm(self, filter: List[dict]):
+    # does a one off query to relay prints the events and exits
+        my_enc = NIP4Encrypt(self.k)
+        posts = ""
+        tags = []
+        tokens =[]
+        
+        last_dm = self.wallet_reserved_records['last_dm']
+        final_dm = int(last_dm)
+        print("secure ecash filterxx:", filter)
+        relay_pool = [self.home_relay]+self.relays
+        print(relay_pool)
+        async with ClientPool(relay_pool) as c:
+        # async with Client(relay) as c:
+            events: List[Event] = await c.query(filter)
+            print("ecash events", events)
+            if events:
+                print("we got events!")
+                for each in events:
+                   
+                    
+                    print("message", each.id, each.kind, each.created_at.timestamp() )
+                   
+            else:
+                print("no events!")    
+                
+                
+        print("last update:", last_dm)    
+        return final_dm, tokens               
        
     async def delete_dms(self, tags):
          async with ClientPool([self.home_relay]+self.relays) as c:
@@ -582,13 +612,14 @@ class Wallet:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
                 print("npub", npub)
+                dm_relays = relays + dm_relays
             else:
-                npub = nrecipient
+                npub_hex = bech32_to_hex(nrecipient)
         except:
             return "error"
-        print(npub,message)
+        print(npub_hex,message)
 
-        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=relays+dm_relays))  
+        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays))  
     
     async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
        
