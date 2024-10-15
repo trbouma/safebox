@@ -2,16 +2,19 @@ from typing import Any, Dict, List, Optional, Union
 import asyncio, json, requests
 from time import sleep
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 import urllib.parse
 import random
 from mnemonic import Mnemonic
 import bolt11
+import aioconsole
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
 from binascii import unhexlify
 import hashlib
+import signal, sys
+
 
 
 from monstr.encrypt import Keys
@@ -20,6 +23,9 @@ from monstr.event.event import Event
 from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from monstr.signing.signing import BasicKeySigner
 from monstr.giftwrap import GiftWrap
+from monstr.util import util_funcs
+
+tail = util_funcs.str_tails
 
 from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
@@ -50,6 +56,7 @@ class Wallet:
     pubkey_bech32: str
     pubkey_hex: str
     privkey_hex: str
+    privkey_bech32: str
     home_relay: str
     relays: List[str]
     mints: List[str]
@@ -70,6 +77,7 @@ class Wallet:
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
             self.pubkey_hex     =   self.k.public_key_hex()
+            self.privkey_bech32 =   self.k.private_key_bech32()
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
             # self.mints          =   mints
@@ -495,12 +503,6 @@ class Wallet:
             'limit': 100, 
             '#p'  :  [self.pubkey_hex],
             'since': int(last_dm +1)
-            
-            
-            
-            
-            
-            
             
         }]
         final_dm, tokens =asyncio.run(self._async_query_ecash_dm(dm_filter))
@@ -2739,3 +2741,148 @@ class Wallet:
             c.publish(n_msg)
         
         return f"{record_message}  to {npub} {share_relays}"   
+    
+    def monitor(self):
+        print("monitor")
+        url = ['wss://strfry.openbalance.app']
+        asyncio.run(self.listen_notes(url))
+        while True:
+            
+            pass
+        return 
+    
+
+
+
+    async def listen_notes(self, url):
+
+        AS_K = 'nsec1jagwdjtyhrln44p8d4pssnh9jdqgsc28lmmzq2lqksplfn9gac2su4790d'
+        TO_K = 'npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5'
+        # TO_K ='npub1pczukv7wx7l6mlpx54qxuzp0s32s7clejt04y4kl6z9vvgyz4x0qp4ehtq'
+        
+        # AS_K = self.privkey_bech32
+        
+        
+        tail = util_funcs.str_tails
+        
+        # nip59 gift wrapper
+        my_k = Keys(AS_K)
+        my_gift = GiftWrap(BasicKeySigner(my_k))
+        send_k = Keys(pub_k=TO_K)
+
+        print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
+
+        # q before printing events
+        print_q = asyncio.Queue()
+
+        # as we're using a pool we'll see the same events multiple times
+        # DeduplicateAcceptor is used to ignore them
+        # my_dd = DeduplicateAcceptor()
+
+
+        # used for both eose and adhoc
+        def my_handler(the_client: Client, sub_id: str, evt: Event):
+            print_q.put_nowait(evt)
+
+        def on_connect(the_client: Client):
+            # oxchat seems to use a large date jitter... think 8 days is enough
+            since = util_funcs.date_as_ticks(datetime.now() - timedelta(hours=24*8))
+
+            the_client.subscribe(handlers=my_handler,
+                                filters=[
+                                    # can only get events for us from relays, we need to store are own posts
+                                    {
+                                        'kinds': [Event.KIND_GIFT_WRAP],
+                                        '#p': [my_k.public_key_hex()]
+                                    }
+                                ]
+                                )
+
+
+        def on_auth(the_client: Client, challenge):
+            print('auth requested')
+
+
+        # create the client and start it running
+        c = ClientPool(url,
+                    on_connect=on_connect,
+                    on_auth=on_auth,
+                    on_eose=my_handler)
+        asyncio.create_task(c.run())
+
+        def sigint_handler(signal, frame):
+            print('stopping listener...')
+            c.end()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, sigint_handler)
+
+        async def output():
+            while True:
+                events: List[Event] = await print_q.get()
+                # because we use from both eose and adhoc, when adhoc it'll just be single event
+                # make [] to simplify code
+                if isinstance(events, Event):
+                    events = [events]
+
+                events = [await my_gift.unwrap(evt) for evt in events]
+                # can't be sorted till unwrapped
+                events.sort(reverse=True)
+
+                for c_event in events:
+                    print(c_event.id[:4], c_event.created_at, c_event.content)
+                    # print(c_event.event_data())
+
+
+        asyncio.create_task(output())
+
+        msg_n = ''
+        while msg_n != 'exit':
+            msg_n = await aioconsole.ainput('')
+            # msg_n = msg.lower().replace(' ', '')
+
+
+            send_evt = Event(content=msg_n,
+                            tags=[
+                                ['p', send_k.public_key_hex()]
+                            ])
+
+            wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+                                                    to_pub_k=send_k.public_key_hex())
+            c.publish(wrapped_evt)
+            # print("published")
+
+            # this version is for us.. this seems to be the way oxchat does it I think but you could
+            # just store locally though it'd be a pain getting your events on different instance
+            await asyncio.sleep(0.2)
+            wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+                                                    to_pub_k=my_k.public_key_hex())
+            # c.publish(wrapped_evt)
+
+
+            # if msg_n != '' and msg_n != 'exit':
+            #     tags = []
+            #     if to_user:
+            #         tags = [['p', to_user.public_key_hex()]]
+            #
+            #     n_event = Event(kind=Event.KIND_TEXT_NOTE,
+            #                     content=msg,
+            #                     pub_key=as_user.public_key_hex(),
+            #                     tags=tags)
+            #     n_event.sign(as_user.private_key_hex())
+            #     client.publish(n_event)
+
+        print('stopping...')
+        c.end()
+
+
+
+
+
+if __name__ == "__main__":
+    
+    # url = ['wss://relay.0xchat.com','wss://relay.damus.io']
+    # this relay seems to work the best with these kind of anon published events, atleast for now
+    # others it seems to be a bit of hit and miss...
+    url = ['wss://strfry.openbalance.app']
+    # asyncio.run(listen_notes(url))  

@@ -26,6 +26,8 @@ wallet  = "default"
 home_relay = "wss://strfry.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 
+# List of mints https://nostrapps.github.io/cashu/mints.json
+
 home_directory = os.path.expanduser('~')
 cli_directory = '.safebox'
 config_file = 'config.yml'
@@ -432,6 +434,15 @@ def accept(token):
     # click.echo(msg_out)
     click.echo(wallet_obj.accept_token(token))
 
+@click.command(help='monitor events')
+@click.pass_context
+def monitor(ctx):
+    click.echo(WELCOME_MSG)
+    click.echo("Monitoring events...")
+    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    
+    click.echo(wallet_obj.monitor())
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(profile)
@@ -445,6 +456,7 @@ cli.add_command(send)
 cli.add_command(get)
 cli.add_command(put)
 cli.add_command(share)
+cli.add_command(monitor)
 
 
 
