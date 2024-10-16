@@ -2751,6 +2751,7 @@ class Wallet:
                 print("npub", npub)
                 
             else:
+                npub = nrecipient
                 npub_hex = bech32_to_hex(nrecipient)
         except:
             return "error"
