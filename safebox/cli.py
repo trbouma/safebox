@@ -435,13 +435,13 @@ def accept(token):
     click.echo(wallet_obj.accept_token(token))
 
 @click.command(help='monitor events')
-@click.pass_context
-def monitor(ctx):
+@click.argument('nrecipient', default=None)
+def monitor(nrecipient):
     click.echo(WELCOME_MSG)
-    click.echo("Monitoring events...")
+    click.echo(f"Monitoring events for {nrecipient}...")
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
-    click.echo(wallet_obj.monitor())
+    click.echo(wallet_obj.monitor(nrecipient))
 
 cli.add_command(info)
 cli.add_command(init)

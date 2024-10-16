@@ -2742,10 +2742,22 @@ class Wallet:
         
         return f"{record_message}  to {npub} {share_relays}"   
     
-    def monitor(self):
-        print("monitor")
-        url = ['wss://strfry.openbalance.app']
-        asyncio.run(self.listen_notes(url))
+    def monitor(self, nrecipient: str):
+        print(f"monitor {nrecipient}")
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+                
+            else:
+                npub_hex = bech32_to_hex(nrecipient)
+        except:
+            return "error"
+        
+        print(f"monitor {npub}")
+        url = ['wss://relay.damus.io']
+        asyncio.run(self.listen_notes(url, npub))
         while True:
             
             pass
@@ -2754,15 +2766,20 @@ class Wallet:
 
 
 
-    async def listen_notes(self, url):
+    async def listen_notes(self, url, npub):
 
-        AS_K = 'nsec1jagwdjtyhrln44p8d4pssnh9jdqgsc28lmmzq2lqksplfn9gac2su4790d'
-        TO_K = 'npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5'
+
+
+        # AS_K  = 'nsec1jagwdjtyhrln44p8d4pssnh9jdqgsc28lmmzq2lqksplfn9gac2su4790d' # OB
+        # AS_K  = 'nsec1ex7f68hn863f8rzpc8gprclh876f7y0tzfaplvcs2rv6ju8wjkts7pu2c5' # TT
+        AS_K    = 'nsec123v8adpuhrlurd4qqs5rsja44kz4yap3al3w8jk76wjkutxegtkqnz20zv' #08
+        # TO_K = 'npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5'
         # TO_K ='npub1pczukv7wx7l6mlpx54qxuzp0s32s7clejt04y4kl6z9vvgyz4x0qp4ehtq'
         
         # AS_K = self.privkey_bech32
-        
-        
+        # AS_K = self.privkey_bech32
+        print("privkey", self.privkey_bech32)
+        TO_K = npub
         tail = util_funcs.str_tails
         
         # nip59 gift wrapper
@@ -2830,8 +2847,9 @@ class Wallet:
                 events.sort(reverse=True)
 
                 for c_event in events:
-                    print(c_event.id[:4], c_event.created_at, c_event.content)
-                    # print(c_event.event_data())
+                    print(c_event.id[:4],c_event.created_at, c_event.content)
+                    test = c_event.pub_key
+                    
 
 
         asyncio.create_task(output())
