@@ -2770,15 +2770,7 @@ class Wallet:
     async def listen_notes(self, url, npub):
 
 
-
-        # AS_K  = 'nsec1jagwdjtyhrln44p8d4pssnh9jdqgsc28lmmzq2lqksplfn9gac2su4790d' # OB
-        # AS_K  = 'nsec1ex7f68hn863f8rzpc8gprclh876f7y0tzfaplvcs2rv6ju8wjkts7pu2c5' # TT
-        AS_K    = 'nsec123v8adpuhrlurd4qqs5rsja44kz4yap3al3w8jk76wjkutxegtkqnz20zv' #08
-        # TO_K = 'npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5'
-        # TO_K ='npub1pczukv7wx7l6mlpx54qxuzp0s32s7clejt04y4kl6z9vvgyz4x0qp4ehtq'
-        
-        # AS_K = self.privkey_bech32
-        # AS_K = self.privkey_bech32
+        AS_K = self.privkey_bech32
         print("privkey", self.privkey_bech32)
         TO_K = npub
         tail = util_funcs.str_tails
