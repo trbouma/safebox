@@ -2771,10 +2771,10 @@ class Wallet:
 
 
         AS_K = self.privkey_bech32
-        print("privkey", self.privkey_bech32)
+        # print("privkey", self.privkey_bech32)
         TO_K = npub
         tail = util_funcs.str_tails
-        
+        since = datetime.now().timestamp()
         # nip59 gift wrapper
         my_k = Keys(AS_K)
         my_gift = GiftWrap(BasicKeySigner(my_k))
@@ -2827,7 +2827,7 @@ class Wallet:
 
         signal.signal(signal.SIGINT, sigint_handler)
 
-        async def output():
+        async def output(since):
             while True:
                 events: List[Event] = await print_q.get()
                 # because we use from both eose and adhoc, when adhoc it'll just be single event
@@ -2840,12 +2840,26 @@ class Wallet:
                 events.sort(reverse=True)
 
                 for c_event in events:
-                    print(c_event.id[:4],c_event.created_at, c_event.content)
-                    test = c_event.pub_key
+                    if c_event.created_at.timestamp() > since:
+                        print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
+                        content = c_event.content
+                        array_token = content.splitlines()
+                    
+                        
+                        for each in array_token:
+                            if each.startswith("cashuA"):
+                                
+                                try:
+                                    print(f"found token! {each}")
+                                    # asyncio.run(self.accept_token(each))
+                                    pass
+                                except:
+                                    pass    
+                                break
                     
 
 
-        asyncio.create_task(output())
+        asyncio.create_task(output(since))
 
         msg_n = ''
         while msg_n != 'exit':
@@ -2887,8 +2901,28 @@ class Wallet:
         c.end()
 
 
+    def run(self):
+        print(f"running {self.pubkey_hex} as a service")
+        
+        asyncio.run(self._async_run())
+      
+        
 
+    async def _async_run(self):
+       
+        task1 = asyncio.create_task(self._async_task())
+       
+        await asyncio.sleep(10)
+        print("run")
+        await task1
 
+    async def _async_task(self):
+       
+     
+        await asyncio.sleep(1)
+        print("task")
+
+        
 
 if __name__ == "__main__":
     

@@ -443,6 +443,15 @@ def monitor(nrecipient):
     
     click.echo(wallet_obj.monitor(nrecipient))
 
+@click.command(help='run as a service')
+
+def run():
+    click.echo(WELCOME_MSG)
+    click.echo(f"Running as a service...")
+    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    
+    wallet_obj.run()
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(profile)
@@ -457,6 +466,7 @@ cli.add_command(get)
 cli.add_command(put)
 cli.add_command(share)
 cli.add_command(monitor)
+cli.add_command(run)
 
 
 
