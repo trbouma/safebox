@@ -189,6 +189,7 @@ class nostrProfile(BaseModel):
     banner:         str = "Not set"
     website:        str = "Not set"
     lud16:          str = "npub@openbalance.app"
+    nprofile:       str = "Not set"
 
 class mintRequest(BaseModel):
     unit:       str = "sat"

@@ -13,7 +13,7 @@ from hotel_names import hotel_names
 from coolname import generate, generate_slug
 from binascii import unhexlify
 import hashlib
-import signal, sys
+import signal, sys, string, cbor2, base64
 
 
 
@@ -24,6 +24,7 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from monstr.signing.signing import BasicKeySigner
 from monstr.giftwrap import GiftWrap
 from monstr.util import util_funcs
+from monstr.entities import Entities
 
 tail = util_funcs.str_tails
 
@@ -98,7 +99,8 @@ class Wallet:
                                         "relays",
                                         "quote",
                                         "user_records",
-                                        "last_dm"
+                                        "last_dm",
+                                        "payment_request"
                                         
                         ]
             self.wallet_reserved_records = {}
@@ -161,6 +163,12 @@ class Wallet:
             # print("init quote:", self.quote)
         except:
             self.wallet_reserved_records['user_records'] = '[]'
+
+        try:
+            payment_request= json.loads(self.wallet_reserved_records['payment_request'])
+            # print("init quote:", self.quote)
+        except:
+            self.wallet_reserved_records['payment_request'] = '[]'
         
        
             
@@ -196,6 +204,7 @@ class Wallet:
     def create_profile(self, nostr_profile_create: bool=False, keepkey:bool=False):
         init_index = {}
         wallet_info = {}
+        n_profile = {}
 
         if keepkey==False:
             self.k= Keys()
@@ -216,12 +225,20 @@ class Wallet:
 
         hotel_name = hotel_names.get_hotel_name()
         display_name = ' '.join(n.capitalize() for n in new_name)
+        # Create nprofile
+        n_profile['pubkey'] = self.k.public_key_hex()
+        n_profile['relay'] = [self.home_relay]
+        n_profile_str = Entities.encode('nprofile', n_profile)
+        print("nprofile_str", n_profile_str)
+
         nostr_profile = nostrProfile(   name=pet_name,
                                         display_name=display_name,
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
                                         lud16= f"{self.pubkey_bech32}@openbalance.app",
-                                        website=f"https://npub.cash/pay/{self.pubkey_bech32}"
+                                        website=f"https://npub.cash/pay/{self.pubkey_bech32}",
+                                        nprofile=n_profile_str
+
                                          )
         if nostr_profile_create:
             out = asyncio.run(self._async_create_profile(nostr_profile))
@@ -244,6 +261,7 @@ class Wallet:
         self.set_wallet_info(label="index", label_info='{}')
         self.set_wallet_info(label="last_dm", label_info='0')
         self.set_wallet_info(label="user_records", label_info='[]')
+        self.set_wallet_info(label="payment_request", label_info='[]')
         
  
         return self.k.private_key_bech32()
@@ -2435,7 +2453,7 @@ class Wallet:
             return "bad token"
         proofs=[]
         proof_obj_list: List[Proof] = []
-        for each in token_obj.token:
+        for each in token_obj.token: 
             print(each.mint)
             for each_proof in each.proofs:
                 proofs.append(each_proof.model_dump())
@@ -2742,7 +2760,7 @@ class Wallet:
         
         return f"{record_message}  to {npub} {share_relays}"   
     
-    def monitor(self, nrecipient: str):
+    def monitor(self, nrecipient: str, relays: List[str]=None):
         print(f"monitor {nrecipient}")
         try:
             if '@' in nrecipient:
@@ -2757,7 +2775,8 @@ class Wallet:
             return "error"
         
         print(f"monitor {npub}")
-        url = ['wss://relay.damus.io']
+        # url = ['wss://relay.damus.io']
+        url = relays
         asyncio.run(self.listen_notes(url, npub))
         while True:
             
@@ -2922,7 +2941,34 @@ class Wallet:
         await asyncio.sleep(1)
         print("task")
 
-        
+    def create_payment_request( self, 
+                                amount:int, 
+                                unit:str='sat', 
+                                single_use: bool=True,
+                                description: str = "Payment"):
+        payment_request_dict = {}
+        random_id = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+
+        payment_request_dict['i'] = random_id
+        payment_request_dict['a'] = amount
+        payment_request_dict['u'] = unit
+        payment_request_dict['s'] = single_use
+        payment_request_dict['d'] = description
+        payment_request_dict['m'] = self.mints
+        payment_request_dict['t'] = {
+                                    "t":"nostr",
+                                    "a": "nprofile",
+                                    "g": [["n","17"]]
+
+                                    }
+
+        print(payment_request_dict)
+        cbor_data = cbor2.dumps(payment_request_dict)
+        base64_encoded_data = base64.b64encode(cbor_data)
+        base64_string = base64_encoded_data.decode('utf-8')
+
+        payment_request = "creqA" + base64_string
+        return payment_request
 
 if __name__ == "__main__":
     

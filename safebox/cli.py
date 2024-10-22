@@ -436,12 +436,19 @@ def accept(token):
 
 @click.command(help='monitor events')
 @click.argument('nrecipient', default=None)
-def monitor(nrecipient):
+@click.option('--relays','-r', default="strfry.openbalance.app")
+
+def monitor(nrecipient, relays):
+    relay_array = []
     click.echo(WELCOME_MSG)
+    relays_str = relays.split(',')
+    for each in relays_str:
+        relay_array.append("wss://"+each)
+    print(relay_array)
     click.echo(f"Monitoring events for {nrecipient}...")
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
-    click.echo(wallet_obj.monitor(nrecipient))
+    click.echo(wallet_obj.monitor(nrecipient, relay_array))
 
 @click.command(help='run as a service')
 
@@ -451,6 +458,19 @@ def run():
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
     wallet_obj.run()
+
+@click.command(help='generate a payment request')
+@click.argument('amount', default=21)
+@click.option("--unit","-u", default="sat", help="Unit")
+@click.option("--description","-d", default="payment", help="payment request description")
+def request(amount, unit, description):
+    click.echo(WELCOME_MSG)
+    click.echo(f"generate a payment request amount {amount} {unit} with description {description}")
+    wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    payment_request = wallet_obj.create_payment_request(amount)
+    click.echo(f"payment request {payment_request}")
+    
+    # wallet_obj.run()
 
 cli.add_command(info)
 cli.add_command(init)
@@ -467,7 +487,7 @@ cli.add_command(put)
 cli.add_command(share)
 cli.add_command(monitor)
 cli.add_command(run)
-
+cli.add_command(request)
 
 
 cli.add_command(deposit)

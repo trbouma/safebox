@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "<3.14,>=3.8.1"
+python = ">=3.9,<3.14"
 monstr = "^0.1.9"
 asyncio = "^3.4.3"
 logging = "^0.4.9.6"
@@ -22,9 +22,11 @@ bech32 = "^1.2.0"
 mnemonic = "^0.21"
 bolt11 = "^2.1.0"
 qrcode = "^7.4.2"
+cbor2 = "^5.6.5"
+python-daemon = "^3.0.1"
 
 [tool.poetry.scripts]
-npcache = "safebox.cli:cli"
+safedaemon = "safebox.safedaemon:main_program"
 safebox = "safebox.cli:cli"
 npurse = "safebox.cli:cli"
 
