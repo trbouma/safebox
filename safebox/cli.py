@@ -453,8 +453,8 @@ def monitor(nrecipient, relays):
 @click.command(help='run as a service')
 
 def run():
-    click.echo(WELCOME_MSG)
-    click.echo(f"Running as a service...")
+    # click.echo(WELCOME_MSG)
+    # click.echo(f"Running as a service...")
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
     wallet_obj.run()

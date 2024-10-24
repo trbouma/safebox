@@ -13,7 +13,7 @@ from hotel_names import hotel_names
 from coolname import generate, generate_slug
 from binascii import unhexlify
 import hashlib
-import signal, sys, string, cbor2, base64
+import signal, sys, string, cbor2, base64,os
 
 
 
@@ -1056,6 +1056,20 @@ class Wallet:
         
         return
 
+    async def async_add_proofs_obj(self,proofs_arg: List[Proofs], replicate_relays: List[str]=None):
+        # make sure have latest kind
+        #TODO this is a workaround
+
+
+
+        proofs_to_store = json.dump
+        for each in proofs_arg:
+            pass
+            proof_to_store = [each.model_dump()]
+            text = json.dumps(proof_to_store)
+            await self._async_add_proofs(text, replicate_relays)
+        
+        return
 
     
     async def _async_add_proofs(self, text:str, replicate_relays: List[str]=None):
@@ -2443,6 +2457,7 @@ class Wallet:
         return "test"
     
     def accept_token(self,cashu_token: str):
+        print("accept token")
         headers = { "Content-Type": "application/json"}
         token_amount =0
         receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
@@ -2868,13 +2883,14 @@ class Wallet:
                         for each in array_token:
                             if each.startswith("cashuA"):
                                 
-                                try:
-                                    print(f"found token! {each}")
-                                    # asyncio.run(self.accept_token(each))
-                                    pass
-                                except:
-                                    pass    
-                                break
+                                
+                                # print(f"found token! {each}")
+                                msg_out = await self.nip17_accept(each)
+                                print(msg_out)
+                                    
+                                
+                            elif each.startswith("creqA"):
+                                print(f"found request {each}")
                     
 
 
@@ -2919,11 +2935,135 @@ class Wallet:
         print('stopping...')
         c.end()
 
+    async def listen_tokens(self, url, npub):
+
+
+        AS_K = self.privkey_bech32
+        # print("privkey", self.privkey_bech32)
+        TO_K = npub
+        tail = util_funcs.str_tails
+        since = datetime.now().timestamp()
+        # nip59 gift wrapper
+        my_k = Keys(AS_K)
+        my_gift = GiftWrap(BasicKeySigner(my_k))
+        send_k = Keys(pub_k=TO_K)
+
+  
+
+        # print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
+
+        # q before printing events
+        print_q = asyncio.Queue()
+
+        # as we're using a pool we'll see the same events multiple times
+        # DeduplicateAcceptor is used to ignore them
+        # my_dd = DeduplicateAcceptor()
+
+
+        # used for both eose and adhoc
+        def my_handler(the_client: Client, sub_id: str, evt: Event):
+            print_q.put_nowait(evt)
+
+        def on_connect(the_client: Client):
+            # oxchat seems to use a large date jitter... think 8 days is enough
+            since = util_funcs.date_as_ticks(datetime.now() - timedelta(hours=24*8))
+
+            the_client.subscribe(handlers=my_handler,
+                                filters=[
+                                    # can only get events for us from relays, we need to store are own posts
+                                    {
+                                        'kinds': [Event.KIND_GIFT_WRAP],
+                                        '#p': [my_k.public_key_hex()]
+                                    }
+                                ]
+                                )
+
+
+        def on_auth(the_client: Client, challenge):
+            print('auth requested')
+
+
+        # create the client and start it running
+        c = ClientPool(url,
+                    on_connect=on_connect,
+                    on_auth=on_auth,
+                    on_eose=my_handler)
+        asyncio.create_task(c.run())
+
+        def sigint_handler(signal, frame):
+            print('stopping listener...')
+            c.end()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, sigint_handler)
+
+        async def output(since):
+            # print("output")
+            home_directory = os.path.expanduser('~')
+            log_directory = '.safebox'
+            log_file = 'log.txt'
+            log_directory = os.path.join(home_directory, log_directory)
+            file_path = os.path.join(home_directory, log_directory, log_file)
+
+            while True:
+                events: List[Event] = await print_q.get()
+                # because we use from both eose and adhoc, when adhoc it'll just be single event
+                # make [] to simplify code
+                if isinstance(events, Event):
+                    events = [events]
+
+                events = [await my_gift.unwrap(evt) for evt in events]
+                # can't be sorted till unwrapped
+                events.sort(reverse=True)
+
+                for c_event in events:
+                    if c_event.created_at.timestamp() > since:
+                        # print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
+                        content = c_event.content
+
+                        with open(file_path, "a+") as f:       
+                            f.write(f"Message received: {content}\n")
+                            f.flush()  # Ensure the log is written to disk
+                           
+
+                        array_token = content.splitlines()
+                    
+                        
+                        for each in array_token:
+                            if each.startswith("cashuA"):
+                                
+                                
+                                # print(f"found token! {each}")
+                                msg_out = await self.nip17_accept(each)
+                                print(msg_out)
+                                    
+                                
+                            elif each.startswith("creqA"):
+                                print(f"found request {each}")
+                    
+
+
+        asyncio.create_task(output(since))
+        msg_n = ''
+        while True:
+            # msg_n = await aioconsole.ainput('')
+            await asyncio.sleep(0.2)
+            
+
+           
+
+        print('stopping...')
+        c.end()
+
+       
 
     def run(self):
-        print(f"running {self.pubkey_hex} as a service")
+        # print(f"running {self.pubkey_hex} as a service")
         
-        asyncio.run(self._async_run())
+        # asyncio.run(self._async_run())
+        npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
+        url = ['wss://strfry.openbalance.app']
+        asyncio.run(self.listen_tokens(url, npub))
       
         
 
@@ -2970,6 +3110,34 @@ class Wallet:
         payment_request = "creqA" + base64_string
         return payment_request
 
+    async def nip17_accept(self, token:str):
+        # self.accept_token(token)
+        # print("accept token")
+        headers = { "Content-Type": "application/json"}
+        token_amount =0
+        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+
+        try:
+            token_obj = TokenV3.deserialize(token)
+        except:
+            return "bad token"
+        proofs=[]
+        proof_obj_list: List[Proof] = []
+        for each in token_obj.token: 
+            # print(each.mint)
+            for each_proof in each.proofs:
+                proofs.append(each_proof.model_dump())
+                proof_obj_list.append(each_proof)
+                id = each_proof.id
+                self.trusted_mints[id]=each.mint
+            
+        await self.async_add_proofs_obj(proof_obj_list)
+        return 'ok'
+            
+
+       
+        
+        
 if __name__ == "__main__":
     
     # url = ['wss://relay.0xchat.com','wss://relay.damus.io']
