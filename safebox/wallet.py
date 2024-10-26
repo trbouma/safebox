@@ -25,6 +25,7 @@ from monstr.signing.signing import BasicKeySigner
 from monstr.giftwrap import GiftWrap
 from monstr.util import util_funcs
 from monstr.entities import Entities
+from monstr.client.event_handlers import DeduplicateAcceptor
 
 tail = util_funcs.str_tails
 
@@ -475,7 +476,8 @@ class Wallet:
         except:
             return "insufficient funds"
         
-        out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
+        out_msg = self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays+relays)
+        # out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
     
 
@@ -1056,7 +1058,7 @@ class Wallet:
         
         return
 
-    async def async_add_proofs_obj(self,proofs_arg: List[Proofs], replicate_relays: List[str]=None):
+    async def _async_add_proofs_obj(self,proofs_arg: List[Proofs], replicate_relays: List[str]=None):
         # make sure have latest kind
         #TODO this is a workaround
 
@@ -1181,6 +1183,18 @@ class Wallet:
         
         return content
     
+    async def _async_load_proofs_with_filter(self):
+        
+        
+        FILTER = [{
+            'limit': 1024,
+            'authors': [self.pubkey_hex],
+            'kinds': [self.wallet_config.kind_cashu]
+        }]
+        content =await self._async_load_proofs(FILTER)
+        
+        return content
+
     async def _async_load_proofs(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
         my_enc = NIP44Encrypt(self.k)
@@ -2097,7 +2111,126 @@ class Wallet:
                    
         
         return "multi swap ok"
+    async def _async_swap(self):
+        # This is the async version of swap
+        headers = { "Content-Type": "application/json"}
+        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        combined_proofs = []
+        combined_proof_objs =[]
         
+        # Let's check all the proofs before we do anything
+
+        for each_keyset in keyset_proofs:
+            check = []
+            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            for each_proof in keyset_proofs[each_keyset]:
+                check.append(each_proof.Y)
+
+            # print(mint_verify_url, check)
+            Ys = {"Ys": check}
+            try:
+                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
+                check_response = response.json()
+                proofs_to_check = check_response['states']
+                for each_proof in proofs_to_check:
+                    assert each_proof['state'] == "UNSPENT"
+                    # print(each_proof['state'])
+            except:
+                return f"there is a problem with the mint {self.trusted_mints[each_keyset]}"
+                
+        # return
+        # All the proofs are verified, we are good to go for the swap   
+        # In multi_each we are going to swap for each proof 
+        
+ 
+        for each_keyset in keyset_proofs:
+            
+            each_keyset_url = self.trusted_mints[each_keyset]
+
+            mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(each_keyset,each_keyset_url)
+            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            
+            for each_proof in keyset_proofs[each_keyset]:
+                # print(each_proof.amount)
+                blinded_values =[]
+                blinded_messages = []
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret,Y))
+                
+                blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
+                                                            id=each_keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                        )
+                data_to_send = {
+                            "inputs":   [each_proof.model_dump()],
+                            "outputs": blinded_messages
+                            
+                }
+                proofs = []
+                proof_objs = []
+                try:
+                    response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                    # print(response.json())
+                    promises = response.json()['signatures']
+                    # print("promises:", promises)
+                    
+                    i = 0
+            
+                    for each in promises:
+                        pub_key_c = PublicKey()
+                        # print("each:", each['C_'])
+                        pub_key_c.deserialize(unhexlify(each['C_']))
+                        promise_amount = each['amount']
+                        A = keys[str(int(promise_amount))]
+                        # A = keys[str(j)]
+                        pub_key_a = PublicKey()
+                        pub_key_a.deserialize(unhexlify(A))
+                        r = blinded_values[i][1]
+                        Y = blinded_values[i][3]
+                        # print(pub_key_c, promise_amount,A, r)
+                        C = step3_alice(pub_key_c,r,pub_key_a)
+                        proof = {   "amount": promise_amount,
+                            "id": each_keyset,
+                            "secret": blinded_values[i][2],
+                            "C":    C.serialize().hex(),
+                            "Y":    Y.serialize().hex()
+                            }
+                        proofs.append(proof)
+                        # print(proofs)
+                        proof_obj = Proof(amount=promise_amount,
+                                      id=each_keyset,
+                                      secret=blinded_values[i][2],
+                                      C=C.serialize().hex(),
+                                      Y = Y.serialize().hex()
+                                      )
+                        proof_objs.append(proof_obj)
+                        i+=1
+                        
+                    
+                    
+
+                except:
+                    ValueError("duplicate proofs")
+                    print("duplicate proof, ignore")
+
+                combined_proofs = combined_proofs + proofs
+                combined_proof_objs = combined_proof_objs + proof_objs
+
+        await self._async_delete_proof_events()
+        print("XXXXX async swap multi each")
+        # self.add_proofs_obj(combined_proof_objs)
+        await self._async_add_proofs_obj(combined_proof_objs)
+        
+        # self._load_proofs()
+        await self._async_load_proofs_with_filter()
+
+        return     
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
 
@@ -2935,18 +3068,17 @@ class Wallet:
         print('stopping...')
         c.end()
 
-    async def listen_tokens(self, url, npub):
+    async def listen_messages(self, url):
 
 
         AS_K = self.privkey_bech32
-        # print("privkey", self.privkey_bech32)
-        TO_K = npub
+
         tail = util_funcs.str_tails
         since = datetime.now().timestamp()
         # nip59 gift wrapper
         my_k = Keys(AS_K)
         my_gift = GiftWrap(BasicKeySigner(my_k))
-        send_k = Keys(pub_k=TO_K)
+
 
   
 
@@ -3018,29 +3150,42 @@ class Wallet:
 
                 for c_event in events:
                     if c_event.created_at.timestamp() > since:
-                        # print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
-                        content = c_event.content
+                        msg_out =''
+                        print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
+                        content = c_event.content                           
 
-                        with open(file_path, "a+") as f:       
-                            f.write(f"Message received: {content}\n")
-                            f.flush()  # Ensure the log is written to disk
-                           
-
-                        array_token = content.splitlines()
-                    
-                        
+                        array_token = content.splitlines()                        
+                            
                         for each in array_token:
-                            if each.startswith("cashuA"):
-                                
-                                
+                            if each.startswith("cashuA"):                                   
+                                    
                                 # print(f"found token! {each}")
                                 msg_out = await self.nip17_accept(each)
-                                print(msg_out)
+                                # print(self.trusted_mints)
+                                # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+                                # print(msg_out)
+                                        
                                     
-                                
                             elif each.startswith("creqA"):
-                                print(f"found request {each}")
-                    
+                                msg_out = "creqA"
+                            
+                        TO_K = c_event.pub_key
+                        send_k = Keys(pub_k=TO_K)
+                        # print(send_k, c_event.content)
+                        msg_n = c_event.content
+                        send_evt = Event(content=msg_n,
+                            tags=[
+                                ['p', send_k.public_key_hex()]
+                            ])
+
+                        wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+                                                    to_pub_k=send_k.public_key_hex())
+                        c.publish(wrapped_evt)
+
+                        with open(file_path, "a+") as f:   
+                            pass    
+                            f.write(f"{c_event.created_at} {c_event.pub_key} {content} {msg_out}\n")
+                            f.flush()  # Ensure the log is written to disk
 
 
         asyncio.create_task(output(since))
@@ -3061,9 +3206,9 @@ class Wallet:
         # print(f"running {self.pubkey_hex} as a service")
         
         # asyncio.run(self._async_run())
-        npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
+        # npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
         url = ['wss://strfry.openbalance.app']
-        asyncio.run(self.listen_tokens(url, npub))
+        asyncio.run(self.listen_messages(url))
       
         
 
@@ -3121,18 +3266,25 @@ class Wallet:
             token_obj = TokenV3.deserialize(token)
         except:
             return "bad token"
+        
         proofs=[]
         proof_obj_list: List[Proof] = []
         for each in token_obj.token: 
             # print(each.mint)
             for each_proof in each.proofs:
+                
                 proofs.append(each_proof.model_dump())
                 proof_obj_list.append(each_proof)
                 id = each_proof.id
                 self.trusted_mints[id]=each.mint
+                print(id, each.mint)
             
-        await self.async_add_proofs_obj(proof_obj_list)
-        return 'ok'
+        await self._async_add_proofs_obj(proof_obj_list)
+        #TODO don't do this every time - only when a new mint shows up
+        await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+        await self._async_swap()
+        
+        return 'add proof'
             
 
        
