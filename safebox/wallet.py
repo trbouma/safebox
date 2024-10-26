@@ -3280,6 +3280,7 @@ class Wallet:
                 print(id, each.mint)
             
         await self._async_add_proofs_obj(proof_obj_list)
+        await self._async_load_proofs_with_filter()
         #TODO don't do this every time - only when a new mint shows up
         await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
         await self._async_swap()
