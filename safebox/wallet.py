@@ -3083,6 +3083,7 @@ class Wallet:
   
 
         # print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
+        print(f"running as {self.pubkey_bech32}")
 
         # q before printing events
         print_q = asyncio.Queue()
@@ -3203,7 +3204,7 @@ class Wallet:
        
 
     def run(self):
-        # print(f"running {self.pubkey_hex} as a service")
+        # print(f"\n listening for ecash for: {self.pubkey_bech32}")
         
         # asyncio.run(self._async_run())
         # npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
@@ -3277,7 +3278,7 @@ class Wallet:
                 proof_obj_list.append(each_proof)
                 id = each_proof.id
                 self.trusted_mints[id]=each.mint
-                print(id, each.mint)
+                # print(id, each.mint)
             
         await self._async_add_proofs_obj(proof_obj_list)
         await self._async_load_proofs_with_filter()
