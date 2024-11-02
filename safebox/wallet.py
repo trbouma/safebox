@@ -3068,7 +3068,7 @@ class Wallet:
         print('stopping...')
         c.end()
 
-    async def listen_messages(self, url):
+    async def listen_nip17(self, url):
 
 
         AS_K = self.privkey_bech32
@@ -3083,7 +3083,7 @@ class Wallet:
   
 
         # print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
-        print(f"running as {self.pubkey_bech32}")
+        print(f"listening for nip17 as {self.pubkey_bech32}")
 
         # q before printing events
         print_q = asyncio.Queue()
@@ -3209,7 +3209,7 @@ class Wallet:
         # asyncio.run(self._async_run())
         # npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
         url = ['wss://strfry.openbalance.app']
-        asyncio.run(self.listen_messages(url))
+        asyncio.run(self.listen_nip17(url))
       
         
 
