@@ -3203,13 +3203,17 @@ class Wallet:
 
        
 
-    def run(self):
+    def run(self, listen_relay: List[str]= None):
         # print(f"\n listening for ecash for: {self.pubkey_bech32}")
         
         # asyncio.run(self._async_run())
         # npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
         # url = ['wss://strfry.openbalance.app']
-        url = [self.home_relay]
+        if listen_relay:
+            url = listen_relay
+        else:
+            url = [self.home_relay]
+        
         asyncio.run(self.listen_nip17(url))
       
         

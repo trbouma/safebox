@@ -451,13 +451,18 @@ def monitor(nrecipient, relays):
     click.echo(wallet_obj.monitor(nrecipient, relay_array))
 
 @click.command(help='run as a service')
+@click.option('--relays','-r', default="strfry.openbalance.app")
 
-def run():
+def run(relays):
     # click.echo(WELCOME_MSG)
     # click.echo(f"Running as a service...")
+    relay_array = []
+    relays_str = relays.split(',')
+    for each in relays_str:
+        relay_array.append("wss://"+each)
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
-    wallet_obj.run()
+    wallet_obj.run(relay_array)
 
 @click.command(help='generate a payment request')
 @click.argument('amount', default=21)
