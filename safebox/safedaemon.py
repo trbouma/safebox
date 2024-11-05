@@ -18,7 +18,7 @@ relays  = [ "wss://relay.nimo.cash",
         ]
 mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-home_relay = "wss://strfry.openbalance.app"
+home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
@@ -56,7 +56,7 @@ def run_daemon():
     """Main function for the daemon."""
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     nrecipient = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37a76-ad31-b020376b50'
-    relay_array =['wss://strfry.openbalance.app']
+    relay_array =['wss://relay.openbalance.app']
     wallet_obj.run()
 
 

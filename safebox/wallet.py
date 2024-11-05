@@ -8,6 +8,7 @@ import random
 from mnemonic import Mnemonic
 import bolt11
 import aioconsole
+import logging
 
 from hotel_names import hotel_names
 from coolname import generate, generate_slug
@@ -70,11 +71,25 @@ class Wallet:
     replicate: bool
     RESERVED_RECORDS: List[str]
     wallet_reserved_records: object
+    logger: object
     
 
 
 
     def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None, replicate = False) -> None:
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.DEBUG) 
+        # Configure the logger's handler and format
+        handler = logging.StreamHandler()  # Output to console
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+
+        # Add handler to the logger (to avoid duplicate handlers)
+        if not self.logger.hasHandlers():
+            self.logger.addHandler(handler)
+        
+        self.logger.debug("Wallet initialized")
+
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
             self.pubkey_bech32  =   self.k.public_key_bech32()
@@ -476,7 +491,8 @@ class Wallet:
         except:
             return "insufficient funds"
         
-        out_msg = self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays+relays)
+        print(f"sending via {ecash_relays}")
+        out_msg = self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays)
         # out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
     
@@ -646,7 +662,8 @@ class Wallet:
     async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
        
         my_gift = GiftWrap(BasicKeySigner(self.k))
-        relays = ['wss://strfry.openbalance.app']
+        # relays = ['wss://strfry.openbalance.app']
+        relays = [self.home_relay]
         async with ClientPool(relays) as c:
 
 
@@ -723,7 +740,8 @@ class Wallet:
             n_msg.sign(self.privkey_hex)
             # print("label, event id:", label, n_msg.id)
             c.publish(n_msg)
-            # await asyncio.sleep(1)
+            await asyncio.sleep(0.2)
+            self.logger.debug(f"wrote event to {write_relays} for {label} with {label_info}")
 
     def get_wallet_info(self, label:str=None):
         my_enc = NIP44Encrypt(self.k)
@@ -981,7 +999,8 @@ class Wallet:
             i+=1
         
         # self.add_proofs(json.dumps(proofs))
-        print("adding deposit proof objects")
+        # print("adding deposit proof objects")
+        self.logger.debug("Adding proofs")
         self.add_proofs_obj(proof_objs)
         
         return True
@@ -1047,14 +1066,16 @@ class Wallet:
         # make sure have latest kind
         #TODO this is a workaround
 
-
+        self.logger.debug(f"adding proofs {proofs_arg}")
 
         proofs_to_store = json.dump
         for each in proofs_arg:
             pass
             proof_to_store = [each.model_dump()]
             text = json.dumps(proof_to_store)
-            asyncio.run(self._async_add_proofs(text, replicate_relays))
+            # asyncio.run(self._async_add_proofs(text, replicate_relays))
+        
+        asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
         
         return
 
@@ -3302,5 +3323,5 @@ if __name__ == "__main__":
     # url = ['wss://relay.0xchat.com','wss://relay.damus.io']
     # this relay seems to work the best with these kind of anon published events, atleast for now
     # others it seems to be a bit of hit and miss...
-    url = ['wss://strfry.openbalance.app']
+    url = ['wss://relay.openbalance.app']
     # asyncio.run(listen_notes(url))  

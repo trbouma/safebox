@@ -23,7 +23,7 @@ relays  = [ "wss://relay.nimo.cash",
         ]
 mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-home_relay = "wss://strfry.openbalance.app"
+home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
@@ -227,7 +227,7 @@ def post(message):
 @click.command(help='Do a secure DM (NIP-17)')
 @click.argument('nrecipient', default=None)
 @click.argument('message', default="Hello,")
-@click.option('--relays','-r', default='strfry.openbalance.app')
+@click.option('--relays','-r', default='relay.openbalance.app')
 
 def dm(nrecipient,message, relays):
     dm_relays = []   
@@ -297,7 +297,7 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('amount', default=21)
 @click.argument('nrecipient', default=None)
 @click.option('--comment','-c', default='Paid!')
-@click.option('--relays','-r', default='strfry.openbalance.app')
+@click.option('--relays','-r', default='relay.openbalance.app')
 def send(amount,nrecipient: str, relays:str, comment:str):
     ecash_relays = []
 
@@ -317,7 +317,7 @@ def send(amount,nrecipient: str, relays:str, comment:str):
 @click.argument('record')
 @click.argument('nrecipient', default=None)
 @click.option('--comment','-c', default='Shared!')
-@click.option('--relays','-r', default='strfry.openbalance.app')
+@click.option('--relays','-r', default='relay.openbalance.app')
 def share (record,nrecipient: str, relays:str, comment:str):
     share_relays = []
 
@@ -436,7 +436,7 @@ def accept(token):
 
 @click.command(help='monitor events')
 @click.argument('nrecipient', default=None)
-@click.option('--relays','-r', default="strfry.openbalance.app")
+@click.option('--relays','-r', default="relay.openbalance.app")
 
 def monitor(nrecipient, relays):
     relay_array = []
@@ -451,7 +451,7 @@ def monitor(nrecipient, relays):
     click.echo(wallet_obj.monitor(nrecipient, relay_array))
 
 @click.command(help='run as a service')
-@click.option('--relays','-r', default="strfry.openbalance.app")
+@click.option('--relays','-r', default="relay.openbalance.app")
 
 def run(relays):
     # click.echo(WELCOME_MSG)
