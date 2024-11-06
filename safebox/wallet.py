@@ -196,6 +196,8 @@ class Wallet:
         
         # print("load proofs")
         self._load_proofs()
+        
+       
 
         return None
             
@@ -1075,9 +1077,9 @@ class Wallet:
             pass
             proof_to_store = [each.model_dump()]
             text = json.dumps(proof_to_store)
-            # asyncio.run(self._async_add_proofs(text, replicate_relays))
+            asyncio.run(self._async_add_proofs(text, replicate_relays))
         
-        asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
+       # asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
         
         return
 
@@ -1203,23 +1205,13 @@ class Wallet:
         FILTER = [{
             'limit': 1024,
             'authors': [self.pubkey_hex],
-            'kinds': [self.wallet_config.kind_cashu]
+            'kinds': [7375]
         }]
         content =asyncio.run(self._async_load_proofs(FILTER))
         
         return content
     
-    async def _async_load_proofs_with_filter(self):
-        
-        
-        FILTER = [{
-            'limit': 1024,
-            'authors': [self.pubkey_hex],
-            'kinds': [self.wallet_config.kind_cashu]
-        }]
-        content =await self._async_load_proofs(FILTER)
-        
-        return content
+
 
     async def _async_load_proofs(self, filter: List[dict]):
     # does a one off query to relay prints the events and exits
@@ -1258,7 +1250,7 @@ class Wallet:
                 # print(each.amount, each.secret)
                 balance += each.amount
             self.balance = balance
-            # print("balance:", balance)
+            self.logger.debug(f"balance from loaded proofs: {balance}")
             # print("proofs:", len(self.proofs))
 
                 
@@ -1575,8 +1567,9 @@ class Wallet:
                 post_payment_proofs.append(each_proof)
           
         
-        self.proofs = post_payment_proofs
         asyncio.run(self._async_delete_proof_events())
+        self.proofs = post_payment_proofs
+        
         # self.add_proof_event(self.proofs)
         self.add_proofs_obj(post_payment_proofs)
         self._load_proofs()
@@ -1744,11 +1737,12 @@ class Wallet:
         tags = []
         for each_event in self.proof_events.proof_events:
             tags.append(["e",each_event.id])
+            self.logger.debug(f"proof to delete: {each_event.id}")
             # print(each_event.id)
             for each_proof in each_event.proofs:
-                # print(each_proof.id, each_proof.amount)
+                # self.logger.debug(f"{each_proof.id}, {each_proof.amount}")
                 pass
-        # print(tags)
+        self.logger.debug(f"proof events to delete {tags}")
         
         async with ClientPool([self.home_relay]) as c:
         
@@ -1880,6 +1874,7 @@ class Wallet:
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
+        proof_objs = []
         
         # Let's check all the proofs before we do anything
 
