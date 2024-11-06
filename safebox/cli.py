@@ -114,7 +114,14 @@ def set(nsec, home, relays, mints, wallet, xrelays):
 
     
     if home != None:
-        home_relay = home if "wss://" in home else f"wss://{home}"
+        if "wss://" in home:
+            home_relay = home
+        elif "ws://" in home:
+            home_relay = home
+        else:
+            home_relay = f"wss://{home}"
+
+
         print("home relay", home_relay)
         config_obj['home_relay']=home_relay
     

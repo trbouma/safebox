@@ -76,9 +76,9 @@ class Wallet:
 
 
 
-    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None, replicate = False) -> None:
+    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None, replicate = False, logging_level=logging.DEBUG) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.logger.setLevel(logging.DEBUG) 
+        self.logger.setLevel(logging_level)  
         # Configure the logger's handler and format
         handler = logging.StreamHandler()  # Output to console
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -145,6 +145,7 @@ class Wallet:
             self.relays = json.loads(self.wallet_reserved_records['relays'])
         else:
             self.relays = relays
+            self.logger.debug("init mints")
             self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
 
         headers = { "Content-Type": "application/json"}
@@ -995,12 +996,13 @@ class Wallet:
             )
             proofs.append(proof.model_dump())
             proof_objs.append(proof)
-            print(proofs)
+            
             i+=1
         
+        self.logger.debug(f"Adding proofs from mint: {proof_objs}")
         # self.add_proofs(json.dumps(proofs))
         # print("adding deposit proof objects")
-        self.logger.debug("Adding proofs")
+        
         self.add_proofs_obj(proof_objs)
         
         return True
@@ -1066,9 +1068,9 @@ class Wallet:
         # make sure have latest kind
         #TODO this is a workaround
 
-        self.logger.debug(f"adding proofs {proofs_arg}")
+        self.logger.debug(f"adding proofs_obj {proofs_arg}")
 
-        proofs_to_store = json.dump
+        #  proofs_to_store = json.dump
         for each in proofs_arg:
             pass
             proof_to_store = [each.model_dump()]
@@ -1111,13 +1113,15 @@ class Wallet:
 
 
         async with ClientPool(write_relays) as c:
-            # print("add proofs with kind:", self.wallet_config.kind_cashu)
-            n_msg = Event(kind=self.wallet_config.kind_cashu,
+            
+            #FIXME kind
+            n_msg = Event(kind=7375,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
+            self.logger.debug(f"proof event content {n_msg.kind} {text}")
             c.publish(n_msg)
-            # await asyncio.sleep(1)
+            await asyncio.sleep(0.2)
 
     def add_proof_event(self, proofs:List[Proof]):
         asyncio.run(self._async_add_proof_event(proofs))  
@@ -1138,7 +1142,8 @@ class Wallet:
         
         async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
-            n_msg = Event(kind=self.wallet_config.kind_cashu,
+        #FIXME KIND
+            n_msg = Event(kind=7375,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
@@ -2118,13 +2123,13 @@ class Wallet:
 
                 except:
                     ValueError("duplicate proofs")
-                    print("duplicate proof, ignore")
+                    self.logger.debug("duplicate proof, ignore")
 
                 combined_proofs = combined_proofs + proofs
                 combined_proof_objs = combined_proof_objs + proof_objs
 
         asyncio.run(self._async_delete_proof_events())
-        print("XXXXX swap multi each")
+        self.logger.debug("XXXXX swap multi each")
         self.add_proofs_obj(combined_proof_objs)
         
         self._load_proofs()
