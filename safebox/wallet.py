@@ -1079,7 +1079,24 @@ class Wallet:
             text = json.dumps(proof_to_store)
             asyncio.run(self._async_add_proofs(text, replicate_relays))
         
-       # asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
+        # asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
+        
+        return
+
+    def write_proofs(self, replicate_relays: List[str]=None):
+        # make sure have latest kind
+        #TODO this is a workaround
+
+        self.logger.debug(f"writing proofs ")
+        self.delete_proof_events()
+       
+        for each in self.proofs:
+            pass
+            proof_to_store = [each.model_dump()]
+            text = json.dumps(proof_to_store)
+            asyncio.run(self._async_add_proofs(text, replicate_relays))
+        
+        self._load_proofs()
         
         return
 
@@ -1260,7 +1277,7 @@ class Wallet:
            
             return proofs
     
-    def delete_proofs(self):
+    def delete_proof_events(self):
         asyncio.run(self._async_delete_proof_events())
 
     def _proofs_by_keyset(self):
@@ -1279,7 +1296,7 @@ class Wallet:
             for each in all_proofs[key]:
                 amount +=each.amount        
             keyset_amounts[key]=amount
-        print(keyset_amounts)
+        # print(keyset_amounts)
         return all_proofs, keyset_amounts
 
 
@@ -1567,12 +1584,15 @@ class Wallet:
                 post_payment_proofs.append(each_proof)
           
         
-        asyncio.run(self._async_delete_proof_events())
+        # asyncio.run(self._async_delete_proof_events())
+        # self.delete_proof_events()
+        
         self.proofs = post_payment_proofs
         
+        self.write_proofs()
         # self.add_proof_event(self.proofs)
-        self.add_proofs_obj(post_payment_proofs)
-        self._load_proofs()
+        # self.add_proofs_obj(post_payment_proofs)
+        # self._load_proofs()
 
     def pay_multi_invoice(  self, 
                      
@@ -1752,7 +1772,8 @@ class Wallet:
                         tags=tags)
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
-            # await asyncio.sleep(1)
+            # added a delay here so the delete event get published
+            await asyncio.sleep(1)
 
     def swap(self):
         #TODO This function is no longer used

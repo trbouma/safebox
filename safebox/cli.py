@@ -395,7 +395,11 @@ def proofs():
         click.echo(f"id: {each.id} amount: {each.amount} Y: {each.Y}")
     click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
     click.echo("Proofs by keyset")
-    wallet_obj._proofs_by_keyset()
+    all_proofs, keyset_amounts = wallet_obj._proofs_by_keyset()
+    click.echo(f"{keyset_amounts}")
+    click.echo("Proof events")
+    for each in wallet_obj.proof_events.proof_events:
+        click.echo(f"Event ID: {each.id}")
 
 
 @click.command(help="show balance")
