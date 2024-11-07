@@ -2270,7 +2270,12 @@ class Wallet:
         await self._async_add_proofs_obj(combined_proof_objs)
         
         # self._load_proofs()
-        await self._async_load_proofs_with_filter()
+        FILTER = [{
+            'limit': 1024,
+            'authors': [self.pubkey_hex],
+            'kinds': [7375]
+        }]
+        await self._async_load_proofs(FILTER)
 
         return     
     def swap_for_payment(self, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
@@ -3328,7 +3333,13 @@ class Wallet:
                 # print(id, each.mint)
             
         await self._async_add_proofs_obj(proof_obj_list)
-        await self._async_load_proofs_with_filter()
+        FILTER = [{
+            'limit': 1024,
+            'authors': [self.pubkey_hex],
+            'kinds': [7375]
+        }]
+        await self._async_load_proofs(FILTER)
+
         #TODO don't do this every time - only when a new mint shows up
         await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
         await self._async_swap()
