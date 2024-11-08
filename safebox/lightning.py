@@ -71,11 +71,11 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
     except:
         return {"status": "ERROR", "reason": "Lighting address does not exist!"}
     
-    print(f"Zap to pay: {zap_parms}")
+    # print(f"Zap to pay: {zap_parms}")
     
     allows_nostr = zap_parms.get("allowsNostr", False)
     nostr_pubkey = zap_parms.get("nostrPubkey", None)
-    print(f"allowsNostr {allows_nostr} with pubkey {nostr_pubkey}")
+    # print(f"allowsNostr {allows_nostr} with pubkey {nostr_pubkey}")
     if allows_nostr:
         pass
         data_to_send = {  
@@ -85,7 +85,7 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
                         
                         }
         ln_return = requests.get(zap_parms['callback'],params=data_to_send)
-        print(ln_return.json())
+        # print(ln_return.json())
         pr = ln_return.json()['pr']
         
 

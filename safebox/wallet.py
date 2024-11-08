@@ -1639,7 +1639,7 @@ class Wallet:
         except Exception as e:
             return f"error {e}"
 
-        print("pay from multiple mints")
+        self.logger.debug("pay from multiple mints")
         available_amount = 0
         chosen_keyset = None
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
@@ -1647,79 +1647,79 @@ class Wallet:
             available_amount += keyset_amounts[each]
         
         
-        print("available amount:", available_amount)
+        self.logger.debug("available amount:", available_amount)
         if available_amount < ln_amount:
             msg_out ="insufficient balance. you need more funds!"
             return msg_out
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            print(key, keyset_amounts[key])
+            self.logger.debug(f"{key}, {keyset_amounts[key]}")
             if keyset_amounts[key] >= ln_amount:
                 chosen_keyset = key
                 break
         if not chosen_keyset:
-            print("insufficient balance in any one keyset, you need to swap!") 
+            self.logger.error("insufficient balance in any one keyset, you need to swap!") 
             return   
         
         self.logger.debug(f"chosen keyset: {chosen_keyset}")
         # Now do the pay routine
         melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
         melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
-        print(melt_quote_url,melt_url)
+        self.logger.debug(f"{melt_quote_url}, {melt_url}")
         headers = { "Content-Type": "application/json"}
         # callback = lightning_address_pay(amount, lnaddress,comment=comment)
         pr = lninvoice        
-        print(pr)
-        print(ln_amount, lninvoice)
+        self.logger.debug(f"pr {pr}")
+        self.logger.debug(f"{ln_amount}, {lninvoice}")
         data_to_send = {    "request": pr,
                             "unit": "sat"
 
                         }
         response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        print("post melt response:", response.json())
+        self.logger.debug(f"post melt response: {response.json()}")
         post_melt_response = PostMeltQuoteResponse(**response.json())
-        print("mint response:", post_melt_response)
+        self.logger.debug(f"mint response: {post_melt_response}")
         proofs_to_use = []
         proof_amount = 0
         amount_needed = ln_amount + post_melt_response.fee_reserve
         self.logger.debug(f"amount needed: {amount_needed}")
         if amount_needed > keyset_amounts[chosen_keyset]:
-            print("insufficient balance in keyset. you need to swap, or use another keyset")
+            self.logger.debug("insufficient balance in keyset. you need to swap, or use another keyset")
             chosen_keyset = None
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                print(key, keyset_amounts[key])
+                self.logger.debug(f"{key}, {keyset_amounts[key]}")
                 if keyset_amounts[key] >= amount_needed:
                     chosen_keyset = key
                     self.logger.debug(f"new chosen keyset: {key}")
                     break
             if not chosen_keyset:
-                print("you don't have a sufficient balance in a keyset, you need to swap")
+                self.logger.debug("you don't have a sufficient balance in a keyset, you need to swap")
                 return
             
             # Set to new mints and redo the calls
             melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
-            print(melt_quote_url,melt_url)
+            self.logger.debug(f"{melt_quote_url},{melt_url}")
             callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
             pr = callback['pr']        
-            print(pr)
-            print(ln_amount, lninvoice)
+            self.logger.debug(f"pr {pr}")
+            self.logger.debug(f"{ln_amount}, {lninvoice}")
             data_to_send = {    "request": pr,
                             "unit": "sat"
 
                         }
             response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-            print("post melt response:", response.json())
+            self.logger.debug(f"post melt response: {response.json()}")
             post_melt_response = PostMeltQuoteResponse(**response.json())
-            print("mint response:", post_melt_response)
+            self.logger.debug(f"mint response: {post_melt_response}")
 
             if not chosen_keyset:
-                print("insufficient balance in any one keyset, you need to swap!") 
+                self.logger.debug("insufficient balance in any one keyset, you need to swap!") 
                 return 
             
         # Print now we should be all set to go
-        print("---we have a sufficient mint---")
-        print(melt_quote_url,melt_url, post_melt_response)
+        self.logger.debug("---we have a sufficient mint---")
+        self.logger.debug(f"{melt_quote_url}, {melt_url}, {post_melt_response}")
         proofs_to_use = []
         proof_amount = 0
         proofs_from_keyset = keyset_proofs[chosen_keyset]
@@ -1727,10 +1727,10 @@ class Wallet:
             pay_proof = proofs_from_keyset.pop()
             proofs_to_use.append(pay_proof)
             proof_amount += pay_proof.amount
-            print("pop", pay_proof.amount)
+            self.logger.debug(f"pop {pay_proof.amount}")
             
-        print("proofs to use:", proofs_to_use)
-        print("remaining", proofs_from_keyset)
+        self.logger.debug(f"proofs to use:  {proofs_to_use}")
+        self.logger.debug(f"remaining: {proofs_from_keyset}")
         # Continue implementing from line 818 swap_for_payment may need a parameter
          # Now need to do the melt
         proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
@@ -1750,7 +1750,7 @@ class Wallet:
                 self.logger.debug(f"pay with {each.amount}, {each.secret}")
             else:
                 keep_proofs.append(each)
-                print(f"keep {each.amount}, {each.secret}")
+                self.logger.debug(f"keep {each.amount}, {each.secret}")
         self.logger.debug(f"spend proofs: {spend_proofs}") 
         self.logger.debug(f"keep proofs:  {keep_proofs}")
         melt_proofs = []
@@ -1760,10 +1760,10 @@ class Wallet:
         data_to_send = {"quote": post_melt_response.quote,
                       "inputs": melt_proofs }
         
-        print(data_to_send)
-        print("we are here!!!")
+        self.logger.debug(data_to_send)
+        self.logger.debug("we are here!!!")
         response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        print(response.json())   
+        self.logger.debug(response.json())   
         # add keep proofs back into selected keyset proofs
         for each in keep_proofs:
             proofs_from_keyset.append(each)
@@ -1776,10 +1776,18 @@ class Wallet:
             each_proofs = keyset_proofs[key]
             for each_proof in each_proofs:
                 post_payment_proofs.append(each_proof)
+        
+        # Replace with new function
         self.proofs = post_payment_proofs
-        asyncio.run(self._async_delete_proof_events())
-        self.add_proofs_obj(post_payment_proofs)
-        self._load_proofs()
+        # asyncio.run(self._async_delete_proof_events())
+        # self.add_proofs_obj(post_payment_proofs)
+        # self._load_proofs()
+
+           
+        
+        self.write_proofs()
+        msg_out = f"Zap of {ln_amount} sats with fee {amount_needed-ln_amount} sats successful! \nYou have {self.balance} sats remaining."
+        self.logger.info(msg_out)
 
 
 
@@ -2881,7 +2889,7 @@ class Wallet:
         if zaps_to_send == []:
             zaps_to_send =[(event.pub_key,None,1)]
         
-        print("zaps to send:", zaps_to_send)
+        self.logger.debug(f"zaps to send: {zaps_to_send}")
 
         prs = []
         for each_zap in zaps_to_send:
@@ -2895,23 +2903,23 @@ class Wallet:
             async with ClientPool([self.home_relay]+self.relays) as c:        
                 events_profile = await c.query(profile_filter)
             try:
-                print("getting profile")
+                self.logger.debug("getting profile")
                 event_profile = events_profile[0]  
-                print(event)  
+                self.logger.debug(event)  
                 profile_str =   event_profile.content
-                print("profile", profile_str)
+                self.logger.debug(f"profile {profile_str}")
                 profile_obj = json.loads(profile_str)
                 lnaddress = profile_obj['lud16']
-                print(lnaddress, lnaddress_to_lnurl(lnaddress))
+                self.logger.debug(f" {lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 
             except:
                 {"status": "could not access profile"}
-                print("could not get profile")
+                self.logger.error("could not get profile")
                 pass
             
             # Now we can create zap request
-            print("create zap request")
+            self.logger.debug("create zap request")
             tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
                         ["relays"] + self.relays,
                         ["amount",str(zap_amount*1000)],
@@ -2926,17 +2934,17 @@ class Wallet:
                                 )
             zap_request.sign(self.privkey_hex)
             print("is valid:", zap_request.is_valid())
-            print(zap_request, zap_request.tags, zap_request.id)
-            print("serialize:", zap_request.serialize())
-            print("to_dict:", zap_request.to_dict())
+            self.logger.debug(f" {zap_request}, {zap_request.tags}, {zap_request.id}")
+            self.logger.debug(f"serialize: {zap_request.serialize()}")
+            self.logger.debug(f"to_dict: {zap_request.to_dict()}")
             zap_dict= zap_request.to_dict()
-            print("zap_dict:",zap_dict )
+            self.logger.debug(f"zap_dict: {zap_dict}" )
             
             zap_test = Event().load(zap_dict)
-            print("zap_test.id:", zap_test.id)
-            print("zap test", zap_test, zap_test.is_valid())
+            self.logger.debug(f"zap_test.id: {zap_test.id}")
+            self.logger.debug(f"zap test  {zap_test}, {zap_test.is_valid()}")
             pr,_,_ = zap_address_pay(zap_amount,lnaddress,zap_dict)
-            print("pay this invoice from the safebox:",pr)
+            self.logger.debug(f"pay this invoice from the safebox: {pr}")
             prs.append(pr)
         
         return prs
