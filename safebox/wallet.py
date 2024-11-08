@@ -76,19 +76,27 @@ class Wallet:
 
 
 
-    def __init__(self, nsec: str, relays: List[str], mints: List[str]|None=None,home_relay:str|None=None, replicate = False, logging_level=logging.DEBUG) -> None:
+    def __init__(   self, 
+                    nsec: str, 
+                    relays: List[str], 
+                    mints: List[str]|None=None,
+                    home_relay:str|None=None, 
+                    replicate = False, 
+                    logging_level=logging.DEBUG) -> None:
+        
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging_level)  
         # Configure the logger's handler and format
-        handler = logging.StreamHandler()  # Output to console
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-
-        # Add handler to the logger (to avoid duplicate handlers)
         if not self.logger.hasHandlers():
+            handler = logging.StreamHandler()  # Output to console
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
             self.logger.addHandler(handler)
+
         
-        self.logger.debug("Wallet initialized")
+            
+        
+        self.logger.info(f"Wallet initialized: {self.__class__.__name__}")
 
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
@@ -757,7 +765,8 @@ class Wallet:
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
         # a_tag = ["a", label_hash]
         # print("a_tag:",a_tag)
-        print("getting:", label)
+        self.logger.debug(f"getting {label}")
+        
         DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
@@ -800,7 +809,8 @@ class Wallet:
         # target_tag = filter[0]['d']
         target_tag = label_hash
         
-        print("target tag:", target_tag)
+        
+        self.logger.debug(f"target tag: {target_tag}")
         event_select = None
         async with ClientPool([self.home_relay]) as c:
         # async with Client(relay) as c:
@@ -1310,7 +1320,8 @@ class Wallet:
         # event_quote_info_list = self.get_wallet_info("quote")
         event_quote_info_list = self.wallet_reserved_records["quote"]
         event_quote_info_list_json = json.loads(event_quote_info_list)
-        print(event_quote_info_list_json)
+       
+        self.logger.debug(f"event quote list: {event_quote_info_list_json}")
         event_quote_info_list_json = self.quote
         for each in event_quote_info_list_json:
             event_quotes.append(walletQuote(**each))
@@ -1322,6 +1333,7 @@ class Wallet:
             
 
             url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
+            self.logger.debug(f"mint quote: {url}")
             
             
             # print("event quote info:", each_quote)
@@ -1339,10 +1351,12 @@ class Wallet:
                     self.set_wallet_info(label="quote", label_info=json.dumps(my_list))
                     
                     
+                    
+                    
                 # return mint_quote.paid
             else:
                 success_for_all = False
-            
+        self._load_proofs()    
         return success_for_all
     
 
@@ -1363,14 +1377,17 @@ class Wallet:
 
                         }
         response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        print("post melt response:", response.json())
+        
+        self.logger.debug(f"post melt response: {response.json()}")
         post_melt_response = PostMeltQuoteResponse(**response.json())
-        print("mint response:", post_melt_response)
+       
+        self.logger.debug(f"post melt response: {post_melt_response}")
 
         proofs_to_use = []
         proof_amount = 0
         amount_needed = amount + post_melt_response.fee_reserve
-        print("amount needed:", amount_needed)
+        
+        self.logger.debug(f"amount needed: {amount_needed}")
         if amount_needed > self.balance:
             print("insufficient balance")
             return
@@ -1380,15 +1397,17 @@ class Wallet:
             proof_amount += pay_proof.amount
             print("pop", pay_proof.amount)
             
-        print("proofs to use", proofs_to_use)
-        print("remaining", self.proofs)
+        
+        self.logger.debug(f"proofs to use: {proofs_to_use}")
+        self.logger.debug(f"proofs in wallet: {self.proofs}")
+        
 
         # Now need to do the melt
         proofs_remaining = self.swap_for_payment(proofs_to_use, amount_needed)
         
 
-        print("proofs remaining:", proofs_remaining)
-        print(f"amount needed: {amount_needed}")
+        self.logger.debug(f"proofs remaining: {proofs_remaining}")
+        self.logger.debug(f"amount needed: {amount_needed}")
         sum_proofs =0
         spend_proofs = []
         keep_proofs = []
@@ -1397,12 +1416,14 @@ class Wallet:
             sum_proofs += each.amount
             if sum_proofs <= amount_needed:
                 spend_proofs.append(each)
-                print(f"pay with {each.amount}, {each.secret}")
+                self.logger.debug(f"pay with {each.amount}, {each.secret}")
             else:
                 keep_proofs.append(each)
-                print(f"keep {each.amount}, {each.secret}")
-        print("spend:",spend_proofs) 
-        print("keep:", keep_proofs) 
+                self.logger.debug(f"keep {each.amount}, {each.secret}")
+        self.logger.debug(f"spend proofs: {spend_proofs}")
+        self.logger.debug(f"keep proofs: {keep_proofs}")
+
+     
 
         melt_proofs = []
         for each_proof in spend_proofs:
@@ -1411,14 +1432,15 @@ class Wallet:
         data_to_send = {"quote": post_melt_response.quote,
                       "inputs": melt_proofs }
         
-        print(data_to_send)
-        print("we are here!!!")
+        
+        self.logger.debug(f"we are here! data to send {data_to_send}")
         response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        print(response.json())   
+           
+        self.logger.debug(f"response json {response.json()}")
         # delete old proofs
         for each in keep_proofs:
             self.proofs.append(each)
-        # print("self proofs", self.proofs)
+        
         asyncio.run(self._async_delete_proof_events())
         self.add_proof_event(self.proofs)
         self._load_proofs()
@@ -1441,8 +1463,9 @@ class Wallet:
         
         print("available amount:", available_amount)
         if available_amount < amount:
-            print("insufficient balance. you need more funds!")
-            return
+            msg_out = "insufficient balance. you need more funds!"
+            
+            return msg_out
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             # print(key, keyset_amounts[key])
@@ -1453,14 +1476,20 @@ class Wallet:
             print("insufficient balance in any one keyset, you need to swap!") 
             return   
         
-        print("chosen keyset for payment", chosen_keyset)
+        self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
         # Now do the pay routine
         melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
         melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
         # print(melt_quote_url,melt_url)
         headers = { "Content-Type": "application/json"}
-        callback = lightning_address_pay(amount, lnaddress,comment=comment)
-        pr = callback['pr']        
+        try:
+            callback = lightning_address_pay(amount, lnaddress,comment=comment)         
+            pr = callback['pr']  
+        except Exception as e:
+            msg_out = f"Could not resolve {lnaddress}. Check if correct address"
+            self.logger.error(msg_out)
+            return msg_out
+                  
         # print(pr)
         print(amount, lnaddress)
         data_to_send = {    "request": pr,
@@ -1474,7 +1503,7 @@ class Wallet:
         proofs_to_use = []
         proof_amount = 0
         amount_needed = amount + post_melt_response.fee_reserve
-        print("amount needed:", amount_needed)
+        self.logger.debug(f"amount needed: {amount_needed}")
         if amount_needed > keyset_amounts[chosen_keyset]:
             print("insufficient balance in keyset. you need to swap, or use another keyset")
             chosen_keyset = None
@@ -1482,7 +1511,7 @@ class Wallet:
                 # print(key, keyset_amounts[key])
                 if keyset_amounts[key] >= amount_needed:
                     chosen_keyset = key
-                    print("new chosen keyset", key)
+                    self.logger.debug(f"new chosen keyset: {key}")
                     break
             if not chosen_keyset:
                 print("you don't have a sufficient balance in a keyset, you need to swap")
@@ -1495,7 +1524,7 @@ class Wallet:
             callback = lightning_address_pay(amount, lnaddress,comment=comment)
             pr = callback['pr']        
             # print(pr)
-            print(amount, lnaddress)
+            self.logger.debug(f"{amount}, {lnaddress}")
             data_to_send = {    "request": pr,
                             "unit": "sat"
 
@@ -1510,8 +1539,9 @@ class Wallet:
                 return 
             
         # Print now we should be all set to go
-        print("---we have a sufficient mint---")
-        # print(melt_quote_url,melt_url, post_melt_response)
+        
+        self.logger.debug("---we have a sufficient mint balance---")
+       
         proofs_to_use = []
         proof_amount = 0
         proofs_from_keyset = keyset_proofs[chosen_keyset]
@@ -1540,12 +1570,13 @@ class Wallet:
             sum_proofs += each.amount
             if sum_proofs <= amount_needed:
                 spend_proofs.append(each)
-                print(f"pay with {each.amount}, {each.secret}")
+                self.logger.debug(f"pay with {each.amount}, {each.secret}")
             else:
                 keep_proofs.append(each)
-                print(f"keep {each.amount}, {each.secret}")
-        print("spend:",spend_proofs) 
-        print("keep:", keep_proofs)
+                self.logger.debug(f"keep {each.amount}, {each.secret}")
+        
+        self.logger.debug(f"spend proofs: {spend_proofs}")
+        self.logger.debug(f"keep proofs: {keep_proofs}")
         melt_proofs = []
         for each_proof in spend_proofs:
                 melt_proofs.append(each_proof.model_dump())
@@ -1553,19 +1584,22 @@ class Wallet:
         data_to_send = {"quote": post_melt_response.quote,
                     "inputs": melt_proofs }
         
-        print(data_to_send)
-        print("Lightning payment we are here!!!")
+       
+        
+        self.logger.debug(f"lightning payment we are here!: {data_to_send}")
         response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        print(response.json()) 
+        
+        self.logger.debug(f"response json: {response.json()}")
         payment_json = response.json()
         #TODO Need to do some error checking
-        print("need to do some error checking")  
+        
+        self.logger.debug(f"need to do some error checking")
         # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
         # add keep proofs back into selected keyset proofs
         if payment_json.get("paid",False):        
-            print("lightning paid ok")
+            self.logger.info(f"lightning payment ok")
         else:
-            print("payment did not go through") 
+            self.logger.info(f"lighting payment did no go through")
             # Add back in spend proofs
             for each in spend_proofs:   
                 proofs_from_keyset.append(each)
@@ -1590,9 +1624,9 @@ class Wallet:
         self.proofs = post_payment_proofs
         
         self.write_proofs()
-        # self.add_proof_event(self.proofs)
-        # self.add_proofs_obj(post_payment_proofs)
-        # self._load_proofs()
+        msg_out = f"Payment of {amount} sats with fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
+        self.logger.info(msg_out)
+        return msg_out
 
     def pay_multi_invoice(  self, 
                      
@@ -1615,8 +1649,8 @@ class Wallet:
         
         print("available amount:", available_amount)
         if available_amount < ln_amount:
-            print("insufficient balance. you need more funds!")
-            return
+            msg_out ="insufficient balance. you need more funds!"
+            return msg_out
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             print(key, keyset_amounts[key])
@@ -1627,7 +1661,7 @@ class Wallet:
             print("insufficient balance in any one keyset, you need to swap!") 
             return   
         
-        print("chosen keyset for payment", chosen_keyset)
+        self.logger.debug(f"chosen keyset: {chosen_keyset}")
         # Now do the pay routine
         melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
         melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
@@ -1648,7 +1682,7 @@ class Wallet:
         proofs_to_use = []
         proof_amount = 0
         amount_needed = ln_amount + post_melt_response.fee_reserve
-        print("amount needed:", amount_needed)
+        self.logger.debug(f"amount needed: {amount_needed}")
         if amount_needed > keyset_amounts[chosen_keyset]:
             print("insufficient balance in keyset. you need to swap, or use another keyset")
             chosen_keyset = None
@@ -1656,7 +1690,7 @@ class Wallet:
                 print(key, keyset_amounts[key])
                 if keyset_amounts[key] >= amount_needed:
                     chosen_keyset = key
-                    print("new chosen keyset", key)
+                    self.logger.debug(f"new chosen keyset: {key}")
                     break
             if not chosen_keyset:
                 print("you don't have a sufficient balance in a keyset, you need to swap")
@@ -1702,8 +1736,8 @@ class Wallet:
         proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
         
 
-        print("proofs remaining:", proofs_remaining)
-        print(f"amount needed: {amount_needed}")
+        self.logger.debug(f"proofs remaining: {proofs_remaining}")
+        self.logger.debug(f"amount needed: {amount_needed}")
         # Implement from line 824
         sum_proofs =0
         spend_proofs = []
@@ -1713,12 +1747,12 @@ class Wallet:
             sum_proofs += each.amount
             if sum_proofs <= amount_needed:
                 spend_proofs.append(each)
-                print(f"pay with {each.amount}, {each.secret}")
+                self.logger.debug(f"pay with {each.amount}, {each.secret}")
             else:
                 keep_proofs.append(each)
                 print(f"keep {each.amount}, {each.secret}")
-        print("spend:",spend_proofs) 
-        print("keep:", keep_proofs)
+        self.logger.debug(f"spend proofs: {spend_proofs}") 
+        self.logger.debug(f"keep proofs:  {keep_proofs}")
         melt_proofs = []
         for each_proof in spend_proofs:
                 melt_proofs.append(each_proof.model_dump())
@@ -2458,7 +2492,7 @@ class Wallet:
         # print(data_to_send)
 
         try:
-            print("are we here?")
+            self.logger.debug("are we here?")
             response = requests.post(url=swap_url, json=data_to_send, headers=headers)
             
             # print(response.json())
@@ -2485,7 +2519,7 @@ class Wallet:
                 r = blinded_values[i][1]
                 secret_msg = blinded_values[i][2]
                 Y: PublicKey = hash_to_curve(secret_msg.encode("utf-8"))
-                print(pub_key_c, promise_amount,A, r)
+                self.logger.debug(f"{pub_key_c} {promise_amount},{A}, {r}")
                 C = step3_alice(pub_key_c,r,pub_key_a)
                 
                 proof = Proof(  amount=promise_amount,
@@ -2681,8 +2715,8 @@ class Wallet:
         
         print("available amount:", available_amount)
         if available_amount < amount:
-            print("insufficient balance. you need more funds!")
-            return
+            msg_out = "insufficient balance. you need more funds!"
+            return msg_out
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             print(key, keyset_amounts[key])
@@ -2720,12 +2754,12 @@ class Wallet:
             sum_proofs += each.amount
             if sum_proofs <= amount:
                 spend_proofs.append(each)
-                print(f"pay with {each.amount}, {each.secret}")
+                self.logger.debug(f"pay with {each.amount}, {each.secret}")
             else:
                 keep_proofs.append(each)
-                print(f"keep {each.amount}, {each.secret}")
-        print("spend:",spend_proofs) 
-        print("keep:", keep_proofs)
+                self.logger.debug(f"keep {each.amount}, {each.secret}")
+        self.logger.debug(f"spend proofs: {spend_proofs}") 
+        self.logger(f"keep proofs: {keep_proofs}")
 
         for each in keep_proofs:
             proofs_from_keyset.append(each)
@@ -2768,8 +2802,8 @@ class Wallet:
         
         print("available amount:", available_amount)
         if available_amount < amount:
-            print("insufficient balance. you need more funds!")
-            return
+            msg_out = "insufficient balance. you need more funds!"
+            return msg_out
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             print(key, keyset_amounts[key])

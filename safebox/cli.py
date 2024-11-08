@@ -8,7 +8,7 @@ from safebox.models import nostrProfile, SafeboxItem
 from datetime import datetime
 from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
-from time import sleep
+from time import sleep, time
 import qrcode
 from safebox.constants import (
     WELCOME_MSG
@@ -25,6 +25,7 @@ mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
 home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
+logging_level = 20
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
 
@@ -46,7 +47,8 @@ else:
                     "home_relay": home_relay,
                     "mints": mints, 
                     "wallet": wallet,
-                    "replicate_relays": replicate_relays}
+                    "replicate_relays": replicate_relays,
+                    "logging_level": 10}
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
@@ -56,6 +58,7 @@ MINTS   = config_obj['mints']
 WALLET  = config_obj['wallet']
 HOME_RELAY = config_obj['home_relay']
 REPLICATE_RELAYS = config_obj['replicate_relays']
+LOGGING_LEVEL = config_obj['logging_level']
 
 def write_config():
      with open(file_path, 'w') as file:        
@@ -72,9 +75,9 @@ def cli():
 def info(ctx):
     click.echo(WELCOME_MSG)
     click.echo("This is safebox. Retrieving wallet...")
-    info = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
-    # print(wallet_obj)
-    click.echo(info)
+    info_out = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+   
+    click.echo(f"npub: {info_out.pubkey_bech32}")
 
 @click.command(help="initialize a new safebox")
 @click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
@@ -82,7 +85,7 @@ def info(ctx):
 def init(profile, keepkey):
     click.echo(f"Creating a new safebox with relay: {HOME_RELAY} and mint: {MINTS}")
     
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     if profile:
         click.echo("Create nostr profile")
     if keepkey:
@@ -102,15 +105,19 @@ def init(profile, keepkey):
 @click.option('--mints', '-m', default=None, help='set mints')
 @click.option('--wallet', '-w', default=None, help='set wallet')
 @click.option('--xrelays', '-x', default=None, help='set replicate relays')
-def set(nsec, home, relays, mints, wallet, xrelays):
+@click.option('--logging', '-l', default=None, help='set logging level')
+def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
     
-    if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None:
+    if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None and logging == None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
         return
    
 
     if nsec != None:
         config_obj['nsec']=nsec
+
+    if logging != None:
+        config_obj['logging_level']= int(logging)
 
     
     if home != None:
@@ -254,11 +261,14 @@ def dm(nrecipient,message, relays):
 def deposit(amount: int):
     qr = qrcode.QRCode()
     click.echo(f"amount: {amount}")
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     cli_quote = wallet_obj.deposit(amount)
     qr.add_data(cli_quote.invoice)
+    qr.make(fit=True)
     click.echo(f"\n\nPlease pay invoice:\n{cli_quote.invoice}\n") 
-    click.echo(f"\n{qr.print_ascii()}\n") 
+    qr_invoice = qr.print_ascii(out=sys.stdout)
+    click.echo(f"\n{qr_invoice}\n") 
+    
 
     click.echo(f"\n\nPlease run safebox check invoice check to see if invoice is paid")
 
@@ -277,11 +287,11 @@ def withdraw(invoice: str):
 @click.argument('param')
 
 def check(param):
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     if param == "invoice":
         click.echo("check invoice")        
         msg_out = wallet_obj.check()
-        click.echo(msg_out)
+        click.echo(f"Invoices paid: {msg_out}. Wallet balance is: {wallet_obj.balance} sats")
     elif param == "ecash":
         click.echo("check for ecash")
         msg_out = wallet_obj.get_ecash_dm()
@@ -294,9 +304,9 @@ def check(param):
 @click.option('--comment','-c', default='Paid!')
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
-    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
-    wallet_obj.pay_multi(amount,lnaddress,comment)
-    # wallet_obj.swap_multi_consolidate()
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
+    msg_out = wallet_obj.pay_multi(amount,lnaddress,comment)
+    click.echo(msg_out)
 
 
 
@@ -405,7 +415,7 @@ def proofs():
 @click.command(help="show balance")
 def balance():
     
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
     click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
 
@@ -414,7 +424,7 @@ def balance():
 @click.option("--consolidate","-c", is_flag=True, show_default=True, default=False, help="Consolidate proofs")
 def swap(consolidate):
     
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
