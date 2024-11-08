@@ -263,7 +263,7 @@ class Wallet:
                                         about = f"Resident of {hotel_name}",
                                         picture=f"https://robohash.org/{pet_name}/?set=set4",
                                         lud16= f"{self.pubkey_bech32}@openbalance.app",
-                                        website=f"https://npub.cash/pay/{self.pubkey_bech32}",
+                                        website=f"https://njump.me/{self.pubkey_bech32}",
                                         nprofile=n_profile_str
 
                                          )
@@ -2873,7 +2873,7 @@ class Wallet:
             event = events[0]  
             print(event)  
             json_str =   f"{event.id}  {event.pub_key}  {event.content} {event.tags}"
-            print("json_str", json_str)
+            self.logger.debug(f"json_str: {json_str}")
             # json_obj = json.loads(json_str)
             # json_obj = json.loads(json_str)
         except:
@@ -2933,7 +2933,7 @@ class Wallet:
                                 pub_key=self.pubkey_hex                            
                                 )
             zap_request.sign(self.privkey_hex)
-            print("is valid:", zap_request.is_valid())
+            self.logger.debug(f"zap is valid: {zap_request.is_valid()}")
             self.logger.debug(f" {zap_request}, {zap_request.tags}, {zap_request.id}")
             self.logger.debug(f"serialize: {zap_request.serialize()}")
             self.logger.debug(f"to_dict: {zap_request.to_dict()}")
