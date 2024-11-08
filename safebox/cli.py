@@ -378,7 +378,7 @@ def zap(amount:int, event,npub, comment):
         return
 
     click.echo(f"Zap amount: {amount} to {event}")
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo(wallet_obj.zap(amount,event,comment))
     
     

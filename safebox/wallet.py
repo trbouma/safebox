@@ -817,7 +817,7 @@ class Wallet:
             
             events = await c.query(filter)
             
-            print(f"37375 events: {len(events)}")
+            self.logger.debug(f"37375 events: {len(events)}")
 
             
 
