@@ -203,7 +203,7 @@ def replicate():
 def get(label):
     
     safebox_info = "None"
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
     try:
         safebox_info = wallet_obj.get_wallet_info(label)
@@ -223,7 +223,7 @@ def get(label):
 
 def put(label, label_info):
     jsons=None
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     # click.echo(wallet.get_wallet_info())
     
 
