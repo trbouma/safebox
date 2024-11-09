@@ -181,7 +181,7 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
 @click.command(help='display nostr profile')
 
 def profile():
-    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,mints=MINTS)
+    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,mints=MINTS, logging_level=LOGGING_LEVEL)
     
     # click.echo(replicate)
     click.echo(wallet.get_profile())
@@ -360,7 +360,7 @@ def testpay(amount):
 @click.argument('amount', default=1)
 def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo(wallet_obj.issue_token(amount))
 
 @click.command(help="Zap amount to event or to recipient")
@@ -396,7 +396,7 @@ def delete():
 @click.command(help="list proofs")
 def proofs():
     
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
@@ -407,9 +407,7 @@ def proofs():
     click.echo("Proofs by keyset")
     all_proofs, keyset_amounts = wallet_obj._proofs_by_keyset()
     click.echo(f"{keyset_amounts}")
-    click.echo("Proof events")
-    for each in wallet_obj.proof_events.proof_events:
-        click.echo(f"Event ID: {each.id}")
+
 
 
 @click.command(help="show balance")
@@ -449,7 +447,7 @@ def receive(token):
 @click.argument('token')
 def accept(token):
     
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)

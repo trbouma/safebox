@@ -2767,7 +2767,7 @@ class Wallet:
                 keep_proofs.append(each)
                 self.logger.debug(f"keep {each.amount}, {each.secret}")
         self.logger.debug(f"spend proofs: {spend_proofs}") 
-        self.logger(f"keep proofs: {keep_proofs}")
+        self.logger.debug(f"keep proofs: {keep_proofs}")
 
         for each in keep_proofs:
             proofs_from_keyset.append(each)
@@ -2871,7 +2871,7 @@ class Wallet:
             events = await c.query(filter)
         try:
             event = events[0]  
-            print(event)  
+            self.logger.debug(f"event: {event}")  
             json_str =   f"{event.id}  {event.pub_key}  {event.content} {event.tags}"
             self.logger.debug(f"json_str: {json_str}")
             # json_obj = json.loads(json_str)
