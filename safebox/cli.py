@@ -246,7 +246,8 @@ def post(message):
 def dm(nrecipient,message, relays):
     dm_relays = []   
     for each in relays.split(","):
-        dm_relays.append("wss://"+each)
+        each = "wss://" + each if not each.startswith("wss://") else each
+        dm_relays.append(each)
 
     click.echo(f"Send to {nrecipient}: {message} via {dm_relays}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY)
@@ -478,7 +479,8 @@ def run(relays):
     relay_array = []
     relays_str = relays.split(',')
     for each in relays_str:
-        relay_array.append("wss://"+each)
+        each = "wss://" + each if not each.startswith("wss://") else each
+        relay_array.append(each)
     wallet_obj = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
     
     wallet_obj.run(relay_array)
