@@ -661,7 +661,7 @@ class Wallet:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
                 print("npub", npub)
-                dm_relays = relays + dm_relays
+                dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
         except:
@@ -673,7 +673,7 @@ class Wallet:
     async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
        
         my_gift = GiftWrap(BasicKeySigner(self.k))
-        # relays = ['wss://strfry.openbalance.app']
+        
         relays = [self.home_relay]
         async with ClientPool(relays) as c:
 
@@ -683,7 +683,7 @@ class Wallet:
                              ['p', npub_hex]
                          ])
            
-            self.logger.debug(f"sending dm to {npub_hex}")
+            self.logger.debug(f"sending dm to {npub_hex} via {dm_relays}")
             wrapped_evt, trans_k = await my_gift.wrap(send_evt,
                                                   to_pub_k=npub_hex)
             # wrapped_evt.sign(self.privkey_hex)
@@ -3299,7 +3299,7 @@ class Wallet:
         
         # asyncio.run(self._async_run())
         # npub = 'npub19xlhmu806lf7yh62kmr6gg4qus9uyss4sr9jeylqqvtud36cuxls2h9s37'
-        # url = ['wss://strfry.openbalance.app']
+        
         if listen_relay:
             url = listen_relay
         else:

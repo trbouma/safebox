@@ -241,7 +241,7 @@ def post(message):
 @click.command(help='Do a secure DM (NIP-17)')
 @click.argument('nrecipient', default=None)
 @click.argument('message', default="Hello,")
-@click.option('--relays','-r', default='relay.openbalance.app')
+@click.option('--relays','-r', default=HOME_RELAY)
 
 def dm(nrecipient,message, relays):
     dm_relays = []   
@@ -470,7 +470,7 @@ def monitor(nrecipient, relays):
     click.echo(wallet_obj.monitor(nrecipient, relay_array))
 
 @click.command(help='run as a service')
-@click.option('--relays','-r', default="relay.openbalance.app")
+@click.option('--relays','-r', default=HOME_RELAY)
 
 def run(relays):
     # click.echo(WELCOME_MSG)
