@@ -315,13 +315,14 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('amount', default=21)
 @click.argument('nrecipient', default=None)
 @click.option('--comment','-c', default='Paid!')
-@click.option('--relays','-r', default='relay.openbalance.app')
+@click.option('--relays','-r', default=HOME_RELAY)
 def send(amount,nrecipient: str, relays:str, comment:str):
     ecash_relays = []
 
    
     for each in relays.split(","):
-     ecash_relays.append("wss://"+each)
+        each = "wss://" + each if not each.startswith("wss://") else each
+        ecash_relays.append(each)
     
     click.echo(f"Send to: {amount} to {nrecipient} via {ecash_relays}")
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
