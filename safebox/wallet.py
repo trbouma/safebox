@@ -666,7 +666,7 @@ class Wallet:
                 npub_hex = bech32_to_hex(nrecipient)
         except:
             return "error"
-        print(npub_hex,message)
+        self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
         asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays))  
     
@@ -683,11 +683,12 @@ class Wallet:
                              ['p', npub_hex]
                          ])
            
-            
+            self.logger.debug(f"sending dm to {npub_hex}")
             wrapped_evt, trans_k = await my_gift.wrap(send_evt,
                                                   to_pub_k=npub_hex)
             # wrapped_evt.sign(self.privkey_hex)
             c.publish(wrapped_evt)
+            await asyncio.sleep(0.2)
                 
                 
                 
@@ -3133,12 +3134,13 @@ class Wallet:
                                                     to_pub_k=send_k.public_key_hex())
             c.publish(wrapped_evt)
             # print("published")
+            self.logger.debug(f"send dm to {send_k.public_key_hex()}")
 
             # this version is for us.. this seems to be the way oxchat does it I think but you could
             # just store locally though it'd be a pain getting your events on different instance
             await asyncio.sleep(0.2)
-            wrapped_evt, trans_k = await my_gift.wrap(send_evt,
-                                                    to_pub_k=my_k.public_key_hex())
+            # wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+            #                                       to_pub_k=my_k.public_key_hex())
             # c.publish(wrapped_evt)
 
 
