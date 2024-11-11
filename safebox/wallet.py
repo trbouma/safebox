@@ -1820,6 +1820,97 @@ class Wallet:
             # added a delay here so the delete event get published
             await asyncio.sleep(1)
 
+    def swap_proofs(self, incoming_swap_proofs: List[Proof]):
+        '''This function swaps proofs'''
+        self.logger.debug("Swap proofs")
+        swap_amount =0
+        count = 0
+        
+        headers = { "Content-Type": "application/json"}
+        
+        #keyset_url = f"{self.mints[0]}/v1/keysets"
+        keyset_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        swap_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/swap"
+        swap_proofs = []
+        blinded_swap_proofs = []
+        blinded_values =[]
+        blinded_messages = []
+        new_proofs = []
+        for each_proof in incoming_swap_proofs:
+            swap_amount+=each_proof.amount        
+            swap_proofs.append(each_proof.model_dump())                    
+            count +=1
+        
+        r = PrivateKey()
+        powers_of_2 = self.powers_of_2_sum(swap_amount)
+        print("total:", swap_amount,count, powers_of_2) 
+        for each in powers_of_2:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret,Y))
+                
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                            id=keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                        )
+            
+        data_to_send = {
+                            "inputs":   swap_proofs,
+                            "outputs": blinded_messages
+                            
+            } 
+        
+        try:
+                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                # print(response.json())
+                promises = response.json()['signatures']
+                # print("promises:", promises)
+
+            
+                mint_key_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
+                response = requests.get(mint_key_url, headers=headers)
+                keys = response.json()["keysets"][0]["keys"]
+                # print(keys)
+                new_proofs = []
+                i = 0
+            
+                for each in promises:
+                    pub_key_c = PublicKey()
+                    # print("each:", each['C_'])
+                    pub_key_c.deserialize(unhexlify(each['C_']))
+                    promise_amount = each['amount']
+                    A = keys[str(int(promise_amount))]
+                    # A = keys[str(j)]
+                    pub_key_a = PublicKey()
+                    pub_key_a.deserialize(unhexlify(A))
+                    r = blinded_values[i][1]
+                    Y = blinded_values[i][3]
+                    # print(pub_key_c, promise_amount,A, r)
+                    C = step3_alice(pub_key_c,r,pub_key_a)
+                    proof = {   "amount": promise_amount,
+                            "id": keyset,
+                            "secret": blinded_values[i][2],
+                            "C":    C.serialize().hex(),
+                            "Y":    Y.serialize().hex()
+                            }
+                    new_proofs.append(proof)
+                    # print(proofs)
+                    i+=1
+        except:
+                ValueError('test')
+
+        # need to convert new_proofs into objects
+        new_proof_obj_list = []
+        for each in new_proofs:
+            new_proof_obj_list.append(Proof(**each))
+
+        return new_proof_obj_list
+    
     def swap(self):
         #TODO This function is no longer used
         swap_amount =0
@@ -2683,35 +2774,8 @@ class Wallet:
     
     def accept_token(self,cashu_token: str):
         print("accept token")
-        headers = { "Content-Type": "application/json"}
-        token_amount =0
-        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+        asyncio.run(self.nip17_accept(cashu_token))
 
-        try:
-            token_obj = TokenV3.deserialize(cashu_token)
-        except:
-            return "bad token"
-        proofs=[]
-        proof_obj_list: List[Proof] = []
-        for each in token_obj.token: 
-            print(each.mint)
-            for each_proof in each.proofs:
-                proofs.append(each_proof.model_dump())
-                proof_obj_list.append(each_proof)
-                id = each_proof.id
-                self.trusted_mints[id]=each.mint
-            
-        print(self.trusted_mints)
-        self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))    
-        print(proofs)
-            
-        #TODO Need to swap before adding
-        print("XXXXX accept token")
-        # self.swap_multi_consolidate()
-        
-        # self.add_proofs(json.dumps(proofs))
-        self.add_proofs_obj(proof_obj_list)
-        # self.swap_multi_consolidate()
         
 
 
@@ -3369,6 +3433,8 @@ class Wallet:
         except:
             return "bad token"
         
+        # need to inspect if a new mint
+
         proofs=[]
         proof_obj_list: List[Proof] = []
         for each in token_obj.token: 
@@ -3380,8 +3446,10 @@ class Wallet:
                 id = each_proof.id
                 self.trusted_mints[id]=each.mint
                 # print(id, each.mint)
-            
-        await self._async_add_proofs_obj(proof_obj_list)
+
+        swap_proofs = self.swap_proofs(proof_obj_list)
+
+        await self._async_add_proofs_obj(swap_proofs)
         FILTER = [{
             'limit': 1024,
             'authors': [self.pubkey_hex],
@@ -3390,8 +3458,9 @@ class Wallet:
         await self._async_load_proofs(FILTER)
 
         #TODO don't do this every time - only when a new mint shows up
-        await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-        await self._async_swap()
+        # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+        # await self._async_swap()
+        self.logger.debug("Proof is added!")
         
         return 'add proof'
             
