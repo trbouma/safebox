@@ -674,7 +674,9 @@ class Wallet:
        
         my_gift = GiftWrap(BasicKeySigner(self.k))
         
-        relays = [self.home_relay]
+        # relays = [self.home_relay]
+        relays = dm_relays
+
         async with ClientPool(relays) as c:
 
 
