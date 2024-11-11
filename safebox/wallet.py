@@ -3168,6 +3168,9 @@ class Wallet:
 
         tail = util_funcs.str_tails
         since = datetime.now().timestamp()
+        since_ticks = util_funcs.date_as_ticks(datetime.now() - timedelta(minutes=1))
+        # since_ticks = util_funcs.date_as_ticks(datetime.now())
+
         # nip59 gift wrapper
         my_k = Keys(AS_K)
         my_gift = GiftWrap(BasicKeySigner(my_k))
@@ -3282,7 +3285,7 @@ class Wallet:
                             f.flush()  # Ensure the log is written to disk
 
 
-        asyncio.create_task(output(since))
+        asyncio.create_task(output(since_ticks))
         msg_n = ''
         while True:
             # msg_n = await aioconsole.ainput('')
