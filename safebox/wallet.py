@@ -3479,7 +3479,7 @@ class Wallet:
         #TODO don't do this every time - only when a new mint shows up
         # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
         # await self._async_swap()
-        self.logger.debug("Proof is added!")
+        self.logger.debug(f"Proofs are added! New balance is: {self.balance}")
         
         return 'add proof'
 
