@@ -37,6 +37,7 @@ from safebox.nostr import bech32_to_hex, hex_to_bech32, nip05_to_npub
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
+from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 
 def powers_of_2_sum(amount):
@@ -2775,6 +2776,7 @@ class Wallet:
     def accept_token(self,cashu_token: str):
         print("accept token")
         asyncio.run(self.nip17_accept(cashu_token))
+        self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
 
         
 
@@ -3428,25 +3430,42 @@ class Wallet:
         token_amount =0
         receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
 
-        try:
-            token_obj = TokenV3.deserialize(token)
-        except:
-            return "bad token"
+        if token[:6] == "cashuA":
+
+            try:
+                token_obj = TokenV3.deserialize(token)
+            except:
+                raise ValueError("bad token")
+            
+                    # need to inspect if a new mint
+
+            proofs=[]
+            proof_obj_list: List[Proof] = []
+            for each in token_obj.token: 
+                # print(each.mint)
+                for each_proof in each.proofs:
+                    
+                    proofs.append(each_proof.model_dump())
+                    proof_obj_list.append(each_proof)
+                    id = each_proof.id
+                    self.trusted_mints[id]=each.mint
+                    # print(id, each.mint)
+
         
-        # need to inspect if a new mint
 
-        proofs=[]
-        proof_obj_list: List[Proof] = []
-        for each in token_obj.token: 
-            # print(each.mint)
-            for each_proof in each.proofs:
-                
-                proofs.append(each_proof.model_dump())
-                proof_obj_list.append(each_proof)
-                id = each_proof.id
-                self.trusted_mints[id]=each.mint
-                # print(id, each.mint)
 
+        elif token[:6] == "cashuB":
+                token_obj = TokenV4.deserialize(token)
+                # print(token_obj)
+                proofs=[]
+                proof_obj_list: List[Proof] = []
+                for each_proof in token_obj.proofs:
+                    proofs.append(each_proof.model_dump())
+                    proof_obj_list.append(each_proof)
+                    id = each_proof.id
+                self.trusted_mints[id]=token_obj.mint
+
+        
         swap_proofs = self.swap_proofs(proof_obj_list)
 
         await self._async_add_proofs_obj(swap_proofs)
@@ -3463,6 +3482,9 @@ class Wallet:
         self.logger.debug("Proof is added!")
         
         return 'add proof'
+
+        
+
             
 
        

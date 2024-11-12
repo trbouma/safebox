@@ -7,6 +7,7 @@ from enum import Enum
 from datetime import datetime
 import json, base64
 from monstr.event.event import Event
+import cbor2
 
 class BIP329Enum(Enum):
     TYPE_TX     =   "tx"
@@ -494,6 +495,68 @@ class TokenV4(BaseModel):
         if self.d:
             return_dict.update(dict(d=self.d))
         # mint
+        return_dict.update(dict(m=self.m))
+        # unit
+        return_dict.update(dict(u=self.u))
+        return return_dict
+
+    def serialize(self, include_dleq=False) -> str:
+        """
+        Takes a TokenV4 and serializes it as "cashuB<cbor_urlsafe_base64>.
+        """
+        prefix = "cashuB"
+        tokenv4_serialized = prefix
+        # encode the token as a base64 string
+        tokenv4_serialized += base64.urlsafe_b64encode(
+            cbor2.dumps(self.serialize_to_dict(include_dleq))
+        ).decode()
+        return tokenv4_serialized
+
+    @classmethod
+    def deserialize(cls, tokenv4_serialized: str) -> "TokenV4":
+        """
+        Ingesta a serialized "cashuB<cbor_urlsafe_base64>" token and returns a TokenV4.
+        """
+        prefix = "cashuB"
+        assert tokenv4_serialized.startswith(prefix), Exception(
+            f"Token prefix not valid. Expected {prefix}."
+        )
+        token_base64 = tokenv4_serialized[len(prefix) :]
+        # if base64 string is not a multiple of 4, pad it with "="
+        token_base64 += "=" * (4 - len(token_base64) % 4)
+
+        token = cbor2.loads(base64.urlsafe_b64decode(token_base64))
+        return cls.parse_obj(token)
+
+    def to_tokenv3(self) -> TokenV3:
+        tokenv3 = TokenV3()
+        for token in self.t:
+            tokenv3.token.append(
+                TokenV3Token(
+                    mint=self.m,
+                    proofs=[
+                        Proof(
+                            id=token.i.hex(),
+                            amount=p.a,
+                            secret=p.s,
+                            C=p.c.hex(),
+                            dleq=(
+                                DLEQWallet(
+                                    e=p.d.e.hex(),
+                                    s=p.d.s.hex(),
+                                    r=p.d.r.hex(),
+                                )
+                                if p.d
+                                else None
+                            ),
+                            witness=p.w,
+                        )
+                        for p in token.p
+                    ],
+                )
+            )
+        return tokenv3
+
 
 class Zevent(Event):
     def to_dict(self):
