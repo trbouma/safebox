@@ -3245,7 +3245,7 @@ class Wallet:
   
 
         # print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
-        print(f"listening for nip17 as {self.pubkey_bech32} using {url}")
+        print(f"listening for nip17 as {self.pubkey_bech32} using {url}. \nType 'exit' to stop")
 
         # q before printing events
         print_q = asyncio.Queue()
@@ -3353,8 +3353,10 @@ class Wallet:
 
         asyncio.create_task(output(since_ticks))
         msg_n = ''
-        while True:
-            # msg_n = await aioconsole.ainput('')
+        while msg_n != 'exit':
+            msg_n = await aioconsole.ainput('')
+                  
+            
             await asyncio.sleep(0.2)
             
 

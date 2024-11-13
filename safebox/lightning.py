@@ -5,6 +5,7 @@ import datetime, hashlib, urllib, uuid
 import binascii
 import os
 from bech32 import bech32_encode, convertbits
+from mnemonic import Mnemonic
 
 def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made!"):
     
@@ -90,3 +91,6 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
         
 
     return pr, allows_nostr,nostr_pubkey
+
+
+

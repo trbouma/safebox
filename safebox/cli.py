@@ -34,6 +34,9 @@ cli_directory = '.safebox'
 config_file = 'config.yml'
 config_directory = os.path.join(home_directory, cli_directory)
 file_path = os.path.join(home_directory, cli_directory, config_file)
+def write_config():
+     with open(file_path, 'w') as file:        
+        yaml.dump(config_obj, file)
 
 os.makedirs(config_directory, exist_ok=True)
 
@@ -52,17 +55,23 @@ else:
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
-RELAYS  = config_obj['relays']
-NSEC    = config_obj['nsec']
-MINTS   = config_obj['mints']
-WALLET  = config_obj['wallet']
-HOME_RELAY = config_obj['home_relay']
-REPLICATE_RELAYS = config_obj['replicate_relays']
-LOGGING_LEVEL = config_obj['logging_level']
+RELAYS  = config_obj.get('relays',relays)
+NSEC    = config_obj.get('nsec',None)
+MINTS   = config_obj.get('mints', mints)
+WALLET  = config_obj.get('wallet', wallet)
+HOME_RELAY = config_obj.get('home_relay', home_relay)
+REPLICATE_RELAYS = config_obj.get('replicate_relays', replicate_relays)
+LOGGING_LEVEL = config_obj.get('logging_level',10)
 
-def write_config():
-     with open(file_path, 'w') as file:        
-        yaml.dump(config_obj, file)
+if NSEC == None:
+    click.echo("Private key is not set")
+    if click.confirm("Do you want to generate a new key?"):
+        
+        write_config()
+
+    sys.exit()
+
+write_config()
 
 
 
@@ -367,8 +376,8 @@ def issue(amount:int):
 
 @click.command(help="Zap amount to event or to recipient")
 @click.argument('amount', default=1)
-# @click.argument('event_id')
-@click.option('--event','-e', default=None)
+
+@click.argument('event')
 @click.option('--npub','-n', default=None)
 @click.option('--comment','-c', default='⚡️')
 def zap(amount:int, event,npub, comment):
