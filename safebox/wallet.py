@@ -284,6 +284,8 @@ class Wallet:
         self.set_wallet_info(label="last_dm", label_info='0')
         self.set_wallet_info(label="user_records", label_info='[]')
         self.set_wallet_info(label="payment_request", label_info='[]')
+
+        self._load_record_events()
         
  
         return self.k.private_key_bech32()
