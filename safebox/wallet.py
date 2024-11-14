@@ -11,7 +11,7 @@ import aioconsole
 import logging
 
 from hotel_names import hotel_names
-from coolname import generate, generate_slug
+# from coolname import generate, generate_slug
 from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
