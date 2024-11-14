@@ -40,6 +40,8 @@ from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zeve
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 
+from safebox.func_utils import generate_name_from_hex, name_to_hex
+
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -240,45 +242,37 @@ class Wallet:
             self.pubkey_hex     =   self.k.public_key_hex()
             self.privkey_hex    =   self.k.private_key_hex()
         
-        new_name = generate()
-        # print(new_name)
-        for i in range(len(new_name)):
-            if new_name[i].lower() in ["of","from"]:
-                if i >=1:
-                    pet_name = new_name[i-2] + new_name[i-1] 
-                else:
-                    pet_name = new_name[i-1]                
-                break
 
-
+        
+        local_name = generate_name_from_hex(self.pubkey_hex)
         hotel_name = hotel_names.get_hotel_name()
-        display_name = ' '.join(n.capitalize() for n in new_name)
+       
         # Create nprofile
         n_profile['pubkey'] = self.k.public_key_hex()
         n_profile['relay'] = [self.home_relay]
         n_profile_str = Entities.encode('nprofile', n_profile)
         print("nprofile_str", n_profile_str)
 
-        nostr_profile = nostrProfile(   name=pet_name,
-                                        display_name=display_name,
+        nostr_profile = nostrProfile(   name=local_name,
+                                        display_name=local_name,
                                         about = f"Resident of {hotel_name}",
-                                        picture=f"https://robohash.org/{pet_name}/?set=set4",
-                                        lud16= f"{self.pubkey_bech32}@openbalance.app",
+                                        picture=f"https://robohash.org/{local_name}/?set=set4",
+                                        lud16= f"{local_name}@openbalance.app",
                                         website=f"https://njump.me/{self.pubkey_bech32}",
                                         nprofile=n_profile_str
 
                                          )
         if nostr_profile_create:
             out = asyncio.run(self._async_create_profile(nostr_profile))
-            hello_msg = f"Hello World from {pet_name}! #introductions"
+            hello_msg = f"Hello World from {local_name}! #introductions"
             print(hello_msg)
             asyncio.run(self._async_send_post(hello_msg))
             print(out)
 
         # init_index = "[{\"root\":\"init\"}]"
-        init_index["root"] = pet_name
+        init_index["root"] = local_name
         # self.set_index_info(json.dumps(init_index))
-        self.set_wallet_info(label="default", label_info=display_name)
+        self.set_wallet_info(label="default", label_info=local_name)
         self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
         
         self.wallet_config = WalletConfig(kind_cashu = 7375)                
@@ -306,9 +300,10 @@ class Wallet:
             
                 profile_str = json.dumps(profile)
                 print(profile_str)
-      
+                # this seems to work
+                profile_2 = json.dumps(nostr_profile.model_dump(mode='json'))
                 n_msg = Event(kind=0,
-                        content=profile,
+                        content=profile_2,
                         pub_key=self.pubkey_hex)
                 n_msg.sign(self.privkey_hex)
                 c.publish(n_msg)
