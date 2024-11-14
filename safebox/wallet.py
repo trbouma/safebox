@@ -334,7 +334,7 @@ class Wallet:
         out_string += f"\nnpub: {str(self.pubkey_bech32)}"
         out_string += f"\npubhex: {str(self.pubkey_hex)}"
         out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
-        out_string += f"\n\nseed phrase: \n{'-'*80}\n{mnemo.to_mnemonic(bytes.fromhex(self.pubkey_hex))}"
+        out_string += f"\n\nseed phrase: \n{'-'*80}\n{mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
         out_string += "\n"+ "-"*80    
     
         for key, value in nostr_profile.__dict__.items():        
