@@ -2913,18 +2913,44 @@ class Wallet:
     
     def zap(self, amount:int, event_id, comment): 
         out_msg = ""
+        prs = []
+
+        try:
+            if '@' in event_id:
+                npub_hex, relays = nip05_to_npub(event_id)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+                event_id = npub
+            
+        except:
+            raise ValueError(f"could not resolve nip05")
+            
+
         if event_id.startswith("note"):
             event_id = bech32_to_hex(event_id)
-        
-        zap_filter = [{  
+            zap_filter = [{  
             'ids'  :  [event_id]          
             
-        }]
-        prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+            }]
+            prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+            
+        elif event_id.startswith("npub"):  
+            pub_hex = bech32_to_hex(event_id)
+            profile_filter =  [{
+                'limit': 1,
+                'authors': [pub_hex],
+                'kinds': [0]
+            }]
+            prs = asyncio.run(self._async_query_npub(amount, comment, profile_filter))
+            self.logger.debug(f"Filter: {profile_filter}")
+            # raise ValueError(f"You are zapping to a npub {event_id}") 
+            out_msg = f"You are zapping {amount} to {event_id} with {prs}"
+        else:
+            raise ValueError(f"need a note or npub") 
+
         for each_pr in prs:
             self.pay_multi_invoice(each_pr)
-            out_msg+=f"\nzap {amount} to event: {event_id} {each_pr}"
-       
+            out_msg+=f"\nzap {amount} to {each_pr}"
         
         return out_msg   
     
@@ -2944,7 +2970,7 @@ class Wallet:
             # json_obj = json.loads(json_str)
             # json_obj = json.loads(json_str)
         except:
-            {"staus": "could not access profile"}
+            {"status": "could not access profile"}
             pass
        
         if event == None:
@@ -2977,7 +3003,7 @@ class Wallet:
                 self.logger.debug(f"profile {profile_str}")
                 profile_obj = json.loads(profile_str)
                 lnaddress = profile_obj['lud16']
-                self.logger.debug(f" {lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
+                self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 
             except:
@@ -3014,6 +3040,31 @@ class Wallet:
             self.logger.debug(f"pay this invoice from the safebox: {pr}")
             prs.append(pr)
         
+        return prs
+    async def _async_query_npub(self, amount:int, comment:str, filter: List[dict]):
+        prs = []
+        async with ClientPool([self.home_relay]+self.relays) as c:        
+            events_profile = await c.query(filter)
+            try:
+                self.logger.debug("getting profile")
+                event_profile = events_profile[0]  
+                self.logger.debug(event_profile)  
+                profile_str =   event_profile.content
+                self.logger.debug(f"profile {profile_str}")
+                profile_obj = json.loads(profile_str)
+                lnaddress = profile_obj['lud16']
+                self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
+                ln_return = lightning_address_pay(amount=amount,lnaddress=lnaddress,comment=comment)
+                pr = ln_return['pr']
+                self.logger.debug(f"zap pr: {pr}")
+                prs.append(pr)
+               
+                
+            except:
+                {"status": "could not access profile"}
+                self.logger.error("could not get profile")
+                pass
+       
         return prs
     
     def share_record(self,record: str, nrecipient: str, share_relays:List[str], comment: str ="Sent!"):
