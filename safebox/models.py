@@ -152,6 +152,7 @@ class Proof(BaseModel):
 
 class WalletConfig(BaseModel):
     kind_cashu: int = 0
+    seed_phrase: str = None
     user_records: List[str] = []
 
 class WalletRecord(BaseModel):

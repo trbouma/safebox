@@ -15,6 +15,7 @@ from hotel_names import hotel_names
 from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
 
 
 
@@ -62,7 +63,7 @@ class Wallet:
     pubkey_bech32: str
     pubkey_hex: str
     privkey_hex: str
-    privkey_bech32: str
+    privkey_bech32: str    
     home_relay: str
     relays: List[str]
     mints: List[str]
@@ -237,11 +238,26 @@ class Wallet:
         n_profile = {}
 
         if keepkey==False:
-            self.k= Keys()
+            #TODO need to decide if to keep 24 seed phrase option.
+            # self.k= Keys()
+            # self.pubkey_bech32  =   self.k.public_key_bech32()
+            # self.pubkey_hex     =   self.k.public_key_hex()
+            # self.privkey_hex    =   self.k.private_key_hex()
+        
+            # This to generate a 32 byte private key from a 12 word seed phrase
+            # Need to store because it cannot be derives from the resulting private key
+            mnemo = Mnemonic("english")
+            seed_phrase = mnemo.generate(strength=128)
+            seed = Bip39SeedGenerator(seed_phrase).Generate()
+            bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+            seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+            self.logger.debug(f"seed private key: {seed_private_key_hex}")
+
+            self.k= Keys(priv_k=seed_private_key_hex)
             self.pubkey_bech32  =   self.k.public_key_bech32()
             self.pubkey_hex     =   self.k.public_key_hex()
             self.privkey_hex    =   self.k.private_key_hex()
-        
+            
 
         
         local_name = generate_name_from_hex(self.pubkey_hex)
@@ -275,7 +291,8 @@ class Wallet:
         self.set_wallet_info(label="default", label_info=local_name)
         self.set_wallet_info(label="profile", label_info=json.dumps(nostr_profile.model_dump()))
         
-        self.wallet_config = WalletConfig(kind_cashu = 7375)                
+        self.wallet_config = WalletConfig(  kind_cashu = 7375,
+                                            seed_phrase=seed_phrase)                
         self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
         self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
         self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
@@ -337,7 +354,7 @@ class Wallet:
         out_string += f"\npubhex: {str(self.pubkey_hex)}"
         out_string += f"\nprivhex: {str(self.privkey_hex)}"
         out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
-        out_string += f"\n\nseed phrase: \n{'-'*80}\n{mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
+        out_string += f"\n\nseed phrase: \n{'-'*80}\n{self.wallet_config.seed_phrase}"
         out_string += "\n"+ "-"*80    
     
         for key, value in nostr_profile.__dict__.items():        
