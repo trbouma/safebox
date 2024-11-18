@@ -10,6 +10,7 @@ from safebox.wallet import Wallet
 from safebox.lightning import lightning_address_pay
 from time import sleep, time
 import qrcode
+from safebox.func_utils import recover_nsec_from_seed
 from safebox.constants import (
     WELCOME_MSG
 
@@ -91,7 +92,8 @@ def info(ctx):
 @click.command(help="initialize a new safebox")
 @click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
-def init(profile, keepkey):
+@click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
+def init(profile, keepkey, longseed):
     click.echo(f"Creating a new safebox with relay: {HOME_RELAY} and mint: {MINTS}")
     
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
@@ -99,7 +101,7 @@ def init(profile, keepkey):
         click.echo("Create nostr profile")
     if keepkey:
         click.echo("Keep existing key")
-    config_obj['nsec'] = wallet_obj.create_profile(profile,keepkey)
+    config_obj['nsec'] = wallet_obj.create_profile(profile,keepkey,longseed)
     
     click.echo(wallet_obj.get_profile())
     write_config()
@@ -224,11 +226,22 @@ def get(label):
     
     click.echo(safebox_info)
 
+@click.command(help='Recover a wallet from seed phrase')
+@click.argument('seedphrase', default=None)
+@click.option('--homerelay','-h', default=HOME_RELAY)
+def recover(seedphrase, homerelay):
+    nsec = recover_nsec_from_seed(seed_phrase=seedphrase)
+    if click.confirm("Do you want to recover to this wallet?"):
+        click.echo(f"Recover seed phrase {nsec}")
+        NSEC=nsec
+        config_obj['nsec']=nsec
+        write_config()
+        wallet_obj = Wallet(nsec=nsec, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+
+
 @click.command(help='help for put')
 @click.argument('label', default='default')
 @click.argument('label_info', default='hello')
-
-
 
 def put(label, label_info):
     jsons=None
@@ -524,6 +537,7 @@ cli.add_command(share)
 cli.add_command(monitor)
 cli.add_command(run)
 cli.add_command(request)
+cli.add_command(recover)
 
 
 cli.add_command(deposit)

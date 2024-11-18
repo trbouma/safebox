@@ -232,31 +232,41 @@ class Wallet:
             amount -= power
         return sorted(powers)
     
-    def create_profile(self, nostr_profile_create: bool=False, keepkey:bool=False):
+    def create_profile(self, nostr_profile_create: bool=False, keepkey:bool=False, longseed:bool=False):
         init_index = {}
         wallet_info = {}
         n_profile = {}
+        mnemo = Mnemonic("english")
 
         if keepkey==False:
-            #TODO need to decide if to keep 24 seed phrase option.
-            # self.k= Keys()
-            # self.pubkey_bech32  =   self.k.public_key_bech32()
-            # self.pubkey_hex     =   self.k.public_key_hex()
-            # self.privkey_hex    =   self.k.private_key_hex()
-        
-            # This to generate a 32 byte private key from a 12 word seed phrase
-            # Need to store because it cannot be derives from the resulting private key
-            mnemo = Mnemonic("english")
-            seed_phrase = mnemo.generate(strength=128)
-            seed = Bip39SeedGenerator(seed_phrase).Generate()
-            bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
-            seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
-            self.logger.debug(f"seed private key: {seed_private_key_hex}")
+            if longseed:
+                #TODO need to decide if to keep 24 seed phrase option.
+                seed_phrase = mnemo.generate(strength=128)
+                seed = Bip39SeedGenerator(seed_phrase).Generate()
+                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+                self.logger.debug(f"seed private key: {seed_private_key_hex}")                
 
-            self.k= Keys(priv_k=seed_private_key_hex)
-            self.pubkey_bech32  =   self.k.public_key_bech32()
-            self.pubkey_hex     =   self.k.public_key_hex()
-            self.privkey_hex    =   self.k.private_key_hex()
+                self.k= Keys(priv_k=seed_private_key_hex)
+                self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.pubkey_hex     =   self.k.public_key_hex()
+                self.privkey_hex    =   self.k.private_key_hex()
+                seed_phrase = mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))
+
+            else:
+                # This to generate a 32 byte private key from a 12 word seed phrase
+                # Need to store because it cannot be derives from the resulting private key
+                
+                seed_phrase = mnemo.generate(strength=128)
+                seed = Bip39SeedGenerator(seed_phrase).Generate()
+                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+                self.logger.debug(f"seed private key: {seed_private_key_hex}")
+                
+                self.k= Keys(priv_k=seed_private_key_hex)
+                self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.pubkey_hex     =   self.k.public_key_hex()
+                self.privkey_hex    =   self.k.private_key_hex()
             
 
         
