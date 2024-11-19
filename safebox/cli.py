@@ -190,9 +190,16 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
 
 
 @click.command(help='display nostr profile')
+@click.option('--homerelay', '-h', default=None, help='set home relay')
 
-def profile():
-    wallet = Wallet(nsec=NSEC,relays=RELAYS, home_relay=HOME_RELAY,mints=MINTS, logging_level=LOGGING_LEVEL)
+def profile(homerelay):
+    if not homerelay:
+        homerelay=HOME_RELAY    
+    else:
+        homerelay = "wss://" + homerelay if not homerelay.startswith("wss://") else homerelay
+
+    click.echo(f"home relay to use: {homerelay}")
+    wallet = Wallet(nsec=NSEC,home_relay=home_relay, logging_level=LOGGING_LEVEL)
     
     # click.echo(replicate)
     click.echo(wallet.get_profile())

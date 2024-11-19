@@ -82,7 +82,7 @@ class Wallet:
 
     def __init__(   self, 
                     nsec: str, 
-                    relays: List[str], 
+                    relays: List[str]|None=None, 
                     mints: List[str]|None=None,
                     home_relay:str|None=None, 
                     replicate = False, 
@@ -143,7 +143,9 @@ class Wallet:
         else:
             self.home_relay = home_relay
          
-        self._load_record_events()
+        content = self._load_record_events()
+
+
         # print(self.wallet_reserved_records)
         if mints == None:
             
@@ -1209,6 +1211,7 @@ class Wallet:
             # await asyncio.sleep(1) 
     
     def _load_record_events(self):
+        
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
@@ -1222,10 +1225,13 @@ class Wallet:
     # does a query for record events, does not decrypt
        
         async with ClientPool([self.home_relay]) as c:
+            record_events =[]
             my_enc = NIP44Encrypt(self.k)
             # get reserved records  
             reverse_hash = {}        
             record_events = await c.query(filter)
+            if len(record_events) == 0:
+                raise ValueError(f"There is no profile on home relay: {self.home_relay}")
             
             # print(f"load record  events: {len(record_events)}")
             for each in self.RESERVED_RECORDS:
