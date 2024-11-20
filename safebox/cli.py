@@ -241,12 +241,16 @@ def get(label):
 @click.option('--homerelay','-h', default=HOME_RELAY)
 def recover(seedphrase, homerelay):
     nsec = recover_nsec_from_seed(seed_phrase=seedphrase)
-    if click.confirm("Do you want to recover to this wallet?"):
+   
+    homerelay = "wss://" + homerelay if not homerelay.startswith("wss://") else homerelay
+    
+    if click.confirm(f"Do you want to recover to this wallet using {homerelay}?"):
         click.echo(f"Recover seed phrase {nsec}")
         NSEC=nsec
+        config_obj['home_relay']=homerelay
         config_obj['nsec']=nsec
         write_config()
-        wallet_obj = Wallet(nsec=nsec, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+        wallet_obj = Wallet(nsec=nsec, relays=RELAYS, home_relay=homerelay, logging_level=LOGGING_LEVEL)
 
 
 @click.command(help='help for put')
