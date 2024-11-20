@@ -69,6 +69,7 @@ class Wallet:
     mints: List[str]
     safe_box_items: List[SafeboxItem]
     proofs: List[Proof]
+    profile_found_on_home_relay = False
     events: int
     balance: int
     proof_events: proofEvents 
@@ -142,82 +143,102 @@ class Wallet:
             return None
         else:
             self.home_relay = home_relay
+
+        # First do a check to see if the data is on the home relay
          
         content = self._load_record_events()
-
+        if self.profile_found_on_home_relay == False:
+            self.logger.debug(f"No safebox data on {self.home_relay}")
+            
+            
+        else:
+            self.logger.debug(f"There is safebox data on {self.home_relay}")
+           
 
         # print(self.wallet_reserved_records)
-        if mints == None:
-            
-            self.mints = json.loads(self.wallet_reserved_records['mints'])
-            
-        else:
-            self.mints = mints
-            self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+        #TODO figure out what to do if relay does not have data or creating on an entirely new relay
 
-        if relays == None:
-            self.relays = json.loads(self.wallet_reserved_records['relays'])
-        else:
-            self.relays = relays
-            self.logger.debug("init mints")
-            self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
+        if self.profile_found_on_home_relay == True:
+            if mints == None:
+                
+                self.mints = json.loads(self.wallet_reserved_records['mints'])
+                
+            else:
+                self.mints = mints
+                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
 
-        headers = { "Content-Type": "application/json"}
-        keyset_url = f"{self.mints[0]}/v1/keysets"
-        try:
-            self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
-            keyset = response.json()['keysets'][0]['id']
-            self.trusted_mints[keyset] = self.mints[0]
-            self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-        except:
-            response = requests.get(keyset_url, headers=headers)
-            keyset = response.json()['keysets'][0]['id']
-            self.trusted_mints[keyset] = self.mints[0]
-            self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+            if relays == None:
+                self.relays = json.loads(self.wallet_reserved_records['relays'])
+            else:
+                self.relays = relays
+                self.logger.debug("init relays")
+                self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
 
-        try:
-            self.wallet_config = WalletConfig(**json.loads(self.wallet_reserved_records["wallet_config"]))
-            # print("ok wallet_config:",self.wallet_config)
-        except:
-            self.wallet_config = WalletConfig(kind_cashu = 7375)
-            self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
-            # print("new wallet_config:",self.wallet_config)
-
-        try:
-            self.quote = json.loads(self.wallet_reserved_records['quote'])
-            # print("init quote:", self.quote)
-        except:
-            self.quote = []
-
-        try:
-            user_records= json.loads(self.wallet_reserved_records['user_records'])
-            # print("init quote:", self.quote)
-        except:
-            self.wallet_reserved_records['user_records'] = '[]'
-
-        try:
-            payment_request= json.loads(self.wallet_reserved_records['payment_request'])
-            # print("init quote:", self.quote)
-        except:
-            self.wallet_reserved_records['payment_request'] = '[]'
         
+        
+            headers = { "Content-Type": "application/json"}
+            keyset_url = f"{self.mints[0]}/v1/keysets"     
+            
+            
+            try:
+                self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
+                keyset = response.json()['keysets'][0]['id']
+                self.trusted_mints[keyset] = self.mints[0]
+                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+            except:
+                response = requests.get(keyset_url, headers=headers)
+                keyset = response.json()['keysets'][0]['id']
+                self.trusted_mints[keyset] = self.mints[0]
+                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+
+            try:
+                self.wallet_config = WalletConfig(**json.loads(self.wallet_reserved_records["wallet_config"]))
+                # print("ok wallet_config:",self.wallet_config)
+            except:
+                self.wallet_config = WalletConfig(kind_cashu = 7375)
+                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
+                # print("new wallet_config:",self.wallet_config)
+
+            try:
+                self.quote = json.loads(self.wallet_reserved_records['quote'])
+                # print("init quote:", self.quote)
+            except:
+                self.quote = []
+
+            try:
+                user_records= json.loads(self.wallet_reserved_records['user_records'])
+                # print("init quote:", self.quote)
+            except:
+                self.wallet_reserved_records['user_records'] = '[]'
+
+            try:
+                payment_request= json.loads(self.wallet_reserved_records['payment_request'])
+                # print("init quote:", self.quote)
+            except:
+                self.wallet_reserved_records['payment_request'] = '[]'
+        
+        else:
+            pass
+            try:
+                self.mints = mints
+                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+                self.logger.debug("init relays")
+                self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
+                self.trusted_mints[keyset] = self.mints[0]
+                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))                
+                self.wallet_reserved_records['user_records'] = '[]'
+                self.wallet_reserved_records['payment_request'] = '[]'
+                self.wallet_config = WalletConfig(kind_cashu = 7375)
+                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
+
+
+            except:
+                pass
        
-            
-
-
-            
-        
-        
-        # print("load proofs")
         self._load_proofs()
-        
-       
-
+      
         return None
-            
-        
-
-
+   
 
     def __repr__(self):
         out_str = json.dumps(self.wallet_reserved_records)
@@ -346,6 +367,8 @@ class Wallet:
         profile_obj = {}
         nostr_profile = None
         mnemo = Mnemonic("english")
+        if not self.profile_found_on_home_relay:
+            return f"No profile on {self.home_relay}"
         
         try:
             FILTER = [{
@@ -354,9 +377,15 @@ class Wallet:
             'kinds': [0]
             }]
             profile = asyncio.run(self._async_query_client_profile(FILTER))
+  
+
         except:        
             profile = self.wallet_reserved_records.get("profile", "{}")
+            out_string = f"There is no profile on {self.home_relay}"
+            
         
+       
+    
         profile_obj = json.loads(profile)
         nostr_profile = nostrProfile(**profile_obj)
         out_string =  "-"*80  
@@ -376,11 +405,12 @@ class Wallet:
         out_string += f"\nMints {self.mints}"
         out_string += f"\nHome Relay {self.home_relay}"
         out_string += f"\nRelays {self.relays}"
-        out_string += "\n"+ "-"*80  
+        out_string += "\n"+ "-"*80   
 
-        #TODO this has to be put into a function (repeats create_profile code)
-        if self.replicate:
-            print("REPLICATE")
+        return out_string
+
+
+
 
 
 
@@ -488,6 +518,8 @@ class Wallet:
         return "ok"
 
     def get_post(self):
+        if not self.profile_found_on_home_relay:
+            return f"No profile found on {self.home_relay}"
         
         
         FILTER = [{
@@ -792,13 +824,14 @@ class Wallet:
         m.update(self.privkey_hex.encode())
         m.update(label.encode())
         label_hash = m.digest().hex()
+        decrypt_content = None
         
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
         # a_tag = ["a", label_hash]
         # print("a_tag:",a_tag)
         self.logger.debug(f"getting {label}")
         
-        DEFAULT_RELAY = self.relays[0]
+        # DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
@@ -1211,18 +1244,19 @@ class Wallet:
             # await asyncio.sleep(1) 
     
     def _load_record_events(self):
-        
+        exists = False
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
             'kinds': [37375]
         }]
-        content =asyncio.run(self._async_load_record_events(FILTER))
-        
-        return content
+        exists =asyncio.run(self._async_load_record_events(FILTER))
+        self.profile_found_on_home_relay = exists
+        return exists
     
     async def _async_load_record_events(self, filter: List[dict]):
     # does a query for record events, does not decrypt
+        exists = False
        
         async with ClientPool([self.home_relay]) as c:
             record_events =[]
@@ -1231,7 +1265,8 @@ class Wallet:
             reverse_hash = {}        
             record_events = await c.query(filter)
             if len(record_events) == 0:
-                raise ValueError(f"There is no profile on home relay: {self.home_relay}")
+                # raise ValueError(f"There is no profile on home relay: {self.home_relay}")
+                return False
             
             # print(f"load record  events: {len(record_events)}")
             for each in self.RESERVED_RECORDS:
@@ -1260,7 +1295,8 @@ class Wallet:
                                 # print(f"load {reverse_hash.get(each_tag[1])}:{each_tag[1]},{decrypt_content}")  
                     
             # print(self.wallet_reserved_records)
-
+        return True
+    
     def _load_proofs(self):
         
         

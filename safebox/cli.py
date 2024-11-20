@@ -24,7 +24,7 @@ relays  = [ "wss://relay.nimo.cash",
         ]
 mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-home_relay = "wss://relay.openbalance.app"
+default_home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 logging_level = 20
 
@@ -60,7 +60,7 @@ RELAYS  = config_obj.get('relays',relays)
 NSEC    = config_obj.get('nsec',None)
 MINTS   = config_obj.get('mints', mints)
 WALLET  = config_obj.get('wallet', wallet)
-HOME_RELAY = config_obj.get('home_relay', home_relay)
+HOME_RELAY = config_obj.get('home_relay', default_home_relay)
 REPLICATE_RELAYS = config_obj.get('replicate_relays', replicate_relays)
 LOGGING_LEVEL = config_obj.get('logging_level',10)
 
@@ -91,9 +91,10 @@ def info(ctx):
 
 @click.command(help="initialize a new safebox")
 @click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
+@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help="Create on home relay.")
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 @click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
-def init(profile, keepkey, longseed):
+def init(profile, keepkey, longseed, homerelay):
     click.echo(f"Creating a new safebox with relay: {HOME_RELAY} and mint: {MINTS}")
     
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
@@ -199,11 +200,13 @@ def profile(homerelay):
         homerelay = "wss://" + homerelay if not homerelay.startswith("wss://") else homerelay
 
     click.echo(f"home relay to use: {homerelay}")
-    wallet = Wallet(nsec=NSEC,home_relay=home_relay, logging_level=LOGGING_LEVEL)
-    
-    # click.echo(replicate)
-    click.echo(wallet.get_profile())
-    click.echo(wallet.get_post())
+    try: 
+        wallet = Wallet(nsec=NSEC,home_relay=homerelay, logging_level=LOGGING_LEVEL)       
+        click.echo(wallet.get_profile())
+        click.echo(wallet.get_post())
+    except Exception as e:
+        click.echo(f"Error {e}")
+
 
 @click.command(help='replicate safebox data to other relays')
 def replicate():
@@ -446,7 +449,7 @@ def balance():
     
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
-    click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
+    click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs.")
 
 
 @click.command(help="swap proofs for new proofs")
