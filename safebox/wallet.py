@@ -3150,11 +3150,12 @@ class Wallet:
         
         # Now let's get the record
         out_record = self.get_wallet_info(record)
+        dm_msg = f"I've shared with you the record: {record}. The contents are below. \n{out_record}"
 
         out_msg = f"{nrecipient} {npub}, {npub_hex}, {out_record}"
 
         # out_msg= asyncio.run(self._async_share_record(record_message=out_record,npub=npub, share_relays=share_relays ))
-        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=out_record,dm_relays=relays+ share_relays)) 
+        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=dm_msg,dm_relays=relays+ share_relays)) 
         return out_msg
     
 
