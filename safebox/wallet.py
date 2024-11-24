@@ -829,13 +829,19 @@ class Wallet:
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
         # a_tag = ["a", label_hash]
         # print("a_tag:",a_tag)
-        self.logger.debug(f"getting {label}")
+       
+        self.logger.debug(f"getting record for: {label}")
         
         # DEFAULT_RELAY = self.relays[0]
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
-            'kinds': [37375]
+            'kinds': [37375],
+            '#d': [label_hash]
+            
+            
+           
+            
             
             
         }]
@@ -849,26 +855,13 @@ class Wallet:
         except:
             return f"Could not retrieve info for: {label}. Does a record exist?"
         
-        # print("tags", event.tags)
-        # encrypt_d = "None"
-        for each in event.tags:
-            
-            if each[0] == 'd':
-                # print(each)
-                orig_d = each[1]
-                # decrypt_d = my_enc.decrypt(orig_d, self.pubkey_hex)
-            
-                break
-        try:
-            decrypt_d = my_enc.decrypt(orig_d, self.pubkey_hex)
-        except:    
-            decrypt_d = "Nothing"
+
 
         return decrypt_content
     
     async def _async_get_wallet_info(self, filter: List[dict],label_hash):
     # does a one off query to relay prints the events and exits
-        # print("filter", filter[0]['d'])
+        self.logger.debug(f"filter {filter}")
         my_enc = NIP44Encrypt(self.k)
         # target_tag = filter[0]['d']
         target_tag = label_hash
@@ -877,33 +870,15 @@ class Wallet:
         self.logger.debug(f"target tag: {target_tag}")
         event_select = None
         async with ClientPool([self.home_relay]) as c:
-        # async with Client(relay) as c:
+        
             
             events = await c.query(filter)
             
             self.logger.debug(f"37375 events: {len(events)}")
 
-            
+            return events[0]
 
 
-            for each in events:
-               
-                try:
-                    # print("EACH!!: ", each.data())
-                    # print("TAGS: ", each.tags)
-                    for each_tag in each.tags:
-                        if each_tag[0] == 'd':
-                            # print(each_tag[1])
-                            if each_tag[1] == target_tag:
-                                # print("MATCH HELLO!!")
-                                event_select = each                   
-
-                except:
-                    # print('no d tag')
-                    pass
-                
-            
-            return event_select
         
     def get_record(self,record_name):
         print("reserved records:", self.RESERVED_RECORDS)
@@ -911,6 +886,7 @@ class Wallet:
             print("this is a reserved record")
             return self.wallet_reserved_records[record_name]
         else:
+            self.logger.debug(f"getting record: {record_name}")
             return self.wallet_reserved_records[record_name]
    
     def get_proofs(self):
@@ -2983,6 +2959,7 @@ class Wallet:
     def zap(self, amount:int, event_id, comment): 
         out_msg = ""
         prs = []
+        orig_address = event_id
 
         try:
             if '@' in event_id:
@@ -2996,13 +2973,20 @@ class Wallet:
             
 
         if event_id.startswith("note"):
-            event_id = bech32_to_hex(event_id)
-            zap_filter = [{  
-            'ids'  :  [event_id]          
+            try:
+                event_id = bech32_to_hex(event_id)
+            except:
+                return "Note id format is invalid. Please check and try again."
+            try:
+                zap_filter = [{  
+                'ids'  :  [event_id]          
+                
+                }]
+                prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+            except:
+                return "Could not find event. Try an additional relay?"
             
-            }]
-            prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
-            
+
         elif event_id.startswith("npub"):  
             pub_hex = bech32_to_hex(event_id)
             profile_filter =  [{
@@ -3013,13 +2997,13 @@ class Wallet:
             prs = asyncio.run(self._async_query_npub(amount, comment, profile_filter))
             self.logger.debug(f"Filter: {profile_filter}")
             # raise ValueError(f"You are zapping to a npub {event_id}") 
-            out_msg = f"You are zapping {amount} to {event_id} with {prs}"
+            out_msg = f"You are zapping {amount} to {orig_address} with {prs}"
         else:
             raise ValueError(f"need a note or npub") 
 
         for each_pr in prs:
             self.pay_multi_invoice(each_pr)
-            out_msg+=f"\nzap {amount} to {each_pr}"
+            out_msg+=f"\nZapped {amount} to destination: {orig_address}."
         
         return out_msg   
     
@@ -3123,8 +3107,40 @@ class Wallet:
                 profile_obj = json.loads(profile_str)
                 lnaddress = profile_obj['lud16']
                 self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
-                ln_return = lightning_address_pay(amount=amount,lnaddress=lnaddress,comment=comment)
-                pr = ln_return['pr']
+
+                # Now we can create zap request
+                self.logger.debug("create zap request for profile")
+                tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
+                            ["relays"] + self.relays,
+                            ["amount",str(amount*1000)],
+                            ["p",event_profile.pub_key],
+                            ["e",event_profile.pub_key]
+                        ]
+                zap_request = Zevent(
+                                    kind=9734,
+                                    content=comment,
+                                    tags = tags,
+                                    pub_key=self.pubkey_hex                            
+                                    )
+                zap_request.sign(self.privkey_hex)
+                self.logger.debug(f"zap is valid: {zap_request.is_valid()}")
+                self.logger.debug(f" {zap_request}, {zap_request.tags}, {zap_request.id}")
+                self.logger.debug(f"serialize: {zap_request.serialize()}")
+                self.logger.debug(f"to_dict: {zap_request.to_dict()}")
+                zap_dict= zap_request.to_dict()
+                self.logger.debug(f"zap_dict: {zap_dict}" )
+                
+                zap_test = Event().load(zap_dict)
+                self.logger.debug(f"zap_test.id: {zap_test.id}")
+                self.logger.debug(f"zap test  {zap_test}, {zap_test.is_valid()}")
+
+                #### End of Zap stuff
+
+                # ln_return = lightning_address_pay(amount=amount,lnaddress=lnaddress,comment=comment)
+                # pr = ln_return['pr']
+
+                pr,_,_ = zap_address_pay(amount,lnaddress,zap_dict)
+
                 self.logger.debug(f"zap pr: {pr}")
                 prs.append(pr)
                
