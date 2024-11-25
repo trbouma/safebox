@@ -85,7 +85,7 @@ def cli():
 def info(ctx):
     click.echo(WELCOME_MSG)
     click.echo("This is safebox. Retrieving wallet...")
-    info_out = Wallet(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    info_out = Wallet(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
    
     click.echo(f"npub: {info_out.pubkey_bech32}")
 
@@ -184,6 +184,9 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
     else:
         config_obj['wallet'] = WALLET
 
+    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    click.echo("set!")
+    
     # print(config_obj)
     click.echo(yaml.dump(config_obj,default_flow_style=False))
     with open(file_path, 'w') as file:        
@@ -192,7 +195,6 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
 
 @click.command(help='display nostr profile')
 @click.option('--homerelay', '-h', default=None, help='set home relay')
-
 def profile(homerelay):
     if not homerelay:
         homerelay=HOME_RELAY    
@@ -324,7 +326,7 @@ def withdraw(invoice: str):
 @click.argument('param')
 
 def check(param):
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     if param == "invoice":
         click.echo("check invoice")        
         msg_out = wallet_obj.check()
@@ -416,7 +418,7 @@ def zap(amount:int, event,npub, comment):
         return
 
     # click.echo(f"Zap amount: {amount} to {event}")
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo(wallet_obj.zap(amount,event,comment))
     
     

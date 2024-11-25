@@ -166,6 +166,19 @@ class Wallet:
             else:
                 self.mints = mints
                 self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
+                headers = { "Content-Type": "application/json"}
+                keyset_url = f"{self.mints[0]}/v1/keysets"
+                try:
+                    self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
+                    keyset = response.json()['keysets'][0]['id']
+                    self.trusted_mints[keyset] = self.mints[0]
+                    self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+                except:
+                    response = requests.get(keyset_url, headers=headers)
+                    keyset = response.json()['keysets'][0]['id']
+                    self.trusted_mints[keyset] = self.mints[0]
+                    self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+
 
             if relays == None:
                 self.relays = json.loads(self.wallet_reserved_records['relays'])
@@ -182,9 +195,9 @@ class Wallet:
             
             try:
                 self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
-                keyset = response.json()['keysets'][0]['id']
-                self.trusted_mints[keyset] = self.mints[0]
-                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+                # keyset = response.json()['keysets'][0]['id']
+                # self.trusted_mints[keyset] = self.mints[0]
+                # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
             except:
                 response = requests.get(keyset_url, headers=headers)
                 keyset = response.json()['keysets'][0]['id']
@@ -1244,7 +1257,7 @@ class Wallet:
                 # raise ValueError(f"There is no profile on home relay: {self.home_relay}")
                 return False
             
-            # print(f"load record  events: {len(record_events)}")
+            self.logger.debug(f"Load record events: {len(record_events)}")
             for each in self.RESERVED_RECORDS:
                 m = hashlib.sha256()
                 m.update(self.privkey_hex.encode())
@@ -1252,25 +1265,24 @@ class Wallet:
                 label_hash = m.digest().hex()
                 # print(each, label_hash)
                 reverse_hash[label_hash]=each
-                             
-            
-            
+
                 for each_record in record_events:                
                     for each_tag in each_record.tags:            
                         if each_tag[0] == 'd':
-                            # print("found!", each_tag)
+                            
                             try:
                                 decrypt_content = my_enc.decrypt(each_record.content, self.pubkey_hex)
                             except:
                                 decrypt_content = "could not decrpyt"
-                            # print("tag",each_tag[1], reverse_hash.get(each_tag[1]))
-                            
+                                                        
                             reserved_record_label = reverse_hash.get(each_tag[1])
+                            
                             if reverse_hash.get(each_tag[1]):
-                                self.wallet_reserved_records[reverse_hash.get(each_tag[1])]=decrypt_content
-                                # print(f"load {reverse_hash.get(each_tag[1])}:{each_tag[1]},{decrypt_content}")  
+                                self.wallet_reserved_records[reserved_record_label]=decrypt_content
+                                
+                
                     
-            # print(self.wallet_reserved_records)
+        self.logger.debug(f"Finished loading reserved records of {len(record_events)} events")   
         return True
     
     def _load_proofs(self):
@@ -1694,7 +1706,7 @@ class Wallet:
             available_amount += keyset_amounts[each]
         
         
-        self.logger.debug("available amount:", available_amount)
+        self.logger.debug(f"available amount: {available_amount}")
         if available_amount < ln_amount:
             msg_out ="insufficient balance. you need more funds!"
             return msg_out
@@ -2962,10 +2974,15 @@ class Wallet:
         orig_address = event_id
 
         try:
-            if '@' in event_id:
+            if '.' in event_id:
+                if '@' in event_id:
+                    pass
+                else:
+                    event_id = "_@" + event_id
+            
                 npub_hex, relays = nip05_to_npub(event_id)
                 npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                self.logger.debug(f"npub: {npub}")
                 event_id = npub
             
         except:
@@ -3113,8 +3130,8 @@ class Wallet:
                 tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
                             ["relays"] + self.relays,
                             ["amount",str(amount*1000)],
-                            ["p",event_profile.pub_key],
-                            ["e",event_profile.pub_key]
+                            ["p",event_profile.pub_key]
+                            
                         ]
                 zap_request = Zevent(
                                     kind=9734,
