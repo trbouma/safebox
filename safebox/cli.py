@@ -186,7 +186,7 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
 
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo("set!")
-    
+
     # print(config_obj)
     click.echo(yaml.dump(config_obj,default_flow_style=False))
     with open(file_path, 'w') as file:        
@@ -401,24 +401,22 @@ def testpay(amount):
 def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    click.echo(wallet_obj.issue_token(amount))
 
 @click.command(help="Zap amount to event or to recipient")
 @click.argument('amount', default=1)
-
 @click.argument('event')
-@click.option('--npub','-n', default=None)
 @click.option('--comment','-c', default='⚡️')
-def zap(amount:int, event,npub, comment):
-    if npub:
-        click.echo("Zap to recipient {npub}, ignore event")
-        return
+
+def zap(amount:int, event, comment):
+
     if event == None:
         click.echo("Need an event!")
         return
-
-    # click.echo(f"Zap amount: {amount} to {event}")
+    
     wallet_obj = Wallet(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    # click.echo(f"Zap amount: {amount} to {event}")
+   
+        
     click.echo(wallet_obj.zap(amount,event,comment))
     
     
