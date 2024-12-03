@@ -11,7 +11,7 @@ from safebox.lightning import lightning_address_pay
 from time import sleep, time
 import qrcode
 from safebox.func_utils import recover_nsec_from_seed
-from safebox.constants import (
+from safebox.prompts import (
     WELCOME_MSG
 
 )
