@@ -24,7 +24,7 @@ relays  = [ "wss://relay.nimo.cash",
         ]
 mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-default_home_relay = "wss://relay.openbalance.app"
+home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 logging_level = 20
 
@@ -60,7 +60,7 @@ RELAYS  = config_obj.get('relays',relays)
 NSEC    = config_obj.get('nsec',None)
 MINTS   = config_obj.get('mints', mints)
 WALLET  = config_obj.get('wallet', wallet)
-HOME_RELAY = config_obj.get('home_relay', default_home_relay)
+HOME_RELAY = config_obj.get('home_relay', home_relay)
 REPLICATE_RELAYS = config_obj.get('replicate_relays', replicate_relays)
 LOGGING_LEVEL = config_obj.get('logging_level',10)
 
