@@ -29,7 +29,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
         ]
 mints   = ["https://mint.coinos.io"]
 wallet  = "default" 
-default_home_relay = "wss://nos.lol"
+home_relay = "wss://nos.lol"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
 logging_level = 10
 
@@ -53,7 +53,7 @@ else:
    
     config_obj = {  'nsec': Keys().private_key_bech32(), 
                     'relays': relays, 
-                    "home_relay": default_home_relay,
+                    "home_relay": home_relay,
                     "mints": mints, 
                     "wallet": wallet,
                     "replicate_relays": replicate_relays,
@@ -65,7 +65,7 @@ RELAYS  = config_obj.get('relays',relays)
 NSEC    = config_obj.get('nsec',None)
 MINTS   = config_obj.get('mints', mints)
 WALLET  = config_obj.get('wallet', wallet)
-HOME_RELAY = config_obj.get('home_relay', default_home_relay)
+HOME_RELAY = config_obj.get('home_relay', home_relay)
 REPLICATE_RELAYS = config_obj.get('replicate_relays', replicate_relays)
 LOGGING_LEVEL = config_obj.get('logging_level',10)
 
