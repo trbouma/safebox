@@ -22,10 +22,10 @@ relays  = [ "wss://relay.nimo.cash",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-mints   = ["https://mint.nimo.cash"]
+mints   = ["https://mint.coinos.io"]
 wallet  = "default" 
-home_relay = "wss://relay.openbalance.app"
-replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
+home_relay = "wss://nos.lol"
+replicate_relays = ["wss://nostr-pub.wellorder.net"]
 logging_level = 20
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
