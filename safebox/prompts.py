@@ -26,3 +26,7 @@ The home relay is where safebox events are published to and retrieved from. Be s
 MINTS_HELP ="""
 The mints that are used by safebox. The first mint specified in the list is the home mint.
 """
+
+NOSTR_PROFILE_HELP ="""
+Each wallet can have its own nostr profile published.
+"""

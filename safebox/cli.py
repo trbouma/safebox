@@ -18,7 +18,8 @@ from safebox.prompts import (
     NSEC_HELP,
     RELAYS_HELP,
     HOME_RELAY_HELP,
-    MINTS_HELP
+    MINTS_HELP,
+    NOSTR_PROFILE_HELP
 
 )
 
@@ -29,9 +30,9 @@ relays  = [ "wss://nostr-pub.wellorder.net",
         ]
 mints   = ["https://mint.coinos.io"]
 wallet  = "default" 
-home_relay = "wss://nos.lol"
-replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
-logging_level = 10
+home_relay = "wss://relay.openbalance.app"
+replicate_relays = ["wss://nostr-pub.wellorder.net"]
+logging_level = 20
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
 
@@ -96,8 +97,8 @@ def info(ctx):
     click.echo(f"npub: {info_out.pubkey_bech32}")
 
 @click.command(help="initialize a new safebox")
-@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
-@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help="Create on home relay.")
+@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help=NOSTR_PROFILE_HELP)
+@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help=HOME_RELAY_HELP)
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 @click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
 def init(profile, keepkey, longseed, homerelay):
@@ -116,16 +117,16 @@ def init(profile, keepkey, longseed, homerelay):
     
 
 
-@click.command(help=SET_HELP)
+@click.command(help="set local config options")
 @click.option('--nsec', '-n', default=None, help=NSEC_HELP)
 @click.option('--relays', '-r', default=None, help=RELAYS_HELP)
 @click.option('--home', '-h', default=None, help=HOME_RELAY_HELP)
 @click.option('--mints', '-m', default=None, help=MINTS_HELP)
 @click.option('--xrelays', '-x', default=None, help='set replicate relays')
 @click.option('--logging', '-l', default=None, help='set logging level')
-def set(nsec, home, relays, mints,  xrelays, logging: int):
+def set(nsec, home, relays, mints,xrelays, logging: int):
     
-    if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None and logging == None:
+    if nsec == None and relays == None and mints == None and home == None and xrelays==None and logging == None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
         return
    
