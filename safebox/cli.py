@@ -12,12 +12,18 @@ from time import sleep, time
 import qrcode
 from safebox.func_utils import recover_nsec_from_seed
 from safebox.prompts import (
-    WELCOME_MSG
+    WELCOME_MSG,
+    INFO_HELP,
+    SET_HELP,
+    NSEC_HELP,
+    RELAYS_HELP,
+    HOME_RELAY_HELP,
+    MINTS_HELP,
+    NOSTR_PROFILE_HELP
 
 )
 
-relays  = [ "wss://relay.nimo.cash",
-            "wss://nostr-pub.wellorder.net", 
+relays  = [ "wss://nostr-pub.wellorder.net", 
             "wss://relay.damus.io", 
             "wss://relay.primal.net",
             "wss://nos.lol"
@@ -90,8 +96,8 @@ def info(ctx):
     click.echo(f"npub: {info_out.pubkey_bech32}")
 
 @click.command(help="initialize a new safebox")
-@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help="Publish Nostr profile.")
-@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help="Create on home relay.")
+@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help=NOSTR_PROFILE_HELP)
+@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help=HOME_RELAY_HELP)
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 @click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
 def init(profile, keepkey, longseed, homerelay):
@@ -111,16 +117,15 @@ def init(profile, keepkey, longseed, homerelay):
 
 
 @click.command(help="set local config options")
-@click.option('--nsec', '-n', default=None, help='set nsec')
-@click.option('--relays', '-r', default=None, help='set relays')
-@click.option('--home', '-h', default=None, help='set home relay')
-@click.option('--mints', '-m', default=None, help='set mints')
-@click.option('--wallet', '-w', default=None, help='set wallet')
+@click.option('--nsec', '-n', default=None, help=NSEC_HELP)
+@click.option('--relays', '-r', default=None, help=RELAYS_HELP)
+@click.option('--home', '-h', default=None, help=HOME_RELAY_HELP)
+@click.option('--mints', '-m', default=None, help=MINTS_HELP)
 @click.option('--xrelays', '-x', default=None, help='set replicate relays')
 @click.option('--logging', '-l', default=None, help='set logging level')
-def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
+def set(nsec, home, relays, mints,xrelays, logging: int):
     
-    if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None and logging == None:
+    if nsec == None and relays == None and mints == None and home == None and xrelays==None and logging == None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
         return
    
