@@ -408,7 +408,7 @@ class Wallet:
         out_string += f"\npubhex: {str(self.pubkey_hex)}"
         out_string += f"\nprivhex: {str(self.privkey_hex)}"
         out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
-        out_string += f"\n\nseed phrase: \n{'-'*80}\n{self.wallet_config.seed_phrase}"
+        out_string += f"\n\nRecovery seed phrase: \n{'-'*80}\n{self.wallet_config.seed_phrase}"
         out_string += "\n"+ "-"*80    
     
         for key, value in nostr_profile.__dict__.items():        

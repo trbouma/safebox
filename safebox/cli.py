@@ -11,22 +11,27 @@ from safebox.lightning import lightning_address_pay
 from time import sleep, time
 import qrcode
 from safebox.func_utils import recover_nsec_from_seed
-from safebox.constants import (
-    WELCOME_MSG
+from safebox.prompts import (
+    WELCOME_MSG,
+    INFO_HELP,
+    SET_HELP,
+    NSEC_HELP,
+    RELAYS_HELP,
+    HOME_RELAY_HELP,
+    MINTS_HELP
 
 )
 
-relays  = [ "wss://relay.nimo.cash",
-            "wss://nostr-pub.wellorder.net", 
+relays  = [ "wss://nostr-pub.wellorder.net", 
             "wss://relay.damus.io", 
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-mints   = ["https://mint.nimo.cash"]
+mints   = ["https://mint.coinos.io"]
 wallet  = "default" 
-default_home_relay = "wss://relay.openbalance.app"
+default_home_relay = "wss://nos.lol"
 replicate_relays = ["wss://relay.nimo.cash", "wss://nostr-pub.wellorder.net"]
-logging_level = 20
+logging_level = 10
 
 # List of mints https://nostrapps.github.io/cashu/mints.json
 
@@ -48,7 +53,7 @@ else:
    
     config_obj = {  'nsec': Keys().private_key_bech32(), 
                     'relays': relays, 
-                    "home_relay": home_relay,
+                    "home_relay": default_home_relay,
                     "mints": mints, 
                     "wallet": wallet,
                     "replicate_relays": replicate_relays,
@@ -80,9 +85,10 @@ write_config()
 def cli():
     pass
 
-@click.command(help='display info')
+@click.command(help=INFO_HELP)
 @click.pass_context
 def info(ctx):
+    
     click.echo(WELCOME_MSG)
     click.echo("This is safebox. Retrieving wallet...")
     info_out = Wallet(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
@@ -110,15 +116,14 @@ def init(profile, keepkey, longseed, homerelay):
     
 
 
-@click.command(help="set local config options")
-@click.option('--nsec', '-n', default=None, help='set nsec')
-@click.option('--relays', '-r', default=None, help='set relays')
-@click.option('--home', '-h', default=None, help='set home relay')
-@click.option('--mints', '-m', default=None, help='set mints')
-@click.option('--wallet', '-w', default=None, help='set wallet')
+@click.command(help=SET_HELP)
+@click.option('--nsec', '-n', default=None, help=NSEC_HELP)
+@click.option('--relays', '-r', default=None, help=RELAYS_HELP)
+@click.option('--home', '-h', default=None, help=HOME_RELAY_HELP)
+@click.option('--mints', '-m', default=None, help=MINTS_HELP)
 @click.option('--xrelays', '-x', default=None, help='set replicate relays')
 @click.option('--logging', '-l', default=None, help='set logging level')
-def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
+def set(nsec, home, relays, mints,  xrelays, logging: int):
     
     if nsec == None and relays == None and mints == None and home == None and wallet==None and xrelays==None and logging == None:
         click.echo(yaml.dump(config_obj, default_flow_style=False))
@@ -179,10 +184,7 @@ def set(nsec, home, relays, mints, wallet, xrelays, logging: int):
     else:
        config_obj['mints']=MINTS 
 
-    if wallet != None:
-        config_obj['wallet'] = wallet
-    else:
-        config_obj['wallet'] = WALLET
+
 
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo("set!")

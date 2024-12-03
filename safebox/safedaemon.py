@@ -5,7 +5,7 @@ import sys
 import os
 import yaml 
 from safebox.wallet import Wallet
-from safebox.constants import (
+from safebox.prompts import (
     WELCOME_MSG
 
 )
