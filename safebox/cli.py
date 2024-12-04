@@ -404,6 +404,8 @@ def testpay(amount):
 def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
     wallet_obj = Wallet(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    token = wallet_obj.issue_token(amount)
+    click.echo(token)
 
 @click.command(help="Zap amount to event or to recipient")
 @click.argument('amount', default=1)
