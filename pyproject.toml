@@ -28,7 +28,7 @@ bip-utils = "^2.9.3"
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
 safebox = "safebox.cli:cli"
-npurse = "safebox.cli:cli"
+acorn = "safebox.cli_acorn:cli"
 
 
 
