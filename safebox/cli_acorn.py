@@ -28,7 +28,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-mints   = ["https://mint.coinos.io"]
+mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
 home_relay = "wss://relay.openbalance.app"
 replicate_relays = ["wss://nostr-pub.wellorder.net"]
@@ -86,38 +86,41 @@ write_config()
 def cli():
     pass
 
-@click.command(help=INFO_HELP)
+@click.command("info", help=INFO_HELP)
 @click.pass_context
 def info(ctx):
     
     click.echo(WELCOME_MSG)
     click.echo("This is acorn. Retrieving wallet...")
-    info_out = Acorn(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
    
-    click.echo(f"npub: {info_out.pubkey_bech32}")
+    click.echo(f"npub: {acorn_obj.pubkey_bech32}")
+    # click.echo(f"instance: {acorn_obj.get_instance()}")
+    click.echo(f"tags: {acorn_obj.acorn_tags}")
+    acorn_obj.update_tags([["balance","26"]])
 
 @click.command(help="initialize a new safebox")
-@click.option("--profile","-p", is_flag=True, show_default=True, default=False, help=NOSTR_PROFILE_HELP)
+
 @click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help=HOME_RELAY_HELP)
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 @click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
-def init(profile, keepkey, longseed, homerelay):
-    click.echo(f"Creating a new safebox with relay: {HOME_RELAY} and mint: {MINTS}")
+@click.option('--name', '-n', default="wallet", help=HOME_RELAY_HELP)
+def init(keepkey, longseed, homerelay,name):
+    click.echo(f"Creating a new acorn with relay: {HOME_RELAY} and mint: {MINTS}")
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    if profile:
-        click.echo("Create nostr profile")
+
     if keepkey:
         click.echo("Keep existing key")
-    config_obj['nsec'] = acorn_obj.create_profile(profile,keepkey,longseed)
+    config_obj['nsec'] = acorn_obj.create_instance(keepkey,longseed, name)
     
-    click.echo(acorn_obj.get_profile())
+    # click.echo(acorn_obj.get_profile())
     write_config()
-    click.echo(acorn_obj.get_post())
+    # click.echo(acorn_obj.get_post())
     
 
 
-@click.command(help="set local config options")
+@click.command("set", help="set local config options")
 @click.option('--nsec', '-n', default=None, help=NSEC_HELP)
 @click.option('--relays', '-r', default=None, help=RELAYS_HELP)
 @click.option('--home', '-h', default=None, help=HOME_RELAY_HELP)
@@ -187,7 +190,7 @@ def set(nsec, home, relays, mints,xrelays, logging: int):
 
 
 
-    wallet_obj = Wallet(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo("set!")
 
     # print(config_obj)
@@ -195,20 +198,25 @@ def set(nsec, home, relays, mints,xrelays, logging: int):
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
+@click.command("balance", help="get balance")
+def get_balance():
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
+    click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
 
+@click.command("profile", help="get profile")
+@click.option('--name', '-n', default="wallet", help=HOME_RELAY_HELP)
+def get_profile(name):
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    click.echo(acorn_obj.get_profile(name))
 
 cli.add_command(info)
 cli.add_command(init)
-
-
-
 cli.add_command(set)
-
-
-
-
-
+cli.add_command(get_balance)
+cli.add_command(get_profile)
 
 
 if __name__ == "__main__":

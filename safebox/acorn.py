@@ -20,9 +20,10 @@ from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
 
 
 from monstr.encrypt import Keys
+from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
-from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
+
 from monstr.signing.signing import BasicKeySigner
 from monstr.giftwrap import GiftWrap
 from monstr.util import util_funcs
@@ -60,11 +61,14 @@ def powers_of_2_sum(amount):
 class Acorn:
     k: Keys
     nsec: str
+    name: str
+    acorn_tags: List = None
     pubkey_bech32: str
     pubkey_hex: str
     privkey_hex: str
     privkey_bech32: str    
     home_relay: str
+    home_mint: str
     relays: List[str]
     mints: List[str]
     safe_box_items: List[SafeboxItem]
@@ -110,145 +114,36 @@ class Acorn:
             self.privkey_bech32 =   self.k.private_key_bech32()
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
-            # self.mints          =   mints
+            self.mints          =   mints
             self.safe_box_items = []
             self.proofs: List[Proof] = []
             self.balance: int = 0
             self.proof_events = proofEvents()
             self.trusted_mints = {}
-            self.home_relay = None
+            self.home_relay = home_relay
             self.replicate = replicate
             self.wallet_config = None
-            self.RESERVED_RECORDS = [   "default",
-                                        "profile",
-                                        "wallet_config",
-                                        "home_relay",
-                                        "mints",
-                                        "trusted_mints",
-                                        "relays",
-                                        "quote",
-                                        "user_records",
-                                        "last_dm",
-                                        "payment_request"
-                                        
-                        ]
+
             self.wallet_reserved_records = {}
         else:
             return "Need nsec" 
 
-        # print("load records")
-
-        if home_relay == None:
-            print("need a home relay to boot")
-            return None
-        else:
-            self.home_relay = home_relay
-
-        # First do a check to see if the data is on the home relay
-         
-        content = self._load_record_events()
-        if self.profile_found_on_home_relay == False:
-            self.logger.debug(f"No safebox data on {self.home_relay}")
-            
-            
-        else:
-            self.logger.debug(f"There is safebox data on {self.home_relay}")
-           
-
-        # print(self.wallet_reserved_records)
-        #TODO figure out what to do if relay does not have data or creating on an entirely new relay
-
-        if self.profile_found_on_home_relay == True:
-            if mints == None:
-                
-                self.mints = json.loads(self.wallet_reserved_records['mints'])
-                
-            else:
-                self.mints = mints
-                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
-                headers = { "Content-Type": "application/json"}
-                keyset_url = f"{self.mints[0]}/v1/keysets"
-                try:
-                    self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
-                    keyset = response.json()['keysets'][0]['id']
-                    self.trusted_mints[keyset] = self.mints[0]
-                    self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-                except:
-                    response = requests.get(keyset_url, headers=headers)
-                    keyset = response.json()['keysets'][0]['id']
-                    self.trusted_mints[keyset] = self.mints[0]
-                    self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-
-
-            if relays == None:
-                self.relays = json.loads(self.wallet_reserved_records['relays'])
-            else:
-                self.relays = relays
-                self.logger.debug("init relays")
-                self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
-
         
+        try:
+            self.acorn_tags = json.loads(self.get_wallet_info(label="wallet"))
+            print(f" wallet info {self.acorn_tags}")
+            for each in self.acorn_tags:
+                if each[0]== "balance":
+                    self.balance = int(each[1])
+                if each[0] == "mint":
+                    self.home_mint = each[1]
+                    print(f"home mint: {self.home_mint}")
+                if each[0] == "name":
+                    self.name = each[1]
+                    print(f"name: {self.name}")
+        except:
+            wallet_info_str = "None"
         
-            headers = { "Content-Type": "application/json"}
-            keyset_url = f"{self.mints[0]}/v1/keysets"     
-            
-            
-            try:
-                self.trusted_mints = json.loads(self.wallet_reserved_records['trusted_mints'])
-                # keyset = response.json()['keysets'][0]['id']
-                # self.trusted_mints[keyset] = self.mints[0]
-                # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-            except:
-                response = requests.get(keyset_url, headers=headers)
-                keyset = response.json()['keysets'][0]['id']
-                self.trusted_mints[keyset] = self.mints[0]
-                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-
-            try:
-                self.wallet_config = WalletConfig(**json.loads(self.wallet_reserved_records["wallet_config"]))
-                # print("ok wallet_config:",self.wallet_config)
-            except:
-                self.wallet_config = WalletConfig(kind_cashu = 7375)
-                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
-                # print("new wallet_config:",self.wallet_config)
-
-            try:
-                self.quote = json.loads(self.wallet_reserved_records['quote'])
-                # print("init quote:", self.quote)
-            except:
-                self.quote = []
-
-            try:
-                user_records= json.loads(self.wallet_reserved_records['user_records'])
-                # print("init quote:", self.quote)
-            except:
-                self.wallet_reserved_records['user_records'] = '[]'
-
-            try:
-                payment_request= json.loads(self.wallet_reserved_records['payment_request'])
-                # print("init quote:", self.quote)
-            except:
-                self.wallet_reserved_records['payment_request'] = '[]'
-        
-        else:
-            pass
-            try:
-                self.mints = mints
-                self.set_wallet_info(label="mints", label_info=json.dumps(self.mints))
-                self.logger.debug("init relays")
-                self.set_wallet_info(label="relays", label_info=json.dumps(self.relays))
-                self.trusted_mints[keyset] = self.mints[0]
-                self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))                
-                self.wallet_reserved_records['user_records'] = '[]'
-                self.wallet_reserved_records['payment_request'] = '[]'
-                self.wallet_config = WalletConfig(kind_cashu = 7375)
-                self.set_wallet_info(label="wallet_config", label_info=json.dumps(self.wallet_config.model_dump()))
-
-
-            except:
-                pass
-       
-        self._load_proofs()
       
         return None
    
@@ -376,49 +271,80 @@ class Acorn:
                 out_msg = "error"
         return out_msg
 
-    def get_profile(self):
-        profile_obj = {}
-        nostr_profile = None
+    def create_instance(self, keepkey:bool=False, longseed:bool=False, name="wallet"):
+        out_msg = "This is another instance"
         mnemo = Mnemonic("english")
-        if not self.profile_found_on_home_relay:
-            return f"No profile on {self.home_relay}"
+        if keepkey==False:
+            if longseed:
+                #TODO need to decide if to keep 24 seed phrase option.
+                seed_phrase = mnemo.generate(strength=128)
+                seed = Bip39SeedGenerator(seed_phrase).Generate()
+                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+                self.logger.debug(f"seed private key: {seed_private_key_hex}")                
+
+                self.k= Keys(priv_k=seed_private_key_hex)
+                self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.pubkey_hex     =   self.k.public_key_hex()
+                self.privkey_hex    =   self.k.private_key_hex()
+                seed_phrase = mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))
+
+            else:
+                # This to generate a 32 byte private key from a 12 word seed phrase
+                # Need to store because it cannot be derives from the resulting private key
+                
+                seed_phrase = mnemo.generate(strength=128)
+                seed = Bip39SeedGenerator(seed_phrase).Generate()
+                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+                self.logger.debug(f"seed private key: {seed_private_key_hex}")
+                
+                self.k= Keys(priv_k=seed_private_key_hex)
+                self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.pubkey_hex     =   self.k.public_key_hex()
+                self.privkey_hex    =   self.k.private_key_hex()
+            
+            self.acorn_tags = [ [ "balance", "0", "sat" ],
+                                [ "privkey", "None" ], 
+                                [ "mint", self.mints[0]],
+                                [ "name", name ]
+                            ]
+            self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
+            self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+
+        return self.k.private_key_bech32()
+
+    def get_profile(self, name="wallet"):
+        mints = []
         
         try:
-            FILTER = [{
-            'limit': 1,
-            'authors': [self.pubkey_hex],
-            'kinds': [0]
-            }]
-            profile = asyncio.run(self._async_query_client_profile(FILTER))
-  
+            wallet_info = json.loads(self.get_wallet_info(name))
+        except:
+            return f"No profile for {name}"    
+        for each in wallet_info:
+            if each[0] == "balance":
+                balance_amount = int(each[1])
+                balance_unit = each[2]
+            elif each[0] == "privkey":
+                lock_privkey = each[1]
+            elif each[0] == "mint":
+                mints.append(each[1])
+            elif each[0] == "name":
+                name = each[1]
 
-        except:        
-            profile = self.wallet_reserved_records.get("profile", "{}")
-            out_string = f"There is no profile on {self.home_relay}"
             
-        
-       
-    
-        profile_obj = json.loads(profile)
-        nostr_profile = nostrProfile(**profile_obj)
-        out_string =  "-"*80  
-        out_string += f"\nProfile Information for: {nostr_profile.display_name}"
-        out_string += "\n"+ "-"*80  
-        out_string += f"\nnpub: {str(self.pubkey_bech32)}"
-        out_string += f"\npubhex: {str(self.pubkey_hex)}"
-        out_string += f"\nprivhex: {str(self.privkey_hex)}"
-        out_string += f"\nnsec: {str(self.k.private_key_bech32())}"
-        out_string += f"\n\nRecovery seed phrase: \n{'-'*80}\n{self.wallet_config.seed_phrase}"
-        out_string += "\n"+ "-"*80    
-    
-        for key, value in nostr_profile.__dict__.items():        
-            out_string += f"\n{str(key).ljust(15)}: {value}"
-        
-        out_string += "\n"+ "-"*80  
-        out_string += f"\nMints {self.mints}"
-        out_string += f"\nHome Relay {self.home_relay}"
-        out_string += f"\nRelays {self.relays}"
-        out_string += "\n"+ "-"*80   
+        out_string = f"""   \nnpub: {self.pubkey_bech32}
+                            \nnsec: {self.privkey_bech32}
+                            
+                            \nwallet info: {wallet_info} 
+                            \nbalance: {balance_amount} {balance_unit}
+                            \nlock: {lock_privkey}
+                            \nmints: {mints}
+                            \nhome relay: {self.home_relay}
+                            \nname: {name}
+                            \n{"*"*75}
+
+        """
 
         return out_string
 
@@ -429,6 +355,18 @@ class Acorn:
 
         return out_string
     
+    def get_instance(self):
+        pass
+        return "this is the instance"
+
+    def update_tags(self,tags: List):
+        print("update tags")
+        for each in tags:
+            if each[0] == 'balance':
+                print(f"this is for balance: {each[1]}")
+            
+        return "updated"
+
     async def _async_query_client_profile(self, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
         json_obj = {}
