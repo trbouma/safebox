@@ -62,7 +62,7 @@ class Acorn:
     k: Keys
     nsec: str
     name: str
-    unit: str
+    unit: str    
     acorn_tags: List = None
     pubkey_bech32: str
     pubkey_hex: str
@@ -70,6 +70,7 @@ class Acorn:
     privkey_bech32: str    
     home_relay: str
     home_mint: str
+    known_mints: dict = {}
     relays: List[str]
     mints: List[str]
     safe_box_items: List[SafeboxItem]
@@ -340,6 +341,7 @@ class Acorn:
                             \nwallet info: {wallet_info}                           
                             \nlock: {lock_privkey}
                             \nmints: {mints}
+                            \nknown mints: {self.known_mints}
                             \nbalance: {self.balance} {self.unit}
                             \nhome relay: {self.home_relay}
                             \nname: {name}
@@ -1267,6 +1269,7 @@ class Acorn:
                         
                     # proof = Proof(**each_content)
                     nip60_proofs = NIP60Proofs(**content_json)
+                    self.known_mints[nip60_proofs.proofs[0]['id']]= nip60_proofs.mint
                     for each in nip60_proofs.proofs:
                         self.proofs.append(each)
                         proof_event.proofs.append(each)
