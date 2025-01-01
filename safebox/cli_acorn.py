@@ -212,11 +212,43 @@ def get_profile(name):
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     click.echo(acorn_obj.get_profile(name))
 
+@click.command("deposit", help="deposit funds into wallet via lightning invoice")
+@click.argument('amount')
+def deposit(amount: int):
+    qr = qrcode.QRCode()
+    click.echo(f"amount: {amount}")
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    cli_quote = acorn_obj.deposit(amount)
+    qr.add_data(cli_quote.invoice)
+    qr.make(fit=True)
+    click.echo(f"\n\nQuote:\n{cli_quote.quote}\n") 
+    click.echo(f"\n\nPlease pay invoice:\n{cli_quote.invoice}\n") 
+    qr_invoice = qr.print_ascii(out=sys.stdout)
+    click.echo(f"\n{qr_invoice}\n") 
+    
+    if click.confirm("Press any key to continue..."):
+        start_time = time()  # Record the start time
+        end_time = start_time + 60  # Set the loop to run for 60 seconds
+
+        while time() < end_time:
+            
+            print("checking")
+            success = acorn_obj.check_quote(cli_quote.quote, amount)
+            if success:
+                break
+            sleep(3)  # Sleep for 3 seconds
+
+        click.echo("Loop completed.")
+
+    click.echo("Done!")
+ 
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
 cli.add_command(get_balance)
 cli.add_command(get_profile)
+cli.add_command(deposit)
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
 from safebox.nostr import bech32_to_hex, hex_to_bech32, nip05_to_npub
 
-from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote
+from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote, NIP60Proofs
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
@@ -62,6 +62,7 @@ class Acorn:
     k: Keys
     nsec: str
     name: str
+    unit: str
     acorn_tags: List = None
     pubkey_bech32: str
     pubkey_hex: str
@@ -135,6 +136,7 @@ class Acorn:
             for each in self.acorn_tags:
                 if each[0]== "balance":
                     self.balance = int(each[1])
+                    self.unit = each[2]
                 if each[0] == "mint":
                     self.home_mint = each[1]
                     print(f"home mint: {self.home_mint}")
@@ -144,7 +146,7 @@ class Acorn:
         except:
             wallet_info_str = "None"
         
-      
+        self._load_proofs()
         return None
    
 
@@ -334,12 +336,11 @@ class Acorn:
 
             
         out_string = f"""   \nnpub: {self.pubkey_bech32}
-                            \nnsec: {self.privkey_bech32}
-                            
-                            \nwallet info: {wallet_info} 
-                            \nbalance: {balance_amount} {balance_unit}
+                            \nnsec: {self.privkey_bech32}                          
+                            \nwallet info: {wallet_info}                           
                             \nlock: {lock_privkey}
                             \nmints: {mints}
+                            \nbalance: {self.balance} {self.unit}
                             \nhome relay: {self.home_relay}
                             \nname: {name}
                             \n{"*"*75}
@@ -927,7 +928,7 @@ class Acorn:
     def _mint_proofs(self, quote:str, amount:int):
         # print("mint proofs")
         headers = { "Content-Type": "application/json"}
-        keyset_url = f"{self.mints[0]}/v1/keysets"
+        keyset_url = f"{self.home_mint}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
 
@@ -953,7 +954,7 @@ class Acorn:
                                                         
                                     )
         # print("blinded values, blinded messages:", blinded_values, blinded_messages)
-        mint_url = f"{self.mints[0]}/v1/mint/bolt11"
+        mint_url = f"{self.home_mint}/v1/mint/bolt11"
 
         # blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
         # print(blinded_message)
@@ -970,11 +971,10 @@ class Acorn:
             return False
 
         
-        mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
+        mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
         response = requests.get(mint_key_url, headers=headers)
         keys = response.json()["keysets"][0]["keys"]
-        # print(keys)
-        proofs = []
+
         proof_objs = []
         i = 0
         
@@ -997,28 +997,30 @@ class Acorn:
                            C=C.serialize().hex(),
                            Y=Y.serialize().hex()
             )
-            proofs.append(proof.model_dump())
+
             proof_objs.append(proof)
             
             i+=1
         
         self.logger.debug(f"Adding proofs from mint: {proof_objs}")
-        # self.add_proofs(json.dumps(proofs))
-        # print("adding deposit proof objects")
+
         
         self.add_proofs_obj(proof_objs)
         
         return True
 
-    def check(self):
+    def check_quote(self, quote:str, amount:int):
+        print(f"check quote {quote}")
+        # return "check_quote"
         
        
-        return self._check_quote()
+        return self._check_quote(quote, amount)
     
     def deposit(self, amount:int)->cliQuote:
-        url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+        
+        url = f"{self.home_mint}/v1/mint/quote/bolt11"
        
-        # url = "https://mint.nimo.cash/v1/mint/quote/bolt11"
+       
         headers = { "Content-Type": "application/json"}
         mint_request = mintRequest(amount=amount)
         mint_request_dump = mint_request.model_dump()
@@ -1035,19 +1037,18 @@ class Acorn:
 
         wallet_quote_list =[]
         
-        wallet_quote_list_str = self.get_wallet_info("quote")
-        wallet_quote_list_json = json.loads(wallet_quote_list_str)
-        for each in wallet_quote_list_json:
-            wallet_quote_list.append(each)
+        # wallet_quote_list_str = self.get_wallet_info("quote")
+        # wallet_quote_list_json = json.loads(wallet_quote_list_str)
+        # for each in wallet_quote_list_json:
+        #    wallet_quote_list.append(each)
         
-        wallet_quote = walletQuote(quote=quote,amount=amount, invoice=invoice)
-        wallet_quote_list.append(wallet_quote.model_dump())
-        # label_info = json.dumps(wallet_quote.model_dump())
-        label_info = json.dumps(wallet_quote_list)
+        # wallet_quote = walletQuote(quote=quote,amount=amount, invoice=invoice)
+        # wallet_quote_list.append(wallet_quote.model_dump())
+        
+        # label_info = json.dumps(wallet_quote_list)
         # print(label_info)
-        self.set_wallet_info(label="quote", label_info=label_info)
-        # self.add_tokens(f"tokens {amount} {payload_json} {response.json()['request']}")
-        # quote=self.check_quote()
+        # self.set_wallet_info(label="quote", label_info=label_info)
+
 
         # TODO this is after quote has been paid - refactor into function
         # self._mint_proofs(quote,amount)
@@ -1074,13 +1075,20 @@ class Acorn:
         self.logger.debug(f"adding proofs_obj {proofs_arg}")
 
         #  proofs_to_store = json.dump
-        for each in proofs_arg:
-            pass
-            proof_to_store = [each.model_dump()]
-            text = json.dumps(proof_to_store)
-            asyncio.run(self._async_add_proofs(text, replicate_relays))
+        # for each in proofs_arg:
+        #    pass
+        #    proof_to_store = [each.model_dump()]
+        #    text = json.dumps(proof_to_store)
+        #    asyncio.run(self._async_add_proofs(text, replicate_relays))
         
-        # asyncio.run(self._async_add_proofs_obj(proofs_arg=proofs_arg, replicate_relays=replicate_relays))
+        # Create the format for NIP 60 proofs
+        nip60_proofs = NIP60Proofs(mint=self.home_mint)
+        for each in proofs_arg:
+            nip60_proofs.proofs.append(each.model_dump())
+        
+        record = nip60_proofs.model_dump_json()
+        print(f"nip60 proofs text: {record}")
+        asyncio.run(self._async_add_proofs(record, replicate_relays))
         
         return
 
@@ -1255,13 +1263,15 @@ class Acorn:
                     content_json = json.loads(content)
                     # print("event_id:", each_event.id)
                     
-                    for each_content in content_json:
+                    
                         
-                        proof = Proof(**each_content)
-                        self.proofs.append(proof)
-                        proof_event.proofs.append(proof)
+                    # proof = Proof(**each_content)
+                    nip60_proofs = NIP60Proofs(**content_json)
+                    for each in nip60_proofs.proofs:
+                        self.proofs.append(each)
+                        proof_event.proofs.append(each)
                         # print(proof.amount, proof.secret)
-                    self.proof_events.proof_events.append(proof_event)          
+                    # self.proof_events.proof_events.append(proof_event)          
                 except:
                     content = each.content
 
@@ -1307,12 +1317,32 @@ class Acorn:
         return all_proofs, keyset_amounts
 
 
-    def _check_quote(self):
+    def _check_quote(self,quote, amount:int):
         # print("check quote", quote)
         #TODO error handling
-        success_for_all = True
+        success_mint = True
            
-        
+        url = f"{self.home_mint}/v1/mint/quote/bolt11/{quote}"
+        self.logger.debug(f"mint quote: {url}")
+
+        headers = { "Content-Type": "application/json"}
+        response = requests.get(url, headers=headers)
+           
+        mint_quote = mintQuote(**response.json())
+        if mint_quote.paid == True:
+                success_mint = self._mint_proofs(mint_quote.quote,amount)
+
+
+                    
+                    
+                    
+                    
+                # return mint_quote.paid
+        else:
+                success_mint = False
+
+        return success_mint
+
         event_quotes = [] 
         # event_quote_info_list = self.get_wallet_info("quote")
         event_quote_info_list = self.wallet_reserved_records["quote"]
