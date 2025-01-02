@@ -2830,8 +2830,9 @@ class Acorn:
     
     def accept_token(self,cashu_token: str):
         print("accept token")
-        asyncio.run(self.nip17_accept(cashu_token))
-        self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+        # asyncio.run(self.nip17_accept(cashu_token))
+        self.nip17_accept(cashu_token)
+        # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
 
         
 
@@ -3577,7 +3578,7 @@ class Acorn:
         payment_request = "creqA" + base64_string
         return payment_request
 
-    async def nip17_accept(self, token:str):
+    def nip17_accept(self, token:str):
         # self.accept_token(token)
         # print("accept token")
         headers = { "Content-Type": "application/json"}
@@ -3622,13 +3623,17 @@ class Acorn:
         
         swap_proofs = self.swap_proofs(proof_obj_list)
 
-        await self._async_add_proofs_obj(swap_proofs)
+        self.add_proofs_obj(swap_proofs)
+        # await self._async_add_proofs_obj(swap_proofs)
+
+
         FILTER = [{
             'limit': 1024,
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
-        await self._async_load_proofs(FILTER)
+        
+        asyncio.run(self._async_load_proofs(FILTER))
 
         #TODO don't do this every time - only when a new mint shows up
         # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
