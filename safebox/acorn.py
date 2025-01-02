@@ -1093,7 +1093,7 @@ class Acorn:
 
         asyncio.run(self._async_add_proofs(text, replicate_relays))  
 
-    def add_proofs_obj(self,proofs_arg: List[Proofs], replicate_relays: List[str]=None):
+    def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
         # make sure have latest kind
         #TODO this is a workaround
 
@@ -1107,7 +1107,7 @@ class Acorn:
         #    asyncio.run(self._async_add_proofs(text, replicate_relays))
         
         # Create the format for NIP 60 proofs
-        nip60_proofs = NIP60Proofs(mint=self.home_mint)
+        nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
         for each in proofs_arg:
             nip60_proofs.proofs.append(each)
         
@@ -1123,7 +1123,12 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         self.delete_proof_events()
-        self.add_proofs_obj(self.proofs)
+        # get proofs by keyset
+        all_proofs, amount = self._proofs_by_keyset()
+        
+        for key, value in all_proofs.items():
+
+            self.add_proofs_obj(value)
        
         # for each in self.proofs:
         #    pass
@@ -2220,8 +2225,12 @@ class Acorn:
             # delete old proofs
             asyncio.run(self._async_delete_proof_events())
             # self.add_proofs(json.dumps(combined_proofs))
-            self.add_proofs_obj(combined_proof_objs)
-            self._load_proofs()
+
+            self.proofs = combined_proof_objs
+            self.write_proofs()
+
+            # self.add_proofs_obj(combined_proof_objs)
+            # self._load_proofs()
         
         return "multi swap ok"
 
