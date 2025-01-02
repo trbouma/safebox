@@ -81,7 +81,7 @@ class Acorn:
     balance: int
     proof_events: proofEvents 
     replicate: bool
-    RESERVED_RECORDS: List[str] = []
+    RESERVED_RECORDS: List[str] = ["balance","privkey"]
     wallet_reserved_records: object
     logger: object
     
@@ -153,6 +153,8 @@ class Acorn:
             wallet_info_str = "None"
         
         self._load_proofs()
+        self.update_tag(["balance",str(self.balance),"sat"])
+        
         return None
    
 
@@ -370,7 +372,7 @@ class Acorn:
         pass
         return "this is the instance"
 
-    def update_tags(self,tags: List):
+    def update_tags_deprecated(self,tags: List):
         print("update tags")
         for each in tags:
             if each[0] == 'balance':
@@ -926,15 +928,28 @@ class Acorn:
             self.set_wallet_info(record_name,record_value)
             return record_name
         else:
-            # print("this is a user record")
-            # user_records = json.loads(self.wallet_reserved_records['user_records'])
-            # user_records.append(record_name)
-            # user_records = sorted(list(set(user_records)))
-            # self.set_wallet_info('user_records',json.dumps(user_records))
+            self.update_tag(["user_record",record_name])
             self.set_wallet_info(record_name,record_value)
             # print(user_records)
             return record_name
     
+    def update_tag(self,tag_value):
+        
+
+        if tag_value[0]=="user_record":
+            if tag_value in self.acorn_tags:
+                print("user record already in!")
+            else:
+                self.acorn_tags.append(tag_value)
+        elif tag_value[0]=="balance":
+            for index, each in enumerate(self.acorn_tags):
+                if each[0]=="balance":
+                    self.acorn_tags[index]=tag_value
+            
+        
+        print(self.acorn_tags)
+        self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
+
     def _mint_proofs(self, quote:str, amount:int):
         # print("mint proofs")
         headers = { "Content-Type": "application/json"}
@@ -1305,6 +1320,7 @@ class Acorn:
             #TODO this is to mitigate some dup errors reading from multiple relays
             self.proofs = list(set(self.proofs))     
            
+            
             return proofs
     
     def delete_proof_events(self):
@@ -1703,8 +1719,8 @@ class Acorn:
         
         self.logger.debug(f"chosen keyset: {chosen_keyset}")
         # Now do the pay routine
-        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
         self.logger.debug(f"{melt_quote_url}, {melt_url}")
         headers = { "Content-Type": "application/json"}
         # callback = lightning_address_pay(amount, lnaddress,comment=comment)
@@ -1737,8 +1753,8 @@ class Acorn:
                 return
             
             # Set to new mints and redo the calls
-            melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-            melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+            melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+            melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
             self.logger.debug(f"{melt_quote_url},{melt_url}")
             callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
             pr = callback['pr']        

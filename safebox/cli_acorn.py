@@ -319,6 +319,23 @@ def balance():
 
     click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
 
+@click.command("zap", help="Zap amount to event or to recipient")
+@click.argument('amount', default=1)
+@click.argument('event')
+@click.option('--comment','-c', default='⚡️')
+
+def zap(amount:int, event, comment):
+
+    if event == None:
+        click.echo("Need an event!")
+        return
+    
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,logging_level=LOGGING_LEVEL)
+    # click.echo(f"Zap amount: {amount} to {event}")
+   
+        
+    click.echo(acorn_obj.zap(amount,event,comment))
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -331,6 +348,7 @@ cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
 cli.add_command(balance)
+cli.add_command(zap)
 
 
 if __name__ == "__main__":
