@@ -62,6 +62,7 @@ class Acorn:
     k: Keys
     nsec: str
     name: str
+    handle: str
     unit: str    
     acorn_tags: List = None
     proof_event_ids = []
@@ -126,6 +127,7 @@ class Acorn:
             self.home_relay = home_relay
             self.replicate = replicate
             self.wallet_config = None
+            self.handle = generate_name_from_hex(self.pubkey_hex)
 
             self.wallet_reserved_records = {}
         else:
@@ -347,7 +349,8 @@ class Acorn:
             
         out_string = f"""   \nnpub: {self.pubkey_bech32}
                             \nnsec: {self.privkey_bech32}                          
-                            \nwallet info: {wallet_info}                           
+                            \nwallet info: {wallet_info}  
+                            \nhandle: @{self.handle}                         
                             \nlock privkey: {lock_privkey}
                             \nlock pubkey: {lock_pubkey}
                             \nmints: {mints}
