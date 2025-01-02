@@ -145,6 +145,10 @@ class Acorn:
                 if each[0] == "name":
                     self.name = each[1]
                     print(f"name: {self.name}")
+                if each[0] == "privkey":
+                    
+                    print(f"privkey: {each[1]}")
+                    print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
         except:
             wallet_info_str = "None"
         
@@ -308,8 +312,9 @@ class Acorn:
                 self.pubkey_hex     =   self.k.public_key_hex()
                 self.privkey_hex    =   self.k.private_key_hex()
             
+            nut_key = Keys()
             self.acorn_tags = [ [ "balance", "0", "sat" ],
-                                [ "privkey", "None" ], 
+                                [ "privkey", nut_key.private_key_hex() ], 
                                 [ "mint", self.mints[0]],
                                 [ "name", name ]
                             ]
@@ -331,6 +336,7 @@ class Acorn:
                 balance_unit = each[2]
             elif each[0] == "privkey":
                 lock_privkey = each[1]
+                lock_pubkey = Keys(each[1]).public_key_hex()
             elif each[0] == "mint":
                 mints.append(each[1])
             elif each[0] == "name":
@@ -340,7 +346,8 @@ class Acorn:
         out_string = f"""   \nnpub: {self.pubkey_bech32}
                             \nnsec: {self.privkey_bech32}                          
                             \nwallet info: {wallet_info}                           
-                            \nlock: {lock_privkey}
+                            \nlock privkey: {lock_privkey}
+                            \nlock pubkey: {lock_pubkey}
                             \nmints: {mints}
                             \nknown mints: {self.known_mints}
                             \nbalance: {self.balance} {self.unit}
