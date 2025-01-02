@@ -273,6 +273,52 @@ def swap(consolidate):
         # acorn_obj.delete_proof_events()
         click.echo(acorn_obj.swap_multi_each())
 
+@click.command("pay", help="Payout funds to lightning address")
+@click.argument('amount', default=21)
+@click.argument('lnaddress', default='trbouma@openbalance.app')
+@click.option('--comment','-c', default='Paid!')
+def pay(amount,lnaddress: str, comment:str):
+    click.echo(f"Pay to: {lnaddress}")
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
+    msg_out = acorn_obj.pay_multi(amount,lnaddress,comment)
+    click.echo(msg_out)
+
+@click.command("put", help='write a private record')
+@click.argument('label', default='default')
+@click.argument('label_info', default='hello')
+def put(label, label_info):
+    jsons=None
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    # click.echo(wallet.get_wallet_info())
+    
+
+    if click.confirm('Do you want to continue?'):    
+     acorn_obj.put_record(label, label_info)
+
+@click.command(help='get a private wallet record')
+@click.argument('label', default = "default")
+def get(label):
+    
+    out_info = "None"
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+
+    try:
+        out_info = acorn_obj.get_wallet_info(label)
+        # safebox_info = wallet_obj.get_record(label)
+        pass
+
+    except:
+        out_info = "No label found!"
+    
+    click.echo(out_info)
+
+@click.command("balance", help="show balance")
+def balance():
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+
+    click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -281,6 +327,10 @@ cli.add_command(get_profile)
 cli.add_command(deposit)
 cli.add_command(proofs)
 cli.add_command(swap)
+cli.add_command(pay)
+cli.add_command(put)
+cli.add_command(get)
+cli.add_command(balance)
 
 
 if __name__ == "__main__":

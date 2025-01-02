@@ -81,7 +81,7 @@ class Acorn:
     balance: int
     proof_events: proofEvents 
     replicate: bool
-    RESERVED_RECORDS: List[str]
+    RESERVED_RECORDS: List[str] = []
     wallet_reserved_records: object
     logger: object
     
@@ -926,13 +926,13 @@ class Acorn:
             self.set_wallet_info(record_name,record_value)
             return record_name
         else:
-            print("this is a user record")
-            user_records = json.loads(self.wallet_reserved_records['user_records'])
-            user_records.append(record_name)
-            user_records = sorted(list(set(user_records)))
-            self.set_wallet_info('user_records',json.dumps(user_records))
+            # print("this is a user record")
+            # user_records = json.loads(self.wallet_reserved_records['user_records'])
+            # user_records.append(record_name)
+            # user_records = sorted(list(set(user_records)))
+            # self.set_wallet_info('user_records',json.dumps(user_records))
             self.set_wallet_info(record_name,record_value)
-            print(user_records)
+            # print(user_records)
             return record_name
     
     def _mint_proofs(self, quote:str, amount:int):
@@ -1108,12 +1108,13 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         self.delete_proof_events()
+        self.add_proofs_obj(self.proofs)
        
-        for each in self.proofs:
-            pass
-            proof_to_store = [each.model_dump()]
-            text = json.dumps(proof_to_store)
-            asyncio.run(self._async_add_proofs(text, replicate_relays))
+        # for each in self.proofs:
+        #    pass
+        #    proof_to_store = [each.model_dump()]
+        #    text = json.dumps(proof_to_store)
+        #    asyncio.run(self._async_add_proofs(text, replicate_relays))
         
         self._load_proofs()
         
@@ -1517,8 +1518,8 @@ class Acorn:
         
         self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
         # Now do the pay routine
-        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
         # print(melt_quote_url,melt_url)
         headers = { "Content-Type": "application/json"}
         try:
@@ -2573,11 +2574,11 @@ class Acorn:
         count = 0
         
         headers = { "Content-Type": "application/json"}
-        keyset_url = f"{self.trusted_mints[keyset_to_use]}/v1/keysets"
+        keyset_url = f"{self.known_mints[keyset_to_use]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
 
-        swap_url = f"{self.trusted_mints[keyset_to_use]}/v1/swap"
+        swap_url = f"{self.known_mints[keyset_to_use]}/v1/swap"
 
         swap_proofs = []
         blinded_values =[]
@@ -2641,7 +2642,7 @@ class Acorn:
             # print("promises:", promises)
 
         
-            mint_key_url = f"{self.trusted_mints[keyset_to_use]}/v1/keys/{keyset}"
+            mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
             response = requests.get(mint_key_url, headers=headers)
             keys = response.json()["keysets"][0]["keys"]
             # print(keys)
