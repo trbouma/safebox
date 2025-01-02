@@ -64,6 +64,7 @@ class Acorn:
     name: str
     unit: str    
     acorn_tags: List = None
+    proof_event_ids = []
     pubkey_bech32: str
     pubkey_hex: str
     privkey_hex: str
@@ -1086,7 +1087,7 @@ class Acorn:
         # Create the format for NIP 60 proofs
         nip60_proofs = NIP60Proofs(mint=self.home_mint)
         for each in proofs_arg:
-            nip60_proofs.proofs.append(each.model_dump())
+            nip60_proofs.proofs.append(each)
         
         record = nip60_proofs.model_dump_json()
         print(f"nip60 proofs text: {record}")
@@ -1259,6 +1260,7 @@ class Acorn:
             
             for each_event in events:
                 # print(type(each_event.id), each_event.id)
+                self.proof_event_ids.append(each_event.id)
                 proof_event = proofEvent(id=each_event.id)
                 try:
                     content = my_enc.decrypt(each_event.content, self.pubkey_hex)
@@ -1834,7 +1836,10 @@ class Acorn:
             for each_proof in each_event.proofs:
                 # self.logger.debug(f"{each_proof.id}, {each_proof.amount}")
                 pass
-        self.logger.debug(f"proof events to delete {tags}")
+        for each in self.proof_event_ids:
+            tags.append(["e",each])
+        tags.append(["k","7375"])
+        self.logger.debug(f"tags for proof events to delete {tags}")
         
         async with ClientPool([self.home_relay]) as c:
         
@@ -2064,7 +2069,7 @@ class Acorn:
 
         for each_keyset in keyset_proofs:
             check = []
-            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
             for each_proof in keyset_proofs[each_keyset]:
                 check.append(each_proof.Y)
 
@@ -2078,7 +2083,7 @@ class Acorn:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
             except:
-                return f"there is a problem with {self.trusted_mints[each_keyset]}"
+                return f"there is a problem with {self.known_mints[each_keyset]}"
                 
         # return
         # All the proofs are verified, we are good to go for the swap    
@@ -2086,9 +2091,9 @@ class Acorn:
  
         for each_keyset in keyset_proofs:
             
-            each_keyset_url = self.trusted_mints[each_keyset]
+            each_keyset_url = self.known_mints[each_keyset]
             # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
             # print(swap_url)
             swap_proofs = []
             blinded_swap_proofs = []
@@ -2132,7 +2137,7 @@ class Acorn:
                 # print("promises:", promises)
 
             
-                mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
                 response = requests.get(mint_key_url, headers=headers)
                 keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
@@ -2207,7 +2212,7 @@ class Acorn:
 
         for each_keyset in keyset_proofs:
             check = []
-            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
             for each_proof in keyset_proofs[each_keyset]:
                 check.append(each_proof.Y)
 
@@ -2221,7 +2226,7 @@ class Acorn:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
             except:
-                return f"there is a problem with the mint {self.trusted_mints[each_keyset]}"
+                return f"there is a problem with the mint {self.known_mints[each_keyset]}"
                 
         # return
         # All the proofs are verified, we are good to go for the swap   
@@ -2230,13 +2235,13 @@ class Acorn:
  
         for each_keyset in keyset_proofs:
             
-            each_keyset_url = self.trusted_mints[each_keyset]
+            each_keyset_url = self.known_mints[each_keyset]
 
-            mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+            mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
             response = requests.get(mint_key_url, headers=headers)
             keys = response.json()["keysets"][0]["keys"]
             # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
             
             for each_proof in keyset_proofs[each_keyset]:
                 # print(each_proof.amount)
@@ -2307,7 +2312,7 @@ class Acorn:
                 combined_proofs = combined_proofs + proofs
                 combined_proof_objs = combined_proof_objs + proof_objs
 
-        asyncio.run(self._async_delete_proof_events())
+        self.delete_proof_events()
         self.logger.debug("XXXXX swap multi each")
         self.add_proofs_obj(combined_proof_objs)
         
@@ -2327,7 +2332,7 @@ class Acorn:
 
         for each_keyset in keyset_proofs:
             check = []
-            mint_verify_url = f"{self.trusted_mints[each_keyset]}/v1/checkstate"
+            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
             for each_proof in keyset_proofs[each_keyset]:
                 check.append(each_proof.Y)
 
@@ -2341,7 +2346,7 @@ class Acorn:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
             except:
-                return f"there is a problem with the mint {self.trusted_mints[each_keyset]}"
+                return f"there is a problem with the mint {self.known_mints[each_keyset]}"
                 
         # return
         # All the proofs are verified, we are good to go for the swap   
@@ -2350,13 +2355,13 @@ class Acorn:
  
         for each_keyset in keyset_proofs:
             
-            each_keyset_url = self.trusted_mints[each_keyset]
+            each_keyset_url = self.known_mints[each_keyset]
 
-            mint_key_url = f"{self.trusted_mints[each_keyset]}/v1/keys/{each_keyset}"
+            mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
             response = requests.get(mint_key_url, headers=headers)
             keys = response.json()["keysets"][0]["keys"]
             # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.trusted_mints[each_keyset]}/v1/swap"
+            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
             
             for each_proof in keyset_proofs[each_keyset]:
                 # print(each_proof.amount)

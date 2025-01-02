@@ -245,16 +245,33 @@ def deposit(amount: int):
 @click.command("proofs", help="list proofs") 
 def proofs():
     
-    wallet_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
-    click.echo(f"{wallet_obj.balance} sats in {len(wallet_obj.proofs)} proofs in {wallet_obj.events} events")
-    for each in wallet_obj.proofs:
+    click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs in {acorn_obj.events} events")
+    for each in acorn_obj.proofs:
         click.echo(f"id: {each.id} amount: {each.amount} Y: {each.Y}")
-    click.echo(f"{wallet_obj.powers_of_2_sum(wallet_obj.balance)}")
+    click.echo(f"{acorn_obj.powers_of_2_sum(acorn_obj.balance)}")
     click.echo("Proofs by keyset")
-    all_proofs, keyset_amounts = wallet_obj._proofs_by_keyset()
+    all_proofs, keyset_amounts = acorn_obj._proofs_by_keyset()
     click.echo(f"{keyset_amounts}")
-    click.echo(f"Known mints: {wallet_obj.known_mints}")
+    click.echo(f"Known mints: {acorn_obj.known_mints}")
+
+@click.command("swap", help="swap proofs for new proofs")
+@click.option("--consolidate","-c", is_flag=True, show_default=True, default=False, help="Consolidate proofs")
+def swap(consolidate):
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    # msg_out = wallet_obj.get_proofs()
+    # wallet_obj.delete_proofs()
+    # click.echo(msg_out)
+    
+    if consolidate:
+        click.echo("Consolidate proofs")
+        click.echo(acorn_obj.swap_multi_consolidate())
+    else:
+        click.echo(f"proof event ids: {acorn_obj.proof_event_ids}")
+        # acorn_obj.delete_proof_events()
+        click.echo(acorn_obj.swap_multi_each())
 
 cli.add_command(info)
 cli.add_command(init)
@@ -263,6 +280,7 @@ cli.add_command(get_balance)
 cli.add_command(get_profile)
 cli.add_command(deposit)
 cli.add_command(proofs)
+cli.add_command(swap)
 
 
 if __name__ == "__main__":
