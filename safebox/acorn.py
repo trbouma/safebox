@@ -1574,8 +1574,8 @@ class Acorn:
                 return
             
             # Set to new mints and redo the calls
-            melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-            melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+            melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+            melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
             # print(melt_quote_url,melt_url)
             callback = lightning_address_pay(amount, lnaddress,comment=comment)
             pr = callback['pr']        
@@ -1885,11 +1885,11 @@ class Acorn:
         headers = { "Content-Type": "application/json"}
         
         #keyset_url = f"{self.mints[0]}/v1/keysets"
-        keyset_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/keysets"
+        keyset_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keysets"
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
 
-        swap_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/swap"
+        swap_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/swap"
         swap_proofs = []
         blinded_swap_proofs = []
         blinded_values =[]
@@ -1928,7 +1928,7 @@ class Acorn:
                 # print("promises:", promises)
 
             
-                mint_key_url = f"{self.trusted_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
+                mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
                 response = requests.get(mint_key_url, headers=headers)
                 keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
@@ -1983,7 +1983,7 @@ class Acorn:
         for each in self.trusted_mints:
             
             keyset_each = each
-            keyset_url_each = self.trusted_mints[each]
+            keyset_url_each = self.known_mints[each]
             print(keyset, keyset_url_each)
 
         
@@ -2914,7 +2914,7 @@ class Acorn:
 
 
         
-        tokens = TokenV3Token(mint=self.trusted_mints[chosen_keyset],
+        tokens = TokenV3Token(mint=self.known_mints[chosen_keyset],
                                         proofs=spend_proofs)
         
         v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
@@ -2948,8 +2948,8 @@ class Acorn:
         
         print("chosen keyset for payment", chosen_keyset)
         # Now do the pay routine
-        melt_quote_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.trusted_mints[chosen_keyset]}/v1/melt/bolt11"
+        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
         print(melt_quote_url,melt_url)
         headers = { "Content-Type": "application/json"}
         
@@ -3582,7 +3582,7 @@ class Acorn:
         # print("accept token")
         headers = { "Content-Type": "application/json"}
         token_amount =0
-        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
+        receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
 
         if token[:6] == "cashuA":
 
@@ -3602,7 +3602,7 @@ class Acorn:
                     proofs.append(each_proof.model_dump())
                     proof_obj_list.append(each_proof)
                     id = each_proof.id
-                    self.trusted_mints[id]=each.mint
+                    self.known_mints[id]=each.mint
                     # print(id, each.mint)
 
         
@@ -3617,7 +3617,7 @@ class Acorn:
                     proofs.append(each_proof.model_dump())
                     proof_obj_list.append(each_proof)
                     id = each_proof.id
-                self.trusted_mints[id]=token_obj.mint
+                self.known_mints[id]=token_obj.mint
 
         
         swap_proofs = self.swap_proofs(proof_obj_list)
