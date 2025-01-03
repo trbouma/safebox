@@ -346,7 +346,11 @@ class Acorn:
             elif each[0] == "name":
                 name = each[1]
 
-            
+        known_mints_cat=""
+
+        for index, (key, value) in enumerate(self.known_mints.items()):
+            known_mints_cat +=f"\n{index+1}. {value} {key}"
+
         out_string = f"""   \nnpub: {self.pubkey_bech32}
                             \nnsec: {self.privkey_bech32} 
                             \npubhex: {self.pubkey_hex}                         
@@ -354,8 +358,8 @@ class Acorn:
                             \nhandle: @{self.handle}                         
                             \nlock privkey: {lock_privkey}
                             \nlock pubkey: {lock_pubkey}
-                            \nmints: {mints}
-                            \nknown mints: {self.known_mints}
+                            \nhome mints: {mints}
+                            \nknown mints: {known_mints_cat}
                             \nbalance: {self.balance} {self.unit}
                             \nhome relay: {self.home_relay}
                             \nname: {name}
