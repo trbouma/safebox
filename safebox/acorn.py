@@ -137,7 +137,7 @@ class Acorn:
         
         try:
             self.acorn_tags = json.loads(self.get_wallet_info(label="wallet"))
-            print(f" wallet info {self.acorn_tags}")
+           
             for each in self.acorn_tags:
                 if each[0]== "balance":
                     self.balance = int(each[1])
@@ -155,9 +155,10 @@ class Acorn:
                     self.seed_phrase = each[1]
         except:
             wallet_info_str = "None"
+            self.home_mint = mints[0]
         
         self._load_proofs()
-        self.update_tag(["balance",str(self.balance),"sat"])
+
         
         return None
    
@@ -358,8 +359,7 @@ class Acorn:
 
         out_string = f"""   \nnpub: {self.pubkey_bech32}
                             \nnsec: {self.privkey_bech32} 
-                            \npubhex: {self.pubkey_hex}                         
-                            \nwallet info: {wallet_info}  
+                            \npubhex: {self.pubkey_hex}  
                             \nhandle: @{self.handle}                         
                             \nlock privkey: {lock_privkey}
                             \nseed phrase: {self.seed_phrase}
@@ -793,7 +793,7 @@ class Acorn:
             # print("label, event id:", label, n_msg.id)
             c.publish(n_msg)
             await asyncio.sleep(0.2)
-            self.logger.debug(f"wrote event to {write_relays} for {label} with {label_info}")
+            self.logger.debug(f"wrote event {label} to {write_relays}")
 
     def get_wallet_info(self, label:str=None):
         my_enc = NIP44Encrypt(self.k)

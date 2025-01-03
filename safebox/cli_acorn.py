@@ -217,7 +217,7 @@ def get_profile(name):
 def deposit(amount: int):
     qr = qrcode.QRCode()
     click.echo(f"amount: {amount}")
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
     cli_quote = acorn_obj.deposit(amount)
     qr.add_data(cli_quote.invoice)
     qr.make(fit=True)
@@ -300,7 +300,7 @@ def put(label, label_info):
 def get(label):
     
     out_info = "None"
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
 
     try:
         out_info = acorn_obj.get_wallet_info(label)
@@ -315,7 +315,7 @@ def get(label):
 @click.command("balance", help="show balance")
 def balance():
     
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
 
     click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
 
@@ -371,6 +371,21 @@ def send(amount,nrecipient: str, relays:str, comment:str):
     out_msg = acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment)
     click.echo(out_msg)
 
+@click.command("recover", help='Recover a wallet from seed phrase')
+@click.argument('seedphrase', default=None)
+@click.option('--homerelay','-h', default=HOME_RELAY)
+def recover(seedphrase, homerelay):
+    nsec = recover_nsec_from_seed(seed_phrase=seedphrase)
+   
+    homerelay = "wss://" + homerelay if not homerelay.startswith("wss://") else homerelay
+    
+    if click.confirm(f"Do you want to recover to this wallet using {homerelay}?"):
+        click.echo(f"Recover seed phrase {nsec}")
+        NSEC=nsec
+        config_obj['home_relay']=homerelay
+        config_obj['nsec']=nsec
+        write_config()
+        wallet_obj = Acorn(nsec=nsec, relays=RELAYS, home_relay=homerelay, logging_level=LOGGING_LEVEL)
 
 cli.add_command(info)
 cli.add_command(init)
@@ -388,6 +403,7 @@ cli.add_command(zap)
 cli.add_command(accept)
 cli.add_command(issue)
 cli.add_command(send)
+cli.add_command(recover)
 
 
 if __name__ == "__main__":
