@@ -348,7 +348,8 @@ class Acorn:
 
             
         out_string = f"""   \nnpub: {self.pubkey_bech32}
-                            \nnsec: {self.privkey_bech32}                          
+                            \nnsec: {self.privkey_bech32} 
+                            \npubhex: {self.pubkey_hex}                         
                             \nwallet info: {wallet_info}  
                             \nhandle: @{self.handle}                         
                             \nlock privkey: {lock_privkey}

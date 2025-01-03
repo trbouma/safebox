@@ -45,7 +45,7 @@ def name_to_hex(name):
 
     # Split the name into parts: first_word, second_word, and number
     try:
-        first_word, second_word, number_str = name.split("-")
+        first_word, second_word, number_str = name.replace("@","").split("-")
         number = int(number_str)
     except ValueError:
         raise ValueError("The name format is invalid. Expected format: 'word1-word2-number'")
