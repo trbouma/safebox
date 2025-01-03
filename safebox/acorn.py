@@ -1729,7 +1729,8 @@ class Acorn:
                 break
         if not chosen_keyset:
             self.logger.error("insufficient balance in any one keyset, you need to swap!") 
-            return   
+            raise ValueError("insufficient balance in any one keyset")
+               
         
         self.logger.debug(f"chosen keyset: {chosen_keyset}")
         # Now do the pay routine
@@ -1753,6 +1754,8 @@ class Acorn:
         proof_amount = 0
         amount_needed = ln_amount + post_melt_response.fee_reserve
         self.logger.debug(f"amount needed: {amount_needed}")
+        #FIXME There is something wrong with the logic here for chosen keysets
+        # This is paying via invoice not lnadress so need to fix 1775
         if amount_needed > keyset_amounts[chosen_keyset]:
             self.logger.debug("insufficient balance in keyset. you need to swap, or use another keyset")
             chosen_keyset = None
@@ -1770,8 +1773,10 @@ class Acorn:
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
             self.logger.debug(f"{melt_quote_url},{melt_url}")
-            callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
-            pr = callback['pr']        
+            # We already have the invoice in this function
+            # callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
+            # pr = callback['pr']   
+            pr = lninvoice     
             self.logger.debug(f"pr {pr}")
             self.logger.debug(f"{ln_amount}, {lninvoice}")
             data_to_send = {    "request": pr,
@@ -3020,7 +3025,8 @@ class Acorn:
                 }]
                 prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
             except:
-                return "Could not find event. Try an additional relay?"
+                raise ValueError("Could not find event. Try an additional relay?")
+                # return "Could not find event. Try an additional relay?"
             
 
         elif event_id.startswith("npub"):  
@@ -3037,9 +3043,12 @@ class Acorn:
         else:
             raise ValueError(f"need a note or npub") 
 
-        for each_pr in prs:
-            self.pay_multi_invoice(each_pr)
-            out_msg+=f"\nZapped {amount} to destination: {orig_address}."
+        try:
+            for each_pr in prs:
+                self.pay_multi_invoice(each_pr)
+                out_msg+=f"\nZapped {amount} to destination: {orig_address}."
+        except Exception as e:
+            out_msg = f"Error {e}"
         
         return out_msg   
     
