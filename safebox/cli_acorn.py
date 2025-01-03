@@ -353,6 +353,25 @@ def issue(amount:int):
     token = acorn_obj.issue_token(amount)
     click.echo(token)
 
+@click.command("send", help="Send amount to nip05 address or npub")
+@click.argument('amount', default=21)
+@click.argument('nrecipient', default=None)
+@click.option('--comment','-c', default='Paid!')
+@click.option('--relays','-r', default=HOME_RELAY)
+def send(amount,nrecipient: str, relays:str, comment:str):
+    ecash_relays = []
+
+   
+    for each in relays.split(","):
+        each = "wss://" + each if not each.startswith("wss://") else each
+        ecash_relays.append(each)
+    
+    click.echo(f"Send to: {amount} to {nrecipient} via {ecash_relays}")
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    out_msg = acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment)
+    click.echo(out_msg)
+
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -368,6 +387,7 @@ cli.add_command(balance)
 cli.add_command(zap)
 cli.add_command(accept)
 cli.add_command(issue)
+cli.add_command(send)
 
 
 if __name__ == "__main__":

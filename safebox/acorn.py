@@ -962,6 +962,7 @@ class Acorn:
 
         keysets_obj = KeysetsResponse(**response.json())
 
+        self.known_mints[keysets_obj.keysets[0].id]= self.home_mint
         # print("id:", keysets_obj.keysets[0].id)
 
         blinded_messages=[]
