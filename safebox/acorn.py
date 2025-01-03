@@ -69,7 +69,8 @@ class Acorn:
     pubkey_bech32: str
     pubkey_hex: str
     privkey_hex: str
-    privkey_bech32: str    
+    privkey_bech32: str 
+    seed_phrase: str   
     home_relay: str
     home_mint: str
     known_mints: dict = {}
@@ -147,10 +148,11 @@ class Acorn:
                 if each[0] == "name":
                     self.name = each[1]
                     print(f"name: {self.name}")
-                if each[0] == "privkey":
-                    
+                if each[0] == "privkey":                    
                     print(f"privkey: {each[1]}")
                     print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
+                if each[0] == "seedphrase":
+                    self.seed_phrase = each[1]
         except:
             wallet_info_str = "None"
         
@@ -317,11 +319,14 @@ class Acorn:
                 self.privkey_hex    =   self.k.private_key_hex()
             
             nut_key = Keys()
+            self.seed_phrase = seed_phrase
             self.acorn_tags = [ [ "balance", "0", "sat" ],
                                 [ "privkey", nut_key.private_key_hex() ], 
                                 [ "mint", self.mints[0]],
-                                [ "name", name ]
+                                [ "name", name ],
+                                ["seedphrase",seed_phrase]
                             ]
+            
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
             self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
 
@@ -357,6 +362,7 @@ class Acorn:
                             \nwallet info: {wallet_info}  
                             \nhandle: @{self.handle}                         
                             \nlock privkey: {lock_privkey}
+                            \nseed phrase: {self.seed_phrase}
                             \nlock pubkey: {lock_pubkey}
                             \nhome mints: {mints}
                             \nknown mints: {known_mints_cat}
