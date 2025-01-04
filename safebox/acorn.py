@@ -368,7 +368,7 @@ class Acorn:
                             \nseed phrase: {self.seed_phrase}
                             \nlock pubkey: {lock_pubkey}
                             \nhome mints: {mints}
-                            \nknown mints: {known_mints_cat}
+                            \nknown mints: {self.known_mints}
                             \nbalance: {self.balance} {self.unit}
                             \nhome relay: {self.home_relay}
                             \nuser records: {self.user_records}
@@ -968,16 +968,24 @@ class Acorn:
         print(self.acorn_tags)
         self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
-    def _mint_proofs(self, quote:str, amount:int):
+    def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
         headers = { "Content-Type": "application/json"}
-        keyset_url = f"{self.home_mint}/v1/keysets"
+        if mint:
+            keyset_url = f"https://{mint}/v1/keysets"
+        else:
+            keyset_url = f"{self.home_mint}/v1/keysets"
+
         response = requests.get(keyset_url, headers=headers)
         keyset = response.json()['keysets'][0]['id']
 
         keysets_obj = KeysetsResponse(**response.json())
 
-        self.known_mints[keysets_obj.keysets[0].id]= self.home_mint
+        if mint:
+            self.known_mints[keysets_obj.keysets[0].id]= f"https://{mint}"
+        else:
+            self.known_mints[keysets_obj.keysets[0].id]= self.home_mint
+
         # print("id:", keysets_obj.keysets[0].id)
 
         blinded_messages=[]
@@ -998,7 +1006,11 @@ class Acorn:
                                                         
                                     )
         # print("blinded values, blinded messages:", blinded_values, blinded_messages)
-        mint_url = f"{self.home_mint}/v1/mint/bolt11"
+        if mint:
+            mint_url = f"https://{mint}/v1/mint/bolt11"
+        else:
+             mint_url = f"{self.home_mint}/v1/mint/bolt11"
+
 
         # blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
         # print(blinded_message)
@@ -1015,7 +1027,11 @@ class Acorn:
             return False
 
         
-        mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
+        if mint:
+            mint_key_url = f"https://{mint}/v1/keys/{keyset}"
+        else:
+            mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
+
         response = requests.get(mint_key_url, headers=headers)
         keys = response.json()["keysets"][0]["keys"]
 
@@ -1053,17 +1069,21 @@ class Acorn:
         
         return True
 
-    def check_quote(self, quote:str, amount:int):
+    def check_quote(self, quote:str, amount:int, mint:str = None):
         print(f"check quote {quote}")
+        
         # return "check_quote"
         
        
-        return self._check_quote(quote, amount)
+        return self._check_quote(quote, amount,mint)
     
-    def deposit(self, amount:int)->cliQuote:
+    def deposit(self, amount:int, mint:str = None)->cliQuote:
         
-        url = f"{self.home_mint}/v1/mint/quote/bolt11"
        
+        if mint:
+            url = f"https://{mint}/v1/mint/quote/bolt11"
+        else:
+            url = f"{self.home_mint}/v1/mint/quote/bolt11"
        
         headers = { "Content-Type": "application/json"}
         mint_request = mintRequest(amount=amount)
@@ -1370,12 +1390,16 @@ class Acorn:
         return all_proofs, keyset_amounts
 
 
-    def _check_quote(self,quote, amount:int):
+    def _check_quote(self,quote, amount:int, mint:str = None):
         # print("check quote", quote)
         #TODO error handling
-        success_mint = True
-           
-        url = f"{self.home_mint}/v1/mint/quote/bolt11/{quote}"
+        success_mint = True    
+          
+        if mint:
+            url = f"https://{mint}/v1/mint/quote/bolt11/{quote}"
+        else:
+             url = f"{self.home_mint}/v1/mint/quote/bolt11/{quote}" 
+
         self.logger.debug(f"mint quote: {url}")
 
         headers = { "Content-Type": "application/json"}
@@ -1383,7 +1407,7 @@ class Acorn:
            
         mint_quote = mintQuote(**response.json())
         if mint_quote.paid == True:
-                success_mint = self._mint_proofs(mint_quote.quote,amount)
+                success_mint = self._mint_proofs(mint_quote.quote,amount,mint)
 
 
                     
@@ -1536,6 +1560,8 @@ class Acorn:
         # print("pay from multiple mints")
         available_amount = 0
         chosen_keyset = None
+        chosen_keysets = [] # This is for multipath payments
+        multi_path = False
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         for each in keyset_amounts:
             available_amount += keyset_amounts[each]
@@ -1553,160 +1579,179 @@ class Acorn:
                 chosen_keyset = key
                 break
         if not chosen_keyset:
-            print("insufficient balance in any one keyset, you need to swap!") 
-            return   
+            # print("insufficient balance in any one keyset, you need to swap or do mpp!") 
+            multi_path = True
+               
         
-        self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
-        # Now do the pay routine
-        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-        # print(melt_quote_url,melt_url)
-        headers = { "Content-Type": "application/json"}
-        try:
-            callback = lightning_address_pay(amount, lnaddress,comment=comment)         
-            pr = callback['pr']  
-        except Exception as e:
-            msg_out = f"Could not resolve {lnaddress}. Check if correct address"
-            self.logger.error(msg_out)
-            return msg_out
-                  
-        # print(pr)
-        print(amount, lnaddress)
-        data_to_send = {    "request": pr,
-                            "unit": "sat"
-
-                        }
-        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        # print("post melt response:", response.json())
-        post_melt_response = PostMeltQuoteResponse(**response.json())
-        # print("mint response:", post_melt_response)
-        proofs_to_use = []
-        proof_amount = 0
-        amount_needed = amount + post_melt_response.fee_reserve
-        self.logger.debug(f"amount needed: {amount_needed}")
-        if amount_needed > keyset_amounts[chosen_keyset]:
-            print("insufficient balance in keyset. you need to swap, or use another keyset")
-            chosen_keyset = None
+        if multi_path:
+            amount_multi =0
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                # print(key, keyset_amounts[key])
-                if keyset_amounts[key] >= amount_needed:
-                    chosen_keyset = key
-                    self.logger.debug(f"new chosen keyset: {key}")
+                
+                print(key, keyset_amounts[key])
+                amount_multi += keyset_amounts[key]
+                chosen_keysets.append(key)
+                if amount_multi >= amount:
+                    print(f"got enough!")
                     break
-            if not chosen_keyset:
-                print("you don't have a sufficient balance in a keyset, you need to swap")
-                return
             
-            # Set to new mints and redo the calls
+            print(f"chosen keysets: {chosen_keysets}")
+
+            raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
+
+        else: # Can pay with a single keyset
+
+            self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
+        
+            # Now do the pay routine
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
             # print(melt_quote_url,melt_url)
-            callback = lightning_address_pay(amount, lnaddress,comment=comment)
-            pr = callback['pr']        
+            headers = { "Content-Type": "application/json"}
+            try:
+                callback = lightning_address_pay(amount, lnaddress,comment=comment)         
+                pr = callback['pr']  
+            except Exception as e:
+                msg_out = f"Could not resolve {lnaddress}. Check if correct address"
+                self.logger.error(msg_out)
+                return msg_out
+                    
             # print(pr)
-            self.logger.debug(f"{amount}, {lnaddress}")
+            print(amount, lnaddress)
             data_to_send = {    "request": pr,
-                            "unit": "sat"
+                                "unit": "sat"
 
-                        }
+                            }
             response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
             # print("post melt response:", response.json())
             post_melt_response = PostMeltQuoteResponse(**response.json())
             # print("mint response:", post_melt_response)
+            proofs_to_use = []
+            proof_amount = 0
+            amount_needed = amount + post_melt_response.fee_reserve
+            self.logger.debug(f"amount needed: {amount_needed}")
+            if amount_needed > keyset_amounts[chosen_keyset]:
+                print("insufficient balance in keyset. you need to swap, or use another keyset")
+                chosen_keyset = None
+                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                    # print(key, keyset_amounts[key])
+                    if keyset_amounts[key] >= amount_needed:
+                        chosen_keyset = key
+                        self.logger.debug(f"new chosen keyset: {key}")
+                        break
+                if not chosen_keyset:
+                    print("you don't have a sufficient balance in a keyset, you need to swap")
+                    return
+                
+                # Set to new mints and redo the calls
+                melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+                melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+                # print(melt_quote_url,melt_url)
+                callback = lightning_address_pay(amount, lnaddress,comment=comment)
+                pr = callback['pr']        
+                # print(pr)
+                self.logger.debug(f"{amount}, {lnaddress}")
+                data_to_send = {    "request": pr,
+                                "unit": "sat"
 
-            if not chosen_keyset:
-                print("insufficient balance in any one keyset, you need to swap!") 
-                return 
-            
-        # Print now we should be all set to go
-        
-        self.logger.debug("---we have a sufficient mint balance---")
-       
-        proofs_to_use = []
-        proof_amount = 0
-        proofs_from_keyset = keyset_proofs[chosen_keyset]
-        while proof_amount < amount_needed:
-            pay_proof = proofs_from_keyset.pop()
-            proofs_to_use.append(pay_proof)
-            proof_amount += pay_proof.amount
-            # print("pop", pay_proof.amount)
-            
-        # print("proofs to use:", proofs_to_use)
-        # print("remaining", proofs_from_keyset)
-        # Continue implementing from line 818 swap_for_payment may need a parameter
-         # Now need to do the melt
-       
-        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-        
+                            }
+                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                # print("post melt response:", response.json())
+                post_melt_response = PostMeltQuoteResponse(**response.json())
+                # print("mint response:", post_melt_response)
 
-        # print("proofs remaining:", proofs_remaining)
-        # print(f"amount needed: {amount_needed}")
-        # Implement from line 824
-        sum_proofs =0
-        spend_proofs = []
-        keep_proofs = []
-        for each in proofs_remaining:
+                if not chosen_keyset:
+                    print("insufficient balance in any one keyset, you need to swap!") 
+                    return 
+                
+            # Print now we should be all set to go
             
-            sum_proofs += each.amount
-            if sum_proofs <= amount_needed:
-                spend_proofs.append(each)
-                self.logger.debug(f"pay with {each.amount}, {each.secret}")
+            self.logger.debug("---we have a sufficient mint balance---")
+        
+            proofs_to_use = []
+            proof_amount = 0
+            proofs_from_keyset = keyset_proofs[chosen_keyset]
+            while proof_amount < amount_needed:
+                pay_proof = proofs_from_keyset.pop()
+                proofs_to_use.append(pay_proof)
+                proof_amount += pay_proof.amount
+                # print("pop", pay_proof.amount)
+                
+            # print("proofs to use:", proofs_to_use)
+            # print("remaining", proofs_from_keyset)
+            # Continue implementing from line 818 swap_for_payment may need a parameter
+            # Now need to do the melt
+        
+            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            
+
+            # print("proofs remaining:", proofs_remaining)
+            # print(f"amount needed: {amount_needed}")
+            # Implement from line 824
+            sum_proofs =0
+            spend_proofs = []
+            keep_proofs = []
+            for each in proofs_remaining:
+                
+                sum_proofs += each.amount
+                if sum_proofs <= amount_needed:
+                    spend_proofs.append(each)
+                    self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                else:
+                    keep_proofs.append(each)
+                    self.logger.debug(f"keep {each.amount}, {each.secret}")
+            
+            self.logger.debug(f"spend proofs: {spend_proofs}")
+            self.logger.debug(f"keep proofs: {keep_proofs}")
+            melt_proofs = []
+            for each_proof in spend_proofs:
+                    melt_proofs.append(each_proof.model_dump())
+
+            data_to_send = {"quote": post_melt_response.quote,
+                        "inputs": melt_proofs }
+            
+        
+            
+            self.logger.debug(f"lightning payment we are here!: {data_to_send}")
+            response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+            
+            self.logger.debug(f"response json: {response.json()}")
+            payment_json = response.json()
+            #TODO Need to do some error checking
+            
+            self.logger.debug(f"need to do some error checking")
+            # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
+            # add keep proofs back into selected keyset proofs
+            if payment_json.get("paid",False):        
+                self.logger.info(f"lightning payment ok")
             else:
-                keep_proofs.append(each)
-                self.logger.debug(f"keep {each.amount}, {each.secret}")
-        
-        self.logger.debug(f"spend proofs: {spend_proofs}")
-        self.logger.debug(f"keep proofs: {keep_proofs}")
-        melt_proofs = []
-        for each_proof in spend_proofs:
-                melt_proofs.append(each_proof.model_dump())
+                self.logger.info(f"lighting payment did no go through")
+                # Add back in spend proofs
+                for each in spend_proofs:   
+                    proofs_from_keyset.append(each)
+            
 
-        data_to_send = {"quote": post_melt_response.quote,
-                    "inputs": melt_proofs }
-        
-       
-        
-        self.logger.debug(f"lightning payment we are here!: {data_to_send}")
-        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        
-        self.logger.debug(f"response json: {response.json()}")
-        payment_json = response.json()
-        #TODO Need to do some error checking
-        
-        self.logger.debug(f"need to do some error checking")
-        # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
-        # add keep proofs back into selected keyset proofs
-        if payment_json.get("paid",False):        
-            self.logger.info(f"lightning payment ok")
-        else:
-            self.logger.info(f"lighting payment did no go through")
-            # Add back in spend proofs
-            for each in spend_proofs:   
+            for each in keep_proofs:
                 proofs_from_keyset.append(each)
-        
-
-        for each in keep_proofs:
-            proofs_from_keyset.append(each)
-        # print("self proofs", self.proofs)
-        # need to reassign back into 
-        keyset_proofs[chosen_keyset]= proofs_from_keyset
-        # OK - now need to put proofs back into a flat lish
-        post_payment_proofs = []
-        for key in keyset_proofs:
-            each_proofs = keyset_proofs[key]
-            for each_proof in each_proofs:
-                post_payment_proofs.append(each_proof)
-          
-        
-        # asyncio.run(self._async_delete_proof_events())
-        # self.delete_proof_events()
-        
-        self.proofs = post_payment_proofs
-        
-        self.write_proofs()
-        msg_out = f"Payment of {amount} sats with fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
-        self.logger.info(msg_out)
-        return msg_out
+            # print("self proofs", self.proofs)
+            # need to reassign back into 
+            keyset_proofs[chosen_keyset]= proofs_from_keyset
+            # OK - now need to put proofs back into a flat lish
+            post_payment_proofs = []
+            for key in keyset_proofs:
+                each_proofs = keyset_proofs[key]
+                for each_proof in each_proofs:
+                    post_payment_proofs.append(each_proof)
+            
+            
+            # asyncio.run(self._async_delete_proof_events())
+            # self.delete_proof_events()
+            
+            self.proofs = post_payment_proofs
+            
+            self.write_proofs()
+            msg_out = f"Payment of {amount} sats with fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
+            self.logger.info(msg_out)
+            return msg_out
 
     def pay_multi_invoice(  self, 
                      

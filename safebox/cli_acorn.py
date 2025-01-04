@@ -214,11 +214,12 @@ def get_profile(name):
 
 @click.command("deposit", help="deposit funds into wallet via lightning invoice")
 @click.argument('amount')
-def deposit(amount: int):
+@click.option('--mint', '-m', default=None, help="deposit mint")
+def deposit(amount: int, mint:str):
     qr = qrcode.QRCode()
-    click.echo(f"amount: {amount}")
+    click.echo(f"amount: {amount} mint:{mint}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
-    cli_quote = acorn_obj.deposit(amount)
+    cli_quote = acorn_obj.deposit(amount, mint)
     qr.add_data(cli_quote.invoice)
     qr.make(fit=True)
     click.echo(f"\n\nQuote:\n{cli_quote.quote}\n") 
@@ -233,7 +234,7 @@ def deposit(amount: int):
         while time() < end_time:
             
             print("checking")
-            success = acorn_obj.check_quote(cli_quote.quote, amount)
+            success = acorn_obj.check_quote(cli_quote.quote, amount, mint)
             if success:
                 break
             sleep(3)  # Sleep for 3 seconds
@@ -280,8 +281,11 @@ def swap(consolidate):
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
-    msg_out = acorn_obj.pay_multi(amount,lnaddress,comment)
-    click.echo(msg_out)
+    try:
+        msg_out = acorn_obj.pay_multi(amount,lnaddress,comment)
+        click.echo(msg_out)
+    except Exception as e:
+        click.echo(f"Error: {e}")
 
 @click.command("put", help='write a private record')
 @click.argument('label', default='default')
