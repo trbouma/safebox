@@ -74,6 +74,7 @@ class Acorn:
     home_relay: str
     home_mint: str
     known_mints: dict = {}
+    user_records = []
     relays: List[str]
     mints: List[str]
     safe_box_items: List[SafeboxItem]
@@ -153,6 +154,8 @@ class Acorn:
                     print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
                 if each[0] == "seedphrase":
                     self.seed_phrase = each[1]
+                if each[0] == "user_record":
+                    self.user_records.append(each[1])   
         except:
             wallet_info_str = "None"
             self.home_mint = mints[0]
@@ -368,6 +371,7 @@ class Acorn:
                             \nknown mints: {known_mints_cat}
                             \nbalance: {self.balance} {self.unit}
                             \nhome relay: {self.home_relay}
+                            \nuser records: {self.user_records}
                             \nname: {name}
                             \n{"*"*75}
 
