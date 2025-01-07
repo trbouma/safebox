@@ -25,6 +25,8 @@ cbor2 = "^5.6.5"
 python-daemon = "^3.0.1"
 bip-utils = "^2.9.3"
 httpx = "^0.28.1"
+fastapi = "^0.115.6"
+uvicorn = "^0.34.0"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
