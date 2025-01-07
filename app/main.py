@@ -13,9 +13,9 @@ def read_root():
 def ln_resolve(name: str = None):
 
     ln_response = {     "callback": f"https://example.com/{name}",
-                        "minSendable": 0,
-                        "maxSendable": 210000,
-                        "metadata": {},
+                        "minSendable": 1000,
+                        "maxSendable": 210000000,
+                        "metadata": f"[[\"text/plain\", \"Send payment to: {name}\"]]",
                         "commentAllowed": 60,
                         "tag": "payRequest"
                    
