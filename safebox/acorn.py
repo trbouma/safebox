@@ -9,6 +9,7 @@ from mnemonic import Mnemonic
 import bolt11
 import aioconsole
 import logging
+import httpx
 
 from hotel_names import hotel_names
 # from coolname import generate, generate_slug
@@ -939,14 +940,15 @@ class Acorn:
             
             return events[0]
 
-    def put_record(self,record_name, record_value):
+    def put_record(self,record_name, record_value, record_type="generic"):
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("careful this is a reserved record.")
             self.set_wallet_info(record_name,record_value)
             return record_name
         else:
-            self.update_tag(["user_record",record_name])
+            
+            self.update_tag(["user_record",record_name,record_type])
             self.set_wallet_info(record_name,record_value)
             # print(user_records)
             return record_name
@@ -1338,6 +1340,7 @@ class Acorn:
                         
                     # proof = Proof(**each_content)
                     nip60_proofs = NIP60Proofs(**content_json)
+                    self.logger.debug(f"load nip60 proofs {nip60_proofs}")
                     self.known_mints[nip60_proofs.proofs[0]['id']]= nip60_proofs.mint
                     for each in nip60_proofs.proofs:
                         self.proofs.append(each)
@@ -1563,6 +1566,16 @@ class Acorn:
         chosen_keysets = [] # This is for multipath payments
         multi_path = False
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        headers = { "Content-Type": "application/json"}
+
+        try:
+            callback = lightning_address_pay(amount, lnaddress,comment=comment)         
+            pr = callback['pr']  
+        except Exception as e:
+            msg_out = f"Could not resolve {lnaddress}. Check if correct address"
+            self.logger.error(msg_out)
+            return msg_out
+
         for each in keyset_amounts:
             available_amount += keyset_amounts[each]
         
@@ -1585,18 +1598,93 @@ class Acorn:
         
         if multi_path:
             amount_multi =0
-            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+            keysets_to_use_for_multi = []
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
                 
-                print(key, keyset_amounts[key])
+                # print(key, keyset_amounts[key])
                 amount_multi += keyset_amounts[key]
                 chosen_keysets.append(key)
-                if amount_multi >= amount:
-                    print(f"got enough!")
-                    break
+                # just do all the keysets for now
+                # if amount_multi >= amount:
+                #     print(f"got enough!")
+                #     break
             
-            print(f"chosen keysets: {chosen_keysets}")
+            print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
+            amount_remaining = amount
+            total_fees = 0
+            total_melt_amount = 0
+            for each_keyset in chosen_keysets:
+                print(f"amount remaining: {amount_remaining}")
+                # There are three possible use cases
+                if amount_remaining <= 0:
+                    print("we are done!")
+                    break
+                elif amount_remaining > keyset_amounts[each_keyset]:
+                    print("use whole keyset amount")
+                    amount_to_use = keyset_amounts[each_keyset]
+                else:
+                    amount_to_use = amount_remaining
+                
+                
+                melt_quote_url = f"{self.known_mints[each_keyset]}/v1/melt/quote/bolt11"
+                melt_url = f"{self.known_mints[each_keyset]}/v1/melt/bolt11"
+                
+                data_to_send = {    "request": pr,
+                                    "unit": "sat",
+                                    "options": {"mpp": {"amount": amount_to_use}}
+                            }
+                # print(f"{melt_quote_url, melt_url} {data_to_send}")
+                try:
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                    post_melt_response = PostMeltQuoteResponse(**response.json())
+                    print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
 
-            raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
+                    # Now need to figure out how much can be paid based on case
+                    if amount_remaining > keyset_amounts[each_keyset]:
+                        pass
+                        amount_to_pay = amount_to_use - post_melt_response.fee_reserve
+                        melt_amount = amount_to_use
+                    else:
+                        pass
+                        amount_to_pay = amount_to_use
+                        melt_amount = amount_to_use + post_melt_response.fee_reserve
+                        if melt_amount >= keyset_amounts[each_keyset]:
+                            print("WARNING")
+                        else:
+                            print(f"melt amount ok")
+
+                    total_melt_amount += melt_amount
+                    total_fees += post_melt_response.fee_reserve
+                    # amount_paid_by_keyset = amount_to_use - post_melt_response.fee_reserve
+                    print(f"can pay amount {amount_to_pay} from keyset total {keyset_amounts[each_keyset]} with: {post_melt_response.fee_reserve}  melt amount is {melt_amount}")
+                    # Redo the melt request
+                    data_to_send = {    "request": pr,
+                                    "unit": "sat",
+                                    "options": {"mpp": {"amount": amount_to_pay}}
+                            }
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                    post_melt_response = PostMeltQuoteResponse(**response.json())
+                    print(f"adjusted post melt response {post_melt_response}")
+                    amount_remaining = amount_remaining - amount_to_pay   
+                    print(f"amount remaining after adjusted {amount_remaining}")                                   
+                    keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
+                except:
+                    pass
+                    # print(f"{self.known_mints[each_keyset]} does not support")
+            if amount_remaining > 0:
+                 raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
+
+            # Now we have the meltquotes
+            print(f"keysets to use for multi {keysets_to_use_for_multi}")
+            print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
+            
+            self._multi_melt(keysets_to_use_for_multi) 
+            
+            # self.write_proofs()
+
+            msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
+            return msg_out
+            # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
 
         else: # Can pay with a single keyset
 
@@ -1605,17 +1693,7 @@ class Acorn:
             # Now do the pay routine
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-            # print(melt_quote_url,melt_url)
-            headers = { "Content-Type": "application/json"}
-            try:
-                callback = lightning_address_pay(amount, lnaddress,comment=comment)         
-                pr = callback['pr']  
-            except Exception as e:
-                msg_out = f"Could not resolve {lnaddress}. Check if correct address"
-                self.logger.error(msg_out)
-                return msg_out
-                    
-            # print(pr)
+
             print(amount, lnaddress)
             data_to_send = {    "request": pr,
                                 "unit": "sat"
@@ -1646,8 +1724,8 @@ class Acorn:
                 melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
                 melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
                 # print(melt_quote_url,melt_url)
-                callback = lightning_address_pay(amount, lnaddress,comment=comment)
-                pr = callback['pr']        
+                # callback = lightning_address_pay(amount, lnaddress,comment=comment)
+                # pr = callback['pr']        
                 # print(pr)
                 self.logger.debug(f"{amount}, {lnaddress}")
                 data_to_send = {    "request": pr,
@@ -1666,7 +1744,8 @@ class Acorn:
             # Print now we should be all set to go
             
             self.logger.debug("---we have a sufficient mint balance---")
-        
+            
+            # This is the part that needs to be added in multi
             proofs_to_use = []
             proof_amount = 0
             proofs_from_keyset = keyset_proofs[chosen_keyset]
@@ -1676,10 +1755,7 @@ class Acorn:
                 proof_amount += pay_proof.amount
                 # print("pop", pay_proof.amount)
                 
-            # print("proofs to use:", proofs_to_use)
-            # print("remaining", proofs_from_keyset)
-            # Continue implementing from line 818 swap_for_payment may need a parameter
-            # Now need to do the melt
+
         
             proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             
@@ -1749,9 +1825,89 @@ class Acorn:
             self.proofs = post_payment_proofs
             
             self.write_proofs()
-            msg_out = f"Payment of {amount} sats with fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
+            msg_out = f"Payment of {amount} sats with single mint fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
             self.logger.info(msg_out)
             return msg_out
+
+    def _multi_melt(self, keysets_to_use):
+
+        
+        headers = { "Content-Type": "application/json"}
+        
+        mpp_mint_melt_request = []
+        
+        for each in keysets_to_use:
+            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+            chosen_keyset = each[0]
+            proofs_to_use = []
+            proof_amount = 0
+            proofs_from_keyset = keyset_proofs[each[0]]
+            amount_needed = each[1]
+            amount_to_pay = each[2]
+            post_melt_response = each[3]
+            melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+            print(f"multi melt: {amount_needed}, \nmelt request: {post_melt_response}  \nproofs: {proofs_from_keyset}")
+            while proof_amount < amount_needed:
+                pay_proof = proofs_from_keyset.pop()
+                proofs_to_use.append(pay_proof)
+                proof_amount += pay_proof.amount
+            
+            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            # proofs_remaining = proofs_to_use
+            sum_proofs =0
+            spend_proofs = []
+            keep_proofs = []
+            for each_proof in proofs_remaining:
+                
+                sum_proofs += each_proof.amount
+                if sum_proofs <= amount_needed:
+                    spend_proofs.append(each_proof)
+                    self.logger.debug(f"pay with {each_proof.amount}, {each_proof.secret}")
+                else:
+                    keep_proofs.append(each_proof)
+                    self.logger.debug(f"keep {each_proof.amount}, {each_proof.secret}")
+            
+            self.logger.debug(f"spend proofs: {spend_proofs}")
+            self.logger.debug(f"keep proofs: {keep_proofs}")
+            melt_proofs = []
+            for each_spend_proof in spend_proofs:
+                    melt_proofs.append(each_spend_proof.model_dump())
+
+            data_to_send = {"quote": post_melt_response.quote,
+                        "inputs": melt_proofs }
+            
+        
+            
+            self.logger.debug(f"lightning payment mpp we are here!: {data_to_send}")
+            mpp_mint_melt_request.append((melt_url,data_to_send))
+            
+        # print(mpp_mint_melt_request)
+        asyncio.run(self._do_mpp_requests(mpp_mint_melt_request)) 
+        print("we are done with the requests")
+
+
+
+
+            
+        return 
+           
+    async def _do_mpp_requests(self, mpp_requests):
+        tasks = []
+        for each_request in mpp_requests:
+            print(f"do each request: {each_request}")
+            asyncio.create_task(self._post_request(each_request))
+        
+        print("tasks have been completed!")
+    
+    async def _post_request(self,request_item):
+        response = requests.post(url=request_item[0], json=request_item[1])
+        return
+        async with httpx.AsyncClient() as client:
+            print(f"doing each request: {request_item}")
+            response = client.post(url=request_item[0], json=request_item[1])
+        pass    
+
+            
 
     def pay_multi_invoice(  self, 
                      
@@ -2779,7 +2935,123 @@ class Acorn:
         # now need break out proofs for payment and proofs remaining
 
         return proofs
+
+    def swap_for_payment_inputs(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
+        # create proofs to melt, and proofs_remaining
+
+        swap_amount =0
+        count = 0
         
+        headers = { "Content-Type": "application/json"}
+        keyset_url = f"{self.known_mints[keyset_to_use]}/v1/keysets"
+        response = requests.get(keyset_url, headers=headers)
+        keyset = response.json()['keysets'][0]['id']
+
+        swap_url = f"{self.known_mints[keyset_to_use]}/v1/swap"
+
+        swap_proofs = []
+        blinded_values =[]
+        blinded_messages = []
+        proofs = []
+        
+        # Figure out proofs_to_use_amount
+        proofs_to_use_amount = 0
+        for each in proofs_to_use:
+            proofs_to_use_amount += each.amount
+       
+        powers_of_2_payment = self.powers_of_2_sum(payment_amount)
+        
+
+        for each in powers_of_2_payment:
+            secret = secrets.token_hex(32)
+            B_, r, Y = step1_alice(secret)
+            blinded_values.append((B_,r, secret))
+            
+            blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
+                                                        ).model_dump()
+                                    )
+        if proofs_to_use_amount > payment_amount:
+            powers_of_2_leftover = self.powers_of_2_sum(proofs_to_use_amount- payment_amount)
+            for each in powers_of_2_leftover:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+            
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                        id=keyset,
+                                                        B_=B_.serialize().hex(),
+                                                        Y = Y.serialize().hex(),
+                                                        ).model_dump()
+                                    )
+
+        proofs_to_send =[]
+        for each in proofs_to_use:
+            proofs_to_send.append(each.model_dump())
+
+        data_to_send = {
+                        "inputs":  proofs_to_send,
+                        "outputs": blinded_messages
+                        
+        }
+
+
+
+        try:
+            self.logger.debug("are we here?")
+            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+            
+            # print(response.json())
+            promises = response.json()['signatures']
+            # print("promises:", promises)
+
+        
+            mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+            # print(keys)
+            
+            i = 0
+        
+            for each in promises:
+                pub_key_c = PublicKey()
+                # print("each:", each['C_'])
+                pub_key_c.deserialize(unhexlify(each['C_']))
+                promise_amount = each['amount']
+                A = keys[str(int(promise_amount))]
+                # A = keys[str(j)]
+                pub_key_a = PublicKey()
+                pub_key_a.deserialize(unhexlify(A))
+                r = blinded_values[i][1]
+                secret_msg = blinded_values[i][2]
+                Y: PublicKey = hash_to_curve(secret_msg.encode("utf-8"))
+                self.logger.debug(f"{pub_key_c} {promise_amount},{A}, {r}")
+                C = step3_alice(pub_key_c,r,pub_key_a)
+                
+                proof = Proof(  amount=promise_amount,
+                                id=keyset,
+                                secret=secret_msg,
+                                C=C.serialize().hex(),
+                                Y = Y.serialize().hex()
+                              
+                                 
+                                )
+                
+                proofs.append(proof)
+                # print(proofs)
+                i+=1
+        except Exception as e:
+            print(e)
+        
+        for each in proofs:
+            pass
+            # print(each.amount)
+        # now need break out proofs for payment and proofs remaining
+
+        return proofs
+            
     def receive_token(self,cashu_token: str):
         headers = { "Content-Type": "application/json"}
         token_amount =0

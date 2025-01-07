@@ -216,6 +216,8 @@ def get_profile(name):
 @click.argument('amount')
 @click.option('--mint', '-m', default=None, help="deposit mint")
 def deposit(amount: int, mint:str):
+    if mint:
+        mint = mint.replace("https://", "")
     qr = qrcode.QRCode()
     click.echo(f"amount: {amount} mint:{mint}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
@@ -299,7 +301,7 @@ def put(label, label_info):
     if click.confirm('Do you want to continue?'):    
      acorn_obj.put_record(label, label_info)
 
-@click.command(help='get a private wallet record')
+@click.command("get", help='get a private wallet record')
 @click.argument('label', default = "default")
 def get(label):
     
