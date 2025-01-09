@@ -64,7 +64,7 @@ class Acorn:
     nsec: str
     name: str
     handle: str
-    unit: str    
+    unit: str   = "sat" 
     acorn_tags: List = None
     proof_event_ids = []
     pubkey_bech32: str

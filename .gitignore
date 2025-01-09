@@ -9,6 +9,9 @@ __pycache__/
 # Scratch stuff
 scratch
 
+# Data Stuff
+data
+
 .python-version
 
 # Distribution / packaging

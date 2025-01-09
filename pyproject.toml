@@ -27,6 +27,7 @@ bip-utils = "^2.9.3"
 httpx = "^0.28.1"
 fastapi = "^0.115.6"
 uvicorn = "^0.34.0"
+sqlmodel = "^0.0.22"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
