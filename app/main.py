@@ -22,7 +22,7 @@ SQLModel.metadata.create_all(engine)
 
 # Create an instance of the FastAPI application
 origins = ["*"]
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

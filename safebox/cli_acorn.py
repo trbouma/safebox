@@ -109,10 +109,12 @@ def init(keepkey, longseed, homerelay,name):
     click.echo(f"Creating a new acorn with relay: {HOME_RELAY} and mint: {MINTS}")
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
 
     if keepkey:
         click.echo("Keep existing key")
-    config_obj['nsec'] = acorn_obj.create_instance(keepkey,longseed, name)
+    click.echo("Create new instance")
+    config_obj['nsec'] = asyncio.run(acorn_obj.create_instance(keepkey,longseed, name))
     
     # click.echo(acorn_obj.get_profile())
     write_config()
@@ -210,7 +212,9 @@ def get_balance():
 def get_profile(name):
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     click.echo(acorn_obj.get_profile(name))
+    
 
 @click.command("deposit", help="deposit funds into wallet via lightning invoice")
 @click.argument('amount')
@@ -221,6 +225,7 @@ def deposit(amount: int, mint:str):
     qr = qrcode.QRCode()
     click.echo(f"amount: {amount} mint:{mint}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     cli_quote = acorn_obj.deposit(amount, mint)
     qr.add_data(cli_quote.invoice)
     qr.make(fit=True)
@@ -249,7 +254,7 @@ def deposit(amount: int, mint:str):
 def proofs():
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-
+    asyncio.run(acorn_obj.load_data())
     click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs in {acorn_obj.events} events")
     for each in acorn_obj.proofs:
         click.echo(f"id: {each.id} amount: {each.amount} Y: {each.Y}")
@@ -283,6 +288,7 @@ def swap(consolidate):
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     try:
         msg_out = acorn_obj.pay_multi(amount,lnaddress,comment)
         click.echo(msg_out)
@@ -295,11 +301,12 @@ def pay(amount,lnaddress: str, comment:str):
 def put(label, label_info):
     jsons=None
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     # click.echo(wallet.get_wallet_info())
     
 
     if click.confirm('Do you want to continue?'):    
-     acorn_obj.put_record(label, label_info)
+     asyncio.run(acorn_obj.put_record(label, label_info))
 
 @click.command("get", help='get a private wallet record')
 @click.argument('label', default = "default")
@@ -307,9 +314,10 @@ def get(label):
     
     out_info = "None"
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = acorn_obj.get_wallet_info(label)
+        out_info = asyncio.run(acorn_obj.get_wallet_info(label))
         # safebox_info = wallet_obj.get_record(label)
         pass
 
@@ -322,6 +330,7 @@ def get(label):
 def balance():
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
 
     click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
 

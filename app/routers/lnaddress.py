@@ -14,7 +14,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
-from app.tasks import poll_for_payment_x
+from app.tasks import poll_for_payment
 
 # settings = Settings()
 
@@ -91,7 +91,7 @@ def ln_resolve(request: Request, name: str = None):
     return ln_response
 
 @router.get("/lnpay/{name}")
-def ln_pay( amount: float,
+async def ln_pay( amount: float,
             request: Request, 
             name: str,
             nonce: str | None = None,
@@ -115,6 +115,7 @@ def ln_pay( amount: float,
             raise HTTPException(status_code=404, detail=f"{name} not found")
 
     acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    await acorn_obj.load_data()
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
     cli_quote = acorn_obj.deposit(amount//1000)
@@ -124,7 +125,7 @@ def ln_pay( amount: float,
         session.add(quote_check)
         session.commit()
 
-   
+    asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT))
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote}"  }
@@ -140,7 +141,7 @@ def ln_pay( amount: float,
     return name
 
 @router.post("/create", tags=["lnaddress"])
-def create_safebox(request: Request):
+async def create_safebox(request: Request):
     
     private_key = Keys()
     
@@ -150,7 +151,9 @@ def create_safebox(request: Request):
 
 
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    nsec_new = acorn_obj.create_instance()
+    await acorn_obj.load_data()
+    
+    nsec_new = await acorn_obj.create_instance()
     profile_info = acorn_obj.get_profile()
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
@@ -180,7 +183,7 @@ def create_safebox(request: Request):
             }
 
 @router.post("/access", tags=["lnaddress"])
-def acess_safebox(request: Request, access_key:str):
+async def acess_safebox(request: Request, access_key:str):
     
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
@@ -193,6 +196,7 @@ def acess_safebox(request: Request, access_key:str):
 
 
     acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=HOME_RELAY, mints=MINTS)
+    await acorn_obj.load_data()
 
     return {"handle": safebox_found.handle,
             "npub": safebox_found.npub,

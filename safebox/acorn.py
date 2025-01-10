@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 import asyncio, json, requests
-from time import sleep
+from time import sleep,time
 import secrets
 from datetime import datetime, timedelta
 import urllib.parse
@@ -123,6 +123,7 @@ class Acorn:
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
             self.mints          =   mints
+            # self.home_mint      = mints[0]
             self.safe_box_items = []
             self.proofs: List[Proof] = []
             self.balance: int = 0
@@ -141,8 +142,21 @@ class Acorn:
             return "Need nsec" 
 
         
+ 
+        
+        # asyncio.run(self._load_proofs())
+        
+
+        
+        return None
+   
+    async def load_data(self):
+        self.logger.debug("load data")
+
         try:
-            self.acorn_tags = json.loads(self.get_wallet_info(label="wallet"))
+            wallet_info = await self.get_wallet_info(label="wallet")
+            self.acorn_tags = json.loads(wallet_info)
+            # self.acorn_tags = json.loads(self.get_wallet_info(label="wallet"))
            
             for each in self.acorn_tags:
                 if each[0]== "balance":
@@ -164,14 +178,10 @@ class Acorn:
         except Exception as e:
             print(f"error reading {e}")
             wallet_info_str = "None"
-            self.home_mint = mints[0]
-        
-        asyncio.run(self._load_proofs())
-        
+            # self.home_mint = mints[0]
 
-        
-        return None
-   
+        await self._load_proofs()
+        return
 
     def __repr__(self):
         out_str = json.dumps(self.wallet_reserved_records)
@@ -296,7 +306,7 @@ class Acorn:
                 out_msg = "error"
         return out_msg
 
-    def create_instance(self, keepkey:bool=False, longseed:bool=False, name="wallet"):
+    async def create_instance(self, keepkey:bool=False, longseed:bool=False, name="wallet"):
         out_msg = "This is another instance"
         mnemo = Mnemonic("english")
         access_key_digest = hashlib.sha256()
@@ -346,18 +356,13 @@ class Acorn:
             access_key_hash = access_key_digest.hexdigest()
             self.access_key = generate_access_key_from_hex(access_key_hash)
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
-            self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+            await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
 
         return self.privkey_bech32
 
     def get_profile(self, name="wallet"):
         mints = []
-        
-        try:
-            wallet_info = json.loads(self.get_wallet_info(name))
-        except:
-            return f"No profile for {name}"    
-        for each in wallet_info:
+        for each in self.acorn_tags:
             if each[0] == "balance":
                 balance_amount = int(each[1])
                 balance_unit = each[2]
@@ -773,8 +778,8 @@ class Acorn:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None):
-        asyncio.run(self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays))  
+    async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None):
+        await self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays)  
     
     async def _async_set_wallet_info(self, label:str, label_info: str, replicate_relays:List[str]=None):
 
@@ -814,7 +819,7 @@ class Acorn:
             await asyncio.sleep(0.2)
             self.logger.debug(f"wrote event {label} to {write_relays}")
 
-    def get_wallet_info(self, label:str=None):
+    async def get_wallet_info(self, label:str=None):
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
@@ -844,7 +849,7 @@ class Acorn:
         }]
 
         # print("are we here?", label_hash)
-        event =asyncio.run(self._async_get_wallet_info(FILTER, label_hash))
+        event =await self._async_get_wallet_info(FILTER, label_hash)
         
         # print(event.data())
         try:
@@ -954,16 +959,16 @@ class Acorn:
             
             return events[0]
 
-    def put_record(self,record_name, record_value, record_type="generic"):
+    async def put_record(self,record_name, record_value, record_type="generic"):
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("careful this is a reserved record.")
-            self.set_wallet_info(record_name,record_value)
+            await self.set_wallet_info(record_name,record_value)
             return record_name
         else:
             
             self.update_tag(["user_record",record_name,record_type])
-            self.set_wallet_info(record_name,record_value)
+            await self.set_wallet_info(record_name,record_value)
             # print(user_records)
             return record_name
     
@@ -1136,6 +1141,24 @@ class Acorn:
          
         return cliQuote(invoice=invoice, quote=quote)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
+    
+    async def poll_for_payment(self, quote:str, amount: int, mint:str=None):
+        start_time = time()  # Record the start time
+        end_time = start_time + 60  # Set the loop to run for 60 seconds
+        success = False
+        #FIXME figure out the prefit
+        mint = mint.replace("https://","")
+        while time() < end_time:
+            
+            self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
+            # success = self.check_quote(quote=quote, amount=amount,mint=mint)
+            if success:
+                self.logger("quote is paid!")
+                break
+            sleep(3)  # Sleep for 3 seconds
+        
+        self.logger.debug("polling done!")
+    
     def withdraw(self, lninvoice:str):
 
         msg_out = self.pay_multi_invoice(lninvoice=lninvoice)
