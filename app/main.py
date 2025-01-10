@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.routers import lnaddress
-from app.tasks import periodic_task, poll_for_payment
+from app.tasks import periodic_task
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,7 +22,7 @@ SQLModel.metadata.create_all(engine)
 
 # Create an instance of the FastAPI application
 origins = ["*"]
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

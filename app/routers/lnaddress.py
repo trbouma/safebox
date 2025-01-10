@@ -14,7 +14,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
-from app.tasks import poll_for_payment
+from app.tasks import poll_for_payment_x
 
 # settings = Settings()
 
@@ -39,7 +39,24 @@ router = APIRouter()
    
 @router.get("/info", tags=["lnaddress"])
 def get_info(request: Request):
-    poll_for_payment()
+    
+    with Session(engine) as session:
+        statement = select(PaymentQuote)
+        payment_quotes = session.exec(statement)
+        record = payment_quotes.first()
+        try:
+            # acorn_obj = Acorn(nsec=each.nsec, mints=[each.mint], home_relay=HOME_RELAY, relays=RELAYS)
+            # acorn_obj = Acorn(nsec=each.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+            # profile_out = acorn_obj.get_profile()
+            print(f"record: {record}")
+            nsec_test = 'nsec187nscru0596h0s2yuzutf83sp8jkwxjk8ag4tzxkugvg7e7wmdyqgk0ayq'
+            acorn_obj = Acorn(nsec=record.nsec, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+            print(acorn_obj.handle)
+            
+        except Exception as e:
+            print(f"error: {e}")
+        
+
     return {"detail": request.url.hostname}
 
 @router.get("/.well-known/lnurlp/{name}")
@@ -96,10 +113,11 @@ def ln_pay( amount: float,
             raise HTTPException(status_code=404, detail=f"{name} not found")
 
     acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-
+   
+    print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
     cli_quote = acorn_obj.deposit(amount//1000)
 
-    quote_check = PaymentQuote(nsec=safebox_found.nsec, quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT)
+    quote_check = PaymentQuote(nsec=safebox_found.nsec, quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT, handle=name)
     with Session(engine) as session:
         session.add(quote_check)
         session.commit()
@@ -124,8 +142,7 @@ def create_safebox(request: Request):
     
     private_key = Keys()
     
-
-            
+ 
     
     NSEC = private_key.private_key_bech32()
 
@@ -136,7 +153,10 @@ def create_safebox(request: Request):
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
-                                            nsec=acorn_obj.privkey_bech32)
+                                            nsec=acorn_obj.privkey_bech32,
+                                            access_key=acorn_obj.access_key
+                                            )
+    
     with Session(engine) as session:
         session.add(register_safebox)
         session.commit()
@@ -151,7 +171,33 @@ def create_safebox(request: Request):
             "nsec": nsec_new,
             "npub": f"{acorn_obj.pubkey_bech32} ",
             "seed_phrase": acorn_obj.seed_phrase,
+            "access_key": acorn_obj.access_key,
             "address": f"{acorn_obj.handle}@{request.url.hostname}",
           
             
             }
+
+@router.post("/access", tags=["lnaddress"])
+def acess_safebox(request: Request, access_key:str):
+    
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise HTTPException(status_code=404, detail=f"{access_key} not found")
+
+
+    acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=HOME_RELAY, mints=MINTS)
+
+    return {"handle": safebox_found.handle,
+            "npub": safebox_found.npub,
+            "nsec": safebox_found.nsec,
+            "balance": acorn_obj.balance
+            }
+           
+          
+            
+     

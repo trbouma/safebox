@@ -43,7 +43,7 @@ from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zeve
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 
-from safebox.func_utils import generate_name_from_hex, name_to_hex
+from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex
 
 def powers_of_2_sum(amount):
     powers = []
@@ -71,7 +71,8 @@ class Acorn:
     pubkey_hex: str
     privkey_hex: str
     privkey_bech32: str 
-    seed_phrase: str   
+    seed_phrase: str = ""  
+    access_key: str =""
     home_relay: str
     home_mint: str
     known_mints: dict = {}
@@ -110,7 +111,7 @@ class Acorn:
             self.logger.addHandler(handler)
 
         
-            
+        access_key_digest = hashlib.sha256()    
         
         self.logger.info(f"Wallet initialized: {self.__class__.__name__}")
 
@@ -131,6 +132,9 @@ class Acorn:
             self.replicate = replicate
             self.wallet_config = None
             self.handle = generate_name_from_hex(self.pubkey_hex)
+            access_key_digest.update(self.privkey_hex.encode())
+            access_key_hash = access_key_digest.hexdigest()
+            self.access_key = generate_access_key_from_hex(access_key_hash)
 
             self.wallet_reserved_records = {}
         else:
@@ -157,7 +161,8 @@ class Acorn:
                     self.seed_phrase = each[1]
                 if each[0] == "user_record":
                     self.user_records.append(each[1])   
-        except:
+        except Exception as e:
+            print(f"error reading {e}")
             wallet_info_str = "None"
             self.home_mint = mints[0]
         
@@ -294,6 +299,7 @@ class Acorn:
     def create_instance(self, keepkey:bool=False, longseed:bool=False, name="wallet"):
         out_msg = "This is another instance"
         mnemo = Mnemonic("english")
+        access_key_digest = hashlib.sha256()
         if keepkey==False:
             if longseed:
                 #TODO need to decide if to keep 24 seed phrase option.
@@ -305,6 +311,7 @@ class Acorn:
 
                 self.k= Keys(priv_k=seed_private_key_hex)
                 self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.privkey_bech32 =   self.k.private_key_bech32()
                 self.pubkey_hex     =   self.k.public_key_hex()
                 self.privkey_hex    =   self.k.private_key_hex()
                 seed_phrase = mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))
@@ -321,6 +328,7 @@ class Acorn:
                 
                 self.k= Keys(priv_k=seed_private_key_hex)
                 self.pubkey_bech32  =   self.k.public_key_bech32()
+                self.privkey_bech32 =   self.k.private_key_bech32()
                 self.pubkey_hex     =   self.k.public_key_hex()
                 self.privkey_hex    =   self.k.private_key_hex()
             
@@ -333,10 +341,14 @@ class Acorn:
                                 ["seedphrase",seed_phrase]
                             ]
             
+            self.handle = generate_name_from_hex(self.pubkey_hex)
+            access_key_digest.update(self.privkey_hex.encode())
+            access_key_hash = access_key_digest.hexdigest()
+            self.access_key = generate_access_key_from_hex(access_key_hash)
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
             self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
 
-        return self.k.private_key_bech32()
+        return self.privkey_bech32
 
     def get_profile(self, name="wallet"):
         mints = []
@@ -365,7 +377,8 @@ class Acorn:
         out_string = f"""   \nnpub: {self.pubkey_bech32}
                             \nnsec: {self.privkey_bech32} 
                             \npubhex: {self.pubkey_hex}  
-                            \nhandle: @{self.handle}                         
+                            \nhandle: {self.handle}   
+                            \naccess key: {self.access_key}                       
                             \nlock privkey: {lock_privkey}
                             \nseed phrase: {self.seed_phrase}
                             \nlock pubkey: {lock_pubkey}

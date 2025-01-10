@@ -14,11 +14,12 @@ class RegisteredSafebox(SQLModel, table=True):
     handle: str
     npub: str
     nsec: str
+    access_key: str
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nsec: str
+    handle: str
     quote: str
     amount: int
     mint: str
-    

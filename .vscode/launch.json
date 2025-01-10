@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         
         {
             "name": "Python Debugger: Current File with Arguments",
@@ -12,6 +13,24 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": "${command:pickArgs}"
+        },
+        
+        {
+            "name": "Uvicorn",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "app.main:app", // Replace "app:app" with "your_module_name:instance_name"
+                "--host", "0.0.0.0",
+                "--port", "7375",
+                "--reload"
+            ],
+            "jinja": true,
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONUNBUFFERED": "1"
+            }
         }
     ]
 }
