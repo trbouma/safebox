@@ -241,7 +241,7 @@ def deposit(amount: int, mint:str):
         while time() < end_time:
             
             print("checking")
-            success = acorn_obj.check_quote(cli_quote.quote, amount, mint)
+            success = asyncio.run(acorn_obj.check_quote(cli_quote.quote, amount, mint))
             if success:
                 break
             sleep(3)  # Sleep for 3 seconds

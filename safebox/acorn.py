@@ -989,7 +989,7 @@ class Acorn:
         print(self.acorn_tags)
         self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
-    def _mint_proofs(self, quote:str, amount:int, mint:str=None):
+    async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
         headers = { "Content-Type": "application/json"}
         if mint:
@@ -1086,17 +1086,17 @@ class Acorn:
         self.logger.debug(f"Adding proofs from mint: {proof_objs}")
 
         
-        self.add_proofs_obj(proof_objs)
+        await self.add_proofs_obj(proof_objs)
         
         return True
 
-    def check_quote(self, quote:str, amount:int, mint:str = None):
+    async def check_quote(self, quote:str, amount:int, mint:str = None):
         print(f"check quote {quote}")
         
         # return "check_quote"
         
        
-        return self._check_quote(quote, amount,mint)
+        return await self._check_quote(quote, amount,mint)
     
     def deposit(self, amount:int, mint:str = None)->cliQuote:
         
@@ -1151,9 +1151,9 @@ class Acorn:
         while time() < end_time:
             
             self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
-            # success = self.check_quote(quote=quote, amount=amount,mint=mint)
+            success = await self.check_quote(quote=quote, amount=amount,mint=mint)
             if success:
-                self.logger("quote is paid!")
+                self.logger.debug("quote is paid!")
                 break
             sleep(3)  # Sleep for 3 seconds
         
@@ -1171,7 +1171,7 @@ class Acorn:
 
         asyncio.run(self._async_add_proofs(text, replicate_relays))  
 
-    def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
+    async def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
         # make sure have latest kind
         #TODO this is a workaround
 
@@ -1191,7 +1191,7 @@ class Acorn:
         
         record = nip60_proofs.model_dump_json()
         print(f"nip60 proofs text: {record}")
-        asyncio.run(self._async_add_proofs(record, replicate_relays))
+        await self._async_add_proofs(record, replicate_relays)
         
         return
 
@@ -1430,7 +1430,7 @@ class Acorn:
         return all_proofs, keyset_amounts
 
 
-    def _check_quote(self,quote, amount:int, mint:str = None):
+    async def _check_quote(self,quote, amount:int, mint:str = None):
         # print("check quote", quote)
         #TODO error handling
         success_mint = True    
@@ -1447,7 +1447,7 @@ class Acorn:
            
         mint_quote = mintQuote(**response.json())
         if mint_quote.paid == True:
-                success_mint = self._mint_proofs(mint_quote.quote,amount,mint)
+                success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
 
 
                     
