@@ -1,0 +1,15 @@
+version: "3"
+services:
+  lnapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: safebox
+    ports:
+      - "7375:8000"
+    environment:
+      - MINT_BACKEND_BOLT11_SAT=FakeWallet
+      - MINT_LISTEN_HOST=0.0.0.0
+      - MINT_LISTEN_PORT=3338
+      - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
+    command: ["poetry", "run", "uvicorn" "app.main:app"]

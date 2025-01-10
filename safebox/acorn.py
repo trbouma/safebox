@@ -1505,7 +1505,7 @@ class Acorn:
     
 
     def pay(self, amount:int, lnaddress: str, comment: str = "Paid!"):
-
+        # This function is no longer used
         melt_quote_url = f"{self.mints[0]}/v1/melt/quote/bolt11"
         melt_url = f"{self.mints[0]}/v1/melt/bolt11"
         
