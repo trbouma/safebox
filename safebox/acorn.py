@@ -3400,7 +3400,7 @@ class Acorn:
                 'authors': [pub_hex],
                 'kinds': [0]
             }]
-            prs = asyncio.run(self._async_query_npub(amount, comment, profile_filter))
+            prs = await self._async_query_npub(amount, comment, profile_filter)
             self.logger.debug(f"Filter: {profile_filter}")
             # raise ValueError(f"You are zapping to a npub {event_id}") 
             out_msg = f"You are zapping {amount} to {orig_address} with {prs}"
