@@ -161,7 +161,8 @@ class Acorn:
             wallet_info_str = "None"
             self.home_mint = mints[0]
         
-        self._load_proofs()
+        asyncio.run(self._load_proofs())
+        
 
         
         return None
@@ -1303,7 +1304,7 @@ class Acorn:
         self.logger.debug(f"Finished loading reserved records of {len(record_events)} events")   
         return True
     
-    def _load_proofs(self):
+    async def _load_proofs(self):
         
         
         FILTER = [{
@@ -1311,7 +1312,7 @@ class Acorn:
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
-        content =asyncio.run(self._async_load_proofs(FILTER))
+        content = await self._async_load_proofs(FILTER)
         
         return content
     

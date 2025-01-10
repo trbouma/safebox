@@ -1,11 +1,19 @@
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-
-
+import asyncio
+from contextlib import asynccontextmanager
 
 from app.routers import lnaddress
+from app.tasks import periodic_task, poll_for_payment
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create Task
+    asyncio.create_task(periodic_task())
+    yield
+    pass
+   
 
 # Create instance of database
 engine = create_engine("sqlite:///data/safebox.db")
@@ -14,7 +22,7 @@ SQLModel.metadata.create_all(engine)
 
 # Create an instance of the FastAPI application
 origins = ["*"]
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -25,6 +33,10 @@ app.add_middleware(
 
 
 app.include_router(lnaddress.router) 
+
+
+
+
 
 # Define a root endpoint
 @app.get("/")

@@ -1,18 +1,20 @@
-from fastapi import Request, APIRouter, Depends, Response, Form, HTTPException
+from fastapi import Request, APIRouter, Depends, Response, Form, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 from pydantic import BaseModel
 import random
 import string
+import asyncio
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from monstr.encrypt import Keys
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox
+from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
+from app.tasks import poll_for_payment
 
 # settings = Settings()
 
@@ -37,6 +39,7 @@ router = APIRouter()
    
 @router.get("/info", tags=["lnaddress"])
 def get_info(request: Request):
+    poll_for_payment()
     return {"detail": request.url.hostname}
 
 @router.get("/.well-known/lnurlp/{name}")
@@ -96,6 +99,13 @@ def ln_pay( amount: float,
 
     cli_quote = acorn_obj.deposit(amount//1000)
 
+    quote_check = PaymentQuote(nsec=safebox_found.nsec, quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT)
+    with Session(engine) as session:
+        session.add(quote_check)
+        session.commit()
+
+   
+
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote}"  }
 
@@ -139,8 +149,9 @@ def create_safebox(request: Request):
 
     return {"detail": request.url.hostname,
             "nsec": nsec_new,
-            "info": f"{acorn_obj.pubkey_hex}, {acorn_obj.handle} ",
+            "npub": f"{acorn_obj.pubkey_bech32} ",
             "seed_phrase": acorn_obj.seed_phrase,
-            "profile_info": profile_info
+            "address": f"{acorn_obj.handle}@{request.url.hostname}",
+          
             
             }
