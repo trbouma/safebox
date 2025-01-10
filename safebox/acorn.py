@@ -1195,18 +1195,18 @@ class Acorn:
         
         return
 
-    def write_proofs(self, replicate_relays: List[str]=None):
+    async def write_proofs(self, replicate_relays: List[str]=None):
         # make sure have latest kind
         #TODO this is a workaround
 
         self.logger.debug(f"writing proofs ")
-        self.delete_proof_events()
+        await self.delete_proof_events()
         # get proofs by keyset
         all_proofs, amount = self._proofs_by_keyset()
         
         for key, value in all_proofs.items():
 
-            self.add_proofs_obj(value)
+            await self.add_proofs_obj(value)
        
         # for each in self.proofs:
         #    pass
@@ -1214,7 +1214,7 @@ class Acorn:
         #    text = json.dumps(proof_to_store)
         #    asyncio.run(self._async_add_proofs(text, replicate_relays))
         
-        self._load_proofs()
+        await self._load_proofs()
         
         return
 
@@ -1407,8 +1407,8 @@ class Acorn:
             
             return proofs
     
-    def delete_proof_events(self):
-        asyncio.run(self._async_delete_proof_events())
+    async def delete_proof_events(self):
+        await self._async_delete_proof_events()
 
     def _proofs_by_keyset(self):
         all_proofs = {}
@@ -1591,7 +1591,7 @@ class Acorn:
         
         
 
-    def pay_multi(  self, 
+    async def pay_multi(  self, 
                     amount:int, 
                     lnaddress: str, 
                     comment: str = "Paid!"): 
@@ -1861,7 +1861,7 @@ class Acorn:
             
             self.proofs = post_payment_proofs
             
-            self.write_proofs()
+            await self.write_proofs()
             msg_out = f"Payment of {amount} sats with single mint fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
             self.logger.info(msg_out)
             return msg_out
@@ -1946,7 +1946,7 @@ class Acorn:
 
             
 
-    def pay_multi_invoice(  self, 
+    async def pay_multi_invoice(  self, 
                      
                     lninvoice: str, 
                     comment: str = "Paid!"): 
@@ -2108,7 +2108,7 @@ class Acorn:
 
            
         
-        self.write_proofs()
+        await self.write_proofs()
         msg_out = f"Zap of {ln_amount} sats with fee {amount_needed-ln_amount} sats successful! \nYou have {self.balance} sats remaining."
         self.logger.info(msg_out)
 
@@ -2347,7 +2347,7 @@ class Acorn:
         
         return f"swap ok sats "
     
-    def swap_multi_consolidate(self):
+    async def swap_multi_consolidate(self):
         #TODO run swap_multi_each first to get rid of any potential doublespends
         #TODO figure out how to catch doublespends in this routine
         headers = { "Content-Type": "application/json"}
@@ -2485,18 +2485,18 @@ class Acorn:
                 swap_balance += each.amount
             # print(len(self.proofs))
             # delete old proofs
-            asyncio.run(self._async_delete_proof_events())
+            await self._async_delete_proof_events()
             # self.add_proofs(json.dumps(combined_proofs))
 
             self.proofs = combined_proof_objs
-            self.write_proofs()
+            await self.write_proofs()
 
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
         
         return "multi swap ok"
 
-    def swap_multi_each(self):
+    async def swap_multi_each(self):
         #TODO this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
@@ -2607,11 +2607,11 @@ class Acorn:
                 combined_proofs = combined_proofs + proofs
                 combined_proof_objs = combined_proof_objs + proof_objs
 
-        self.delete_proof_events()
+        await self.delete_proof_events()
         self.logger.debug("XXXXX swap multi each")
-        self.add_proofs_obj(combined_proof_objs)
+        await self.add_proofs_obj(combined_proof_objs)
         
-        self._load_proofs()
+        await self._load_proofs()
         
                    
         
@@ -3356,7 +3356,7 @@ class Acorn:
         return "test"
 
     
-    def zap(self, amount:int, event_id, comment): 
+    async def zap(self, amount:int, event_id, comment): 
         out_msg = ""
         prs = []
         orig_address = event_id
@@ -3387,7 +3387,7 @@ class Acorn:
                 'ids'  :  [event_id]          
                 
                 }]
-                prs = asyncio.run(self._async_query_zap(amount, comment,zap_filter))
+                prs = await self._async_query_zap(amount, comment,zap_filter)
             except:
                 raise ValueError("Could not find event. Try an additional relay?")
                 # return "Could not find event. Try an additional relay?"
@@ -3409,7 +3409,7 @@ class Acorn:
 
         try:
             for each_pr in prs:
-                self.pay_multi_invoice(each_pr)
+                await self.pay_multi_invoice(each_pr)
                 out_msg+=f"\nZapped {amount} to destination: {orig_address}."
         except Exception as e:
             out_msg = f"Error {e}"

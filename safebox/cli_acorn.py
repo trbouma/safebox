@@ -269,17 +269,19 @@ def proofs():
 def swap(consolidate):
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
     
     if consolidate:
         click.echo("Consolidate proofs")
-        click.echo(acorn_obj.swap_multi_consolidate())
+        result_out = asyncio.run(acorn_obj.swap_multi_consolidate())
+        click.echo(result_out)
     else:
-        click.echo(f"proof event ids: {acorn_obj.proof_event_ids}")
-        # acorn_obj.delete_proof_events()
-        click.echo(acorn_obj.swap_multi_each())
+        click.echo("Swap proofs")
+        result_out = asyncio.run(acorn_obj.swap_multi_each())
+        click.echo(result_out)
 
 @click.command("pay", help="Payout funds to lightning address")
 @click.argument('amount', default=21)
@@ -290,7 +292,7 @@ def pay(amount,lnaddress: str, comment:str):
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     try:
-        msg_out = acorn_obj.pay_multi(amount,lnaddress,comment)
+        msg_out = asyncio.run(acorn_obj.pay_multi(amount,lnaddress,comment))
         click.echo(msg_out)
     except Exception as e:
         click.echo(f"Error: {e}")
@@ -345,10 +347,11 @@ def zap(amount:int, event, comment):
         return
     
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     # click.echo(f"Zap amount: {amount} to {event}")
    
-        
-    click.echo(acorn_obj.zap(amount,event,comment))
+    result_out = asyncio.run(acorn_obj.zap(amount,event,comment))    
+    click.echo(result_out)
 
 @click.command(help="Accept cashu token")
 @click.argument('token')

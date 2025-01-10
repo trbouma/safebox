@@ -120,10 +120,7 @@ async def ln_pay( amount: float,
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
     cli_quote = acorn_obj.deposit(amount//1000)
 
-    quote_check = PaymentQuote(nsec=safebox_found.nsec, quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT, handle=name)
-    with Session(engine) as session:
-        session.add(quote_check)
-        session.commit()
+
 
     asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT))
 
