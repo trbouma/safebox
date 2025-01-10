@@ -3215,16 +3215,16 @@ class Acorn:
 
         return "test"
     
-    def accept_token(self,cashu_token: str):
+    async def accept_token(self,cashu_token: str):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
-        self.nip17_accept(cashu_token)
+        await self.nip17_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
 
         
 
 
-    def issue_token(self, amount:int):
+    async def issue_token(self, amount:int):
         print("issue token")
         available_amount = 0
         chosen_keyset = None
@@ -3293,12 +3293,12 @@ class Acorn:
             for each_proof in each_proofs:
                 post_payment_proofs.append(each_proof)
         self.proofs = post_payment_proofs
-        asyncio.run(self._async_delete_proof_events())
+        await self._async_delete_proof_events()
         
         
-        self.add_proofs_obj(post_payment_proofs)
+        await self.add_proofs_obj(post_payment_proofs)
         
-        self._load_proofs()
+        await self._load_proofs()
 
 
         
@@ -3969,7 +3969,7 @@ class Acorn:
         payment_request = "creqA" + base64_string
         return payment_request
 
-    def nip17_accept(self, token:str):
+    async def nip17_accept(self, token:str):
         # self.accept_token(token)
         # print("accept token")
         headers = { "Content-Type": "application/json"}
@@ -4014,7 +4014,12 @@ class Acorn:
         
         swap_proofs = self.swap_proofs(proof_obj_list)
 
-        self.add_proofs_obj(swap_proofs)
+        try:
+            await self.add_proofs_obj(swap_proofs)
+        except Exception as e:
+            self.logger.debug(f"Proof not accepted {e}")
+            return f"error {e}"
+
         # await self._async_add_proofs_obj(swap_proofs)
 
 
@@ -4024,7 +4029,7 @@ class Acorn:
             'kinds': [7375]
         }]
         
-        asyncio.run(self._async_load_proofs(FILTER))
+        await self._async_load_proofs(FILTER)
 
         #TODO don't do this every time - only when a new mint shows up
         # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))

@@ -357,18 +357,21 @@ def zap(amount:int, event, comment):
 @click.argument('token')
 def accept(token):
     
-    wallet_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    click.echo(wallet_obj.accept_token(token))
+    result_out = asyncio.run(acorn_obj.accept_token(token))
+    click.echo(result_out)
 
 @click.command("issue", help="Issue token amount")
 @click.argument('amount', default=1)
 def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    token = acorn_obj.issue_token(amount)
+    asyncio.run(acorn_obj.load_data())
+    token = asyncio.run(acorn_obj.issue_token(amount))
     click.echo(token)
 
 @click.command("send", help="Send amount to nip05 address or npub")
