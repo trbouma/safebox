@@ -1,11 +1,14 @@
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from contextlib import asynccontextmanager
 
+from app.config import Settings
 from app.routers import lnaddress
 from app.tasks import periodic_task
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,6 +17,10 @@ async def lifespan(app: FastAPI):
     yield
     pass
    
+
+# Create Settings:
+settings = Settings()
+print(settings)
 
 # Create instance of database
 engine = create_engine("sqlite:///data/safebox.db")
@@ -34,14 +41,15 @@ app.add_middleware(
 
 app.include_router(lnaddress.router) 
 
-
+templates = Jinja2Templates(directory="templates")
 
 
 
 # Define a root endpoint
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to the Safebox app!"}
+def read_root(request: Request):
+    return templates.TemplateResponse( "welcome.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!"})
+    # return {"message": "Welcome to the Safebox app!"}
 
-# Define another example endpoint
+
 
