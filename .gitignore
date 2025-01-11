@@ -10,7 +10,8 @@ __pycache__/
 scratch
 
 # Data Stuff
-data
+data/*
+!data/
 
 .python-version
 
