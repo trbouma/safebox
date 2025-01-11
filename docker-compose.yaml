@@ -9,6 +9,9 @@ services:
       - "7375:7375"
     environment:
       - LNAPP_HOME_RELAY=relay.openbalance.app
+    volumes:
+      - ./templates:/app/templates
+      - ./data:/app/data
 
     command: ["poetry", "run", "uvicorn", "app.main:app", "--host","0.0.0.0","--port","7375"]
     
