@@ -1,0 +1,815 @@
+{% extends "uxbase.html" %}
+
+{% block title %}User Wallet{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+<script>
+
+
+
+
+async function createWallet() {
+
+
+window.location.href="/wallet/create";
+
+}
+
+async function loginNostr() {
+
+
+window.location.href="/wallet/nostrloginpage/";
+
+}
+
+async function login() {
+  var _data; 
+  var test_value;
+  var login_button = document.getElementById("login_button");
+  var wallet_key_button = document.getElementById("wallet_key_button");
+  // alert(wallet_key_button.value)
+  login_button.textContent = "Please wait...";
+  const submit_data = {"wallet_key": wallet_key_button.value};
+  
+   
+
+  await fetch('/wallet/login', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
+    
+    
+
+    // alert("Click to continue.");
+    // location.reload()
+    window.location.href="/wallet/"
+   
+      }
+      
+  
+  async function logout() {
+  var data; 
+  await fetch('/wallet/logout', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+               
+       })
+    .then((response) => response.json())
+    .then((data) => getlogoutStatus(data));
+  
+  // location.reload();
+  window.location.href="/wallet/";
+  // alert("log out");
+  
+
+}
+
+
+function getMode() {
+
+  var get_input = document.getElementById("ln_recipient").value;
+  var ln_pay_button = document.getElementById("ln_pay_button")
+  if (get_input == "ecash") {
+
+    ln_pay_button.hidden="hidden";
+
+    // alert(get_input)
+
+  } else {
+
+    ln_pay_button.hidden="";
+  }
+
+}
+
+
+function setMode() {
+
+var get_input = document.getElementById("ln_recipient").value;
+var pay_button = document.getElementById("ln_pay_button");
+var check_lninvoice = get_input.slice(0,4).toUpperCase();
+
+
+  if (check_lninvoice == "LNBC") {
+
+    window.location.href="/wallet/?wallet_mode=lninvoice&qr_code=" + get_input;
+  }
+
+if  (get_input.slice(0,4).toUpperCase()== "NPUB")
+{
+
+  // alert("npub");
+  pay_button.textContent = "Pay to Npub!";
+
+}
+else
+{pay_button.textContent = "Pay to Lightning Address!";}
+
+}
+
+async function copyEcash() {
+
+// await issueEcash();
+
+await issueEcash();
+
+
+var copyText = document.getElementById("ecash_send");
+
+
+
+copyText.select();
+copyText.setSelectionRange(0, 99999);
+await navigator.clipboard.writeText(copyText.value);
+
+//alert("Copied Ecash to clipboard" + copyText.value);
+alert("Copied Ecash to clipboard!");
+
+//copyText.value="";
+
+}
+
+async function sendEcash() {
+
+  //alert("send ecash!");
+  window.location.href="/wallet/ecash";
+
+
+} 
+
+async function qrcodeEcash() {
+
+await issueEcash();
+
+var ecash_token = document.getElementById("ecash_send").value;
+var ecash_amount = document.getElementById("ln_recipient_amount").value;
+var currency_code = document.getElementById("ln_currency").value;
+
+
+
+// alert(ecash_amount);
+// await issueEcash();
+
+window.location.href="/wallet/qrcodeshow?ecash_token="+ ecash_token + "&amount=" + ecash_amount + "&currency_code=" + currency_code;
+
+}
+
+async function scanCode() {
+
+
+window.location.href="/v1/acquire/scan/?wallet_name={{wallet_info_pass['wallet_name']}}&acquire_mode=private";
+
+}
+
+async function scanNFC() {
+
+// add this code after the scan button
+// <button id="ln_nfc_button"onclick="scanNFC()">Scan NFC</button> 
+
+window.location.href="/wallet/nfcrw";
+
+}
+
+async function accountHistory() {
+
+
+window.location.href="/wallet/txhistory";
+
+}
+
+async function gotoProfile() {
+
+// alert("{{wallet_info_pass['wallet_name']}}");
+window.location.href="/{{wallet_info_pass['wallet_name']}}";
+
+}
+
+async function issueEcash(){
+  
+  var data;
+  var ecash_amount = document.getElementById("ln_recipient_amount").value;
+  var ecash_currrency = document.getElementById("ln_currency").value;
+  var ecash_token_button = document.getElementById("ecash_token_button");
+
+  {% if payment_type == 'ecash' %}
+    var ecash_lock_code = document.getElementById("ecash_lock_code").value;
+
+    const submit_data = {"amount": ecash_amount, "currency": ecash_currrency, "ecash_lock_code": ecash_lock_code};
+  {% else %}
+   
+    const submit_data = {"amount": ecash_amount, "currency": ecash_currrency};
+  {% endif %}
+
+
+  ecash_token_button.textContent = "Creating ecash token, please wait...";
+  ecash_token_button.disabled = true;
+
+   // alert("Send Ecash" + JSON.stringify(submit_data));
+   // alert("It takes a moment to issue the ecash token. Please click OK and wait for the token to appear as a QR Code.")
+
+   await fetch('/wallet/issueecash', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+    ecash_token_button.disabled = false;
+    ecash_token_button.textContent = "Creating ecash token";
+   
+    
+    
+}
+async function paytoLNAddr(){
+  var ln_recipient = document.getElementById("ln_recipient");
+  var ln_recipient_amount = document.getElementById("ln_recipient_amount");
+  var ln_currency = document.getElementById("ln_currency");
+  var ln_recipient_comment = document.getElementById("ln_comment");
+  var ln_recipient_txt_comment = document.getElementById("txt_comment");
+  var ln_pay_button = document.getElementById("ln_pay_button");
+  var ecash_header = document.getElementById("ecash_header");
+
+  // ecash_header.textContent = "Sending payment, please wait...";
+  
+  ln_pay_button.disabled = true;
+  
+  ln_amount = ln_recipient_amount.value;
+  ln_address = ln_recipient.value.trim();
+  // ln_comment = ln_recipient_comment.value;
+  ln_txt_comment = ln_recipient_txt_comment.value;
+  ln_currency_selected = ln_currency.value;
+  // alert(ln_txt_comment);
+  if (ln_amount == 0) 
+    { // alert("amount is zero");
+    ln_pay_button.textContent = "Getting recipient info..";
+    const submit_data = {"ln_address":ln_address};
+    // alert(JSON.stringify(submit_data));
+
+    await fetch('/wallet/lncallback', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},        
+            body: JSON.stringify(submit_data)         
+          })
+        .then((response) => response.json())
+        .then((data) => getlnCallbackStatus(data));
+
+    // location.reload();
+  }
+  else 
+    { // alert("amount is greater than zero"); 
+  
+  
+
+      const submit_data = {"ln_amount": ln_amount,
+                        "ln_address":ln_address, "ln_currency": ln_currency_selected, "ln_comment": ln_txt_comment};
+
+    // alert(JSON.stringify(submit_data));
+  
+    ln_pay_button.textContent = "Please wait...";
+
+      await fetch('/wallet/lnpay', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},        
+            body: JSON.stringify(submit_data)         
+          })
+        .then((response) => response.json())
+        .then((data) => getlnPayStatus(data));
+        ln_pay_button.textContent = "Pay to Lightning Address!";
+        ln_pay_button.disabled = false;
+        
+        // location.reload();
+        window.location.href="/wallet/"
+      }  
+    };
+
+  async function paytoLNInvoice(){
+  // var ln_invoice = document.getElementById("ln_recipient").value;
+  var ln_invoice_button = document.getElementById("ln_invoice_button");
+  
+  
+  
+  ln_invoice_button.textContent = "Please wait...";
+  ln_invoice_button.disabled = true;
+  
+  // alert("Pay LN Invoice!");
+    
+ 
+ 
+  const submit_data = {"ln_invoice": qr_code};
+
+  // alert(JSON.stringify(submit_data));
+  
+ 
+
+  await fetch('/wallet/invoicepay', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getlnInvoiceStatus(data));
+    alert("Payment has been sent! Please check to see if paid.")
+    // ocation.reload();
+    window.location.href="/wallet/";
+
+    };
+
+function checkAmount() {
+  // alert("check Amount")
+  var ln_pay_button = document.getElementById("ln_pay_button");
+  ln_pay_button.textContent = "Pay to Lightning Address"
+}
+function delayFunction() {
+  // alert('Hello');
+  var ln_pay_button = document.getElementById("ln_pay_button");
+  ln_pay_button.textContent = "Pay to Lightning Address";
+  ln_pay_button.disabled = false;
+  
+}
+
+function getStatus(challenge_status) {
+  var issueEcash = document.getElementById("ecash_send");
+    console.log(challenge_status);
+    // alert(JSON.stringify(challenge_status["cashu_tokens"][0]));
+    return_value = challenge_status["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+    issueEcash.value = return_value;
+     
+    
+}
+
+function getlnPayStatus(ln_pay_status) {
+  var ln_pay_button = document.getElementById("ln_pay_button");
+    console.log(ln_pay_status);
+    // alert(JSON.stringify(challenge_status["cashu_tokens"][0]));
+    // issueEcash.value = challenge_status["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+    //alert("lnpay")
+    // ecash_header.textContent = JSON.stringify(ln_pay_status["msg"]);
+    var status = JSON.stringify(ln_pay_status["status"]);
+    const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
+    alert("Payment " + parsedObject.status);
+
+    // ln_pay_button.textContent = JSON.stringify(ln_pay_status["status"]);
+    // setTimeout(delayFunction, 1500);
+    // ln_pay_button.textContent = "Pay to Lightning Address";
+   
+
+}
+
+function getlnCallbackStatus(ln_callback_status) {
+  var ln_pay_button = document.getElementById("ln_pay_button");
+  var ln_currency = document.getElementById("ln_currency");
+    console.log(ln_callback_status);
+    // alert(JSON.stringify(challenge_status["cashu_tokens"][0]));
+    // issueEcash.value = challenge_status["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+    // alert("callback"+ ln_callback_status["data"]["currency"]["code"])
+    // ecash_header.textContent = JSON.stringify(ln_pay_status["msg"]);
+    ln_text = JSON.parse(ln_callback_status["data"]["metadata"]);
+    
+    ln_pay_button.textContent = ln_text[0][1];
+    // alert(JSON.stringify(ln_text[1][1]));
+
+    if (ln_callback_status["data"]["currency"]["code"] === undefined)
+      { ln_currency.value = "SAT";
+        alert("boggl"); 
+      }
+    else
+      {ln_currency.value = ln_callback_status["data"]["currency"]["code"];}
+    setTimeout(delayFunction, 10000);
+    // ln_pay_button.textContent = "Pay to Lightning Address";
+   
+
+}
+
+function getlnInvoiceStatus(ln_pay_status) {
+  var ln_pay_button = document.getElementById("ln_pay_button");
+    console.log(ln_pay_status);
+    // alert(JSON.stringify(challenge_status["cashu_tokens"][0]));
+    // issueEcash.value = challenge_status["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+    //alert("lnpay")
+    // ecash_header.textContent = JSON.stringify(ln_pay_status["msg"]);
+    ln_invoice_button.textContent = JSON.stringify(ln_pay_status["msg"]);
+    setTimeout(delayFunction, 1500);
+    // ln_pay_button.textContent = "Pay to Lightning Address";
+   
+
+}
+
+function getlogoutStatus(logout_status) {
+  var ecash_header = document.getElementById("ecash_header");
+    console.log(logout_status);
+    // alert(JSON.stringify(challenge_status["cashu_tokens"][0]));
+    // issueEcash.value = challenge_status["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+    //alert("lnpay")
+    // alert(JSON.stringify(logout_status['msg']))
+   
+
+}
+
+function redeemLNURLwstatus(lnurl_data) {
+
+  const parsedObject = JSON.parse(JSON.stringify(lnurl_data));
+  
+  alert("Redemption is " + parsedObject.status + ". Check your account balance. \nClick OK to continue."); 
+  // alert(JSON.stringify(lnurl_data));
+  window.location.href = "/wallet";
+  
+
+}
+
+function authLNURLwstatus(lnurl_data) {
+
+alert("You should now be logged in!")
+// alert(JSON.stringify(lnurl_data));
+window.location.href = "/wallet/";
+
+
+}
+
+function redeemEcashstatus(data) {
+
+// alert("ecash")
+const parsedObject = JSON.parse(JSON.stringify(data['msg']));
+alert(JSON.stringify(parsedObject.msg));
+window.location.href = "/wallet/";
+
+
+}
+
+async function redeemLNURLw(lnurl_arg) {
+
+  // alert("Please wait a moment...");
+  
+
+await fetch('/redeem/lnurl?lnurl='+lnurl_arg+"&wallet_name={{ wallet_name }}", {
+            method: "GET",
+            headers: {"Content-Type": "application/json"}        
+                     
+          })
+        .then((response) => response.json())
+        .then((data) => redeemLNURLwstatus(data));
+
+        
+        window.location.href = "/";
+        
+        //location.reload();
+
+}
+
+async function authLNURLw(lnurl_arg) {
+
+await fetch('/auth/lnurl?lnurl='+lnurl_arg, {
+          method: "GET",
+          headers: {"Content-Type": "application/json"}        
+                   
+        })
+      .then((response) => response.json())
+      .then((data) => authLNURLwstatus(data));
+
+      
+      // window.location.href = "/";
+      
+      //location.reload();
+
+}
+
+async function redeemEcash(ecash_arg) {
+  const submit_data = {"wallet_name": "{{wallet_name}}", "ecash_token": ecash_arg};
+  await fetch('/wallet/acceptecash', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => redeemEcashstatus(data));
+
+    // alert("Accepted ecash! "  );
+
+}
+
+async function payCancel() {
+
+  alert("Payment cancelled! Going back to wallet...");
+  window.location.href="/wallet/";
+}
+
+async function payMe() {
+
+// alert("Pay Me");
+window.location.href="/{{wallet_name}}";
+}
+
+var global_ecash;
+var scan_nfc = false;
+var wallet_mode = "{{wallet_mode}}";
+var wallet_name = "{{wallet_name}}";
+var qr_code = "{{qr_code}}";
+var ln_pay_button = document.getElementById("ln_pay_button");
+
+// localStorage.setItem('wallet_name', '{{wallet_name}}');
+// var ls_wallet_name = localStorage.getItem('wallet_name');
+// alert(ls_wallet_name);
+
+
+let auth_text = "Authentication to site is requested.\n Click OK or Cancel.";
+
+if (wallet_mode=="ecash"){
+  // alert("Redeeming ecash. Click OK to continue");
+  
+  redeemEcash(qr_code);
+  
+
+} else if (wallet_mode== "withdrawRequest") {
+
+  // alert("Redeeming a LNURL Code. Click OK to continue."); 
+  redeemLNURLw(qr_code);
+
+} else if (wallet_mode== "authenticate") {
+  if (confirm(auth_text) == true) {
+    alert("Authentication OK"); 
+    authLNURLw(qr_code)
+  } else {
+    alert("Authentication Cancel"); 
+  }
+
+  
+
+
+}
+
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+<style>
+button {
+  background-color: #008CBA; /* Green */
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  border-radius: 8px;
+  width: 90%
+}
+
+button:active {
+  background-color: #3e8e41;
+  box-shadow: 0 5px #666;
+  transform: translateY(4px);
+}
+
+textarea
+{
+  border:1px solid #999999;
+  width:100%;
+  margin:5px 0;
+  padding:3px;
+}
+
+input[type='number']{
+    width: 80px;
+}
+
+img 
+{
+  width: 256px;
+  height: auto;
+  border-radius: 8px;
+}
+
+
+
+</style>
+
+
+<main role="main" class="container">
+    <div class="row">
+        <div class="col">
+             
+            
+            
+        </div>
+    </div>
+    
+</main><!-- /.container -->
+
+
+        <center>
+        {% if logged_in %}
+
+        {% if wallet_mode == 'lninvoice' %}
+          {% if ln_amount == 0 %}
+            <h1>Please request an invoice with an amount</h1>
+          {% else %}       
+            <h1>Pay {{ wallet_info_pass['currency_symbol']}}{{ "{:.2f}".format(ln_amount*1000/local_multiplier) }} {{ wallet_info_pass['local_currency']}} ?</h1>
+            ({{ln_amount}} sats)
+          {% endif %}
+
+        {% else %}
+          <h1>{{wallet_info_pass['currency_symbol']}}{{"{:.2f}".format(wallet_info_pass['local_amount'])}} {{wallet_info_pass['currency_description']}}</h1>
+          (My open balance: {{wallet_info_pass['balance']}} sats)
+
+        {% endif  %}
+        
+         
+          
+         
+        
+        {% if wallet_mode in ['ecash','initial'] %}
+        <br>
+        <a href="/{{wallet_name}}"><img src="/img/{{wallet_name}}"></a>
+          <br>
+          <br>
+          My Lighting Address: <a href="/{{wallet_name}}">{{lightning_address}}</a>
+        
+
+        <br>
+        <br>
+        
+        <button id="ln_scan_button"onclick="scanCode()">Scan</button> 
+        <br>
+        <br> 
+        <button id="ln_pay_me_button"onclick="payMe()">Pay Me!</button>        
+        <br>
+        <br>        
+       
+        {% endif %}
+        
+        
+        {% else %}
+        <h1><i>Welcome to {{brand_name}}!</i></h1>
+        <img src="/brand/img/logo.jpg">
+        <br>
+
+        <h2>Please login.</h2> 
+        
+        {% endif %}
+       
+        
+      {% if logged_in %} 
+      {% if wallet_mode in [ 'withdrawRequest'] %}
+        <h2>Redeeming LNURL, please wait...</h2>
+
+      {% endif %}
+      
+        {% if wallet_mode in ['lninvoice', 'withdrawRequest'] %}
+          
+        {% else %}
+          
+        
+         
+      <hr>  
+     
+      <table>
+        <tr>
+          <td align="right">
+            
+          </td> 
+          
+          <td> Make a Lighting Payment To: <br><input style="width:100%;" list="contacts" placeholder="enter lightning address"  id="ln_recipient" name="ln_recipient" value="{{ln_recipient}}" size="24" oninput="getMode()" onchange="setMode()">
+            <datalist id="contacts">
+              <option value="ecash"></option>
+              <option value="hello@nimo.cash"></option>
+              
+              
+              
+            </datalist>
+          </td>
+        </tr>
+        <tr>
+          <td align="right"></td>
+          <td>Amount:<br><input type="number" placeholder="0" id="ln_recipient_amount" name="ln_recipient_amount" onchange="checkAmount()" value="" size="8">
+              <select id="ln_currency" name="ln_currency">
+              {% for entry in currency_list %}
+              <option value="{{entry[0]}}" {{ 'selected' if entry[0] == wallet_info_pass['local_currency'] else '' }}>{{entry[1]}}</option>         
+              {% endfor %}
+              </select>
+          </td>
+      </tr>
+      <tr>
+        <td align="right" valign="top">
+         
+        </td>
+        
+        <td>Memo: <br>
+          <textarea id="txt_comment" placeholder= "Thanks!" name="txt_comment" rows="3" cols="24"></textarea>
+        </td>
+       
+        
+      </tr>
+      
+
+    {% if ecash_lock_code !='' %}
+      <tr>
+        <td align="right" valign="top">  
+    </td>
+    
+    <td>Ecash Lock Code: <br>
+      <textarea id="ecash_lock_code" name="ecash_lock_code" rows="1" cols="24">{{ecash_lock_code}}</textarea>
+    </td>
+    {% endif %}
+    
+  </tr>
+      </table>
+
+    {% endif %}   
+
+      {% if ecash_lock_code !='' %}
+
+      {% else %}
+        {% if wallet_mode in ['lnaddress','initial', 'lnurlp'] %}
+       
+          <button id="ln_pay_button" onclick="paytoLNAddr()">Pay to Lightning Address!</button> 
+        {% elif wallet_mode == 'lninvoice' %}
+        <br>{{show_payment_instruction}}<br>
+            {% if ln_amount > 0 %}
+              <button id="ln_invoice_button" onclick="paytoLNInvoice()">Authorize Payment of {{ wallet_info_pass['currency_symbol']}}{{ "{:.2f}".format(ln_amount*1000/local_multiplier) }} {{ wallet_info_pass['local_currency']}} ({{ln_amount}} sats)</button>
+            {% endif %}
+              <br>
+        (You'll have {{ wallet_info_pass['currency_symbol'] }}{{"{:.2f}".format(wallet_info_pass['local_amount']- ln_amount*1000/local_multiplier)}} {{ wallet_info_pass['local_currency']}} remaining)
+        
+
+        {% endif %}  
+      <br><br>
+      <button id="ln_cancel" onclick="payCancel()">Cancel</button>
+      <br>
+      <br>
+      <hr>
+      <button onclick="issueEcash()" hidden="hidden">Withdraw</button>   
+      {% endif %}
+      
+      {% if wallet_mode in ['ecash','initial'] %}
+      
+      <button id="ecash_token_button" onclick="sendEcash()">Send Ecash</button> 
+      <br>
+      {% endif %} 
+     
+      <textarea id="ecash_send" name="ecash_send" rows="8" cols="37" hidden="hidden">   
+      </textarea> 
+      
+      
+      <br>
+      <button onclick="accountHistory()">Show Account History </button>
+      <br>
+      <br>
+      <button onclick="logout()">Logout </button>
+
+      {% else %}
+
+      <br>
+      
+      <input type="password" value="{{wallet_qr_key}}" id="wallet_key_button">
+
+      <!-- The button used to copy the text -->
+      <br>
+      <br>
+        
+      <button id="login_button" onclick="login()">Continue with Wallet Key </button>
+      <br>
+      <br>
+      <button id="login_nostr_button" onclick="loginNostr()">Continue with Nostr</button>
+      <br>
+      <br>
+      If you don't have a wallet please go to:
+      <br> 
+      
+      <button onclick="createWallet()">Create Wallet!</button> 
+      
+       
+      {% endif %}
+      <br><br>
+      <a href="/">|Home</a>|<a href="/rates/currency">Rates</a>
+      {% if logged_in %} 
+      |<a href="/wallet/nwc">Wallet Connect</a>
+      |<a href="/v1/service/pos/{{wallet_name}}">POS</a>
+      |<a href="/wallet/update">Update</a>
+      |<a href="/wallet/onboard">Onboard|</a>
+
+      {% endif %}
+      <br>
+      {{wallet_mode}}{{wallet_qr_key}}
+        </center>     
+    
+
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

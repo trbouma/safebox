@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from app.config import Settings
-from app.routers import lnaddress
+from app.routers import lnaddress, safebox
 from app.tasks import periodic_task
 
 
@@ -40,6 +40,7 @@ app.add_middleware(
 
 
 app.include_router(lnaddress.router) 
+app.include_router(safebox.router, prefix="/safebox") 
 
 templates = Jinja2Templates(directory="templates")
 

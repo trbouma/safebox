@@ -1,0 +1,93 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Safebox{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+{% endblock %}
+
+{% block page_content %}
+
+<style>
+
+    .container {
+      display: flex;
+      justify-content: center; /* Horizontal alignment */
+     
+      height: 100vh;          /* Full viewport height */
+      border: 1px solid #ccc; /* Optional for visualization */
+    }
+
+    button {
+      background-color: #008CBA; /* Green */
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      border-radius: 8px;
+      width: 90%
+    }
+    
+    button:active {
+      background-color: #3e8e41;
+      box-shadow: 0 5px #666;
+      transform: translateY(4px);
+    }
+    
+    textarea
+    {
+      border:1px solid #999999;
+      width:100%;
+      margin:5px 0;
+      padding:3px;
+    }
+    
+    input[type='number']{
+        width: 80px;
+    }
+    
+    img 
+    {
+      width: 256px;
+      height: auto;
+      border-radius: 8px;
+    }
+    
+    
+    
+    </style>
+
+<main role="main" class="container">
+    
+    <div class="container">
+        
+       
+       
+        
+        <div class="col" style="text-align: center;">
+            
+            
+            Hello, {{access_key}}! 
+            
+           
+            <br>
+            <br>
+            <button id="ln_scan_button"onclick="scanCode()">Hello</button>
+            
+        </div>
+    </div>
+</main><!-- /.container -->
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}
