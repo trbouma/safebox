@@ -13,7 +13,7 @@
 
   async function logout() {
   var data; 
-  alert("log out");
+  //alert("log out");
   await fetch('/safebox/logout', {
         method: "GET",
         headers: {"Content-Type": "application/json"}        
@@ -26,6 +26,13 @@
   window.location.href="/";
   
   
+
+}
+
+async function scanCode() {
+// alert("scan!");
+
+window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}&acquire_mode=private";
 
 }
 
@@ -78,9 +85,26 @@ function revealSeedPhrase() {
   <img src="https://robohash.org/{{safebox.handle}}">
   <br><br>
   <p>My Lightning Address is: </p>
-  <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>             
-  <p>My seed phrase is: <br>
+  <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
+  <button id="ln_scan_button"onclick="scanCode()">Scan</button>  
+  <br><br>  
+  <button id="ln_scan_button"onclick="logoutx()">Accept Payment</button>  
   <hr>
+  Make a Lighting Payment To:
+  <br><input style="width:100%;" list="contacts" placeholder="enter lightning address"  id="ln_recipient" name="ln_recipient" value="{{ln_recipient}}" size="24" oninput="getMode()" onchange="setMode()">
+  <br>Amount:
+  <br><input type="number" placeholder="0" id="ln_recipient_amount" name="ln_recipient_amount" onchange="checkAmount()" value="" size="8">
+  <br>
+  Memo:
+  <textarea id="txt_comment" placeholder= "Thanks!" name="txt_comment" rows="3" cols="24"></textarea>
+  <br><br>
+  <button id="ln_scan_button" onclick="scanCode()">Pay</button>  
+  
+  <hr>
+  <i><h4>Important and Private Stuff</h4></i>
+  <hr>       
+  <p>My seed phrase is: <br>
+ 
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
   
   <hr>            
