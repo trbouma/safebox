@@ -2,6 +2,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -42,7 +43,8 @@ app.add_middleware(
 app.include_router(lnaddress.router) 
 app.include_router(safebox.router, prefix="/safebox") 
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/src", StaticFiles(directory="app/src"), name="src")
 
 
 

@@ -12,12 +12,10 @@
 
 
 
-<main role="main" class="container">
+<div class="center-text">
     
- <!-- Container for Page Content -->
- <div class="container mt-5">
-    <div class="text-center">
-        <h1 class="display-4">{{ message }}</h1>
+        <h1>{{ message }}</h1>
+        
         <p class="lead">Coming soon!!!</p>
         <p >Safebox is the next generation sovereign technlogy being developed to power <a href="https://openbalance.app">Openbalance.app</a> 
        
@@ -27,14 +25,16 @@
 
         </p>
         <form action="/create" method="POST">
-            <label for="invite_code">Invite Code:</label>
-            <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >        
+            <label for="invite_code">Invite Code:</label><br>
+            <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >
+            <br><br>    
             <button >Create Safebox</button>
         </form>
         <br>
         <form action="/safebox/login" method="POST">
-            <label for="access_key">Access Key</label>
-            <input type="text" id="access_key" name="access_key" placeholder="Enter Access Key" >    
+            <label for="access_key">Access Key</label><br>
+            <input type="text" id="access_key" name="access_key" placeholder="Enter Access Key" >
+            <br><br>    
             <button type="submit">Login to Safebox</button>
         </form>
         <hr>
@@ -42,7 +42,7 @@
         
     </div>
      
-</main><!-- /.container -->
+
 
 
 {% endblock %}

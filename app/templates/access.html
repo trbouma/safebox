@@ -1,0 +1,61 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Safebox{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+<script>
+  async function logout() {
+  var data; 
+  await fetch('/safebox/logout', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+               
+       })
+    .then((response) => response.json())
+  
+  
+  //location.reload();
+  window.location.href="/";
+  // alert("log out");
+  
+
+}
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+<div class="center-text">
+
+  
+  <h3>My Balance</h3>
+  <h4>{{safebox.balance}} sats</h4>
+  <img src="https://robohash.org/{{safebox.handle}}">
+  <br><br>
+  <p>My Lightning Address is: </p>
+  <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>             
+  <p>My seed phrase is: <br>
+  <hr>
+  <b>{{safebox.seed_phrase}}</b></p>  
+  <hr>            
+  <p>My access_key is: </b></p>
+  <b>{{safebox.access_key}}</b></p>
+  <p>My balance is: {{safebox.balance}} sats</p>   
+  <br>
+  <br>
+  <button id="ln_scan_button"onclick="logout()">Logout</button>
+            
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

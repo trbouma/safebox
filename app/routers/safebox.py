@@ -19,7 +19,7 @@ import logging, jwt
 
 
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
 engine = create_engine("sqlite:///data/database.db")
 SQLModel.metadata.create_all(engine)
 
@@ -59,7 +59,7 @@ def login(access_key: str = Form()):
     )
     return response
 
-@router.post("/logout")
+@router.get("/logout")
 def logout():
     response = JSONResponse({"message": "Successfully logged out"})
     response.delete_cookie(key="access_token")
