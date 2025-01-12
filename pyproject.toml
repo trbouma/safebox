@@ -31,6 +31,7 @@ sqlmodel = "^0.0.22"
 pydantic-settings = "^2.7.1"
 jinja2 = "^3.1.5"
 pyjwt = "^2.10.1"
+python-multipart = "^0.0.20"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"

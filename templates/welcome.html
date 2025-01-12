@@ -29,12 +29,19 @@
             <h1 class="display-4">{{ message }}</h1>
             <p>Coming soon!!!</p>
             <p class="lead">Safebox is the next generation sovereign technlogy being developed to power <a href="https://openbalance.app">Openbalance.app</a> 
-
+            <p><a href="/create">Create</a></p>
             
             <p>Follow the latest blog entries <a href="https://tim-bouma.npub.pro/tag/safebox/">here</a>
             <p><a href="https://github.com/trbouma">GitHub Repo</a></p>    
 
             </p>
+            <form action="/create" method="POST">
+                <label for="invite_code">Invite Code:</label>
+                <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >
+
+        
+                <button type="submit">Create</button>
+            </form>
         </div>
 
         

@@ -6,8 +6,13 @@ from fastapi.templating import Jinja2Templates
 import asyncio
 
 from datetime import datetime, timedelta
+from safebox.acorn import Acorn
+
 
 from app.utils import create_jwt_token
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+from app.appmodels import RegisteredSafebox, PaymentQuote
+from app.config import Settings
 
 import logging, jwt
 
@@ -16,14 +21,27 @@ SECRET_KEY = "foobar"
 ALGORITHM = "HS256"
 
 templates = Jinja2Templates(directory="templates")
+engine = create_engine("sqlite:///data/database.db")
+SQLModel.metadata.create_all(engine)
 
 router = APIRouter()
+settings = Settings()
 
 @router.post("/login", tags=["safebox"])
 def login(access_key: str):
 
-
+    
     # Authenticate user
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        print(statement)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            pass
+            raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
     # Create JWT token
@@ -64,6 +82,19 @@ def protected_route(request: Request, access_token: str = Cookie(None)):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    print(access_key)
+    # Token is valid, now get the safebox
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            handle = safebox_found.handle
+        else:
+            raise HTTPException(status_code=404, detail=f"{access_key} not found")
+
+    safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+    asyncio.run(safebox.load_data())
     # Token is valid, proceed
-    return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "access_key":access_key})
+    return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox})
     return {"message": f"Welcome, {access_key}!"}

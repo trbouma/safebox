@@ -72,7 +72,11 @@
         <div class="col" style="text-align: center;">
             
             
-            Hello, {{access_key}}! 
+            <p>Hello, {{safebox.handle}}@{{request.url.hostname}} ! 
+            <p>Your access_key is: {{safebox.access_key}}</p>
+            <p>Your seed phrase is: {{safebox.seed_phrase}}</p>  
+            <p>Your handle is: {{safebox.handle}}</p> 
+            <p>Your balance is: {{safebox.balance}}</p>
             
            
             <br>

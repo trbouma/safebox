@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import random
 import string
 import asyncio
+from datetime import timedelta
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -15,6 +16,7 @@ from safebox.acorn import Acorn
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
 from app.tasks import poll_for_payment
+from app.utils import create_jwt_token
 
 # settings = Settings()
 
@@ -138,11 +140,11 @@ async def ln_pay( amount: float,
     return name
 
 @router.post("/create", tags=["lnaddress"])
-async def create_safebox(request: Request):
+async def create_safebox(request: Request, invite_code:str = Form()):
     
     private_key = Keys()
     
- 
+    print(invite_code)
     
     NSEC = private_key.private_key_bech32()
 
@@ -163,13 +165,24 @@ async def create_safebox(request: Request):
         session.add(register_safebox)
         session.commit()
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox)
-        safeboxes = session.exec(statement)
-        for each in safeboxes:
-            print(each.handle)
 
-    return {"detail": request.url.hostname,
+
+        # Create JWT token
+    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=1))
+
+    # Create response with JWT as HttpOnly cookie
+    response = RedirectResponse(url="/safebox/access", status_code=302)
+    # response = JSONResponse({"message": "Login successful"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevent JavaScript access
+        max_age=3600,  # 1 hour
+        secure=False,  # Set to True in production to enforce HTTPS
+        samesite="Lax",  # Protect against CSRF
+    )
+
+    wallet_info = {"detail": request.url.hostname,
             "nsec": nsec_new,
             "npub": f"{acorn_obj.pubkey_bech32} ",
             "seed_phrase": acorn_obj.seed_phrase,
@@ -178,6 +191,12 @@ async def create_safebox(request: Request):
           
             
             }
+    print(wallet_info)
+    
+    return response
+    
+    
+    
 
 @router.post("/access", tags=["lnaddress"])
 async def acess_safebox(request: Request, access_key:str):
