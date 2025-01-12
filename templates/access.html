@@ -10,76 +10,25 @@
 
 {% block page_content %}
 
-<style>
 
-    .container {
-      display: flex;
-      justify-content: center; /* Horizontal alignment */
-     
-      height: 100vh;          /* Full viewport height */
-      border: 1px solid #ccc; /* Optional for visualization */
-    }
-
-    button {
-      background-color: #008CBA; /* Green */
-      border: none;
-      color: white;
-      padding: 15px 32px;
-      text-align: center;
-      text-decoration: none;
-      display: inline-block;
-      font-size: 16px;
-      border-radius: 8px;
-      width: 90%
-    }
-    
-    button:active {
-      background-color: #3e8e41;
-      box-shadow: 0 5px #666;
-      transform: translateY(4px);
-    }
-    
-    textarea
-    {
-      border:1px solid #999999;
-      width:100%;
-      margin:5px 0;
-      padding:3px;
-    }
-    
-    input[type='number']{
-        width: 80px;
-    }
-    
-    img 
-    {
-      width: 256px;
-      height: auto;
-      border-radius: 8px;
-    }
-    
-    
-    
-    </style>
 
 <main role="main" class="container">
     
     <div class="container">
         
-       
-       
-        
-        <div class="col" style="text-align: center;">
+        <div class="col" style="text-align: center;">            
             
-            
-            <p><h1>Hello, {{safebox.handle}}@{{request.url.hostname}} ! </h1>
+            <h3>{{safebox.handle}}@{{request.url.hostname}}</h3>
             <img src="https://robohash.org/{{safebox.handle}}">
-            <p>Your access_key is: {{safebox.access_key}}</p>
-            <p>Your seed phrase is: {{safebox.seed_phrase}}</p>  
-            <p>Your handle is: {{safebox.handle}}</p> 
-            <p>Your balance is: {{safebox.balance}}</p>
-            
-           
+            <br><br>
+            <p>Your handle is: {{safebox.handle}}</p>             
+            <p>Your seed phrase is: <br>
+            <hr>
+            <b>{{safebox.seed_phrase}}</b></p>  
+            <hr>            
+            <p>Your access_key is: </b></p>
+            <b>{{safebox.access_key}}</b></p>
+            <p>Your balance is: {{safebox.balance}} sats</p>   
             <br>
             <br>
             <button id="ln_scan_button"onclick="scanCode()">Hello</button>

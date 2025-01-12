@@ -16,9 +16,8 @@ from app.config import Settings
 
 import logging, jwt
 
-# Secret key for signing JWT
-SECRET_KEY = "foobar"
-ALGORITHM = "HS256"
+
+
 
 templates = Jinja2Templates(directory="templates")
 engine = create_engine("sqlite:///data/database.db")
@@ -28,7 +27,7 @@ router = APIRouter()
 settings = Settings()
 
 @router.post("/login", tags=["safebox"])
-def login(access_key: str):
+def login(access_key: str = Form()):
 
     
     # Authenticate user
@@ -73,7 +72,7 @@ def protected_route(request: Request, access_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Missing access token")
 
     try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         access_key = payload.get("sub")
         if not access_key:
             raise HTTPException(status_code=401, detail="Invalid token")
