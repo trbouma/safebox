@@ -7,8 +7,13 @@
 <script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
 
 <script>
+
+  var reveal_seed_phrase = false;
+  var reveal_access_key = false;
+
   async function logout() {
   var data; 
+  alert("log out");
   await fetch('/safebox/logout', {
         method: "GET",
         headers: {"Content-Type": "application/json"}        
@@ -19,10 +24,46 @@
   
   //location.reload();
   window.location.href="/";
-  // alert("log out");
+  
   
 
 }
+
+function revealSeedPhrase() {
+    var reveal_seed_phrase_text = document.getElementById("seed_phrase_reveal_text");
+    //alert("reveal seed phrase!");
+    if (reveal_seed_phrase == false) 
+    {
+        
+        
+        reveal_seed_phrase_text.textContent = "{{safebox.seed_phrase}}";
+        reveal_seed_phrase = true;
+    }
+    else
+    {
+        reveal_seed_phrase_text.textContent = "*********";
+        reveal_seed_phrase = false;
+    }
+  }
+
+  function revealAccessKey() {
+    var reveal_access_key_text = document.getElementById("access_key_reveal_text");
+    //alert("reveal seed phrase!");
+    if (reveal_access_key == false) 
+    {
+        
+        
+        access_key_reveal_text.textContent = "{{safebox.access_key}}";
+        reveal_access_key = true;
+    }
+    else
+    {
+        access_key_reveal_text.textContent = "*********";
+        reveal_access_key = false;
+    }
+  } 
+
+
 
 </script>
 
@@ -40,10 +81,12 @@
   <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>             
   <p>My seed phrase is: <br>
   <hr>
-  <b>{{safebox.seed_phrase}}</b></p>  
+  <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
+  
   <hr>            
   <p>My access_key is: </b></p>
-  <b>{{safebox.access_key}}</b></p>
+  <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
+ 
   <p>My balance is: {{safebox.balance}} sats</p>   
   <br>
   <br>
