@@ -10,6 +10,7 @@
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
+  var old_balance = {{safebox.balance}};
 
   async function logout() {
   var data; 
@@ -76,9 +77,18 @@ function revealSeedPhrase() {
   window.location.href="/safebox/profile/{{safebox.handle}}";
 }
 
+
 function checkBalance(balance) {
 
   var heading_balance = document.getElementById("heading_balance");
+  new_balance =  parseInt(JSON.stringify(balance));
+  if (new_balance > old_balance)
+  {   alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
+      old_balance = new_balance;
+
+  
+
+  }
   heading_balance.textContent = JSON.stringify(balance) +" sats"
 
   //alert(JSON.stringify(balance));
@@ -109,7 +119,7 @@ fetch('/safebox/poll')
 <div class="center-text">
 
   
-  <h3>My Balance</h3>
+  <h3>My OpenBalance</h3>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  

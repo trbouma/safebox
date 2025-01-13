@@ -23,7 +23,7 @@ settings = Settings()
 
 RELAYS = ['wss://relay.openbalance.app']
 MINTS = ['https://mint.nimo.cash']
-HOME_RELAY = 'wss://relay.openbalance.app'
+# HOME_RELAY = 'wss://relay.openbalance.app'
 LOGGING_LEVEL = 10
 HOME_MINT = 'https://mint.nimo.cash'
 
@@ -54,7 +54,7 @@ def get_info(request: Request):
                 # profile_out = acorn_obj.get_profile()
                 print(f"record: {record}")
                 nsec_test = 'nsec187nscru0596h0s2yuzutf83sp8jkwxjk8ag4tzxkugvg7e7wmdyqgk0ayq'
-                acorn_obj = Acorn(nsec=record.nsec, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+                acorn_obj = Acorn(nsec=record.nsec, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
                 print(acorn_obj.handle)
                 acorn_obj.check_quote(record.quote,record.amount)
                 
@@ -117,7 +117,7 @@ async def ln_pay( amount: float,
         else:
             raise HTTPException(status_code=404, detail=f"{name} not found")
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
@@ -151,7 +151,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     NSEC = private_key.private_key_bech32()
 
 
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
     
     nsec_new = await acorn_obj.create_instance()
@@ -198,7 +198,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     return response
     
 @router.get("/onboard/{invite_code}", tags=["lnaddress", "public"])
-async def onboard_safebox(request: Request, invite_code:str):
+async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
     
     private_key = Keys()
     
@@ -207,7 +207,7 @@ async def onboard_safebox(request: Request, invite_code:str):
     NSEC = private_key.private_key_bech32()
 
 
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
     
     nsec_new = await acorn_obj.create_instance()
@@ -216,6 +216,8 @@ async def onboard_safebox(request: Request, invite_code:str):
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
+                                            home_relay=settings.HOME_RELAY,
+                                            onboard_code=invite_code,
                                             access_key=acorn_obj.access_key
                                             )
     
@@ -258,7 +260,7 @@ async def acess_safebox(request: Request, access_key:str):
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=HOME_RELAY, mints=MINTS)
+    acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=settings.HOME_RELAY, mints=MINTS)
     await acorn_obj.load_data()
 
     return {"handle": safebox_found.handle,
