@@ -13,6 +13,9 @@
   var old_balance = "{{safebox.balance}}";
   var onboard = "{{onboard}}";
 
+ 
+ 
+
   if (onboard=="True") {
   alert("Welcome to Safebox! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!");
   }
@@ -86,13 +89,18 @@ function revealSeedPhrase() {
 function checkBalance(balance) {
 
   var heading_balance = document.getElementById("heading_balance");
+  var payment_notification = document.getElementById("payment_notification");
   new_balance =  parseInt(JSON.stringify(balance));
   if (new_balance > old_balance)
-  {   alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
+  {   // alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
+      payment_notification.textContent = (new_balance-old_balance).toString() + " sats paid!";
       old_balance = new_balance;
+      
 
-  
-
+  }
+  else
+  {
+    payment_notification.textContent = "Waiting for Payment!" ;
   }
   heading_balance.textContent = JSON.stringify(balance) +" sats"
 
@@ -133,6 +141,8 @@ fetch('/safebox/poll')
   
   <h3>My OpenBalance</h3>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>
+  <span id="payment_notification">Please Pay!</span>
+  <br>
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  
   <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
