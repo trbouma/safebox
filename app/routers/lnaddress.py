@@ -197,7 +197,52 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     
     return response
     
+@router.get("/onboard/{invite_code}", tags=["lnaddress", "public"])
+async def onboard_safebox(request: Request, invite_code:str):
     
+    private_key = Keys()
+    
+    print(invite_code)
+    
+    NSEC = private_key.private_key_bech32()
+
+
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    await acorn_obj.load_data()
+    
+    nsec_new = await acorn_obj.create_instance()
+    profile_info = acorn_obj.get_profile()
+
+    register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
+                                            npub=acorn_obj.pubkey_bech32,
+                                            nsec=acorn_obj.privkey_bech32,
+                                            access_key=acorn_obj.access_key
+                                            )
+    
+    with Session(engine) as session:
+        session.add(register_safebox)
+        session.commit()
+
+
+
+        # Create JWT token
+    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=8))
+
+    # Create response with JWT as HttpOnly cookie
+    response = RedirectResponse(url="/safebox/access", status_code=302)
+    # response = JSONResponse({"message": "Login successful"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevent JavaScript access
+        
+        secure=True,  # Set to True in production to enforce HTTPS
+        samesite="Lax",  # Protect against CSRF
+    )
+
+
+    
+    return response  
     
 
 @router.post("/access", tags=["lnaddress"])
