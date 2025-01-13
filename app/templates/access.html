@@ -70,7 +70,11 @@ function revealSeedPhrase() {
     }
   } 
 
+  async function acceptPayment() {
 
+  alert("Accept Payment {{safebox.handle}}");
+  window.location.href="/safebox/profile/{{safebox.handle}}";
+}
 
 </script>
 
@@ -83,12 +87,14 @@ function revealSeedPhrase() {
   <h3>My Balance</h3>
   <h4>{{safebox.balance}} sats</h4>
   <img src="https://robohash.org/{{safebox.handle}}">
+  <br>  
+  <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
   <br><br>
   <p>My Lightning Address is: </p>
   <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
   <button id="ln_scan_button"onclick="scanCode()">Scan</button>  
   <br><br>  
-  <button id="ln_scan_button"onclick="logoutx()">Accept Payment</button>  
+  <button id="ln_accept_payment"onclick="receivePayment()">Receive</button>  
   <hr>
   Make a Lighting Payment To:
   <br><input style="width:100%;" list="contacts" placeholder="enter lightning address"  id="ln_recipient" name="ln_recipient" value="{{ln_recipient}}" size="24" oninput="getMode()" onchange="setMode()">

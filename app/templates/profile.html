@@ -1,0 +1,350 @@
+{% extends "uxbase.html" %}
+
+{% block title %}{{user_name}} {% endblock %}
+{% block head %}
+{{ super() }}
+
+    <meta name="twitter:image" content="/img/{{user_name}}">
+    <meta property="og:image" content="/img/{{user_name}}" />
+
+
+<script>
+
+
+// global variables from template 
+var wallet_name = "{{user_name}}";
+var invoice_hash = "hash";
+var invoice_pr = "None";
+var logged_in = "{{logged_in}}";
+var token = "{{token}}";
+var amount = {{amount}};
+
+
+var currency = "{{currency}}";
+var ecash_aquire_mode = "scan";
+
+
+
+
+async function backToWallet() {
+
+
+window.location.href="/wallet/";
+
+}
+
+async function gotoHome() {
+
+
+window.location.href="/wallet/";
+
+}
+
+async function scanCode() {
+
+
+window.location.href="/wallet/scanner";
+
+}
+
+function delayFunction() {
+  // alert('Hello');
+  var ln_invoice_img = document.getElementById("ln_invoice_img");
+
+  ln_invoice_img.src = "/wallet/qrcode/{{lightning_address}}";
+  
+}
+
+function lightningAddress()
+{ 
+    // alert("hello");
+    invoice_hash = "hash";
+    var ln_invoice_img = document.getElementById("ln_invoice_img");
+    var ln_invoice_status = document.getElementById("invoice_status");
+    ln_invoice_img.src = "/safebox/qr/{{lightning_address}}";
+    ln_invoice_status.textContent = "Scan Lightning Address.";
+
+
+}
+async function fetchData(url) {
+    try {
+        const response = await fetch(url);
+
+        // Check if the request was successful
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error("There was a problem with the fetch operation:", error);
+    }
+}
+
+function acceptecash(){
+    var data;
+    var ecash_token = document.getElementById("ecash_input").textContent;
+    const submit_data = {"wallet_name": "{{user_name}}", "ecash_token": ecash_token};
+   
+   fetch('/wallet/acceptecash', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
+
+    alert("Accepted ecash! " );
+}
+
+async function getecash(){
+   var data;
+   var ecash_token = document.getElementById("ecash_input");
+   var ecash_input_button = document.getElementById("ecash_input_button");
+   var ecash_amount = 2;
+   const submit_data = {"wallet_name": "{{user_name}}", "ecash_token": ecash_token.value, "ecash_amount": ecash_amount, "transaction_token": token};
+   // alert(JSON.stringify(submit_data));
+
+   if (ecash_aquire_mode == "scan")
+   {
+    alert("scanning!"+ wallet_name);
+    window.location.href="/wallet/scanner/?wallet_name="+wallet_name +"&acquire_mode=public";
+    return;
+   }
+   // alert("Redeeming ecash!" + ecash_aquire_mode);
+   ecash_input_button.textContent = "Redeeming ecash, please wait...";
+   ecash_input_button.disabled =true;
+   await fetch('/wallet/acceptecash', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data['msg']));
+    
+    ecash_token.value = "";
+    ecash_input_button.textContent = "Scan ecash";
+    ecash_input_button.disabled =false;
+    ecash_aquire_mode = 'scan';
+}
+
+function getStatus(challenge_status) {
+    console.log(challenge_status);
+    alert(JSON.stringify(challenge_status['msg']));
+
+}
+
+setInterval(pollInvoice, 3000);
+
+function pollInvoice() {
+  var data; 
+    
+  if (invoice_hash == "hash") {
+    return;
+  }
+  else {
+    fetch('/pollinvoice/' + invoice_hash)
+        .then((response) => response.json())
+        .then((data) => checkInvoiceStatus(data['paid']));
+  }
+
+}
+
+async function copytoClipboard() {
+    var ln_invoice_status = document.getElementById("invoice_status");
+    var ln_invoice_img = document.getElementById("ln_invoice_img"); 
+
+
+    if (invoice_hash == "hash")
+    {  
+
+        ln_invoice_img.src = "/wallet/qrcode/{{lightning_address}}";
+        ln_invoice_status.textContent = "Scan Lightning Address.";
+    
+    } else
+    {
+
+        await navigator.clipboard.writeText(invoice_pr);
+        ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
+
+        //if (logged_in == "True")
+        //{
+        //     
+        //    window.location.href="/wallet/?wallet_mode=lninvoice&qr_code="+ invoice_pr.toUpperCase()
+        // }
+        
+
+    }
+    
+
+}
+
+async function checkEcash() {
+    var ecash_input_button = document.getElementById("ecash_input_button");
+    var ecash_input = document.getElementById("ecash_input");
+    
+   
+    if (ecash_input.value !== "")
+    {
+        ecash_input_button.textContent = "Redeem ecash";
+        ecash_aquire_mode = "text"
+    }
+    else
+    {
+        ecash_input_button.textContent = "Scan ecash";
+        ecash_aquire_mode = "scan"
+        
+    }
+    
+
+
+}
+
+function checkInvoiceStatus(invoice_status) {
+  var ln_invoice_img = document.getElementById("ln_invoice_img"); 
+  var user_profile_img = document.getElementById("user_profile_img"); 
+  var ln_invoice_status = document.getElementById("invoice_status");
+  var ln_invoice_button = document.getElementById("ln_invoice_button");
+  if (JSON.stringify(invoice_status) == 'true') {
+    
+   
+    ln_invoice_img.src = "/static/images/nimo/green-check-2.png";   
+    ln_invoice_status.textContent = "Invoice Paid! Thank You!";
+    ln_invoice_button.textContent = "Create Lightning Invoice.";
+    invoice_hash = "hash";
+
+    
+    if (logged_in=="True") {
+       window.location.href="/wallet/txhistory/?from_payment=true";
+     }
+    
+    
+  
+    
+
+    
+    
+    
+  }
+  
+
+}
+
+async function createLNInvoice() {
+    
+    var ln_invoice_amount = document.getElementById("ln_invoice_amount").value;
+    var ln_invoice_img = document.getElementById("ln_invoice_img");
+    var ln_invoice_status = document.getElementById("invoice_status");
+    var ln_invoice_button = document.getElementById("ln_invoice_button");
+    var ln_currency =  document.getElementById("ln_currency").value;
+
+    var user_profile_img = document.getElementById("user_profile_img");
+
+    ln_invoice_img.src = "/static/images/nimo/circle-256.gif";
+    // alert("hello " + ln_currency.value);
+    // alert("create LN Invoice" + ln_invoice_amount.value);
+    
+    var url_to_call = "/getinvoice/" + wallet_name + "/" + ln_currency + "/" + ln_invoice_amount + "/" + token;
+    ln_invoice_status.textContent = "Creating Lightning Invoice. Please wait for QR code to appear";
+    
+
+    const data = await fetchData(url_to_call);
+    const parsedObject = JSON.parse(JSON.stringify(data));
+    if (parsedObject.status == "OK")
+    {
+        // alert(parsedObject.msg);
+        invoice_pr = parsedObject.invoice;
+        invoice_hash = parsedObject.hash;
+        ln_invoice_img.src = "/wallet/qrcode/" + parsedObject.invoice;
+        ln_invoice_img.width = 300;
+
+        // user_profile_img.src = "/wallet/qrcode/" + parsedObject.invoice;
+        // user_profile_img.width = 256;
+        
+        
+    }
+    else
+    {
+        alert("There was an error!");
+    }
+    
+    ln_invoice_status.textContent = "Please scan QR Code to pay or click to copy to clipboard.";
+    // ln_invoice_button.textContent = "Please Pay Invoice";
+    ln_invoice_img.src = "/wallet/qrcode/" + parsedObject.invoice;
+   
+}
+
+
+
+var user_name = '{{user_name}}';
+
+ 
+</script>
+
+
+
+{% endblock %}
+
+{% block page_content %}
+
+<style>
+    button {
+      background-color: #008CBA; /* Green */
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      border-radius: 8px;
+      width: 90%
+    }
+    
+    button:active {
+      background-color: #3e8e41;
+      box-shadow: 0 5px #666;
+      transform: translateY(4px);
+    }
+    
+    textarea
+    {
+      border:1px solid #999999;
+      width:90%;
+      margin:5px 0;
+      padding:3px;
+    }
+    
+    input[type='number']{
+        width: 80px;
+    }
+
+    img {
+  border-radius: 8px;
+    }
+    
+  
+    </style>
+
+<div class="center-text">
+    <h2>Pay {{lightning_address}}</h2> 
+    <p id="invoice_status">Scan Lightning Address!</p>
+    <img id="ln_invoice_img" onclick="copytoClipboard()" width="256"  src="/safebox/qr/{{lightning_address}}">
+    <br>
+    <a href="/"><img id="user_profile_img" width="256"  src="https://robohash.org/{{user_name}}"></a>
+    <p id="invoice_lightning">Create a Lightning Invoice!</p>
+    Amount: <input type="number"  min="0" id="ln_invoice_amount" name="ln_invoice_amount"  value="{{amount}}" size="8">
+    <br><br>
+    <button id="ln_invoice_button" onclick="createLNInvoice()">Create Lightning Invoice </button>
+</div>
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

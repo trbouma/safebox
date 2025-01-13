@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends, Request, APIRouter, Respons
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
+from typing import Optional
 from fastapi.templating import Jinja2Templates
-import asyncio
+import asyncio,qrcode, io
 
 from datetime import datetime, timedelta
 from safebox.acorn import Acorn
@@ -65,6 +66,17 @@ def logout():
     response.delete_cookie(key="access_token")
     return response
 
+
+
+@router.get("/qr/{qr_text}", tags=["public"])
+def create_authqr(qr_text: str):
+          
+    img = qrcode.make(qr_text)
+    buf = io.BytesIO()
+    img.save(buf)
+    buf.seek(0) # important here!
+    return StreamingResponse(buf, media_type="image/jpeg")
+
 @router.get("/access", tags=["safebox"])
 def protected_route(request: Request, access_token: str = Cookie(None)):
     # Extract and verify JWT from the cookie
@@ -97,3 +109,32 @@ def protected_route(request: Request, access_token: str = Cookie(None)):
     # Token is valid, proceed
     return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox})
     return {"message": f"Welcome, {access_key}!"}
+
+@router.get("/profile/{handle}", response_class=HTMLResponse)
+async def root_get_user_profile(    request: Request, 
+                                    handle: str, 
+
+                                   
+                                ):
+
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise HTTPException(status_code=404, detail=f"{handle} not found")
+
+    user_name = safebox_found.handle    
+    lightning_address = f"{safebox_found.handle}@{request.url.hostname}"
+
+    return templates.TemplateResponse("profile.html", 
+                                      {"request": request, "user_name": user_name, 
+                                       "lightning_address": lightning_address,
+                                       
+                                       
+                                         
+                                      
+                                          
+                                            })
