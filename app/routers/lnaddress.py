@@ -65,7 +65,7 @@ def get_info(request: Request):
     return {"detail": request.url.hostname}
 
 @router.get("/.well-known/lnurlp/{name}")
-def ln_resolve(request: Request, name: str = None):
+def ln_resolve(request: Request, name: str = None, amount: int = None):
 
     ln_callback = f"https://{request.url.hostname}/lnpay/{name}"
     with Session(engine) as session:

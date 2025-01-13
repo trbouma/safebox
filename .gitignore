@@ -11,6 +11,7 @@ scratch
 
 # Data Stuff
 data/*
+data/database.db
 !data/
 
 .python-version
