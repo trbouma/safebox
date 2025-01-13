@@ -79,7 +79,7 @@ def create_authqr(qr_text: str):
     return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.get("/access", tags=["safebox", "protected"])
-def protected_route(request: Request, access_token: str = Cookie(None)):
+def protected_route(request: Request, onboard: bool = False, access_token: str = Cookie(None)):
     try:
         safebox_found = fetch_safebox(access_token=access_token)
     except:
@@ -87,11 +87,11 @@ def protected_route(request: Request, access_token: str = Cookie(None)):
         return response
         
 
-
+    print(f"onboard {onboard}")
     safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
     asyncio.run(safebox.load_data())
     # Token is valid, proceed
-    return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox})
+    return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox, "onboard": onboard})
     return {"message": f"Welcome, {access_key}!"}
 
 @router.get("/poll", tags=["protected"])

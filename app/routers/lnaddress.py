@@ -146,6 +146,9 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     
     private_key = Keys()
     
+    if not invite_code or invite_code=="":
+        invite_code = "test_user"
+
     print(invite_code)
     
     NSEC = private_key.private_key_bech32()
@@ -160,7 +163,10 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
+                                            home_relay=settings.HOME_RELAY,
+                                            onboard_code=invite_code,
                                             access_key=acorn_obj.access_key
+                                            
                                             )
     
     with Session(engine) as session:
@@ -173,7 +179,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=1))
 
     # Create response with JWT as HttpOnly cookie
-    response = RedirectResponse(url="/safebox/access", status_code=302)
+    response = RedirectResponse(url="/safebox/access?onboard=true", status_code=302)
     # response = JSONResponse({"message": "Login successful"})
     response.set_cookie(
         key="access_token",
@@ -184,16 +190,8 @@ async def create_safebox(request: Request, invite_code:str = Form()):
         samesite="Lax",  # Protect against CSRF
     )
 
-    wallet_info = {"detail": request.url.hostname,
-            "nsec": nsec_new,
-            "npub": f"{acorn_obj.pubkey_bech32} ",
-            "seed_phrase": acorn_obj.seed_phrase,
-            "access_key": acorn_obj.access_key,
-            "address": f"{acorn_obj.handle}@{request.url.hostname}",
-          
-            
-            }
-    print(wallet_info)
+    
+ 
     
     return response
     

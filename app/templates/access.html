@@ -10,7 +10,12 @@
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
-  var old_balance = {{safebox.balance}};
+  var old_balance = "{{safebox.balance}}";
+  var onboard = "{{onboard}}";
+
+  if (onboard=="True") {
+  alert("Welcome to Safebox! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!");
+  }
 
   async function logout() {
   var data; 
@@ -111,12 +116,19 @@ fetch('/safebox/poll')
 
 }
 
+
+
 </script>
 
 {% endblock %}
 
 {% block page_content %}
 <div class="center-text">
+  {% if onboard %} 
+    Welcome!
+  {% else %}  
+    Welcome back!
+  {% endif %}
 
   
   <h3>My OpenBalance</h3>
