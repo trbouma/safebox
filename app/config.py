@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SERVICE_TAG_LINE: str = 'Your money. Your data'
     SECRET_KEY: str = "foobar"
     ALGORITHM: str = "HS256"
+    DATABASE: str = "sqlite:///data/database.db"
 
     class Config:
         env_file = '.env'

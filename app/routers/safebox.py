@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from safebox.acorn import Acorn
 
 
-from app.utils import create_jwt_token
+from app.utils import create_jwt_token, fetch_safebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from app.config import Settings
@@ -18,14 +18,15 @@ from app.config import Settings
 import logging, jwt
 
 
-
+settings = Settings()
 
 templates = Jinja2Templates(directory="app/templates")
-engine = create_engine("sqlite:///data/database.db")
-SQLModel.metadata.create_all(engine)
+
 
 router = APIRouter()
-settings = Settings()
+
+engine = create_engine(settings.DATABASE)
+SQLModel.metadata.create_all(engine)
 
 @router.post("/login", tags=["safebox"])
 def login(access_key: str = Form()):
@@ -77,38 +78,35 @@ def create_authqr(qr_text: str):
     buf.seek(0) # important here!
     return StreamingResponse(buf, media_type="image/jpeg")
 
-@router.get("/access", tags=["safebox"])
+@router.get("/access", tags=["safebox", "protected"])
 def protected_route(request: Request, access_token: str = Cookie(None)):
-    # Extract and verify JWT from the cookie
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Missing access token")
-
     try:
-        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        access_key = payload.get("sub")
-        if not access_key:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+        
 
-    print(access_key)
-    # Token is valid, now get the safebox
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
-        safeboxes = session.exec(statement)
-        safebox_found = safeboxes.first()
-        if safebox_found:
-            handle = safebox_found.handle
-        else:
-            raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
     safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
     asyncio.run(safebox.load_data())
     # Token is valid, proceed
     return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox})
     return {"message": f"Welcome, {access_key}!"}
+
+@router.get("/poll", tags=["protected"])
+async def poll_for_payment(request: Request, access_token: str = Cookie(None)):
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+        safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+        await safebox.load_data()
+    except:
+        return {"detail": "not logged in"}
+
+
+
+    return {"detail": "polling",
+            "balance": safebox.balance}
 
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 

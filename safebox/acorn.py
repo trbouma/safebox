@@ -1139,7 +1139,7 @@ class Acorn:
         # self._mint_proofs(quote,amount)
 
          
-        return cliQuote(invoice=invoice, quote=quote)
+        return cliQuote(invoice=invoice, quote=quote, mint_url=url)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
     async def poll_for_payment(self, quote:str, amount: int, mint:str=None):

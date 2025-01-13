@@ -15,10 +15,11 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
-from app.tasks import poll_for_payment
+from app.tasks import poll_for_payment, callback_done
 from app.utils import create_jwt_token
+from app.config import Settings
 
-# settings = Settings()
+settings = Settings()
 
 RELAYS = ['wss://relay.openbalance.app']
 MINTS = ['https://mint.nimo.cash']
@@ -26,7 +27,7 @@ HOME_RELAY = 'wss://relay.openbalance.app'
 LOGGING_LEVEL = 10
 HOME_MINT = 'https://mint.nimo.cash'
 
-engine = create_engine("sqlite:///data/database.db")
+engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
 
@@ -124,10 +125,11 @@ async def ln_pay( amount: float,
 
 
 
-    asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT))
+    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT))
+    
 
     success_obj = {     "tag": "message",
-                            "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote}"  }
+                            "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }
 
     
 

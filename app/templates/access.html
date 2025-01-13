@@ -70,10 +70,35 @@ function revealSeedPhrase() {
     }
   } 
 
-  async function acceptPayment() {
+  async function receivePayment() {
 
-  alert("Accept Payment {{safebox.handle}}");
+  //alert("Receive Payment {{safebox.handle}}");
   window.location.href="/safebox/profile/{{safebox.handle}}";
+}
+
+function checkBalance(balance) {
+
+  var heading_balance = document.getElementById("heading_balance");
+  heading_balance.textContent = JSON.stringify(balance) +" sats"
+
+  //alert(JSON.stringify(balance));
+}
+
+
+
+
+setInterval(pollPayment, 10000);
+
+function pollPayment() {
+var data; 
+
+
+fetch('/safebox/poll')
+    .then((response) => response.json())
+    .then((data) => checkBalance(data['balance']));
+
+// alert("hello");
+
 }
 
 </script>
@@ -85,14 +110,14 @@ function revealSeedPhrase() {
 
   
   <h3>My Balance</h3>
-  <h4>{{safebox.balance}} sats</h4>
+  <h4 id="heading_balance">{{safebox.balance}} sats</h4>
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  
   <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
   <br><br>
   <p>My Lightning Address is: </p>
   <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
-  <button id="ln_scan_button"onclick="scanCode()">Scan</button>  
+  <button id="ln_scan_button" onclick="scanCode()">Scan</button>  
   <br><br>  
   <button id="ln_accept_payment"onclick="receivePayment()">Receive</button>  
   <hr>
@@ -117,7 +142,7 @@ function revealSeedPhrase() {
   <p>My access_key is: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
  
-  <p>My balance is: {{safebox.balance}} sats</p>   
+   
   <br>
   <br>
   <button id="ln_scan_button"onclick="logout()">Logout</button>

@@ -23,3 +23,4 @@ class PaymentQuote(SQLModel, table=True):
     quote: str
     amount: int
     mint: str
+    paid: bool

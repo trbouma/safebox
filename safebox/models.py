@@ -207,6 +207,7 @@ class mintQuote(BaseModel):
 class cliQuote(BaseModel):
     invoice:    str
     quote:      str
+    mint_url:   str
 
 
 class KeysetsResponseKeyset(BaseModel):
