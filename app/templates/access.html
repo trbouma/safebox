@@ -113,6 +113,15 @@ alert(backup_message);
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
 
 }
+async function copyAddress() {
+
+await navigator.clipboard.writeText("{{safebox.handle}}@{{request.url.hostname}}");
+alert("{{safebox.handle}}@{{request.url.hostname}}"+ " copied to clipboard!");
+
+
+
+
+}
 async function privateData() {
 
 
@@ -181,15 +190,17 @@ fetch('/safebox/poll')
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>
   <span id="payment_notification">Scan My Address!</span>
   <br>
+ 
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  
   <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
   <br><br>
+  
   <p>My Lightning Address is: </p>
-  <p><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
+  <p id="ln_address_text" onclick="copyAddress()"><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>  
   <br><br>  
-  <button id="ln_accept_payment"onclick="receivePayment()">Receive</button>  
+  <button id="ln_accept_payment" onclick="receivePayment()">Receive</button>  
 
   <hr>
   Make a Lighting Payment To:
@@ -204,12 +215,12 @@ fetch('/safebox/poll')
   
   <hr>
   <i><h4>My Personal Stuff</h4></i>
-  <hr>       
+      
   <p>My seed phrase is: <br>
  
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
   
-  <hr>            
+          
   <p>My access_key is: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
   {% if onboard %} 
@@ -220,9 +231,10 @@ fetch('/safebox/poll')
   </button>
   <br>
   <br>
-  <button id="my_private_data_button" onclick="privateData()" >Private Data</button>
+  
 
   {% endif %}
+  <button id="my_private_data_button" onclick="privateData()" >Private Data</button>
  
   <hr>
   <i><h4>My Social Stuff</h4></i>
@@ -231,6 +243,7 @@ fetch('/safebox/poll')
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br>
   <br>
+  <hr>
   <i><h4>Exit Safebox</h4></i>
   <br>
   <button id="logout_button"onclick="logout()" >Logout</button>
