@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-import jwt
+import jwt, re
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -66,3 +66,12 @@ def fetch_safebox(access_token) -> RegisteredSafebox:
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
         
     return safebox_found
+
+def check_ln_address(ln_address: str):
+    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    # pass the regular expression
+    # and the string into the fullmatch() method
+    if(re.fullmatch(regex, ln_address)):
+        return True 
+    else:
+        False  

@@ -100,7 +100,7 @@
         var header_msg = document.getElementById('header-msg');
         header_msg.innerText = "Success! Please wait a moment...";
         scanner.stop();
-        window.location.href="/v1/acquire/scanresult?qr_code=" + result.data;
+        window.location.href="/scanner/scanresult?qr_code=" + result.data;
         
     }
 
@@ -199,7 +199,7 @@ async function backToWallet() {
 async function backToProfile() {
 
 
-window.location.href="/{{wallet_name}}" ;
+window.location.href="/safebox/access" ;
 
 }
 </script>

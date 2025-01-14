@@ -22,7 +22,8 @@
   var reveal_access_key = false;
   var old_balance = "{{safebox.balance}}";
   var onboard = "{{onboard}}";
-  var clipboard_data = "Access Key: {{safebox.access_key}} \n\nRecovery Phrase (12 words): {{safebox.seed_phrase}}"
+  var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{safebox.access_key}} \n\nRecovery Phrase (12 words):\n\n{{safebox.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
+  var backup_message = "Your important data is copied to the clipboard! \n\nPlease copy your access key and recovery phrase to a secure and private place \n\nDon't delay. This message appears the first time you use your wallet.";
 
  
  
@@ -105,7 +106,16 @@ function onboardFriend() {
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(clipboard_data);
-alert("copied to clipboard!");
+alert(backup_message);
+
+
+// ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
+
+}
+async function privateData() {
+
+
+alert("Coming Soon!");
 
 
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
@@ -202,7 +212,14 @@ fetch('/safebox/poll')
   <p>My access_key is: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
   {% if onboard %} 
-  <button id="clipboard_button" onclick="copytoClipboard()" >Copy to Clipboard</button>
+  <button id="clipboard_button" onclick="copytoClipboard()" >
+    <b>***Important***</b> 
+    <br> Copy My Access Key and Recovery Phrase to Clipboard
+    <br><b>***Click Now***</b>
+  </button>
+  <br>
+  <br>
+  <button id="my_private_data_button" onclick="privateData()" >My Private Data</button>
 
   {% endif %}
  
