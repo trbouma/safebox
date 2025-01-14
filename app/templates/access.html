@@ -130,7 +130,7 @@ function checkBalance(balance) {
   new_balance =  parseInt(JSON.stringify(balance));
   if (new_balance > old_balance)
   {   alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
-      payment_notification.textContent = (new_balance-old_balance).toString() + " sats paid!";
+      payment_notification.textContent = (new_balance-old_balance).toString() + " sats received!";
       old_balance = new_balance;
       
 
