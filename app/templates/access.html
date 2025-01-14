@@ -4,9 +4,19 @@
 {% block head %}
 {{ super() }}
 
+
+
 <script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
 
+<script type="module">
+
+  import { Confetti } from './confetti.js';
+
+
+</script>
+
 <script>
+
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
@@ -79,12 +89,17 @@ function revealSeedPhrase() {
     }
   } 
 
-  async function receivePayment() {
+  function receivePayment() {
 
   //alert("Receive Payment {{safebox.handle}}");
   window.location.href="/safebox/profile/{{safebox.handle}}";
 }
 
+function onboardFriend() {
+
+  //alert("Onboard");
+  window.location.href="/invite?onboard_code={{safebox.handle}}";
+}
 
 function checkBalance(balance) {
 
@@ -92,7 +107,7 @@ function checkBalance(balance) {
   var payment_notification = document.getElementById("payment_notification");
   new_balance =  parseInt(JSON.stringify(balance));
   if (new_balance > old_balance)
-  {   // alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
+  {   alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
       payment_notification.textContent = (new_balance-old_balance).toString() + " sats paid!";
       old_balance = new_balance;
       
@@ -139,9 +154,10 @@ fetch('/safebox/poll')
   {% endif %}
 
   
+
   <h3>My OpenBalance</h3>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>
-  <span id="payment_notification">Please Pay!</span>
+  <span id="payment_notification">Scan My Address!</span>
   <br>
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  
@@ -152,6 +168,7 @@ fetch('/safebox/poll')
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>  
   <br><br>  
   <button id="ln_accept_payment"onclick="receivePayment()">Receive</button>  
+
   <hr>
   Make a Lighting Payment To:
   <br><input style="width:100%;" list="contacts" placeholder="enter lightning address"  id="ln_recipient" name="ln_recipient" value="{{ln_recipient}}" size="24" oninput="getMode()" onchange="setMode()">
@@ -174,10 +191,16 @@ fetch('/safebox/poll')
   <p>My access_key is: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
  
-   
+  <hr>
+  <i><h4>Social Stuff</h4></i>
+  
+  <br>
+  <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br>
   <br>
-  <button id="ln_scan_button"onclick="logout()">Logout</button>
+  <i><h4>Exit Safebox</h4></i>
+  <br>
+  <button id="logout_button"onclick="logout()" >Logout</button>
             
 </div>
 

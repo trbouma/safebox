@@ -2,11 +2,13 @@ from fastapi import Request, APIRouter, Depends, Response, Form, HTTPException, 
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
+
 from pydantic import BaseModel
 import random
 import string
 import asyncio
 from datetime import timedelta
+import qrcode, io
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -20,6 +22,7 @@ from app.utils import create_jwt_token
 from app.config import Settings
 
 settings = Settings()
+templates = Jinja2Templates(directory="app/templates")
 
 RELAYS = ['wss://relay.openbalance.app']
 MINTS = ['https://mint.nimo.cash']
@@ -229,7 +232,8 @@ async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
     access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=8))
 
     # Create response with JWT as HttpOnly cookie
-    response = RedirectResponse(url="/safebox/access", status_code=302)
+    # response = RedirectResponse(url="/safebox/access", status_code=302)
+    response = RedirectResponse(url="/safebox/access?onboard=true", status_code=302)
     # response = JSONResponse({"message": "Login successful"})
     response.set_cookie(
         key="access_token",
@@ -239,11 +243,22 @@ async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
         secure=True,  # Set to True in production to enforce HTTPS
         samesite="Lax",  # Protect against CSRF
     )
-
-
     
     return response  
-    
+
+@router.get("/invite", response_class=HTMLResponse, tags=["public"]) 
+async def invite_friend(request: Request, onboard_code: str):  
+        return templates.TemplateResponse( "invite.html", {"request": request, "title": "Welcome Page", "message": "You're Invited!", "onboard_code": onboard_code})
+
+@router.get("/inviteqr/{onboard_code}", tags=["public"])
+def create_inviteqr(request: Request, onboard_code: str):
+
+    qr_text = f"{request.base_url}onboard/{onboard_code}"      
+    img = qrcode.make(qr_text)
+    buf = io.BytesIO()
+    img.save(buf)
+    buf.seek(0) # important here!
+    return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.post("/access", tags=["lnaddress"])
 async def acess_safebox(request: Request, access_key:str):
