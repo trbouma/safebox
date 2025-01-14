@@ -22,6 +22,7 @@
   var reveal_access_key = false;
   var old_balance = "{{safebox.balance}}";
   var onboard = "{{onboard}}";
+  var clipboard_data = "Access Key: {{safebox.access_key}} \n\nRecovery Phrase (12 words): {{safebox.seed_phrase}}"
 
  
  
@@ -99,6 +100,16 @@ function onboardFriend() {
 
   //alert("Onboard");
   window.location.href="/invite?onboard_code={{safebox.handle}}";
+}
+
+async function copytoClipboard() {
+
+await navigator.clipboard.writeText(clipboard_data);
+alert("copied to clipboard!");
+
+
+// ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
+
 }
 
 function checkBalance(balance) {
@@ -190,6 +201,10 @@ fetch('/safebox/poll')
   <hr>            
   <p>My access_key is: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
+  {% if onboard %} 
+  <button id="clipboard_button" onclick="copytoClipboard()" >Copy to Clipboard</button>
+
+  {% endif %}
  
   <hr>
   <i><h4>Social Stuff</h4></i>
