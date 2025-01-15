@@ -1,5 +1,9 @@
 from typing import Optional
 
+from pydantic import BaseModel
+from typing import List
+from enum import Enum
+
 from sqlmodel import Field, SQLModel
 
 
@@ -26,3 +30,8 @@ class PaymentQuote(SQLModel, table=True):
     amount: int
     mint: str
     paid: bool
+
+class lnPay(BaseModel):
+    address: str 
+    amount: int 
+    comment: str

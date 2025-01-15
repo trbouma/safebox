@@ -184,15 +184,49 @@ function setActions(local_action_mode,local_action_data) {
   }
 }
 
+function getlnPayStatus(ln_pay_status) {
+  // var ln_pay_button = document.getElementById("ln_pay_button");
+    console.log(ln_pay_status);
+
+    var status = JSON.stringify(ln_pay_status["detail"]);
+    const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
+    alert("Payment " + parsedObject.detail);
+
+
+   
+
+}
+
 async function lnPay() {
   const recipient_address = document.getElementById("ln_recipient_address");
   const recipient_amount = document.getElementById("ln_recipient_amount");
   const recipient_memo = document.getElementById("ln_recipient_memo");
-  var ln_addressee = recipient_address.value;
+  var ln_address = recipient_address.value;
   var ln_amount = parseInt(recipient_amount.value);
-  var ln_memo = recipient_memo.value;
-  alert("Pay!" + ln_addressee + ln_amount + ln_memo);
+  var ln_comment = recipient_memo.value;
+  alert("Pay! " + ln_address + " " + ln_amount + " with comment "+ ln_comment);
+
+  const submit_data = {"amount": ln_amount,
+                        "address":ln_address,  "comment": ln_comment};
+
+    // alert(JSON.stringify(submit_data));
   
+    // ln_pay_button.textContent = "Please wait...";
+
+      await fetch('/safebox/pay', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},        
+            body: JSON.stringify(submit_data)         
+          })
+        .then((response) => response.json())
+        .then((data) => getlnPayStatus(data));
+        //ln_pay_button.textContent = "Pay to Lightning Address!";
+        //ln_pay_button.disabled = false;
+        
+        // location.reload();
+        //window.location.href="/wallet/"
+      
+
 
 }
 

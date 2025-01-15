@@ -12,7 +12,7 @@ from safebox.acorn import Acorn
 
 from app.utils import create_jwt_token, fetch_safebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, PaymentQuote
+from app.appmodels import RegisteredSafebox, lnPay
 from app.config import Settings
 
 import logging, jwt
@@ -107,23 +107,22 @@ def protected_route(    request: Request,
                                         })
     
 
-@router.get("/pay", tags=["protected"])
+@router.post("/pay", tags=["protected"])
 async def ln_payment(   request: Request, 
-                        ln_address: str, 
-                        ln_amount: int, 
-                        ln_comment: str = "Paid!",
+                        ln_pay: lnPay,
                         access_token: str = Cookie(None)):
+    msg_out ="No payment"
     try:
         safebox_found = fetch_safebox(access_token=access_token)
         safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
         await safebox.load_data()
-        await safebox.pay_multi(amount=ln_amount,lnaddress=ln_address,comment=ln_comment)
+        msg_out = await safebox.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
     except Exception as e:
         return {f"detail": "error {e}"}
 
 
 
-    return {"detail": "pay"}
+    return {"detail": msg_out}
 
 
 @router.get("/poll", tags=["protected"])
