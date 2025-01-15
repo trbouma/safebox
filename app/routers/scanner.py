@@ -33,7 +33,7 @@ router = APIRouter()
 
 
 @router.get("/scan", tags=["scanner"], response_class=HTMLResponse)
-async def get_scanner(request: Request, qr_code: str = "none", wallet_name: str = "user", acquire_mode: str = "public"):
+async def get_scanner(request: Request, qr_code: str = "none", wallet_name: str = "user"):
     """return user information"""
     
    
@@ -41,8 +41,8 @@ async def get_scanner(request: Request, qr_code: str = "none", wallet_name: str 
     
     return templates.TemplateResponse("acquirescan.html", 
                                       {"request": request,
-                                       "wallet_name": wallet_name,
-                                       "acquire_mode": acquire_mode
+                                       "wallet_name": wallet_name
+                                       
                                        
                                        } )
    
@@ -53,11 +53,18 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
    
 
     data = None
+    action_mode = None
+    action_data = None
     #remove any scheme prefixes
     qr_code = qr_code.replace('lightning:','').replace('bitcoin:','').replace("LIGHTNING:","")
     #remove any annoying url prepends
     qr_code = qr_code.replace('https://wallet.cashu.me/?token=',"")
     print(qr_code)
+
+    if check_ln_address(qr_code):
+        action_mode ="lnaddress"
+        action_data= qr_code
+        return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}")
     
     return RedirectResponse(f"/safebox/access")
     

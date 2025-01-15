@@ -8,12 +8,7 @@
 
 <script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
 
-<script type="module">
 
-  import { Confetti } from './confetti.js';
-
-
-</script>
 
 <script>
 
@@ -22,11 +17,13 @@
   var reveal_access_key = false;
   var old_balance = "{{safebox.balance}}";
   var onboard = "{{onboard}}";
+  var action_mode = "{{action_mode}}";
+  var action_data = "{{action_data}}";
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{safebox.access_key}} \n\nRecovery Phrase (12 words):\n\n{{safebox.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease copy your access key and recovery phrase to a secure and private place \n\nDon't delay. This message appears the first time you use your wallet.";
   var onboard_msg = "Welcome to OpenBalance Safebox! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
 
- 
+
  
 
   if (onboard=="True") {
@@ -54,7 +51,7 @@
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}&acquire_mode=private";
+window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}";
 
 }
 
@@ -92,7 +89,9 @@ function revealSeedPhrase() {
     }
   } 
 
-  function receivePayment() {
+  
+
+function receivePayment() {
 
   //alert("Receive Payment {{safebox.handle}}");
   window.location.href="/safebox/profile/{{safebox.handle}}";
@@ -171,6 +170,24 @@ fetch('/safebox/poll')
 }
 
 
+function setActions(local_action_mode,local_action_data) {
+  if (local_action_mode=="lnaddress"){
+     
+      
+      // const input_1 = document.getElementById("ln_recipient_input");
+      const input_1 = document.getElementById("ln_recipient_input");
+      const pay_1 = document.getElementById("ln_pay_button")
+      input_1.value = local_action_data;
+      pay_1.textContent = "Authorize Payment";
+      //alert(local_action_mode  + local_action_data);
+     
+  }
+}
+
+async function lnPay() {
+  alert("Pay!");
+
+}
 
 </script>
 
@@ -195,23 +212,26 @@ fetch('/safebox/poll')
   <br>  
   <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
   <br><br>
+  {{action_mode}} {{action_data}}
   
-  <p>My Lightning Address is: </p>
+  <p><h4>My Lightning Address is:</h4> </p>
   <p id="ln_address_text" onclick="copyAddress()"><b>{{safebox.handle}}@{{request.url.hostname}}</b></p>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>  
   <br><br>  
   <button id="ln_accept_payment" onclick="receivePayment()">Receive</button>  
 
   <hr>
-  Make a Lighting Payment To:
-  <br><input style="width:100%;" list="contacts" placeholder="enter lightning address"  id="ln_recipient" name="ln_recipient" value="{{ln_recipient}}" size="24" oninput="getMode()" onchange="setMode()">
-  <br>Amount:
+  <h4>Make a Lighting Payment To:</h4>
+  <br><input style="width:100%;" type="text" placeholder="enter lightning address"  id="ln_recipient_input" name="ln_recipient_input" value="test" size="24" ">
+  <br>
+  <br><h4>Enter Amount:</h4>
   <br><input type="number" placeholder="0" id="ln_recipient_amount" name="ln_recipient_amount" onchange="checkAmount()" value="" size="8">
   <br>
-  Memo:
+  <br>
+  <h4>Memo:</h4>
   <textarea id="txt_comment" placeholder= "Thanks!" name="txt_comment" rows="3" cols="24"></textarea>
   <br><br>
-  <button id="ln_scan_button" onclick="scanCode()">Pay</button>  
+  <button id="ln_pay_button" onclick="lnPay()">Authorize Payment</button>  
   
   <hr>
   <i><h4>My Personal Stuff</h4></i>
@@ -250,6 +270,10 @@ fetch('/safebox/poll')
             
 </div>
 
+<script>
+setActions(action_mode,action_data);
+
+</script>
 
 {% endblock %}
 

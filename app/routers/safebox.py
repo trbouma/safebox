@@ -79,7 +79,12 @@ def create_authqr(qr_text: str):
     return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.get("/access", tags=["safebox", "protected"])
-def protected_route(request: Request, onboard: bool = False, access_token: str = Cookie(None)):
+def protected_route(    request: Request, 
+                        onboard: bool = False, 
+                        action_mode:str=None, 
+                        action_data: str = None,
+                        access_token: str = Cookie(None)
+                    ):
     try:
         safebox_found = fetch_safebox(access_token=access_token)
     except:
@@ -87,12 +92,39 @@ def protected_route(request: Request, onboard: bool = False, access_token: str =
         return response
         
 
-    print(f"onboard {onboard}")
+    print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
     safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
     asyncio.run(safebox.load_data())
     # Token is valid, proceed
-    return templates.TemplateResponse( "access.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!", "safebox":safebox, "onboard": onboard})
-    return {"message": f"Welcome, {access_key}!"}
+    return templates.TemplateResponse(  "access.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "message": "Welcome to Safebox Web!", 
+                                            "safebox":safebox, 
+                                            "onboard": onboard,
+                                            "action_mode": action_mode,
+                                            "action_data": action_data
+                                        })
+    
+
+@router.get("/pay", tags=["protected"])
+async def ln_payment(   request: Request, 
+                        ln_address: str, 
+                        ln_amount: int, 
+                        ln_comment: str = "Paid!",
+                        access_token: str = Cookie(None)):
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+        safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+        await safebox.load_data()
+        await safebox.pay_multi(amount=ln_amount,lnaddress=ln_address,comment=ln_comment)
+    except Exception as e:
+        return {f"detail": "error {e}"}
+
+
+
+    return {"detail": "pay"}
+
 
 @router.get("/poll", tags=["protected"])
 async def poll_for_payment(request: Request, access_token: str = Cookie(None)):
