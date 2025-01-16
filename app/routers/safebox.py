@@ -158,7 +158,7 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
 def private_data(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
-    """Protected access to private data in home relay"""
+    """Protected access to private data stored in home relay"""
     try:
         safebox_found = fetch_safebox(access_token=access_token)
     except:
@@ -173,6 +173,24 @@ def private_data(       request: Request,
 
                                         })
 
+@router.get("/credentials", tags=["safebox", "protected"])
+def my_credentials(       request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to credentials stored in home relay"""
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    
+
+    return templates.TemplateResponse(  "credentials.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found 
+
+                                        })
 
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 
