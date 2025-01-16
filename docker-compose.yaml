@@ -8,7 +8,7 @@ services:
     ports:
       - "7375:7375"
     environment:
-      - LNAPP_HOME_RELAY=relay.openbalance.app
+      - HOME_RELAY=wss://relay.openbalance.app
     volumes:
       - ./app/templates:/app/app/templates
       - ./data:/app/data

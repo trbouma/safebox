@@ -46,23 +46,7 @@ router = APIRouter()
 @router.get("/info", tags=["lnaddress"])
 def get_info(request: Request):
     
-    with Session(engine) as session:
-        statement = select(PaymentQuote)
-        payment_quotes = session.exec(statement)
-        records = payment_quotes.fetchall()
-        for record in records:
-            try:
-                # acorn_obj = Acorn(nsec=each.nsec, mints=[each.mint], home_relay=HOME_RELAY, relays=RELAYS)
-                # acorn_obj = Acorn(nsec=each.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-                # profile_out = acorn_obj.get_profile()
-                print(f"record: {record}")
-                nsec_test = 'nsec187nscru0596h0s2yuzutf83sp8jkwxjk8ag4tzxkugvg7e7wmdyqgk0ayq'
-                acorn_obj = Acorn(nsec=record.nsec, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
-                print(acorn_obj.handle)
-                acorn_obj.check_quote(record.quote,record.amount)
-                
-            except Exception as e:
-                print(f"error: {e}")
+
         
 
     return {"detail": request.url.hostname}
@@ -121,7 +105,7 @@ async def ln_pay( amount: float,
         else:
             raise HTTPException(status_code=404, detail=f"{name} not found")
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
@@ -159,7 +143,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     
     NSEC = private_key.private_key_bech32()
 
-
+    # Use settings.HOME_RELAY
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
     
@@ -169,7 +153,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
-                                            home_relay=settings.HOME_RELAY,
+                                            home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
                                             access_key=acorn_obj.access_key
                                             
@@ -210,7 +194,7 @@ async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
     
     NSEC = private_key.private_key_bech32()
 
-
+    # Use settings.HOME_RELAY for new safebox
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
     
@@ -220,7 +204,7 @@ async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
-                                            home_relay=settings.HOME_RELAY,
+                                            home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
                                             access_key=acorn_obj.access_key
                                             )
@@ -276,7 +260,7 @@ async def acess_safebox(request: Request, access_key:str):
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=settings.HOME_RELAY, mints=MINTS)
+    acorn_obj = Acorn(nsec=safebox_found.nsec, home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
 
     return {"handle": safebox_found.handle,

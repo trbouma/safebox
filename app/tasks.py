@@ -9,7 +9,7 @@ from safebox.acorn import Acorn
 from app.config import Settings
 settings = Settings()
 
-HOME_RELAY = 'wss://relay.openbalance.app'
+# HOME_RELAY = 'wss://relay.openbalance.app'
 RELAYS = ['wss://relay.openbalance.app']
 MINTS = ['https://mint.nimo.cash']
 LOGGING_LEVEL=20
@@ -26,8 +26,7 @@ async def periodic_task():
 
 async def service_poll_for_payment(handle:str, quote: str, mint: str, amount: int ):
 
-    # acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=mint, logging_level=LOGGING_LEVEL)    
-    # await acorn_obj.load_data()
+
     
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==handle)
@@ -44,7 +43,7 @@ async def service_poll_for_payment(handle:str, quote: str, mint: str, amount: in
         session.add(safebox_found)
         session.commit()
     
-    # print(f"Service Poll for payment balance: {acorn_obj.balance} ")
+   
     
 
     return

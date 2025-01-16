@@ -93,7 +93,7 @@ def protected_route(    request: Request,
         
 
     print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
-    safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+    safebox = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
     asyncio.run(safebox.load_data())
     # Token is valid, proceed
     return templates.TemplateResponse(  "access.html", 
@@ -114,7 +114,7 @@ async def ln_payment(   request: Request,
     msg_out ="No payment"
     try:
         safebox_found = fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
         msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
     except Exception as e:

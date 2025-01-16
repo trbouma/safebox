@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "foobar"
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"
+    RELAYS: List = ['wss://relay.openbalance.app']
 
     class Config:
         env_file = '.env'
