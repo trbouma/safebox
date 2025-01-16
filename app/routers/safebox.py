@@ -91,6 +91,7 @@ def protected_route(    request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
         
+    #TODO Update balance here
 
     print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
     safebox = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
