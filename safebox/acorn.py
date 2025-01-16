@@ -66,6 +66,7 @@ class Acorn:
     handle: str
     unit: str   = "sat" 
     acorn_tags: List = None
+    owner: str = None
     proof_event_ids = []
     pubkey_bech32: str
     pubkey_hex: str
@@ -168,6 +169,9 @@ class Acorn:
                 if each[0] == "name":
                     self.name = each[1]
                     print(f"name: {self.name}")
+                if each[0] == "owner":
+                    self.owner = each[1]
+                    print(f"owner: {self.owner}")
                 if each[0] == "privkey":                    
                     print(f"privkey: {each[1]}")
                     print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
@@ -348,7 +352,8 @@ class Acorn:
                                 [ "privkey", nut_key.private_key_hex() ], 
                                 [ "mint", self.mints[0]],
                                 [ "name", name ],
-                                ["seedphrase",seed_phrase]
+                                ["seedphrase",seed_phrase],
+                                ["owner",self.pubkey_bech32]
                             ]
             
             self.handle = generate_name_from_hex(self.pubkey_hex)
@@ -383,7 +388,8 @@ class Acorn:
                             \nnsec: {self.privkey_bech32} 
                             \npubhex: {self.pubkey_hex}  
                             \nhandle: {self.handle}   
-                            \naccess key: {self.access_key}                       
+                            \naccess key: {self.access_key}  
+                            \nowner: {self.owner}                     
                             \nlock privkey: {lock_privkey}
                             \nseed phrase: {self.seed_phrase}
                             \nlock pubkey: {lock_pubkey}
