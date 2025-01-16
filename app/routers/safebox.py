@@ -154,6 +154,26 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
     return {"detail": "polling",
             "balance": safebox_found.balance}
 
+@router.get("/privatedata", tags=["safebox", "protected"])
+def private_data(       request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data in home relay"""
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    msg_out = "To be implemented!"
+
+    return templates.TemplateResponse(  "privatedata.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found 
+
+                                        })
+
+
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 
                                     handle: str, 
