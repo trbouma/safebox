@@ -103,6 +103,11 @@ function onboardFriend() {
   window.location.href="/invite?onboard_code={{safebox.handle}}";
 }
 
+async function privateData() {
+
+window.location.href="/safebox/privatedata";
+}
+
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(clipboard_data);
@@ -121,15 +126,7 @@ alert("{{safebox.handle}}@{{request.url.hostname}}"+ " copied to clipboard!");
 
 
 }
-async function privateData() {
 
-
-alert("Coming Soon!");
-
-
-// ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
-
-}
 
 function checkBalance(balance) {
 
