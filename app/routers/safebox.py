@@ -114,30 +114,44 @@ async def ln_payment(   request: Request,
     msg_out ="No payment"
     try:
         safebox_found = fetch_safebox(access_token=access_token)
-        safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
-        await safebox.load_data()
-        msg_out = await safebox.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
+        await acorn_obj.load_data()
+        msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
     except Exception as e:
         return {f"detail": "error {e}"}
 
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.one()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise ValueError("Could not find safebox!")
+    
+       
 
+        safebox_found.balance = acorn_obj.balance
+        session.add(safebox_found)
+        session.commit()
 
     return {"detail": msg_out}
 
 
 @router.get("/poll", tags=["protected"])
-async def poll_for_payment(request: Request, access_token: str = Cookie(None)):
+async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
     try:
         safebox_found = fetch_safebox(access_token=access_token)
-        safebox = Acorn(nsec=safebox_found.nsec,home_relay=settings.HOME_RELAY)
-        await safebox.load_data()
+        
     except:
-        return {"detail": "not logged in"}
+        return {"detail": "error",
+                "balance": 0}
 
+    print(f"safebox poll {safebox_found.handle} {safebox_found.balance}")
 
 
     return {"detail": "polling",
-            "balance": safebox.balance}
+            "balance": safebox_found.balance}
 
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 

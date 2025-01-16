@@ -5,6 +5,9 @@ from safebox.acorn import Acorn
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
+from safebox.acorn import Acorn
+from app.config import Settings
+settings = Settings()
 
 HOME_RELAY = 'wss://relay.openbalance.app'
 RELAYS = ['wss://relay.openbalance.app']
@@ -21,27 +24,29 @@ async def periodic_task():
         await asyncio.sleep(10)  # Simulate work every 10 seconds
 
 
-def poll_for_payment():
+async def service_poll_for_payment(handle:str, quote: str, mint: str, amount: int ):
 
-    print("this is a poll for payment")
-    with Session(engine) as session:
-        statement = select(PaymentQuote)
-        payment_quotes = session.exec(statement)
-        record = payment_quotes.first()
-        try:
-            # acorn_obj = Acorn(nsec=each.nsec, mints=[each.mint], home_relay=HOME_RELAY, relays=RELAYS)
-            # acorn_obj = Acorn(nsec=each.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-            # profile_out = acorn_obj.get_profile()
-            print(f"quote: {record}")
-            #acorn_obj = Acorn(nsec=record.nsec, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-            # print(acorn_obj.seed_phrase)
-            
-        except Exception as e:
-            print(f"error: {e}")
-        # del acorn_obj
-
-    print("Poll for paymentx")
+    # acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=mint, logging_level=LOGGING_LEVEL)    
+    # await acorn_obj.load_data()
     
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.one()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise ValueError("Could not find safebox!")
+    
+        print(f"safebox! {safebox_found.handle} {safebox_found.balance} amount: {amount}")
+
+        safebox_found.balance = safebox_found.balance + amount
+        session.add(safebox_found)
+        session.commit()
+    
+    # print(f"Service Poll for payment balance: {acorn_obj.balance} ")
+    
+
     return
 
 async def callback_done(task):

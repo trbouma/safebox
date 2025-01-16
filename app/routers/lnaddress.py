@@ -17,7 +17,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
-from app.tasks import poll_for_payment, callback_done
+from app.tasks import service_poll_for_payment, callback_done
 from app.utils import create_jwt_token
 from app.config import Settings
 
@@ -110,7 +110,8 @@ async def ln_pay( amount: float,
             
             ):
 
- 
+    sat_amount = int(amount//1000)
+
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
         safeboxes = session.exec(statement)
@@ -124,12 +125,14 @@ async def ln_pay( amount: float,
     await acorn_obj.load_data()
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
-    cli_quote = acorn_obj.deposit(amount//1000)
+    cli_quote = acorn_obj.deposit(sat_amount)
 
 
 
-    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=int(amount//1000),mint=HOME_MINT))
+    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
     
+    # do here with a wrapper
+    task2 = asyncio.create_task(service_poll_for_payment(handle=safebox_found.handle,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }

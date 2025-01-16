@@ -21,6 +21,7 @@ class RegisteredSafebox(SQLModel, table=True):
     home_relay: str = None
     onboard_code: str = None
     access_key: str 
+    balance: int = 0
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
