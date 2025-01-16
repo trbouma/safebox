@@ -15,7 +15,7 @@
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
-  var old_balance = "{{safebox.balance}}";
+  var starting_balance = "{{safebox.balance}}";
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
@@ -139,18 +139,22 @@ function checkBalance(balance) {
   var payment_notification = document.getElementById("payment_notification");
   new_balance =  parseInt(JSON.stringify(balance));
   // alert("new balance " + new_balance);
-  if (new_balance > old_balance)
-  {   alert("Funds received of: " + (new_balance-old_balance).toString() + " sats");
-      payment_notification.textContent = (new_balance-old_balance).toString() + " sats received!";
-      old_balance = new_balance;
-      
-
+  if (new_balance > starting_balance)
+  {   // alert("Change in funds : " + (new_balance-starting_balance).toString() + " sats");
+      payment_notification.textContent = "Net balance of " + (new_balance-starting_balance).toString() + " sats received!";
+     
+  }
+  else if (new_balance < starting_balance)
+  {
+    payment_notification.textContent = "Net balance of " + (starting_balance - new_balance).toString() + " sats sent!";
+    
   }
   else
   {
     payment_notification.textContent = "Ready for Payment!" ;
   }
-  heading_balance.textContent = JSON.stringify(balance) +" sats"
+  
+  heading_balance.textContent = JSON.stringify(new_balance) +" sats";
 
   //alert(JSON.stringify(balance));
 }
@@ -256,7 +260,7 @@ async function lnPay() {
 
   <h3>My OpenBalance</h3>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>
-  <span id="payment_notification">Scan My Address!</span>
+  <span id="payment_notification">Ready for Payment!</span>
   <br>
  
   <img src="https://robohash.org/{{safebox.handle}}">
