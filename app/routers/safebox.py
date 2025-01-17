@@ -172,6 +172,25 @@ def private_data(       request: Request,
                                             "safebox": safebox_found 
 
                                         })
+@router.get("/health", tags=["safebox", "protected"])
+def health_data(       request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    msg_out = "To be implemented!"
+
+    return templates.TemplateResponse(  "healthdata.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found 
+
+                                        })
+
 
 @router.get("/credentials", tags=["safebox", "protected"])
 def my_credentials(       request: Request, 

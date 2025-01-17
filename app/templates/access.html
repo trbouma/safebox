@@ -113,6 +113,11 @@ async function myCredentials() {
 window.location.href="/safebox/credentials";
 }
 
+async function myHealthData() {
+
+window.location.href="/safebox/health";
+}
+
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(clipboard_data);
@@ -298,12 +303,15 @@ async function lnPay() {
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup Security Info</button>
-  <br>
-  <br>
+  <br><br>
+  <hr>
   <i><h4>My Credentials</h4></i>
   <button id="my_credentials_button" onclick="myCredentials()" >Present a Credential</button> 
   <br><br>
+  <hr>
   <i><h4>My Private Info</h4></i>
+  <button id="my_private_data_button" onclick="myHealthData()" >Access Health Data</button>
+  <br><br>
   <button id="my_private_data_button" onclick="privateData()" >Access Private Data</button>
  
   
