@@ -24,7 +24,7 @@ settings = Settings()
 print(settings)
 
 # Create instance of database
-engine = create_engine("sqlite:///data/safebox.db")
+engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
 

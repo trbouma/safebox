@@ -33,6 +33,9 @@ pyjwt = "^2.10.1"
 python-multipart = "^0.0.20"
 httpx = "^0.28.1"
 gunicorn = "^23.0.0"
+asyncpg = "^0.30.0"
+greenlet = "^3.1.1"
+psycopg2 = "^2.9.10"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
