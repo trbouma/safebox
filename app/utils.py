@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-import jwt, re
+import jwt, re, requests, bech32
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -75,3 +75,33 @@ def check_ln_address(ln_address: str):
         return True 
     else:
         False  
+
+def decode_lnurl(lnurl: str) -> str:
+    """
+    Decodes a Bech32-encoded LNURL into a readable URL.
+
+    Args:
+        lnurl (str): The LNURL string to decode.
+
+    Returns:
+        str: The decoded URL.
+
+    Raises:
+        ValueError: If the LNURL is not a valid Bech32 string.
+    """
+    try:
+        # Decode the Bech32 string
+        hrp, data = bech32.bech32_decode(lnurl)
+        if hrp is None or data is None:
+            raise ValueError("Invalid LNURL encoding")
+
+        # Convert the decoded data into bytes
+        decoded_bytes = bech32.convertbits(data, 5, 8, False)
+        if decoded_bytes is None:
+            raise ValueError("Failed to convert Bech32 data to bytes")
+
+        # Convert the bytes to a readable URL
+        url = bytes(decoded_bytes).decode("utf-8")
+        return url
+    except Exception as e:
+        raise ValueError(f"Error decoding LNURL: {e}")

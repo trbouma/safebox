@@ -7,8 +7,9 @@ from fastapi.templating import Jinja2Templates
 import asyncio
 
 import logging
+from urllib.parse import urlparse
 
-from app.utils import check_ln_address
+from app.utils import check_ln_address, decode_lnurl
 
 from fastapi import FastAPI, File, UploadFile
 import shutil
@@ -64,9 +65,24 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
     if check_ln_address(qr_code):
         action_mode ="lnaddress"
         action_data= qr_code
-        return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}")
+        
     
-    return RedirectResponse(f"/safebox/access")
+    elif qr_code[:5].lower() == "lnurl":
+        # This handles the different lnurl types
+        try:
+            url = decode_lnurl(qr_code)
+            if "lnurlp" in url:
+                ln_parts = urlparse(url)
+                action_data = ln_parts.path.split('/')[-1]+ "@" + ln_parts.netloc
+                action_mode = "lnaddress"
+                
+        except:
+            # logger.debug("there is an error")
+            wallet_mode = "initial"
+    else:
+        return RedirectResponse(f"/safebox/access")
+
+    return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}")
     
     wallet_mode = "text"
     out_data = qr_code
