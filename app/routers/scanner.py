@@ -79,6 +79,17 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
         except:
             # logger.debug("there is an error")
             wallet_mode = "initial"
+    elif qr_code[:4].lower() == 'lnbc':
+        action_mode = 'lninvoice'
+        action_data = qr_code
+        try:
+            decode_invoice=bolt11.decode(qr_code)
+            action_amount =decode_invoice.amount_msat//1000
+            action_comment=decode_invoice.description
+            return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}&action_amount={action_amount}&action_comment={action_comment}")
+        except:
+            pass
+    
     else:
         return RedirectResponse(f"/safebox/access")
 

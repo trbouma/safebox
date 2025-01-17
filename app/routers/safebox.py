@@ -83,6 +83,8 @@ def protected_route(    request: Request,
                         onboard: bool = False, 
                         action_mode:str=None, 
                         action_data: str = None,
+                        action_amount: int = None,
+                        action_comment: str = None,
                         access_token: str = Cookie(None)
                     ):
     try:
@@ -104,7 +106,10 @@ def protected_route(    request: Request,
                                             "safebox":safebox, 
                                             "onboard": onboard,
                                             "action_mode": action_mode,
-                                            "action_data": action_data
+                                            "action_data": action_data,
+                                            "action_amount": action_amount,
+                                            "action_comment": action_comment
+
                                         })
     
 
