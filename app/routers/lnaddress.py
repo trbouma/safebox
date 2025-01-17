@@ -116,7 +116,7 @@ async def ln_pay( amount: float,
     task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
     
     # do here with a wrapper
-    task2 = asyncio.create_task(service_poll_for_payment(handle=safebox_found.handle,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
+    task2 = asyncio.create_task(service_poll_for_payment(access_key=safebox_found.access_key,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }

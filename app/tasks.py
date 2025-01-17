@@ -14,7 +14,7 @@ RELAYS = ['wss://relay.openbalance.app']
 MINTS = ['https://mint.nimo.cash']
 LOGGING_LEVEL=20
 
-engine = create_engine("sqlite:///data/database.db")
+engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
 async def periodic_task():
@@ -24,14 +24,14 @@ async def periodic_task():
         await asyncio.sleep(10)  # Simulate work every 10 seconds
 
 
-async def service_poll_for_payment(handle:str, quote: str, mint: str, amount: int ):
+async def service_poll_for_payment(access_key:str, quote: str, mint: str, amount: int ):
 
 
     
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==handle)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
         safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
+        safebox_found = safeboxes.first()
         if safebox_found:
             out_name = safebox_found.handle
         else:
