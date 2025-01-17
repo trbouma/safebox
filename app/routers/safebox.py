@@ -111,6 +111,11 @@ def protected_route(    request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
         
+    if safebox_found.custom_handle:
+        lightning_address = f"{safebox_found.custom_handle}@{request.url.hostname}"
+    else:
+        lightning_address = f"{safebox_found.handle}@{request.url.hostname}"
+        
     #TODO Update balance here
 
     print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
@@ -122,6 +127,7 @@ def protected_route(    request: Request,
                                             "title": "Welcome Page", 
                                             "message": "Welcome to Safebox Web!", 
                                             "safebox":safebox, 
+                                            "lightning_address": lightning_address,
                                             "onboard": onboard,
                                             "action_mode": action_mode,
                                             "action_data": action_data,

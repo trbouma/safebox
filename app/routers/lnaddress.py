@@ -53,7 +53,7 @@ def get_info(request: Request):
 
 @router.get("/.well-known/lnurlp/{name}")
 def ln_resolve(request: Request, name: str = None, amount: int = None):
-
+    match = False
     ln_callback = f"https://{request.url.hostname}/lnpay/{name}"
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
@@ -61,8 +61,17 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
         safebox_found = safeboxes.first()
         if safebox_found:
             out_name = safebox_found.handle
+            match = True
         else:
-            raise HTTPException(status_code=404, detail=f"{name} not found")
+            # check for custom handle
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle ==name)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            if safebox_found:
+                out_name = safebox_found.handle
+                match = True
+            if not match:
+                raise HTTPException(status_code=404, detail=f"{name} not found")
 
     ln_response = {     "callback": ln_callback,
                         "minSendable": 1000,
@@ -93,7 +102,7 @@ async def ln_pay( amount: float,
 
             
             ):
-
+    match = False
     sat_amount = int(amount//1000)
 
     with Session(engine) as session:
@@ -103,7 +112,16 @@ async def ln_pay( amount: float,
         if safebox_found:
             out_name = safebox_found.handle
         else:
-            raise HTTPException(status_code=404, detail=f"{name} not found")
+            # check for custom handle
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle ==name)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            if safebox_found:
+                out_name = safebox_found.handle
+                match = True
+            if not match:
+                raise HTTPException(status_code=404, detail=f"{name} not found")
+            
 
     acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
@@ -131,62 +149,10 @@ async def ln_pay( amount: float,
 
     return name
 
-@router.post("/create", tags=["lnaddress"])
-async def create_safebox(request: Request, invite_code:str = Form()):
-    
-    private_key = Keys()
-    
-    if not invite_code or invite_code=="":
-        invite_code = "test_user"
 
-    print(invite_code)
-    
-    NSEC = private_key.private_key_bech32()
-
-    # Use settings.HOME_RELAY
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
-    await acorn_obj.load_data()
-    
-    nsec_new = await acorn_obj.create_instance()
-    profile_info = acorn_obj.get_profile()
-
-    register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
-                                            npub=acorn_obj.pubkey_bech32,
-                                            nsec=acorn_obj.privkey_bech32,
-                                            home_relay=acorn_obj.home_relay,
-                                            onboard_code=invite_code,
-                                            access_key=acorn_obj.access_key
-                                            
-                                            )
-    
-    with Session(engine) as session:
-        session.add(register_safebox)
-        session.commit()
-
-
-
-        # Create JWT token
-    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(weeks=settings.TOKEN_EXPIRES_WEEKS, hours=settings.TOKEN_EXPIRES_HOURS))
-
-    # Create response with JWT as HttpOnly cookie
-    response = RedirectResponse(url="/safebox/access?onboard=true", status_code=302)
-    # response = JSONResponse({"message": "Login successful"})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,  # Prevent JavaScript access
-        max_age=3600,  # 1 hour
-        secure=False,  # Set to True in production to enforce HTTPS
-        samesite="Lax",  # Protect against CSRF
-    )
-
-    
- 
-    
-    return response
     
 @router.get("/onboard/{invite_code}", tags=["lnaddress", "public"])
-async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
+async def onboard_safebox(request: Request, invite_code:str ):
     
     private_key = Keys()
     

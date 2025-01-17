@@ -277,11 +277,11 @@ async function lnInvoicePay() {
   <br>
   <img src="https://robohash.org/{{safebox.handle}}">
   <br>  
-  <img src="/safebox/qr/{{safebox.handle}}@{{request.url.hostname}}">
+  <img src="/safebox/qr/{{lightning_address}}">
   <br>
   
   <p><h4>Please Scan QR Code</h4> </p>
-  <i><p id="ln_address_text" onclick="copyAddress()">Or pay to: <b>{{safebox.handle}}@{{request.url.hostname}}</b></p></i>
+  <i><p id="ln_address_text" onclick="copyAddress()">Or pay to: <b>{{lightning_address}}</b></p></i>
   <hr>
   {% if action_mode == "lninvoice" %} 
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
