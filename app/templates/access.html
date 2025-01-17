@@ -129,8 +129,8 @@ alert(backup_message);
 }
 async function copyAddress() {
 
-await navigator.clipboard.writeText("{{safebox.handle}}@{{request.url.hostname}}");
-alert("{{safebox.handle}}@{{request.url.hostname}}"+ " copied to clipboard!");
+await navigator.clipboard.writeText("{{lightning_address}}");
+alert("{{lightning_address}}"+ " copied to clipboard!");
 
 
 
@@ -261,27 +261,18 @@ async function lnInvoicePay() {
 
 {% block page_content %}
 <div class="center-text">
-  {% if onboard %} 
-    Welcome!
-  {% else %}  
-    Welcome back!
-  {% endif %}
-
-  
 
   <h3>My OpenBalance</h3>
+  <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">Ready!</span>
-  <br>
-  <img src="https://robohash.org/{{safebox.handle}}">
-  <br>  
+  <br> 
+  <p><h5>My QR Code</h5> </p>
   <img src="/safebox/qr/{{lightning_address}}">
   <br>
   
-  <p><h4>Please Scan QR Code</h4> </p>
-  <i><p id="ln_address_text" onclick="copyAddress()">Or pay to: <b>{{lightning_address}}</b></p></i>
   <hr>
   {% if action_mode == "lninvoice" %} 
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
