@@ -63,6 +63,7 @@ def fetch_safebox(access_token) -> RegisteredSafebox:
         if safebox_found:
             handle = safebox_found.handle
         else:
+
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
         
     return safebox_found
@@ -105,3 +106,18 @@ def decode_lnurl(lnurl: str) -> str:
         return url
     except Exception as e:
         raise ValueError(f"Error decoding LNURL: {e}")
+    
+def extract_leading_numbers(input_string: str) -> str:
+    """
+    Extracts the leading numbers from a string.
+    
+    Args:
+        input_string (str): The input string containing numbers and text.
+    
+    Returns:
+        int: The leading numbers as an integer. Returns None if no numbers are found.
+    """
+    match = re.match(r"^\d+", input_string)
+    if match:
+        return match.group()
+    return None

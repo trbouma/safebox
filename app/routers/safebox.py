@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from safebox.acorn import Acorn
 
 
-from app.utils import create_jwt_token, fetch_safebox
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, lnPay
 from app.config import Settings
@@ -31,7 +31,7 @@ SQLModel.metadata.create_all(engine)
 @router.post("/login", tags=["safebox"])
 def login(access_key: str = Form()):
 
-    
+    match = False
     # Authenticate user
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
@@ -42,7 +42,25 @@ def login(access_key: str = Form()):
             out_name = safebox_found.handle
         else:
             pass
-            raise HTTPException(status_code=404, detail=f"{access_key} not found")
+            # Try to find withouy hypens
+            leading_num = extract_leading_numbers(access_key)
+            
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
+            safeboxes = session.exec(statement)
+            for each_safebox in safeboxes:
+                access_key_on_record = each_safebox.access_key
+                split_key= access_key_on_record.split("-")
+                if split_key[1] in access_key and split_key[2] in access_key:
+                    print("match!")
+                    # set the access key to the one of record
+                    access_key = access_key_on_record
+                    match=True
+                    break
+                
+                print(each_safebox)
+            
+            if not match:
+                raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
     # Create JWT token
