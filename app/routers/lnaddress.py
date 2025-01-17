@@ -166,7 +166,7 @@ async def create_safebox(request: Request, invite_code:str = Form()):
 
 
         # Create JWT token
-    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=1))
+    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(weeks=settings.TOKEN_EXPIRES_WEEKS, hours=settings.TOKEN_EXPIRES_HOURS))
 
     # Create response with JWT as HttpOnly cookie
     response = RedirectResponse(url="/safebox/access?onboard=true", status_code=302)
@@ -216,7 +216,7 @@ async def onboard_safebox(request: Request, invite_code:str = 'alpha'):
 
 
         # Create JWT token
-    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(hours=8))
+    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(weeks=settings.TOKEN_EXPIRES_WEEKS, hours=settings.TOKEN_EXPIRES_HOURS))
 
     # Create response with JWT as HttpOnly cookie
     # response = RedirectResponse(url="/safebox/access", status_code=302)
