@@ -138,6 +138,7 @@ alert("{{lightning_address}}"+ " copied to clipboard!");
 }
 
 function getCreateInvoiceStatus(ln_invoice_status) {
+    const create_invoice_button = document.getElementById("ln_create_invoice_button");
     const img_qr_display_pic = document.getElementById("img_qr_display");
     const parsedObject = JSON.parse(JSON.stringify(ln_invoice_status));
     console.log(ln_invoice_status);
@@ -145,12 +146,13 @@ function getCreateInvoiceStatus(ln_invoice_status) {
     var status = JSON.stringify(ln_invoice_status["status"]);
     var invoice = JSON.stringify(ln_invoice_status["invoice"]);
     console.log("display invoice");
-    // img_qr_display_pic.src = "https://robohash.org/cpbouma";
+    
     console.log(parsedObject.invoice);
     // img_qr_display_pic.src = "https://safebox.openbalance.app/safebox/qr/"+ parsedObject.invoice;
     img_qr_display_pic.src = "/safebox/qr/"+ parsedObject.invoice;
     
     // alert("Payment: " + parsedObject.status + parsedObject.invoice );
+    create_invoice_button.textContent = "Invoice Created! ";
   
 
 }
@@ -164,20 +166,18 @@ async function createInvoice() {
   var ln_create_invoice_amount = parseInt(create_invoice_amount.value);
   
   if (confirm("Do you want to create an invoice?")) {
-    alert("invoice");
+    
 
-  }
+ 
   
-  create_invoice_button.textContent = "Creating invoice... ";
+    create_invoice_button.textContent = "Creating invoice... ";
  
   
 
-  const submit_data = { "amount": ln_create_invoice_amount,
+    const submit_data = { "amount": ln_create_invoice_amount,
                         "comment": "Please pay!"};
 
-    // alert(JSON.stringify(submit_data));
-  
-    // ln_pay_button.textContent = "Please wait...";
+
 
       await fetch('/safebox/invoice', {
             method: "POST",
@@ -187,11 +187,7 @@ async function createInvoice() {
         .then((response) => response.json())
         .then((data) => getCreateInvoiceStatus(data));
 
-
-
-
-
-
+      }
 
 
 }
