@@ -192,18 +192,30 @@ async def ln_invoice(   request: Request,
     msg_out ="No payment"
     try:
         safebox_found = fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-        await acorn_obj.load_data()
-        # msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
-        cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )
+
         
     except Exception as e:
         return {f"status": "error {e}"}
+    
+
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )   
 
     task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=ln_invoice.amount,mint=HOME_MINT))
+
+    # Do the update for the polling balance
+ 
+    # Update the cache amout   
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = safebox_update.balance + ln_invoice.amount
+        session.add(safebox_update)
+        session.commit()
     
-    # do here with a wrapper
-    # task2 = asyncio.create_task(service_poll_for_payment(access_key=safebox_found.access_key,quote=cli_quote.quote, mint=HOME_MINT, amount=ln_invoice.amount))
+
 
 
     return {"status": "ok",
