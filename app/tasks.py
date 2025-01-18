@@ -24,12 +24,26 @@ async def periodic_task():
         await asyncio.sleep(10)  # Simulate work every 10 seconds
 
 
-async def service_poll_for_payment(access_key:str, quote: str, mint: str, amount: int ):
+async def service_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amount: int ):
 
+    start_time = time()  # Record the start time
+    end_time = start_time + 60  # Set the loop to run for 60 seconds
+    success = False
+    mint = mint.replace("https://","")
+    while time() < end_time:           
+        print("the lion is asleep")
+        # success = await acorn_obj.check_quote(quote=quote, amount=amount,mint=mint)
+        if success:
+            print("quote is paid")
+            break
+        sleep(3)  # Sleep for 3 seconds
+        
+    print("service polling done!")
 
     
+    
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==acorn_obj.access_key)
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
         if safebox_found:
@@ -39,14 +53,15 @@ async def service_poll_for_payment(access_key:str, quote: str, mint: str, amount
     
         print(f"safebox! {safebox_found.handle} {safebox_found.balance} amount: {amount}")
 
-        safebox_found.balance = safebox_found.balance + amount
+        # safebox_found.balance = safebox_found.balance + amount
+        safebox_found.balance = acorn_obj.balance
         session.add(safebox_found)
         session.commit()
-    
-   
-    
-
     return
+
+
+
+
 
 async def callback_done(task):
     print("callback function")

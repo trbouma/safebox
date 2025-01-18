@@ -145,7 +145,7 @@ function getCreateInvoiceStatus(ln_invoice_status) {
     var status = JSON.stringify(ln_invoice_status["status"]);
     var invoice = JSON.stringify(ln_invoice_status["invoice"]);
     console.log("display invoice");
-    img_qr_display_pic.src = "https://robohash.org/cpbouma";
+    // img_qr_display_pic.src = "https://robohash.org/cpbouma";
     console.log(parsedObject.invoice);
     // img_qr_display_pic.src = "https://safebox.openbalance.app/safebox/qr/"+ parsedObject.invoice;
     img_qr_display_pic.src = "/safebox/qr/"+ parsedObject.invoice;

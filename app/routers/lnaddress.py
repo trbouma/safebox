@@ -17,7 +17,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment, callback_done
+from app.tasks import service_poll_for_payment
 from app.utils import create_jwt_token
 from app.config import Settings
 
@@ -111,6 +111,8 @@ async def ln_pay( amount: float,
         safebox_found = safeboxes.first()
         if safebox_found:
             out_name = safebox_found.handle
+
+            match = True
         else:
             # check for custom handle
             statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle ==name)
@@ -118,10 +120,21 @@ async def ln_pay( amount: float,
             safebox_found = safeboxes.first()
             if safebox_found:
                 out_name = safebox_found.handle
+
                 match = True
-            if not match:
+        if not match:
                 raise HTTPException(status_code=404, detail=f"{name} not found")
+
+    # Update the cache amout   
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = safebox_update.balance + sat_amount
+        session.add(safebox_update)
+        session.commit()
             
+
 
     acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
     await acorn_obj.load_data()
@@ -130,11 +143,10 @@ async def ln_pay( amount: float,
     cli_quote = acorn_obj.deposit(sat_amount)
 
 
-
     task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
     
     # do here with a wrapper
-    task2 = asyncio.create_task(service_poll_for_payment(access_key=safebox_found.access_key,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
+    # task2 = asyncio.create_task(service_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }

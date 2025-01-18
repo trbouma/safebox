@@ -121,14 +121,29 @@ def protected_route(    request: Request,
     #TODO Update balance here
 
     print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
-    safebox = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-    asyncio.run(safebox.load_data())
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+    asyncio.run(acorn_obj.load_data())
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.one()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise ValueError("Could not find safebox!")
+    
+       
+
+        safebox_found.balance = acorn_obj.balance
+        session.add(safebox_found)
+        session.commit()
+
     # Token is valid, proceed
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
                                             "message": "Welcome to Safebox Web!", 
-                                            "safebox":safebox, 
+                                            "safebox":acorn_obj, 
                                             "lightning_address": lightning_address,
                                             "safebox_branding": settings.SAFEBOX_BRANDING,
                                             "onboard": onboard,
