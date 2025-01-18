@@ -14,12 +14,10 @@
 
 <div class="center-text">
     
-        <h1>{{ message }}</h1>
+        <h1>{{ branding }}</h1>
         
-        <p class="lead">Coming soon!!!</p>
-        <p >Safebox is the next generation sovereign technlogy being developed to power <a href="https://openbalance.app">Openbalance.app</a> 
-       
-        
+        <p class="lead">{{branding_message}}</p>
+        <p >Get sovereign access to your funds and data.</a> 
         <p>Follow the latest blog entries <a href="https://tim-bouma.npub.pro/tag/safebox/">here</a>
          
 
@@ -28,17 +26,18 @@
             <label for="invite_code">Invite Code:</label><br>
             <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >
             <br><br>    
-            <button >Get a Safebox</button>
+            <button >Get</button>
         </form>
         <br>
         <form action="/safebox/login" method="POST">
             <label for="access_key">Access Key</label><br>
             <input type="text" id="access_key" name="access_key" placeholder="Enter Access Key" >
             <br><br>    
-            <button type="submit">Login to Safebox</button>
+            <button type="submit">Access</button>
         </form>
         <hr>
         <p><a href="https://github.com/trbouma">GitHub Repo</a></p> 
+        <p><i>This is <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a> <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
         
     </div>
      

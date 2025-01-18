@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     MINTS: List = ['https://mint.nimo.cash']
     TOKEN_EXPIRES_WEEKS: int = 1
     TOKEN_EXPIRES_HOURS: int = 8
-    SAFEBOX_BRANDING: str = "My SafeBox"
+    BRANDING: str = "My SafeBox"
+    BRANDING_MESSAGE: str = "My Stuff, My Way!"
 
     class Config:
         env_file = '.env'

@@ -52,8 +52,12 @@ app.mount("/src", StaticFiles(directory="app/src"), name="src")
 # Define a root endpoint
 @app.get("/")
 def read_root(request: Request):
-    return templates.TemplateResponse( "welcome.html", {"request": request, "title": "Welcome Page", "message": "Welcome to Safebox Web!"})
-    # return {"message": "Welcome to the Safebox app!"}
+    return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": settings.BRANDING_MESSAGE})
+    
 
 
 
