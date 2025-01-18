@@ -25,7 +25,7 @@ async def periodic_task():
 
 
 async def service_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amount: int ):
-
+    #FIXME - this function is no longer used.
     start_time = time()  # Record the start time
     end_time = start_time + 60  # Set the loop to run for 60 seconds
     success = False
@@ -59,7 +59,27 @@ async def service_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amou
         session.commit()
     return
 
+async def invoice_poll_for_payment(safebox_found: RegisteredSafebox, quote: str, mint: str, amount: int ):
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    
+    await acorn_obj.load_data()
+    await acorn_obj.poll_for_payment(quote=quote,amount=amount,mint=mint)
+    print("We are done!!!!")
+    
+    
+    
+   
 
+    # Update the cache amountt   
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.id ==safebox_found.id)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = safebox_update.balance + amount
+        session.add(safebox_update)
+        session.commit()
+    return
 
 
 

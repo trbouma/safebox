@@ -14,7 +14,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, lnPay, lnInvoice
 from app.config import Settings
-from app.tasks import service_poll_for_payment
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
 import logging, jwt
 
@@ -156,7 +156,7 @@ def protected_route(    request: Request,
     
 
 @router.post("/pay", tags=["protected"])
-async def ln_payment(   request: Request, 
+async def ln_address_payment(   request: Request, 
                         ln_pay: lnPay,
                         access_token: str = Cookie(None)):
     msg_out ="No payment"
@@ -186,7 +186,7 @@ async def ln_payment(   request: Request,
     return {"detail": msg_out}
 
 @router.post("/invoice", tags=["protected"])
-async def ln_invoice(   request: Request, 
+async def ln_invoice_payment(   request: Request, 
                         ln_invoice: lnInvoice,
                         access_token: str = Cookie(None)):
     msg_out ="No payment"
@@ -202,10 +202,17 @@ async def ln_invoice(   request: Request,
     await acorn_obj.load_data()
     cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )   
 
-    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=ln_invoice.amount,mint=HOME_MINT))
+    
+
+
+
+
+    task2 = asyncio.create_task(invoice_poll_for_payment(safebox_found=safebox_found,quote=cli_quote.quote, amount=ln_invoice.amount, mint=HOME_MINT))
+    return {"status": "ok", "invoice": cli_quote.invoice}
 
     # Do the update for the polling balance
  
+    # task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=ln_invoice.amount,mint=HOME_MINT))
     # Update the cache amout   
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
