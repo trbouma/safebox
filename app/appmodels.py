@@ -37,3 +37,7 @@ class lnPay(BaseModel):
     address: str 
     amount: int 
     comment: str
+
+class lnInvoice(BaseModel):
+    amount: int 
+    comment: str = "Please Pay!"

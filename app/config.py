@@ -17,8 +17,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.openbalance.app']
+    MINTS: List = ['https://mint.nimo.cash']
     TOKEN_EXPIRES_WEEKS: int = 1
     TOKEN_EXPIRES_HOURS: int = 8
+    SAFEBOX_BRANDING: str = "My SafeBox"
 
     class Config:
         env_file = '.env'

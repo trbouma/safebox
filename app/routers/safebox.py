@@ -12,12 +12,14 @@ from safebox.acorn import Acorn
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPay
+from app.appmodels import RegisteredSafebox, lnPay, lnInvoice
 from app.config import Settings
+from app.tasks import service_poll_for_payment
 
 import logging, jwt
 
-
+HOME_MINT = "https://mint.nimo.cash"
+MINTS = ['https://mint.nimo.cash']
 settings = Settings()
 
 templates = Jinja2Templates(directory="app/templates")
@@ -88,7 +90,7 @@ def logout():
 
 
 @router.get("/qr/{qr_text}", tags=["public"])
-def create_authqr(qr_text: str):
+async def create_authqr(qr_text: str):
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()
@@ -128,6 +130,7 @@ def protected_route(    request: Request,
                                             "message": "Welcome to Safebox Web!", 
                                             "safebox":safebox, 
                                             "lightning_address": lightning_address,
+                                            "safebox_branding": settings.SAFEBOX_BRANDING,
                                             "onboard": onboard,
                                             "action_mode": action_mode,
                                             "action_data": action_data,
@@ -166,6 +169,30 @@ async def ln_payment(   request: Request,
         session.commit()
 
     return {"detail": msg_out}
+
+@router.post("/invoice", tags=["protected"])
+async def ln_invoice(   request: Request, 
+                        ln_invoice: lnInvoice,
+                        access_token: str = Cookie(None)):
+    msg_out ="No payment"
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        # msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )
+        
+    except Exception as e:
+        return {f"status": "error {e}"}
+
+    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=ln_invoice.amount,mint=HOME_MINT))
+    
+    # do here with a wrapper
+    # task2 = asyncio.create_task(service_poll_for_payment(access_key=safebox_found.access_key,quote=cli_quote.quote, mint=HOME_MINT, amount=ln_invoice.amount))
+
+
+    return {"status": "ok",
+            "invoice": cli_quote.invoice}
 
 
 @router.get("/poll", tags=["protected"])

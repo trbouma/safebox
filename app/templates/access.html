@@ -137,12 +137,58 @@ alert("{{lightning_address}}"+ " copied to clipboard!");
 
 }
 
+function getCreateInvoiceStatus(ln_invoice_status) {
+    const img_qr_display_pic = document.getElementById("img_qr_display");
+    const parsedObject = JSON.parse(JSON.stringify(ln_invoice_status));
+    console.log(ln_invoice_status);
+
+    var status = JSON.stringify(ln_invoice_status["status"]);
+    var invoice = JSON.stringify(ln_invoice_status["invoice"]);
+    console.log("display invoice");
+    img_qr_display_pic.src = "https://robohash.org/cpbouma";
+    console.log(parsedObject.invoice);
+    // img_qr_display_pic.src = "https://safebox.openbalance.app/safebox/qr/"+ parsedObject.invoice;
+    img_qr_display_pic.src = "/safebox/qr/"+ parsedObject.invoice;
+    
+    // alert("Payment: " + parsedObject.status + parsedObject.invoice );
+  
+
+}
+
 async function createInvoice() {
 
+  const create_invoice_amount = document.getElementById("ln_create_invoice_amount");
+  const create_invoice_button = document.getElementById("ln_create_invoice_button");
+  
+  
+  var ln_create_invoice_amount = parseInt(create_invoice_amount.value);
+  
+  if (confirm("Do you want to create an invoice?")) {
+    alert("invoice");
 
-if (confirm("Do you want to create an invoice?")) {
-  alert("invoice");
-}
+  }
+  
+  create_invoice_button.textContent = "Creating invoice... ";
+ 
+  
+
+  const submit_data = { "amount": ln_create_invoice_amount,
+                        "comment": "Please pay!"};
+
+    // alert(JSON.stringify(submit_data));
+  
+    // ln_pay_button.textContent = "Please wait...";
+
+      await fetch('/safebox/invoice', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},        
+            body: JSON.stringify(submit_data)         
+          })
+        .then((response) => response.json())
+        .then((data) => getCreateInvoiceStatus(data));
+
+
+
 
 
 
@@ -215,9 +261,7 @@ function getlnPayStatus(ln_pay_status) {
     var status = JSON.stringify(ln_pay_status["detail"]);
     const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
     alert("Payment " + parsedObject.detail);
-
-
-   
+  
 
 }
 
@@ -261,9 +305,25 @@ async function lnPay() {
 
 }
 
+function getInvoiceStatus(ln_invoice_status) {
+  // var ln_pay_button = document.getElementById("ln_pay_button");
+    console.log(ln_invoice_status);
+
+    var status = JSON.stringify(ln_invoice_status["detail"]);
+
+    const parsedObject = JSON.parse(JSON.stringify(ln_invoice_status));
+    alert("Payment " + parsedObject.detail);
+  
+
+}
+
 async function lnInvoicePay() {
-  alert("pay invoice!");
-   window.location.href="/safebox/access"
+  
+
+
+    alert("pay invoice!");
+    //window.location.href="/safebox/access"
+  
 
 }
 
@@ -274,7 +334,7 @@ async function lnInvoicePay() {
 {% block page_content %}
 <div class="center-text">
 
-  <h3>My OpenBalance</h3>
+  <h3>{{safebox_branding}}</h3>
   <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
@@ -282,10 +342,11 @@ async function lnInvoicePay() {
   <span id="payment_notification">Ready!</span>
   <br> 
   <p><h5>My QR Code</h5> </p>
-  <img src="/safebox/qr/{{lightning_address}}">
-  <input type="number" placeholder="amount to receive" id="ln_invoice_amount" name="ln_invoice_amount"  value="" size="24" style="width:60%">
+  <img id="img_qr_display" src="/safebox/qr/{{lightning_address}}">
+  <br>
+  <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
   <br><br>
-  <button id="ln_scan_button" onclick="createInvoice()">Invoice Amount</button>
+  <button id="ln_create_invoice_button" onclick="createInvoice()">Invoice Amount</button>
   <hr>
   {% if action_mode == "lninvoice" %} 
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}

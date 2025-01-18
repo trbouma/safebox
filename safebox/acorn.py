@@ -1106,8 +1106,9 @@ class Acorn:
     
     def deposit(self, amount:int, mint:str = None)->cliQuote:
         
-       
+        #FIXME parameter passing with scheme
         if mint:
+            mint = mint.replace("https://","")
             url = f"https://{mint}/v1/mint/quote/bolt11"
         else:
             url = f"{self.home_mint}/v1/mint/quote/bolt11"
