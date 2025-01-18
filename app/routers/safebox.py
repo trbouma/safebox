@@ -31,7 +31,7 @@ engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
 @router.post("/login", tags=["safebox"])
-def login(access_key: str = Form()):
+def login(request: Request, access_key: str = Form()):
 
     match = False
     # Authenticate user
@@ -46,6 +46,13 @@ def login(access_key: str = Form()):
             pass
             # Try to find withouy hypens
             leading_num = extract_leading_numbers(access_key)
+            if not leading_num:
+                return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": settings.BRANDING_RETRY})
+                # raise HTTPException(status_code=404, detail=f"{access_key} not found")
             
             statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
             safeboxes = session.exec(statement)
@@ -62,7 +69,13 @@ def login(access_key: str = Form()):
                 print(each_safebox)
             
             if not match:
-                raise HTTPException(status_code=404, detail=f"{access_key} not found")
+                
+                return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": settings.BRANDING_MESSAGE})
+                # raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
     # Create JWT token

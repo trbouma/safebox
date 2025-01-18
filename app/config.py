@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     TOKEN_EXPIRES_HOURS: int = 8
     BRANDING: str = "My SafeBox"
     BRANDING_MESSAGE: str = "My Stuff, My Way!"
+    BRANDING_RETRY: str = "Whoops! Let's try that again!"
 
     class Config:
         env_file = '.env'
