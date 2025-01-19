@@ -33,6 +33,7 @@ SQLModel.metadata.create_all(engine)
 @router.post("/login", tags=["safebox"])
 def login(request: Request, access_key: str = Form()):
 
+    access_key=access_key.strip().lower()
     match = False
     # Authenticate user
     with Session(engine) as session:
