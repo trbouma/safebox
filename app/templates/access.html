@@ -17,6 +17,7 @@
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
   var starting_balance = "{{safebox.balance}}";
+  // var orginal_background = document.body.style.backgroundColor ;
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
@@ -220,7 +221,8 @@ function checkBalance(balance) {
 
 
       if (ux_mode=="wait_invoice"){
-        alert("Invoice Paid!");
+        // alert("Invoice Paid!");
+        document.body.style.backgroundColor = "lightgreen";
         img_qr_display_pic.src ="/img/green-check.png";
         
         payment_notification.textContent = "Invoice Paid!";
@@ -238,6 +240,7 @@ function checkBalance(balance) {
   else
   {
     payment_notification.textContent = "Ready for Payment!" ;
+    document.body.style.backgroundColor = "white";
   }
   if (ux_mode == "init") {
         
