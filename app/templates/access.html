@@ -21,7 +21,7 @@
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{safebox.access_key}} \n\nRecovery Phrase (12 words):\n\n{{safebox.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
-  var backup_message = "Your important data is copied to the clipboard! \n\nPlease copy your access key and recovery phrase to a secure and private place \n\nDon't delay. This message appears the first time you use your wallet.";
+  var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
   var onboard_msg = "Welcome to OpenBalance Safebox! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
 
 
@@ -390,26 +390,12 @@ async function lnInvoicePay() {
     <h5>Memo:</h5>
     <textarea id="ln_recipient_memo" placeholder= "Thanks!" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
-    <button id="ln_pay_button" onclick="lnPay()">Pay Amount</button> 
+    <button id="ln_pay_button" onclick="lnPay()">Pay Lightning Address</button> 
   
   {% endif %}
   
- 
   
-  <hr>
-  <i><h4>My Security Info</h4></i>
- 
-       
-  <p>My seed phrase is: <br>
- 
-  <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
-  
-          
-  <p>My access_key is: </b></p>
-  <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>
-  
-  <button id="clipboard_button" onclick="copytoClipboard()" >Backup Security Info</button>
-  <br><br>
+
   <hr>
   <i><h4>My Personal Info</h4></i>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
@@ -423,13 +409,23 @@ async function lnInvoicePay() {
   
   <br>
   <hr>
-  <i><h4>Social</h4></i>
+  <i><h4>My Social Network</h4></i>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br>
-  <br>
   <hr>
-  <i><h4>Exit </h4></i>
-  <br>
+
+  <i><h4>My Security Info</h4></i>
+  <p>My access_key: </b></p>
+  <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
+  <p>My recovery phrase: <br> 
+  <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
+  
+          
+
+  
+  <button id="clipboard_button" onclick="copytoClipboard()" >Copy to Clipboard</button>
+  <br><br>
+  
   <button id="logout_button"onclick="logout()" >Logout</button>
   <hr>
   Technical Information
