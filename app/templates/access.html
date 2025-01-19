@@ -368,15 +368,15 @@ async function lnInvoicePay() {
 {% block page_content %}
 <div class="center-text">
 
-  <h3>{{branding}}</h3>
-  <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
+  <h3>{{branding}}</h3>  
   <h4 id="heading_balance">{{safebox.balance}} sats</h4>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">Ready!</span>
-  <br> 
-  <p><h5>Scan to Pay</h5> </p>
-  <img id="img_qr_display" src="/safebox/qr/{{lightning_address}}">
+  <br>
+  <img id="img_qr_display" onclick="copyAddress()" src="/safebox/qr/{{lightning_address}}">
+  <br>
+  <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
   <br>
   <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
   <br><br>
@@ -414,8 +414,6 @@ async function lnInvoicePay() {
   <br><br>
   <button id="my_private_data_button" onclick="privateData()" >Personal Records</button>
  
-  
-  
   <br>
   <hr>
   <i><h4>My Social Network</h4></i>

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     BRANDING: str = "My SafeBox"
     BRANDING_MESSAGE: str = "My Stuff, My Way!"
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
+    INVITE_CODES: List = ["alpha","sec2025"]
 
     class Config:
         env_file = '.env'

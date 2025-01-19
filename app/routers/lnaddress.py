@@ -166,6 +166,16 @@ async def ln_pay( amount: float,
 @router.get("/onboard/{invite_code}", tags=["lnaddress", "public"])
 async def onboard_safebox(request: Request, invite_code:str ):
     
+    if invite_code not in settings.INVITE_CODES:
+        message = "Looks like you need an invite code!"
+        return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": message})
+    
+    
+    
     private_key = Keys()
     
     print(invite_code)
