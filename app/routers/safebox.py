@@ -314,6 +314,26 @@ def my_credentials(       request: Request,
 
                                         })
 
+
+@router.get("/ecash", tags=["safebox", "protected"])
+def my_ecash(       request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to credentials stored in home relay"""
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    
+
+    return templates.TemplateResponse(  "ecash.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found 
+
+                                        })
+
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 
                                     handle: str, 

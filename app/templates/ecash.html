@@ -1,0 +1,54 @@
+{% extends "uxbase.html" %}
+
+{% block title %}My Credentials{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+<script>
+
+async function backToProfile() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    
+        <h1>Ecash</h1>
+        <p class="lead">Coming soon!!!</p>
+        <p>Pay with ecash for: {{safebox.handle}}</p>        
+        <p>Ecash data is being stored on home relay: {{safebox.home_relay}}</p>
+        
+        
+        <br>
+        <br>
+        <button onclick="backToProfile()">Back to Safebox</button>
+      
+ 
+
+        <hr>
+     
+        
+    </div>
+     
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

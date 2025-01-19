@@ -109,6 +109,11 @@ async function privateData() {
 window.location.href="/safebox/privatedata";
 }
 
+async function myEcash() {
+
+window.location.href="/safebox/ecash";
+}
+
 async function myCredentials() {
 
 window.location.href="/safebox/credentials";
@@ -215,7 +220,7 @@ function checkBalance(balance) {
 
 
       if (ux_mode=="wait_invoice"){
-        //alert("invoice paid");
+        alert("Invoice Paid!");
         img_qr_display_pic.src ="/img/green-check.png";
         
         payment_notification.textContent = "Invoice Paid!";
@@ -367,7 +372,7 @@ async function lnInvoicePay() {
   <br>
   <span id="payment_notification">Ready!</span>
   <br> 
-  <p><h5>My QR Code</h5> </p>
+  <p><h5>Scan to Pay</h5> </p>
   <img id="img_qr_display" src="/safebox/qr/{{lightning_address}}">
   <br>
   <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
@@ -380,7 +385,7 @@ async function lnInvoicePay() {
     <button id="ln_invoice_pay_button" onclick="lnInvoicePay()">Authorize Payment</button> 
     <br>
   {% else %}
-    <h4>Pay a Lightning Address:</h4>
+    <h4>Pay with Lightning</h4>
     <br><input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="24" ">
     <br>
     
@@ -393,9 +398,10 @@ async function lnInvoicePay() {
     <button id="ln_pay_button" onclick="lnPay()">Pay Lightning Address</button> 
   
   {% endif %}
-  
-  
-
+  <hr>
+  <i><h4>Ecash</h4></i>
+  <button id="my_ecash_button" onclick="myEcash()" >Ecash</button> 
+  <br><br>  
   <hr>
   <i><h4>My Personal Info</h4></i>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
