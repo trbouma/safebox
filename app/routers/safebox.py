@@ -74,7 +74,7 @@ def login(request: Request, access_key: str = Form()):
                                         {   "request": request, 
                                             "title": "Welcome Page", 
                                             "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_MESSAGE})
+                                            "branding_message": settings.BRANDING_RETRY})
                 # raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 

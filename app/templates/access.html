@@ -12,6 +12,7 @@
 
 <script>
 
+  var ux_mode = "init";
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
@@ -164,16 +165,21 @@ async function createInvoice() {
   
   
   var ln_create_invoice_amount = parseInt(create_invoice_amount.value);
+  // alert(ln_create_invoice_amount)
   
-  if (confirm("Do you want to create an invoice?")) {
+  
+  create_invoice_button.textContent = "Creating invoice... ";
+ 
+  if (ln_create_invoice_amount <=0 || isNaN(ln_create_invoice_amount)){
+    create_invoice_button.textContent = "Need Amount ";
+    //alert("need amount");
+
+  }
+  else
+  {
     
-
- 
-  
-    create_invoice_button.textContent = "Creating invoice... ";
- 
-  
-
+    create_invoice_button.textContent = "Invoice Amount ";
+    
     const submit_data = { "amount": ln_create_invoice_amount,
                         "comment": "Please pay!"};
 
@@ -188,19 +194,35 @@ async function createInvoice() {
         .then((data) => getCreateInvoiceStatus(data));
 
       }
+    ux_mode = "wait_invoice";
+    }
 
 
-}
+
 
 function checkBalance(balance) {
 
   var heading_balance = document.getElementById("heading_balance");
   var payment_notification = document.getElementById("payment_notification");
+  const img_qr_display_pic = document.getElementById("img_qr_display");
+  console.log("checking balance from polling: " + ux_mode);
   new_balance =  parseInt(JSON.stringify(balance));
   // alert("new balance " + new_balance);
   if (new_balance > starting_balance)
   {   // alert("Change in funds : " + (new_balance-starting_balance).toString() + " sats");
       payment_notification.textContent = "Net balance of " + (new_balance-starting_balance).toString() + " sats received!";
+      
+
+
+      if (ux_mode=="wait_invoice"){
+        //alert("invoice paid");
+        img_qr_display_pic.src ="/img/green-check.png";
+        
+        payment_notification.textContent = "Invoice Paid!";
+        
+        ux_mode="init";
+      }      
+
      
   }
   else if (new_balance < starting_balance)
@@ -212,8 +234,16 @@ function checkBalance(balance) {
   {
     payment_notification.textContent = "Ready for Payment!" ;
   }
+  if (ux_mode == "init") {
+        
+      //do a check here so it doesn't load the image everytime    
+      img_qr_display_pic.src = "/safebox/qr/{{lightning_address}}";
+
+              
+      } 
   
   heading_balance.textContent = JSON.stringify(new_balance) +" sats";
+  starting_balance = new_balance;
 
   //alert(JSON.stringify(balance));
 }

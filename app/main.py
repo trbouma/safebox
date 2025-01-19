@@ -46,6 +46,7 @@ app.include_router(scanner.router, prefix="/scanner")
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
+app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 
 
