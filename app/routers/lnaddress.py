@@ -163,8 +163,8 @@ async def ln_pay( amount: float,
 
 
     
-@router.get("/onboard/{invite_code}", tags=["lnaddress", "public"])
-async def onboard_safebox(request: Request, invite_code:str ):
+@router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
+async def onboard_safebox(request: Request, invite_code:str = Form() ):
     
     if invite_code not in settings.INVITE_CODES:
         message = "Looks like you need an invite code!"
