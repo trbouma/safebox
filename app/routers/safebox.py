@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ import asyncio,qrcode, io
 
 from datetime import datetime, timedelta
 from safebox.acorn import Acorn
+from time import sleep
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers
@@ -357,9 +358,49 @@ async def root_get_user_profile(    request: Request,
     return templates.TemplateResponse("profile.html", 
                                       {"request": request, "user_name": user_name, 
                                        "lightning_address": lightning_address,
-                                       
-                                       
-                                         
-                                      
                                           
                                             })
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+
+    await websocket.accept()
+
+    access_token = websocket.cookies.get("access_token")
+    try:
+        safebox_found = fetch_safebox(access_token=access_token)
+    except:
+        await websocket.close(code=1008)  # Policy violation
+        return
+
+    starting_balance = safebox_found.balance
+    new_balance = starting_balance
+    await websocket.send_text(f"safebox starting balance for {safebox_found.handle} is: {starting_balance}")
+
+    while True:
+        try:
+            # data = await websocket.receive_text()
+            # print(f"message received: {data}")
+            # await websocket.send_text(f"message received {safebox_found.handle} from safebox: {data}")
+            
+           
+            with Session(engine) as session:
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==safebox_found.access_key)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()
+                new_balance = safebox_found.balance
+            if new_balance != starting_balance:
+                print("there is a new balance!")
+                await websocket.send_text(f"safebox new balance for {safebox_found.handle} is: {new_balance}")
+                starting_balance = new_balance
+            sleep(3)
+        
+        except Exception as e:
+            print(f"Websocket error: {e}")
+            break
+        
+        
+        
+    print("websocket connection closed")
+    

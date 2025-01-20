@@ -259,7 +259,7 @@ function checkBalance(balance) {
 
 
 
-setInterval(pollPayment, 10000);
+// setInterval(pollPayment, 10000);
 
 function pollPayment() {
 var data; 
@@ -363,6 +363,22 @@ async function lnInvoicePay() {
 
 </script>
 
+<script>
+  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws");
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+      console.log("Message received:", event.data);
+      document.getElementById("response").innerText = event.data;
+  };
+  ws.onclose = () => console.log("WebSocket closed");
+
+  function sendMessage() {
+      ws.send("Hello from the browser!");
+      
+  }
+</script>
+
 {% endblock %}
 
 {% block page_content %}
@@ -438,6 +454,9 @@ async function lnInvoicePay() {
   Technical Information
   <br>
   Mode: {{action_mode}} Data: {{action_data}}
+  <br>
+  <button onclick="sendMessage()">Send Message</button>
+  <p id="response"></p>
             
 </div>
 
