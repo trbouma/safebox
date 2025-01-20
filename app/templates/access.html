@@ -382,7 +382,7 @@ async function lnInvoicePay() {
       document.getElementById("payment_notification").innerText = `${message}`;
       if (status == "OK"){
         document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
-        document.getElementById("ln_create_invoice_button").textContent = "/safebox/qr/{{lightning_address}}";
+        document.getElementById("ln_create_invoice_button").textContent = "Create Invoice";
       }
   };
   ws.onclose = () => console.log("WebSocket closed");
