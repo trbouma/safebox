@@ -375,7 +375,10 @@ async function lnInvoicePay() {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);
       const balance = response.balance;
+      const message = response.message;
+      
       document.getElementById("heading_balance").innerText = `${balance} sats`;
+      document.getElementById("payment_notification").innerText = `${message}`;
       //document.getElementById("response").innerText = event.data;
   };
   ws.onclose = () => console.log("WebSocket closed");
