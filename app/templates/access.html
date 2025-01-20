@@ -376,10 +376,13 @@ async function lnInvoicePay() {
       const response = JSON.parse(event.data);
       const balance = response.balance;
       const message = response.message;
-      
+      const status = response.status
+
       document.getElementById("heading_balance").innerText = `${balance} sats`;
       document.getElementById("payment_notification").innerText = `${message}`;
-      //document.getElementById("response").innerText = event.data;
+      if (status == "DONE"){
+        document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+      }
   };
   ws.onclose = () => console.log("WebSocket closed");
 

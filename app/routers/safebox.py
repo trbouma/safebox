@@ -390,17 +390,22 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             new_balance = await fetch_balance(safebox_found.id)
             if new_balance > starting_balance:
                 message = f"Payment received! {new_balance-starting_balance} sats."
+                status = "RECD"
             elif new_balance < starting_balance:
                 message = f"Payment sent! {starting_balance-new_balance} sats."
-            
-            await websocket.send_json({"balance":new_balance, "message": message})
-            
-        
-            starting_balance = new_balance
-           
-            # sleep(10)
+                status = "SENT"
+            else:
+                message = "All payments up to date!"
+                status = "DONE"
+
             
 
+                
+          
+            await websocket.send_json({"balance":new_balance, "message": message, "status": status})
+            starting_balance = new_balance
+           
+            
         
         except Exception as e:
             print(f"Websocket error: {e}")
