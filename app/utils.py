@@ -68,6 +68,14 @@ def fetch_safebox(access_token) -> RegisteredSafebox:
         
     return safebox_found
 
+async def fetch_balance(id: int):
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.id==id)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+
+        return safebox_found.balance
+
 def check_ln_address(ln_address: str):
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     # pass the regular expression

@@ -223,7 +223,10 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
 
 @router.get("/invite", response_class=HTMLResponse, tags=["public"]) 
 async def invite_friend(request: Request, onboard_code: str):  
+        onboard_code=onboard_code.strip().lower()
         return templates.TemplateResponse( "invite.html", {"request": request, "title": "Welcome Page", "message": "You're Invited!", "onboard_code": onboard_code})
+
+    
 
 @router.get("/inviteqr/{onboard_code}", tags=["public"])
 def create_inviteqr(request: Request, onboard_code: str):

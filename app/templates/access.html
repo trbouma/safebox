@@ -261,6 +261,8 @@ function checkBalance(balance) {
 
 // setInterval(pollPayment, 10000);
 
+
+
 function pollPayment() {
 var data; 
 
@@ -364,19 +366,35 @@ async function lnInvoicePay() {
 </script>
 
 <script>
+  document.addEventListener("touchstart", handleInteraction); 
+  //document.addEventListener("click", handleInteraction); 
   const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws");
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
       console.log("Message received:", event.data);
-      document.getElementById("response").innerText = event.data;
+      const response = JSON.parse(event.data);
+      const balance = response.balance;
+      document.getElementById("heading_balance").innerText = `${balance} sats`;
+      //document.getElementById("response").innerText = event.data;
   };
   ws.onclose = () => console.log("WebSocket closed");
 
-  function sendMessage() {
-      ws.send("Hello from the browser!");
+  async function sendMessage() {
+      
+      ws.send("App is touched");
+      //alert("app is touched!");
       
   }
+
+  async function handleInteraction(event) {
+    console.log("Interaction detected:", event.type, "on element:", event.target);
+    // Add your custom logic here
+    sendMessage();
+}
+ 
+
+  
 </script>
 
 {% endblock %}
@@ -384,13 +402,13 @@ async function lnInvoicePay() {
 {% block page_content %}
 <div class="center-text">
 
-  <h3>{{branding}}</h3>  
-  <h4 id="heading_balance">{{safebox.balance}} sats</h4>  
+  <h3 onclick="sendMessage()" >{{branding}}</h3>  
+  <h4  onclick="sendMessage()" id="heading_balance">{{safebox.balance}} sats</h4>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">Ready!</span>
   <br>
-  <img id="img_qr_display" onclick="copyAddress()" src="/safebox/qr/{{lightning_address}}">
+  <img id="img_qr_display" onclick="sendMessage()" src="/safebox/qr/{{lightning_address}}">
   <br>
   <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
   <br>
