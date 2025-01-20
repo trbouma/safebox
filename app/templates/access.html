@@ -380,8 +380,9 @@ async function lnInvoicePay() {
 
       document.getElementById("heading_balance").innerText = `${balance} sats`;
       document.getElementById("payment_notification").innerText = `${message}`;
-      if (status == "DONE"){
+      if (status == "OK"){
         document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+        document.getElementById("ln_create_invoice_button").textContent = "/safebox/qr/{{lightning_address}}";
       }
   };
   ws.onclose = () => console.log("WebSocket closed");
