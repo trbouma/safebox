@@ -11,7 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, lnPay, lnInvoice
 from app.config import Settings
@@ -383,8 +383,10 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
 
     while True:
         try:
-            data = await websocket.receive_text()
-            print(f"message received: {data}")
+            await db_state_change(safebox_found.id)
+            
+            # data = await websocket.receive_text()
+            # print(f"message received: {data}")
             # await websocket.send_text(f"message received {safebox_found.handle} from safebox: {data}")
             
             
@@ -413,7 +415,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             
         
         except Exception as e:
-            print(f"Websocket error: {e}")
+            print(f"Websocket message: {e}")
             break
         
         

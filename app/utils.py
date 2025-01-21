@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import jwt, re, requests, bech32
+from time import sleep
+import asyncio
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -75,6 +77,11 @@ async def fetch_balance(id: int):
         safebox_found = safeboxes.first()
 
         return safebox_found.balance
+
+async def db_state_change(id: int):
+    # print(f"db state change for {id}")
+    await asyncio.sleep(5)
+    return
 
 def check_ln_address(ln_address: str):
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
