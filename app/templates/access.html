@@ -381,11 +381,10 @@ async function lnInvoicePay() {
       if (status == "RECD" || status == "SENT") {
       document.getElementById("heading_balance").innerText = `${balance} sats`;
       document.getElementById("payment_notification").innerText = `${message}`;
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+      document.getElementById("ln_create_invoice_button").textContent = "Create Invoice";
       }
-      if (status == "OK"){
-        // document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
-        document.getElementById("ln_create_invoice_button").textContent = "Create Invoice";
-      }
+
   };
   ws.onclose = () => console.log("WebSocket closed");
 
