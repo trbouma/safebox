@@ -43,7 +43,7 @@ def authenticate_user(username: str, password: str):
         return {"username": username}
     return None
 
-def fetch_safebox(access_token) -> RegisteredSafebox:
+async def fetch_safebox(access_token) -> RegisteredSafebox:
     if not access_token:
         raise HTTPException(status_code=401, detail="Missing access token")
     try:

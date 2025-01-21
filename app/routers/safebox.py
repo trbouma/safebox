@@ -32,7 +32,7 @@ engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
 @router.post("/login", tags=["safebox"])
-def login(request: Request, access_key: str = Form()):
+async def login(request: Request, access_key: str = Form()):
 
     access_key=access_key.strip().lower()
     match = False
@@ -97,7 +97,7 @@ def login(request: Request, access_key: str = Form()):
     return response
 
 @router.get("/logout")
-def logout():
+async def logout():
     response = JSONResponse({"message": "Successfully logged out"})
     response.delete_cookie(key="access_token")
     return response
@@ -114,7 +114,7 @@ async def create_authqr(qr_text: str):
     return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.get("/access", tags=["safebox", "protected"])
-def protected_route(    request: Request, 
+async def protected_route(    request: Request, 
                         onboard: bool = False, 
                         action_mode:str=None, 
                         action_data: str = None,
@@ -123,7 +123,7 @@ def protected_route(    request: Request,
                         access_token: str = Cookie(None)
                     ):
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
     except:
         response = RedirectResponse(url="/", status_code=302)
         return response
@@ -137,7 +137,7 @@ def protected_route(    request: Request,
 
     print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-    asyncio.run(acorn_obj.load_data())
+    await acorn_obj.load_data()
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
         safeboxes = session.exec(statement)
@@ -176,7 +176,7 @@ async def ln_address_payment(   request: Request,
                         access_token: str = Cookie(None)):
     msg_out ="No payment"
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
         msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
@@ -206,7 +206,7 @@ async def ln_invoice_payment(   request: Request,
                         access_token: str = Cookie(None)):
     msg_out ="No payment"
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
 
         
     except Exception as e:
@@ -247,7 +247,7 @@ async def ln_invoice_payment(   request: Request,
 @router.get("/poll", tags=["protected"])
 async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
         
     except:
         return {"detail": "error",
@@ -260,12 +260,12 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
             "balance": safebox_found.balance}
 
 @router.get("/privatedata", tags=["safebox", "protected"])
-def private_data(       request: Request, 
+async def private_data(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
     except:
         response = RedirectResponse(url="/", status_code=302)
         return response
@@ -278,12 +278,12 @@ def private_data(       request: Request,
 
                                         })
 @router.get("/health", tags=["safebox", "protected"])
-def health_data(       request: Request, 
+async def health_data(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
     except:
         response = RedirectResponse(url="/", status_code=302)
         return response
@@ -298,12 +298,12 @@ def health_data(       request: Request,
 
 
 @router.get("/credentials", tags=["safebox", "protected"])
-def my_credentials(       request: Request, 
+async def my_credentials(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to credentials stored in home relay"""
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
     except:
         response = RedirectResponse(url="/", status_code=302)
         return response
@@ -318,12 +318,12 @@ def my_credentials(       request: Request,
 
 
 @router.get("/ecash", tags=["safebox", "protected"])
-def my_ecash(       request: Request, 
+async def my_ecash(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to credentials stored in home relay"""
     try:
-        safebox_found = fetch_safebox(access_token=access_token)
+        safebox_found = await fetch_safebox(access_token=access_token)
     except:
         response = RedirectResponse(url="/", status_code=302)
         return response
@@ -370,7 +370,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
     # access_token = websocket.cookies.get("access_token")
     try:
        
-       safebox_found = fetch_safebox(access_token=access_token)
+       safebox_found = await fetch_safebox(access_token=access_token)
     except:
         await websocket.close(code=1008)  # Policy violation
         return
