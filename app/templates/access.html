@@ -390,15 +390,15 @@ async function lnInvoicePay() {
 
   async function sendMessage() {
       
-      ws.send("App is touched");
-      //alert("app is touched!");
+      // ws.send("App is touched");
+      alert("Coming soon!");
       
   }
 
   async function handleInteraction(event) {
     console.log("Interaction detected:", event.type, "on element:", event.target);
     // Add your custom logic here
-    sendMessage();
+    // sendMessage();
 }
  
 
@@ -410,13 +410,13 @@ async function lnInvoicePay() {
 {% block page_content %}
 <div class="center-text">
 
-  <h3 onclick="sendMessage()" >{{branding}}</h3>  
-  <h4  onclick="sendMessage()" id="heading_balance">{{safebox.balance}} sats</h4>  
+  <h3 >{{branding}}</h3>  
+  <h4   id="heading_balance">{{safebox.balance}} sats</h4>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">Ready!</span>
   <br>
-  <img id="img_qr_display" onclick="sendMessage()" src="/safebox/qr/{{lightning_address}}">
+  <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
   <br>
   <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
   <br>
@@ -477,6 +477,7 @@ async function lnInvoicePay() {
   
   <button id="logout_button"onclick="logout()" >Logout</button>
   <hr>
+  <i><h4>Experimental and Testing</h4></i>
   Technical Information
   <br>
   Mode: {{action_mode}} Data: {{action_data}}
