@@ -24,24 +24,58 @@ window.location.href="/safebox/access" ;
 
 
 <div class="center-text">
+    <h4>Private Data Coming Soon!</h4>
+</div>
+
+<div id="card-container"></div>
+
+<script>
+  // Function to create and add a card
+  function addCard(title, content) {
+    // Create a card element
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // Create and add the title element
+    const cardTitle = document.createElement('div');
+    cardTitle.className = 'card-title';
+    cardTitle.textContent = title;
+
+    // Create and add the content element
+    const cardContent = document.createElement('div');
+    cardContent.className = 'card-content';
+    cardContent.textContent = content;
+
+    // Append title and content to the card
+    card.appendChild(cardTitle);
+    card.appendChild(cardContent);
+
+    // Append the card to the container
+    const container = document.getElementById('card-container');
+    container.appendChild(card);
+  }
+
+  // Example usage
+  addCard('Private Data 1', 'This is the content of the first private data record.');
+  addCard('Private Data 2', 'This is the content of the second private data record.');
+</script>
+<br>
+
+<div class="center-text">
     
-        <h1>My Private Data</h1>
-        <p class="lead">Including Health Data!</p>
-        <p class="lead">Coming soon!!!</p>
-        <p>Private data for: {{safebox.handle}}</p>        
-        <p>Private data is being stored on home relay: {{safebox.home_relay}}</p>
+
         
         
-        <br>
-        <br>
-        <button onclick="backToProfile()">Back to Safebox</button>
+        
+
+    <button onclick="backToProfile()">Back to Safebox</button>
       
  
 
-        <hr>
+        
      
         
-    </div>
+</div>
      
 
 
