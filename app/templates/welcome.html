@@ -17,27 +17,29 @@
         <h1>{{ branding }}</h1>
         
         <p class="lead">{{branding_message}}</p>
-        <p >Full control of your funds and data.</a> 
-        <p>Follow the latest blog entries <a href="https://tim-bouma.npub.pro/tag/safebox/">here</a>
-         
-
+        <p >Control your personal funds and data.</a> 
+        
+            <form action="/safebox/login" method="POST">
+                <label for="access_key">Access Key:</label><br>
+                <input type="text" id="access_key" name="access_key" type="password" placeholder="Enter access key" >
+                <br><br>    
+                <button type="submit">Login</button>
+            </form>
         </p>
-        <form action="/onboard/website" method="POST">
-            <label for="invite_code">Invite Code:</label><br>
-            <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >
-            <br><br>    
-            <button >Get</button>
-        </form>
+            <form action="/onboard/website" method="POST">
+                <label for="invite_code">Invite Code:</label><br>
+                <input type="text" id="invite_code" name="invite_code" placeholder="Enter invite code" >
+                <br><br>    
+                <button >Get SafeBox</button>
+            </form>
         <br>
-        <form action="/safebox/login" method="POST">
-            <label for="access_key">Access Key</label><br>
-            <input type="text" id="access_key" name="access_key" type="password" Enter Access Key" >
-            <br><br>    
-            <button type="submit">Access</button>
-        </form>
-        <hr>
-        <p><a href="https://github.com/trbouma">GitHub Repo</a></p> 
-        <p><i>This is <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a> <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
+            <hr>
+            <p>Follow the latest blog entries <a href="https://tim-bouma.npub.pro/tag/safebox/">here</a>
+            <p><a href="https://github.com/trbouma">GitHub Repo</a></p> 
+            <p><i>This is <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a> <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
+             
+
+
         
     </div>
      
