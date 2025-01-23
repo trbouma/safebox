@@ -2116,8 +2116,9 @@ class Acorn:
            
         
         await self.write_proofs()
-        msg_out = f"Zap of {ln_amount} sats with fee {amount_needed-ln_amount} sats successful! \nYou have {self.balance} sats remaining."
+        msg_out = f"Paid {ln_amount} sats with fee {amount_needed-ln_amount} sats successful! \nYou have {self.balance} sats remaining."
         self.logger.info(msg_out)
+        return msg_out
 
 
 

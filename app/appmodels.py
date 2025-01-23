@@ -33,10 +33,15 @@ class PaymentQuote(SQLModel, table=True):
     mint: str
     paid: bool
 
-class lnPay(BaseModel):
+class lnPayAddress(BaseModel):
     address: str 
     amount: int 
     comment: str
+
+class lnPayInvoice(BaseModel):
+    invoice: str 
+    comment: str = None
+
 
 class lnInvoice(BaseModel):
     amount: int 

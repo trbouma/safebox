@@ -301,7 +301,7 @@ function getlnPayStatus(ln_pay_status) {
 
 }
 
-async function lnPay() {
+async function lnPayAddress() {
   const recipient_address = document.getElementById("ln_recipient_address");
   const recipient_amount = document.getElementById("ln_recipient_amount");
   const recipient_memo = document.getElementById("ln_recipient_memo");
@@ -321,7 +321,7 @@ async function lnPay() {
   
     // ln_pay_button.textContent = "Please wait...";
 
-      await fetch('/safebox/pay', {
+      await fetch('/safebox/payaddress', {
             method: "POST",
             headers: {"Content-Type": "application/json"},        
             body: JSON.stringify(submit_data)         
@@ -341,6 +341,55 @@ async function lnPay() {
 
 }
 
+async function lnPayInvoice() {
+  // const recipient_address = document.getElementById("ln_recipient_address");
+  // const recipient_amount = document.getElementById("ln_recipient_amount");
+  const recipient_memo = document.getElementById("ln_recipient_memo");
+  const invoice_pay_button = document.getElementById("ln_invoice_pay_button");
+  //var ln_address = recipient_address.value;
+  //var ln_amount = parseInt(recipient_amount.value);
+  var ln_comment = recipient_memo.value;
+  // alert("Pay! " + ln_address + " " + ln_amount + " with comment "+ ln_comment);
+  
+  ln_amount = parseInt("{{action_amount}}");
+  ln_invoice ="{{action_data}}";
+
+  // await alert("pay invoice " + ln_invoice);
+  
+
+  
+  // console.log(ln_amount);
+
+  const submit_data = {"invoice": ln_invoice,
+                       "comment": ln_comment};
+
+
+    invoice_pay_button.disabled = true;
+    invoice_pay_button.textContent = "Please wait...";
+
+      await fetch('/safebox/payinvoice', {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},        
+            body: JSON.stringify(submit_data)         
+          })
+        .then((response) => response.json())
+        .then((data) => getlnPayStatus(data));
+        //ln_pay_button.textContent = "Pay to Lightning Address!";
+        //ln_pay_button.disabled = false;
+        
+        // location.reload();
+        
+
+        
+        invoice_pay_button.disabled = false;
+        window.location.href="/safebox/access"
+      
+
+
+}
+
+
+
 function getInvoiceStatus(ln_invoice_status) {
   // var ln_pay_button = document.getElementById("ln_pay_button");
     console.log(ln_invoice_status);
@@ -353,15 +402,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
 }
 
-async function lnInvoicePay() {
-  
 
-
-    alert("pay invoice!");
-    //window.location.href="/safebox/access"
-  
-
-}
 
 </script>
 
@@ -415,22 +456,29 @@ async function lnInvoicePay() {
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">Ready!</span>
-  <br>
-  <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
-  <br>
-  <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
-  <br>
-  <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
-  <br><br>
-  <button id="ln_create_invoice_button" onclick="createInvoice()">Invoice Amount</button>
-  <hr>
-  {% if action_mode == "lninvoice" %} 
+  {% if action_mode == "lninvoice" %}
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
     <br><br>
-    <button id="ln_invoice_pay_button" onclick="lnInvoicePay()">Authorize Payment</button> 
+    <h5>Memo:</h5>
+    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
+    <br><br>
+    <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Payment</button> 
     <br>
   {% else %}
-    <h4>Pay with Lightning</h4>
+
+    <br>
+    <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
+    <br>
+    <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
+    <br>
+    <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
+    <br><br>
+    <button id="ln_create_invoice_button" onclick="createInvoice()">Invoice Amount</button>
+    <hr>
+
+
+  
+    <h4>Pay Lightning Address</h4>
     <br><input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
     <br>
     
@@ -440,7 +488,7 @@ async function lnInvoicePay() {
     <h5>Memo:</h5>
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
-    <button id="ln_pay_button" onclick="lnPay()">Pay Lightning Address</button> 
+    <button id="ln_pay_button" onclick="lnPayAddress()">Pay Lightning Address</button> 
   
   {% endif %}
   <hr>
