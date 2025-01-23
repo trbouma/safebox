@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.openbalance.app']
     MINTS: List = ['https://mint.nimo.cash']
-    TOKEN_EXPIRES_WEEKS: int = 1
+    TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8
+    SESSION_AGE_DAYS: int = 30
     BRANDING: str = "My SafeBox"
     BRANDING_MESSAGE: str = "My Stuff, My Way!"
     BRANDING_RETRY: str = "Whoops! Let's try that again!"

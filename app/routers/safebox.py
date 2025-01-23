@@ -90,7 +90,7 @@ async def login(request: Request, access_key: str = Form()):
         key="access_token",
         value=access_token,
         httponly=True,  # Prevent JavaScript access
-        max_age=3600,  # 1 hour
+        max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
         secure=False,  # Set to True in production to enforce HTTPS
         samesite="Lax",  # Protect against CSRF
     )
