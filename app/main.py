@@ -1,6 +1,6 @@
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from fastapi import FastAPI, Request, BackgroundTasks, WebSocket
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, BackgroundTasks, WebSocket, Cookie
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from app.config import Settings
 from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
+from app.utils import fetch_safebox
 
 
 @asynccontextmanager
@@ -53,7 +54,15 @@ app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 # Define a root endpoint
 @app.get("/")
-def read_root(request: Request):
+async def read_root(request: Request, access_token: str = Cookie(default=None)):
+    print(f"Access token: {access_token}")
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        response = RedirectResponse(url="/safebox/access", status_code=302)
+        return response
+    except:
+        pass
+        print("pass")
     return templates.TemplateResponse(  "welcome.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
