@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest
+from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -266,7 +266,41 @@ async def issue_ecash(   request: Request,
                 "detail": msg_out
             }
 
+@router.post("/acceptecash", tags=["protected"])
+async def accept_ecash(   request: Request, 
+                        ecash_accept: ecashAccept,
+                        access_token: str = Cookie(None)):
+    msg_out ="No payment"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        await acorn_obj.load_data()
 
+       
+        
+        msg_out = await acorn_obj.accept_token(ecash_accept.ecash_token)
+    except Exception as e:
+        return {    "status": "ERROR",
+                    "detail": f"error {e}"}
+
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.one()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise ValueError("Could not find safebox!")
+    
+       
+
+        safebox_found.balance = acorn_obj.balance
+        session.add(safebox_found)
+        session.commit()
+    
+    return {    "status": "OK",
+                "detail": msg_out
+            }
 
 @router.post("/invoice", tags=["protected"])
 async def ln_invoice_payment(   request: Request, 

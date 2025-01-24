@@ -3258,8 +3258,9 @@ class Acorn:
     async def accept_token(self,cashu_token: str):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
-        await self.nip17_accept(cashu_token)
+        msg_out = await self.nip17_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+        return msg_out
 
         
 
@@ -4058,7 +4059,7 @@ class Acorn:
             await self.add_proofs_obj(swap_proofs)
         except Exception as e:
             self.logger.debug(f"Proof not accepted {e}")
-            return f"error {e}"
+            return f"Proof not accepted. Doublespent?"
 
         # await self._async_add_proofs_obj(swap_proofs)
 
@@ -4076,7 +4077,7 @@ class Acorn:
         # await self._async_swap()
         self.logger.debug(f"Proofs are added! New balance is: {self.balance}")
         
-        return 'add proof'
+        return f'Successfully accepted! New balance is {self.balance}'
 
         
 

@@ -50,3 +50,5 @@ class lnInvoice(BaseModel):
 class ecashRequest(BaseModel):
     amount: int 
     
+class ecashAccept(BaseModel):
+    ecash_token: str 
