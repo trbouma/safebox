@@ -46,3 +46,7 @@ class lnPayInvoice(BaseModel):
 class lnInvoice(BaseModel):
     amount: int 
     comment: str = "Please Pay!"
+
+class ecashRequest(BaseModel):
+    amount: int 
+    

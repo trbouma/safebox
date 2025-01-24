@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}My Credentials{% endblock %}
+{% block title %}Ecash{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -8,10 +8,71 @@
 
 <script>
 
+var global_ecash_issued = "";
+
 async function backToProfile() {
 
 
 window.location.href="/safebox/access" ;
+}
+
+async function getStatus(return_result) {
+
+    var qr_img_func = document.getElementById("img_qr_display");
+    // qr_img_func.src = "/img/logo.png";
+    // ecash_response = JSON.parse(return_result);
+    parsedResult = JSON.parse(JSON.stringify(return_result));
+    // alert("we are here:" + parsedResult.status);
+  
+    //alert(response.status);
+  //return_value = return_result["cashu_tokens"][0].replace(/"([^"]+(?="))"/g, '$1') ;
+  //issueEcash.value = return_value;
+  global_ecash_issued = parsedResult.detail;
+  qr_img_func.src = "/safebox/qr/"+ global_ecash_issued;
+  await navigator.clipboard.writeText(global_ecash_issued);
+
+  
+     
+    
+}
+
+async function createEcashToken() {
+    
+    var data;
+    var qr_img_func = document.getElementById("img_qr_display");
+    var ecash_input_func = document.getElementById("ln_ecash_amount");
+
+    qr_img_func.src = "/img/circle-256.gif";
+    
+    ecash_amount = parseInt(ecash_input_func.value);
+    // alert(ecash_amount);
+
+    const submit_data = {"amount": ecash_amount};
+    
+
+
+
+   await fetch('/safebox/issueecash', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+    // qr_img_func.src = "/img/logo.png";
+    // alert("create token");
+// window.location.href="/safebox/access" ;
+
+
+}
+
+async function copytoClipboard() {
+
+
+await navigator.clipboard.writeText(global_ecash_issued);
+// alert(`Copied ${ecash_token} to clipboard!`);
 
 }
 
@@ -25,15 +86,24 @@ window.location.href="/safebox/access" ;
 
 <div class="center-text">
     
-        <h1>Ecash</h1>
-        <p class="lead">Coming soon!!!</p>
-        <p>Pay with ecash for: {{safebox.handle}}</p>        
-        <p>Ecash data is being stored on home relay: {{safebox.home_relay}}</p>
+    <h3>Ecash</h3>
+    <span id="user_notification">Careful, this is ecash!</span>
+    <br>
+
+    <img id="img_qr_display" src="/img/logo.png" onclick="copytoClipboard()">
+    <br>
+
         
-        
-        <br>
-        <br>
-        <button onclick="backToProfile()">Back to Safebox</button>
+       
+    Enter Ecash Amount:<br><input type="number" placeholder="0" id="ln_ecash_amount" name="ln_ecash_amount"  value="" size="12">
+    <br>
+    <br>
+       
+    <button id="ecash_token_button" onclick="createEcashToken()">Create Ecash Token</button> 
+    <br><br>
+    <button onclick="copytoClipboard()">Copy to Clipboard</button> 
+    <br><br>
+    <button onclick="backToProfile()">Back to Safebox</button>
       
  
 

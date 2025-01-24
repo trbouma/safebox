@@ -328,6 +328,23 @@ def get(label):
     
     click.echo(out_info)
 
+@click.command("getrecords", help='get a private wallet record')
+def get_records():
+    
+    out_info = "None"
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+
+    try:
+        out_info = asyncio.run(acorn_obj.get_user_records())
+        
+        
+
+    except:
+        out_info = "No label found!"
+    
+    click.echo(out_info)
+
 @click.command("balance", help="show balance")
 def balance():
     
@@ -419,6 +436,7 @@ cli.add_command(swap)
 cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
+cli.add_command(get_records)
 cli.add_command(balance)
 cli.add_command(zap)
 cli.add_command(accept)

@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice
+from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -105,7 +105,7 @@ async def logout():
 
 
 @router.get("/qr/{qr_text}", tags=["public"])
-async def create_authqr(qr_text: str):
+async def create_qr(qr_text: str):
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()
@@ -231,6 +231,43 @@ async def ln_pay_invoice(   request: Request,
     
     return {"detail": msg_out}
 
+@router.post("/issueecash", tags=["protected"])
+async def issue_ecash(   request: Request, 
+                        ecash_request: ecashRequest,
+                        access_token: str = Cookie(None)):
+    msg_out ="No payment"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        await acorn_obj.load_data()
+
+        # msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
+        msg_out = await acorn_obj.issue_token(ecash_request.amount)
+    except Exception as e:
+        return {    "status": "ERROR",
+                    f"detail": "error {e}"}
+
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.one()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            raise ValueError("Could not find safebox!")
+    
+       
+
+        safebox_found.balance = acorn_obj.balance
+        session.add(safebox_found)
+        session.commit()
+    
+    return {    "status": "OK",
+                "detail": msg_out
+            }
+
+
+
 @router.post("/invoice", tags=["protected"])
 async def ln_invoice_payment(   request: Request, 
                         ln_invoice: lnInvoice,
@@ -309,7 +346,7 @@ async def private_data(       request: Request,
 
                                         })
 @router.get("/health", tags=["safebox", "protected"])
-async def health_data(       request: Request, 
+async def my_health(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""

@@ -416,6 +416,41 @@ class Acorn:
         pass
         return "this is the instance"
 
+    async def get_user_records(self):
+
+        events_out = []
+        my_enc = NIP44Encrypt(self.k)
+        m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
+        # m.update(label.encode())
+        # label_hash = m.digest().hex()
+        decrypt_content = None
+        
+        FILTER = [{
+            'limit': 100,
+            'authors': [self.pubkey_hex],
+            'kinds': [37375]   
+            
+        }]
+
+        async with ClientPool([self.home_relay]) as c:  
+            events = await c.query(FILTER)           
+        
+        for each in events:
+            try:
+                decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+            except:
+                return f"Could not retrieve info."
+            
+            try:
+                parsed_record = json.loads(decrypt_content)
+            except:
+                parsed_record = decrypt_content
+            
+            events_out.append(parsed_record)
+        
+        return events_out
+
     def update_tags_deprecated(self,tags: List):
         print("update tags")
         for each in tags:
@@ -845,11 +880,7 @@ class Acorn:
             'limit': 100,
             'authors': [self.pubkey_hex],
             'kinds': [37375],
-            '#d': [label_hash]
-            
-            
-           
-            
+            '#d': [label_hash]   
             
             
         }]
@@ -889,6 +920,7 @@ class Acorn:
 
         
     def get_record(self,record_name):
+        #FIXME - not sure if this function is used
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("this is a reserved record")
@@ -973,12 +1005,12 @@ class Acorn:
             return record_name
         else:
             
-            self.update_tag(["user_record",record_name,record_type])
+            await self.update_tag(["user_record",record_name,record_type])
             await self.set_wallet_info(record_name,record_value)
             # print(user_records)
             return record_name
     
-    def update_tag(self,tag_value):
+    async def update_tag(self,tag_value):
         
 
         if tag_value[0]=="user_record":
@@ -993,7 +1025,7 @@ class Acorn:
             
         
         print(self.acorn_tags)
-        self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
+        await self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
