@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30
     BRANDING: str = "Get SafeBox"
-    BRANDING_MESSAGE: str = "My Stuff, My Way!"
+    BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
     INVITE_CODES: List = ["alpha","sec2025", "rektuser"]
 

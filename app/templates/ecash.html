@@ -42,6 +42,10 @@ async function createEcashToken() {
     var qr_img_func = document.getElementById("img_qr_display");
     var ecash_input_func = document.getElementById("ln_ecash_amount");
 
+
+    user_confirm = confirm("Are you sure you want to proceed?")
+    if (user_confirm == false) {return;}
+    
     qr_img_func.src = "/img/circle-256.gif";
     
     ecash_amount = parseInt(ecash_input_func.value);
