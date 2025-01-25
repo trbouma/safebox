@@ -33,6 +33,35 @@
   alert(onboard_msg);
   }
 
+  async function getEcashStatus(data) {
+
+    var status = JSON.stringify(data["status"]);
+    var detail = JSON.stringify(data["detail"]);
+    alert(detail);
+    window.location.href="/safebox/access";
+    
+
+  }
+
+  if (action_mode=="ecash") {
+    
+    const submit_data = {"ecash_token": action_data };
+    // alert("ecash");
+
+     fetch('/safebox/acceptecash', {
+           method: "POST",
+           headers: {"Content-Type": "application/json"},        
+           body: JSON.stringify(submit_data)         
+           })
+         .then((response) => response.json())
+         .then((data) => getEcashStatus(data));
+
+
+
+    }
+
+
+
   async function logout() {
   var data; 
   //alert("log out");
@@ -461,6 +490,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <span id="payment_notification">
     {% if action_mode == 'lnaddress' %}
       Enter amount and memo
+    {% elif action_mode == 'ecash' %}
+      Receiving ecash, please wait...
     {% else %}
       Ready!  
     {% endif %}  

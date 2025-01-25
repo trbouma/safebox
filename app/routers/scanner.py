@@ -89,7 +89,11 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
             return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}&action_amount={action_amount}&action_comment={action_comment}")
         except:
             pass
-    
+    elif qr_code[:6] == "cashuA":
+        action_mode = "ecash"
+        action_data = qr_code
+       
+
     else:
         return RedirectResponse(f"/safebox/access")
 
