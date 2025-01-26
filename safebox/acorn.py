@@ -1004,9 +1004,14 @@ class Acorn:
             await self.set_wallet_info(record_name,record_value)
             return record_name
         else:
-            
+            record_obj = { "tag"   : [record_name],
+                            "type"  : record_type,
+                            "payload": record_value
+                          }
+            record_json_str = json.dumps(record_obj)
             await self.update_tag(["user_record",record_name,record_type])
-            await self.set_wallet_info(record_name,record_value)
+
+            await self.set_wallet_info(record_name,record_json_str)
             # print(user_records)
             return record_name
     

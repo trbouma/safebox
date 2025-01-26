@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 import asyncio
 from contextlib import asynccontextmanager
 
+from monstr.encrypt import Keys
+
 from app.config import Settings
 from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
 # Create Settings:
 settings = Settings()
 print(settings)
+service_key = Keys(settings.SERVICE_SECRET_KEY)
 
 # Create instance of database
 engine = create_engine(settings.DATABASE)
@@ -53,7 +56,7 @@ app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 
 # Define a root endpoint
-@app.get("/")
+@app.get("/", tags=["public"])
 async def read_root(request: Request, access_token: str = Cookie(default=None)):
     print(f"Access token: {access_token}")
     try:
@@ -68,6 +71,48 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
                                             "title": "Welcome Page", 
                                             "branding": settings.BRANDING,
                                             "branding_message": settings.BRANDING_MESSAGE})
+
+@app.get("/.well-known/nostr.json",tags=["public"])
+async def get_nostr_name(request: Request, name: str, ):
+
+    # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
+
+    if name == "_":
+        npub_hex = service_key.public_key_hex()
+        return {
+        "names": {
+            "_": npub_hex
+        },
+        "relays":
+                     { f"{npub_hex}": settings.RELAYS}  }
+
+    try: 
+        # wallet_info = get_public_profile(wallet_name=name)
+        # print(wallet_info['wallet_info']['npub_hex'])
+        # return{"status": "OK", "reason": "not implemented yet"}
+        pass
+        pubkey = npub_hex
+        
+    except:
+        return{"status": "ERROR", "reason": "Name does not exist"}
+
+    account_metadata = {}    
+    # pubkey =  wallet_info['wallet_info']['npub_hex']
+
+    
+
+    nostr_names = {
+                    "names": {
+                        f"{name}": pubkey
+                        },
+                     "relays":
+                     { f"{pubkey}": settings.RELAYS}   
+                    
+                    }
+
+    headers = {"Access-Control-Allow-Origin" : "*"}
+    return JSONResponse(content=nostr_names, headers=headers)
+    # return nostr_names
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

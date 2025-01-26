@@ -343,7 +343,8 @@ def get_records():
     except:
         out_info = "No label found!"
     
-    click.echo(out_info)
+    for each in out_info:
+        click.echo(f"RECORD: {each}")
 
 @click.command("balance", help="show balance")
 def balance():

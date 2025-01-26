@@ -24,12 +24,17 @@ window.location.href="/safebox/access" ;
 
 
 <div class="center-text">
-    <h4>Private Data Coming Soon!</h4>
+    <h4>My Private Data Almost There!</h4>
+    
+    
 </div>
 
 <div id="card-container"></div>
 
 <script>
+  const jsonUserData = {{ user_records | tojson }};
+  
+
   // Function to create and add a card
   function addCard(title, content) {
     // Create a card element
@@ -56,10 +61,23 @@ window.location.href="/safebox/access" ;
   }
 
   // Example usage
-  addCard('Private Data 1', 'This is the content of the first private data record.');
-  addCard('Private Data 2', 'This is the content of the second private data record.');
+  // alert("hello"+ JSON.stringify(jsonUserData)); 
+  for (let record of jsonUserData)
+  {
+    if (record.hasOwnProperty("tag")) {
+        console.log(`Name: ${record.name}`);
+        addCard(record.tag, record.payload);
+    } else {
+        console.log("This record does not have a 'name' property.");
+    }
+    // addCard('Private Data 1', JSON.stringify(record));
+
+  }
+
+  //addCard('Private Data 1', JSON.stringify(jsonUserData));
+  //addCard('Private Data 2', 'This is the content of the second private data record.');
 </script>
-<br>
+   
 
 <div class="center-text">
     

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     HOME_RELAY: str = 'wss://relay.openbalance.app'
     SERVICE_NAME: str = 'Safebox'
     SERVICE_TAG_LINE: str = 'Your money. Your data'
-    SECRET_KEY: str = "foobar"
+    SERVICE_SECRET_KEY: str = "foobar"
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.openbalance.app']

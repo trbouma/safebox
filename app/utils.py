@@ -4,6 +4,9 @@ import jwt, re, requests, bech32
 from time import sleep
 import asyncio
 
+from bech32 import bech32_decode, convertbits
+import struct
+
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -24,12 +27,12 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SERVICE_SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 def decode_jwt_token(token: str):
     try:
-        decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = jwt.decode(token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
         return decoded_token
     except jwt.ExpiredSignatureError:
         return "Token has expired"
@@ -47,7 +50,7 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
     if not access_token:
         raise HTTPException(status_code=401, detail="Missing access token")
     try:
-        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(access_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
         access_key = payload.get("sub")
         if not access_key:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -136,3 +139,113 @@ def extract_leading_numbers(input_string: str) -> str:
     if match:
         return match.group()
     return None
+
+
+
+def parse_nostr_bech32(encoded_string):
+    # Decode the Bech32 string
+    hrp, data = bech32_decode(encoded_string)
+    if hrp not in {"nprofile", "nevent", "naddr"} or data is None:
+        raise ValueError("Invalid Bech32 string or unsupported prefix")
+
+    # Convert 5-bit data to 8-bit for processing
+    decoded_data = bytes(convertbits(data, 5, 8, False))
+
+    # Initialize result dictionary
+    result = {"prefix": hrp, "values": {}}
+
+    index = 0
+    while index < len(decoded_data):
+        # Extract the tag and length
+        tag = decoded_data[index]
+        index += 1
+        length = decoded_data[index]
+        index += 1
+
+        # Extract the corresponding value based on length
+        value = decoded_data[index : index + length]
+        index += length
+
+        # Parse based on the tag
+        if tag == 0:  # Special
+            if hrp in {"nprofile", "nevent", "naddr"}:
+                result["values"]["pubhex"] = value.hex()
+        elif tag == 1:  # Relay
+            relay = value.decode("ascii")
+            if "relay" not in result["values"]:
+                result["values"]["relay"] = []
+            result["values"]["relay"].append(relay)
+        elif tag == 2:  # Author
+            result["values"]["author"] = value.hex()
+        elif tag == 3:  # Kind
+            kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
+            result["values"]["kind"] = kind
+
+    return result
+
+
+def create_nprofile_from_hex(npub, relays=None):
+    if len(npub) != 64:
+        raise ValueError("Invalid public key length. Must be 32 bytes (64 hex characters).")
+    
+    # Convert the hex-encoded public key to bytes
+    pubkey_bytes = bytes.fromhex(npub)
+    
+    # Create the encoded data
+    data = []
+
+    # Tag 0: Special (public key)
+    data.append(0)  # Tag 0
+    data.append(len(pubkey_bytes))  # Length of the public key (32 bytes)
+    data.extend(pubkey_bytes)  # Public key bytes
+
+    # Tag 1: Relay
+    if relays:
+        for relay in relays:
+            relay_bytes = relay.encode("ascii")
+            data.append(1)  # Tag 1
+            data.append(len(relay_bytes))  # Length of the relay string
+            data.extend(relay_bytes)  # Relay string as bytes
+
+    # Convert 8-bit data to 5-bit data for Bech32 encoding
+    converted_data = convertbits(data, 8, 5, True)
+
+    # Encode the data as a Bech32 string with the "nprofile" prefix
+    nprofile = bech32.bech32_encode("nprofile", converted_data)
+    
+    return nprofile
+
+def create_nprofile_from_npub(npub_bech32, relays=None):
+    # Decode the npub Bech32 string
+    hrp, data = bech32.bech32_decode(npub_bech32)
+    if hrp != "npub" or data is None:
+        raise ValueError("Invalid npub Bech32 string")
+    
+    # Convert 5-bit data back to 8-bit data
+    pubkey_bytes = bytes(convertbits(data, 5, 8, False))
+    if len(pubkey_bytes) != 32:
+        raise ValueError("Invalid public key length in npub Bech32 string")
+    
+    # Create the encoded data for nprofile
+    encoded_data = []
+
+    # Tag 0: Special (public key)
+    encoded_data.append(0)  # Tag 0
+    encoded_data.append(len(pubkey_bytes))  # Length of the public key (32 bytes)
+    encoded_data.extend(pubkey_bytes)  # Public key bytes
+
+    # Tag 1: Relay (optional)
+    if relays:
+        for relay in relays:
+            relay_bytes = relay.encode("ascii")
+            encoded_data.append(1)  # Tag 1
+            encoded_data.append(len(relay_bytes))  # Length of the relay string
+            encoded_data.extend(relay_bytes)  # Relay string as bytes
+
+    # Convert 8-bit data to 5-bit data for Bech32 encoding
+    converted_data = convertbits(encoded_data, 8, 5, True)
+
+    # Encode the data as a Bech32 string with the "nprofile" prefix
+    nprofile = bech32.bech32_encode("nprofile", converted_data)
+    
+    return nprofile
