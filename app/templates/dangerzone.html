@@ -4,7 +4,7 @@
 {% block head %}
 {{ super() }}
 
-<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
 
 <script>
 
@@ -47,6 +47,30 @@ async function setCustomHandle() {
 
 
       }
+
+      async function setOwnerNpub() {
+    
+    var data;
+   
+    var input_owner_npbub = document.getElementById("input_owner_npub");
+
+    owner_npub = input_owner_npub.value;
+    user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_npub} as your owner npub?`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"npub": owner_npub, "local_currency": null};
+
+   await fetch('/safebox/setownerdata', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
 </script>
 
 {% endblock %}
@@ -57,11 +81,17 @@ async function setCustomHandle() {
 
 <div class="center-text">
     <h4>This is the Danger Zone!</h4>
-    Set Your Custom Handle:
+    Set your custom handle. This gives you a friendly lighting address.
    <br><br><input type="text" placeholder="enter custom handle" id="input_custom_handle"   value="" style="width:90%;">
     <br><br>
     <button onclick="setCustomHandle()">Set Custom Handle</button>
     <br><br>
+    <hr>
+    Set your owner npub. This gives you a NIP-05 verification address.
+    <br><br><input type="text" placeholder="enter owner npub" id="input_owner_npub"   value="" style="width:90%;">
+     <br><br>
+     <button onclick="setOwnerNpub()">Set Owner Npub</button>
+     <br><br>
     
 </div>
 
@@ -69,6 +99,7 @@ async function setCustomHandle() {
    
 
 <div class="center-text">
+  <hr>
     
 
         

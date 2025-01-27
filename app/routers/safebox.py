@@ -630,7 +630,7 @@ async def set_owner_data(   request: Request,
         await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
         msg_out = "successful"
     except:
-        return {"status": "ERROR", "detail": "Owner update error" }
+        return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
    
             
     if owner_data.npub:
