@@ -77,6 +77,7 @@ class Acorn:
     home_relay: str
     home_mint: str
     known_mints: dict = {}
+    local_currency: str = "SAT"
     user_records = []
     relays: List[str]
     mints: List[str]
@@ -168,6 +169,8 @@ class Acorn:
                     print(f"home mint: {self.home_mint}")
                 if each[0] == "name":
                     self.name = each[1]
+                if each[0] == "local_currency":
+                    self.local_currency = each[1]
                     print(f"name: {self.name}")
                 if each[0] == "owner":
                     self.owner = each[1]
@@ -177,6 +180,8 @@ class Acorn:
                     print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
                 if each[0] == "seedphrase":
                     self.seed_phrase = each[1]
+                if each[0] == "local_currency":
+                    self.local_currency = each[1]
                 if each[0] == "user_record":
                     self.user_records.append(each[1])   
         except Exception as e:
@@ -186,6 +191,23 @@ class Acorn:
 
         await self._load_proofs()
         return
+    
+    async def set_owner_data(self, npub:str = None, local_currency=None):
+
+        update_tags = []
+        if npub ==None and local_currency== None:
+            return
+        if npub:            
+            try:
+                npub_obj = Keys(pub_k=npub)
+                update_tags.append(["owner",npub])                
+            except:
+                raise ValueError("npub is not a valid format")
+        if local_currency:
+            update_tags.append(["local_currency",local_currency])
+        
+        await self.update_tags(update_tags)
+        return "OK"
 
     def __repr__(self):
         out_str = json.dumps(self.wallet_reserved_records)
@@ -353,7 +375,8 @@ class Acorn:
                                 [ "mint", self.mints[0]],
                                 [ "name", name ],
                                 ["seedphrase",seed_phrase],
-                                ["owner",self.pubkey_bech32]
+                                ["owner",self.pubkey_bech32],
+                                ["local_currency", self.local_currency]
                             ]
             
             self.handle = generate_name_from_hex(self.pubkey_hex)
@@ -393,6 +416,7 @@ class Acorn:
                             \nlock privkey: {lock_privkey}
                             \nseed phrase: {self.seed_phrase}
                             \nlock pubkey: {lock_pubkey}
+                            \nlocal currency: {self.local_currency}
                             \nhome mints: {mints}
                             \nknown mints: {self.known_mints}
                             \nbalance: {self.balance} {self.unit}
@@ -451,13 +475,7 @@ class Acorn:
         
         return events_out
 
-    def update_tags_deprecated(self,tags: List):
-        print("update tags")
-        for each in tags:
-            if each[0] == 'balance':
-                print(f"this is for balance: {each[1]}")
-            
-        return "updated"
+
 
     async def _async_query_client_profile(self, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
@@ -1009,24 +1027,33 @@ class Acorn:
                             "payload": record_value
                           }
             record_json_str = json.dumps(record_obj)
-            await self.update_tag(["user_record",record_name,record_type])
+            await self.update_tags([["user_record",record_name,record_type]])
 
             await self.set_wallet_info(record_name,record_json_str)
             # print(user_records)
             return record_name
     
-    async def update_tag(self,tag_value):
+    async def update_tags(self,tag_values):
         
+        for tag_value in tag_values:
+            if tag_value[0]=="user_record":
+                if tag_value in self.acorn_tags:
+                    print("user record already in!")
+                else:
+                    self.acorn_tags.append(tag_value)
+            elif tag_value[0]=="balance":
+                for index, each in enumerate(self.acorn_tags):
+                    if each[0]=="balance":
+                        self.acorn_tags[index]=tag_value
+            elif tag_value[0] == "owner":
+                for index, each in enumerate(self.acorn_tags):
+                    if each[0]=="owner":
+                        self.acorn_tags[index]=tag_value
+            elif tag_value[0] == "local_currency":
+                for index, each in enumerate(self.acorn_tags):
+                    if each[0]=="local_currency":
+                        self.acorn_tags[index]=tag_value
 
-        if tag_value[0]=="user_record":
-            if tag_value in self.acorn_tags:
-                print("user record already in!")
-            else:
-                self.acorn_tags.append(tag_value)
-        elif tag_value[0]=="balance":
-            for index, each in enumerate(self.acorn_tags):
-                if each[0]=="balance":
-                    self.acorn_tags[index]=tag_value
             
         
         print(self.acorn_tags)

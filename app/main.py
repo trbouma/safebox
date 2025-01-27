@@ -1,6 +1,6 @@
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from fastapi import FastAPI, Request, BackgroundTasks, WebSocket, Cookie
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, BackgroundTasks, WebSocket, Cookie, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +13,7 @@ from app.config import Settings
 from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
+from app.appmodels import RegisteredSafebox
 
 
 @asynccontextmanager
@@ -76,7 +77,7 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
 async def get_nostr_name(request: Request, name: str, ):
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
-
+    
     if name == "_":
         npub_hex = service_key.public_key_hex()
         return {
@@ -85,12 +86,24 @@ async def get_nostr_name(request: Request, name: str, ):
         },
         "relays":
                      { f"{npub_hex}": settings.RELAYS}  }
+    else:
+        pass
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==name)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            if safebox_found:
+                key_obj = Keys(pub_k=safebox_found.owner)
+                npub_hex = key_obj.public_key_hex()
+            else:
+
+                raise HTTPException(status_code=404, detail=f"{name} not found")
 
     try: 
         # wallet_info = get_public_profile(wallet_name=name)
         # print(wallet_info['wallet_info']['npub_hex'])
         # return{"status": "OK", "reason": "not implemented yet"}
-        pass
+        
         pubkey = npub_hex
         
     except:

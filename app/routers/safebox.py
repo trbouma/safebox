@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept
+from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -546,4 +546,69 @@ async def get_records(       request: Request,
     records_out = await acorn_obj.get_user_records()
 
     return records_out
+
+@router.post("/setownerdata", tags=["safebox", "protected"])
+async def set_owner_data(   request: Request, 
+                            owner_data: ownerData,
+                            access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    status = "OK"
+    msg_out =""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
     
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()   
+    
+    if owner_data.custom_handle:
+        try:
+            with Session(engine) as session:   
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==owner_data.custom_handle)
+                safeboxes = session.exec(statement)
+                safebox_custom = safeboxes.first()              
+                safebox_custom.custom_handle = owner_data.custom_handle
+                session.add(safebox_custom)
+                session.commit() 
+                          
+        except Exception as e:
+            return {"status": "ERROR", "detail": f"custom handle maybe taken?" } 
+
+        msg_out = msg_out + "success added custom handle!"  
+    
+    if owner_data.local_currency:
+        local_currency = owner_data.local_currency.upper().strip()
+    
+        if local_currency not in settings.SUPPORTED_CURRENCIES:
+            status = "ERROR"
+            msg_out = "local currency not supported."
+        else:
+
+            await acorn_obj.set_owner_data(local_currency=owner_data.local_currency)
+        
+        msg_out = msg_out + " set currency!"
+            
+    if owner_data.npub:
+            
+        try:
+
+            await acorn_obj.set_owner_data(npub=owner_data.npub)
+            with Session(engine) as session:                 
+                safebox_found.owner = owner_data.npub
+                session.add(safebox_found)
+                session.commit() 
+            
+                
+
+        except Exception as e:
+            msg_out = f"Error: {e}"
+            status = "ERROR"
+         
+        msg_out = msg_out + "success added owner!"
+
+
+    return {"status": status, "detail": msg_out }  

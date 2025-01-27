@@ -214,6 +214,16 @@ def get_profile(name):
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     click.echo(acorn_obj.get_profile(name))
+
+@click.command("setowner", help="get profile")
+@click.option('--owner', '-o', default=None, help="set owner npub")
+@click.option('--currency', '-c', default=None, help="set local currency")
+def set_owner(owner, currency):
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    msg_out = asyncio.run(acorn_obj.set_owner_data(npub=owner,local_currency=currency))
+    click.echo(msg_out)
     
 
 @click.command("deposit", help="deposit funds into wallet via lightning invoice")
@@ -444,6 +454,7 @@ cli.add_command(accept)
 cli.add_command(issue)
 cli.add_command(send)
 cli.add_command(recover)
+cli.add_command(set_owner)
 
 
 if __name__ == "__main__":

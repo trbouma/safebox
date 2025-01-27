@@ -23,6 +23,7 @@ class RegisteredSafebox(SQLModel, table=True):
     onboard_code: str = None
     access_key: str 
     balance: int = 0
+    owner: str = None
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -52,3 +53,8 @@ class ecashRequest(BaseModel):
     
 class ecashAccept(BaseModel):
     ecash_token: str 
+
+class ownerData(BaseModel):
+    npub: str|None = None 
+    custom_handle: str|None=None
+    local_currency: str|None=None
