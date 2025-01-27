@@ -58,6 +58,5 @@ class customHandle(BaseModel):
     custom_handle: str
 
 class ownerData(BaseModel):
-    npub: str|None = None 
-    custom_handle: str|None=None
+    npub: str|None = None
     local_currency: str|None=None

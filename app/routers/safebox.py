@@ -621,35 +621,17 @@ async def set_owner_data(   request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
     
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()   
-    
-    if owner_data.custom_handle:
-        try:
-            with Session(engine) as session:   
-                statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==owner_data.custom_handle)
-                safeboxes = session.exec(statement)
-                safebox_custom = safeboxes.first()              
-                safebox_custom.custom_handle = owner_data.custom_handle
-                session.add(safebox_custom)
-                session.commit() 
-                          
-        except Exception as e:
-            return {"status": "ERROR", "detail": f"custom handle maybe taken?" } 
-
-        msg_out = msg_out + "success added custom handle!"  
-    
     if owner_data.local_currency:
-        local_currency = owner_data.local_currency.upper().strip()
+        owner_data.local_currency = owner_data.local_currency.upper().strip()
     
-        if local_currency not in settings.SUPPORTED_CURRENCIES:
-            status = "ERROR"
-            msg_out = "local currency not supported."
-        else:
-
-            await acorn_obj.set_owner_data(local_currency=owner_data.local_currency)
-        
-        msg_out = msg_out + " set currency!"
+    try:
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()   
+        await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
+        msg_out = "successful"
+    except:
+        return {"status": "ERROR", "detail": "Owner update error" }
+   
             
     if owner_data.npub:
             
@@ -667,7 +649,7 @@ async def set_owner_data(   request: Request,
             msg_out = f"Error: {e}"
             status = "ERROR"
          
-        msg_out = msg_out + "success added owner!"
+        msg_out = msg_out + " successfully added owner to safebox register!"
 
 
     return {"status": status, "detail": msg_out }  
