@@ -1,0 +1,63 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Danger Zone{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+<script>
+
+async function backToProfile() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h4>This is the Danger Zone!</h4>
+    Set Your Custom Handle
+    <br><br>
+    <button onclick="backToProfile()">Set Custom Handle</button>
+    <br><br>
+    
+</div>
+
+
+   
+
+<div class="center-text">
+    
+
+        
+        
+        
+
+    <button onclick="backToProfile()">Back to Safebox</button>
+      
+ 
+
+        
+     
+        
+</div>
+     
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

@@ -54,6 +54,9 @@ class ecashRequest(BaseModel):
 class ecashAccept(BaseModel):
     ecash_token: str 
 
+class customHandle(BaseModel):
+    custom_handle: str
+
 class ownerData(BaseModel):
     npub: str|None = None 
     custom_handle: str|None=None

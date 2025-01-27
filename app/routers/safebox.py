@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData
+from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -443,6 +443,27 @@ async def my_ecash(       request: Request,
 
                                         })
 
+
+@router.get("/dangerzone", tags=["safebox", "protected"])
+async def my_danger_zone(       request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to danger zone"""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    msg_out = "To be implemented!"
+
+    return templates.TemplateResponse(  "dangerzone.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found 
+
+                                        })
+
+
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 
                                     handle: str, 
@@ -547,11 +568,49 @@ async def get_records(       request: Request,
 
     return records_out
 
+@router.post("/setcustomhandle", tags=["safebox", "protected"])
+async def set_custom_handle(   request: Request, 
+                            custom_handle: customHandle,
+                            access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    status = "OK"
+    msg_out =""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+
+    
+    if custom_handle.custom_handle:
+        try:
+            with Session(engine) as session:   
+                            
+                safebox_found.custom_handle = custom_handle.custom_handle
+                session.add(safebox_found)
+                session.commit() 
+                msg_out = f"Congratulations, you now have {custom_handle.custom_handle}@{request.url.hostname}!"
+            
+        except Exception as e:
+            status = "ERROR"
+            msg_out = f"Custom handle maybe taken?"  
+
+        
+    
+      
+
+
+    return {"status": status, "detail": msg_out }  
+
 @router.post("/setownerdata", tags=["safebox", "protected"])
 async def set_owner_data(   request: Request, 
                             owner_data: ownerData,
                             access_token: str = Cookie(None)
                     ):
+    #FIXME this function is trying to do too much
     """Protected access to private data stored in home relay"""
     status = "OK"
     msg_out =""
