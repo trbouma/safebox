@@ -10,11 +10,43 @@
 
 async function backToProfile() {
 
-
 window.location.href="/safebox/access" ;
 
 }
 
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
+async function setCustomHandle() {
+    
+    var data;
+   
+    var input_custom_handle = document.getElementById("input_custom_handle");
+
+    custom_handle = input_custom_handle.value;
+    user_confirm = confirm(`Are you sure you want to proceed with ${custom_handle} as your custom handle`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"custom_handle": custom_handle};
+
+   await fetch('/safebox/setcustomhandle', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
 </script>
 
 {% endblock %}
@@ -25,9 +57,10 @@ window.location.href="/safebox/access" ;
 
 <div class="center-text">
     <h4>This is the Danger Zone!</h4>
-    Set Your Custom Handle
+    Set Your Custom Handle:
+   <br><br><input type="text" placeholder="enter custom handle" id="input_custom_handle"   value="" style="width:90%;">
     <br><br>
-    <button onclick="backToProfile()">Set Custom Handle</button>
+    <button onclick="setCustomHandle()">Set Custom Handle</button>
     <br><br>
     
 </div>
