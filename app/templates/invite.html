@@ -4,7 +4,11 @@
 {% block head %}
 {{ super() }}
 
-<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
+
+
+
+
 
 <script>
 
@@ -23,7 +27,6 @@ async function backToWallet() {
 {% block page_content %}
 
 
-
 <div class="center-text">
     
         <h1>{{ message }}</h1>
@@ -34,20 +37,22 @@ async function backToWallet() {
         
         <p><img src="https://{{request.url.hostname}}/inviteqr/{{onboard_code}}">
         <br><br>
-        <button onclick="backToWallet()">Back</button> 
+        <button onclick="backToWallet()">Home</button> 
        
 
 
         
     </div>
      
+    <script>
+        setDarkMode();
+    </script>
 
 
+    {% endblock %}
 
-{% endblock %}
-
-{% block scripts %}
-{{ super() }}
-
-
-{% endblock %}
+    {% block scripts %}
+    {{ super() }}
+    
+    
+    {% endblock %}
