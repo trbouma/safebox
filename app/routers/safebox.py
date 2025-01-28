@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle
+from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -464,6 +464,36 @@ async def my_danger_zone(       request: Request,
                                         })
 
 
+@router.get("/displaycard", tags=["safebox", "protected"])
+async def display_card(      request: Request, 
+                            card: str,
+                            access_token: str = Cookie(None)
+                    ):
+    """Protected access to updating the card"""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    record = await acorn_obj.get_record(record_name=card)
+    
+
+    return templates.TemplateResponse(  "card.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found,
+                                            "card": card,
+                                            "content": record["payload"]
+                                            
+                                            
+
+                                        })
+
+
+
+
 @router.get("/profile/{handle}", response_class=HTMLResponse)
 async def root_get_user_profile(    request: Request, 
                                     handle: str, 
@@ -568,6 +598,87 @@ async def get_records(       request: Request,
 
     return records_out
 
+@router.post("/addcard", tags=["safebox", "protected"])
+async def add_card(         request: Request, 
+                            add_card: addCard,
+                            access_token: str = Cookie(None)
+                    ):
+    """Add card to safebox"""
+    status = "OK"
+    detail = "Nothing yet"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    try:
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        await acorn_obj.put_record(record_name=add_card.title,record_value=add_card.content)
+        detail = "Update successful!"
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail}  
+
+@router.post("/updatecard", tags=["safebox", "protected"])
+async def update_card(         request: Request, 
+                            update_card: updateCard,
+                            access_token: str = Cookie(None)
+                    ):
+    """Update card in safebox"""
+    status = "OK"
+    detail = "Nothing yet"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    try:
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content)
+        detail = "Update successful!"
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail}  
+
+@router.post("/deletecard", tags=["safebox", "protected"])
+async def delete_card(         request: Request, 
+                            delete_card: deleteCard,
+                            access_token: str = Cookie(None)
+                    ):
+    """Delete card from safebox"""
+    status = "OK"
+    detail = "Nothing yet"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    try:
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title)
+        detail = f"Success! {msg_out}"
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail} 
+
 @router.post("/setcustomhandle", tags=["safebox", "protected"])
 async def set_custom_handle(   request: Request, 
                             custom_handle: customHandle,
@@ -610,7 +721,7 @@ async def set_owner_data(   request: Request,
                             owner_data: ownerData,
                             access_token: str = Cookie(None)
                     ):
-    #FIXME this function is trying to do too much
+    #TODO confirm this function 
     """Protected access to private data stored in home relay"""
     status = "OK"
     msg_out =""

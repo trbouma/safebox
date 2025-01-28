@@ -916,6 +916,50 @@ class Acorn:
 
         return decrypt_content
     
+    async def delete_wallet_info(self, label:str=None):
+        my_enc = NIP44Encrypt(self.k)
+
+        m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
+        m.update(label.encode())
+        label_hash = m.digest().hex()
+        decrypt_content = None
+        
+        # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
+        # a_tag = ["a", label_hash]
+        # print("a_tag:",a_tag)
+       
+        self.logger.debug(f"getting record for: {label}")
+        
+        # DEFAULT_RELAY = self.relays[0]
+        FILTER = [{
+            'limit': 100,
+            'authors': [self.pubkey_hex],
+            'kinds': [37375],
+            '#d': [label_hash]   
+            
+            
+        }]
+
+        # print("are we here?", label_hash)
+        event =await self._async_get_wallet_info(FILTER, label_hash)
+        
+        # Do the delete here
+        tags = [["e", event.id]]
+        print("tags to delete: ", tags)
+        async with ClientPool([self.home_relay]) as c:
+        
+            n_msg = Event(kind=Event.KIND_DELETE,
+                        content=None,
+                        pub_key=self.pubkey_hex,
+                        tags=tags)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            # added a delay here so the delete event get published
+            await asyncio.sleep(1)
+        
+        return f"{label} deleted."    
+    
     async def _async_get_wallet_info(self, filter: List[dict],label_hash):
     # does a one off query to relay prints the events and exits
         self.logger.debug(f"filter {filter}")
@@ -937,15 +981,17 @@ class Acorn:
 
 
         
-    def get_record(self,record_name):
+    async def get_record(self,record_name):
         #FIXME - not sure if this function is used
-        print("reserved records:", self.RESERVED_RECORDS)
-        if record_name in self.RESERVED_RECORDS:
-            print("this is a reserved record")
-            return self.wallet_reserved_records[record_name]
-        else:
-            self.logger.debug(f"getting record: {record_name}")
-            return self.wallet_reserved_records[record_name]
+        record_out = await self.get_wallet_info(label=record_name)
+        try:
+            record_obj = json.loads(record_out)
+        except:
+            record_obj = record_out
+
+        return record_obj
+
+
    
     def get_proofs(self):
         #TODO add in a group by keyset

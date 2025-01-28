@@ -60,3 +60,15 @@ class customHandle(BaseModel):
 class ownerData(BaseModel):
     npub: str|None = None
     local_currency: str|None=None
+
+class addCard(BaseModel):
+    title: str
+    content: str
+
+class updateCard(BaseModel):
+    title: str
+    content: str
+
+class deleteCard(BaseModel):
+    title: str
+  

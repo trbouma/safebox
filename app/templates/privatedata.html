@@ -24,7 +24,7 @@ window.location.href="/safebox/access" ;
 
 
 <div class="center-text">
-    <h4>My Private Data Almost There!</h4>
+    <h4>My Private Data</h4>
     
     
 </div>
@@ -55,6 +55,11 @@ window.location.href="/safebox/access" ;
     card.appendChild(cardTitle);
     card.appendChild(cardContent);
 
+    card.addEventListener('click', () => {
+        // alert(`You clicked on: ${title} with: ${content}`);
+        window.location.href=`/safebox/displaycard?card=${title}`;
+      });
+
     // Append the card to the container
     const container = document.getElementById('card-container');
     container.appendChild(card);
@@ -74,8 +79,10 @@ window.location.href="/safebox/access" ;
 
   }
 
-  //addCard('Private Data 1', JSON.stringify(jsonUserData));
-  //addCard('Private Data 2', 'This is the content of the second private data record.');
+async function addCardtoSafebox() {
+
+  alert("add card");
+}
 </script>
    
 
@@ -85,8 +92,9 @@ window.location.href="/safebox/access" ;
         
         
         
-
-    <button onclick="backToProfile()">Back to Safebox</button>
+  <button onclick="addCardtoSafebox()">Add Card</button>
+  <br><br>
+  <button onclick="backToProfile()">Back to Safebox</button>
       
  
 

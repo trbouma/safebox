@@ -8,7 +8,7 @@ import random
 import string
 import asyncio
 from datetime import timedelta
-import qrcode, io
+import qrcode, io, urllib
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -29,6 +29,9 @@ MINTS = ['https://mint.nimo.cash']
 # HOME_RELAY = 'wss://relay.openbalance.app'
 LOGGING_LEVEL = 10
 HOME_MINT = 'https://mint.nimo.cash'
+
+
+service_key_obj = Keys(priv_k=settings.SERVICE_SECRET_KEY)
 
 engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
@@ -77,8 +80,9 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
                         "minSendable": 1000,
                         "maxSendable": 210000000,
                         "metadata": f"[[\"text/plain\", \"Send Payment to: {name}\"]]",
-                        "commentAllowed": 60,
+                        "commentAllowed": 60,                        
                         "allowsNostr" :True,
+                        "nostrPubkey" :     service_key_obj.public_key_hex(),
                         "tag": "payRequest"
 
                   
@@ -147,6 +151,11 @@ async def ln_pay( amount: float,
     
     # do here with a wrapper
     # task2 = asyncio.create_task(service_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
+
+    #FIXME Implement zaps here
+
+    if nostr != None:
+        nostr_decode=urllib.parse.unquote(nostr)
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }

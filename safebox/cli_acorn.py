@@ -338,6 +338,24 @@ def get(label):
     
     click.echo(out_info)
 
+@click.command("delete", help='get a private wallet record')
+@click.argument('label', default = "default")
+def delete_record(label):
+    
+    out_info = "None"
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+
+    try:
+        out_info = asyncio.run(acorn_obj.delete_wallet_info(label))
+        # safebox_info = wallet_obj.get_record(label)
+        pass
+
+    except:
+        out_info = "No label found!"
+    
+    click.echo(out_info)
+
 @click.command("getrecords", help='get a private wallet record')
 def get_records():
     
@@ -447,6 +465,7 @@ cli.add_command(swap)
 cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
+cli.add_command(delete_record)
 cli.add_command(get_records)
 cli.add_command(balance)
 cli.add_command(zap)
