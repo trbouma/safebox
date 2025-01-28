@@ -15,6 +15,8 @@ window.location.href="/safebox/access" ;
 
 }
 
+
+
 </script>
 
 {% endblock %}
@@ -57,7 +59,7 @@ window.location.href="/safebox/access" ;
 
     card.addEventListener('click', () => {
         // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/safebox/displaycard?card=${title}`;
+        window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit`;
       });
 
     // Append the card to the container
@@ -80,8 +82,10 @@ window.location.href="/safebox/access" ;
   }
 
 async function addCardtoSafebox() {
+// alert("add card!");
+window.location.href=`/safebox/displaycard?action_mode=add`;
 
-  alert("add card");
+
 }
 </script>
    

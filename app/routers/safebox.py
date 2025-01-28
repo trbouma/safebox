@@ -466,7 +466,8 @@ async def my_danger_zone(       request: Request,
 
 @router.get("/displaycard", tags=["safebox", "protected"])
 async def display_card(      request: Request, 
-                            card: str,
+                            card: str = None,
+                            action_mode: str = None,
                             access_token: str = Cookie(None)
                     ):
     """Protected access to updating the card"""
@@ -476,19 +477,23 @@ async def display_card(      request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
     
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
-    record = await acorn_obj.get_record(record_name=card)
+    if action_mode == 'edit':
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        record = await acorn_obj.get_record(record_name=card)
+        content = record["payload"]
+    elif action_mode =='add':
+        card = ""
+        content =""
     
 
     return templates.TemplateResponse(  "card.html", 
                                         {   "request": request,
                                             "safebox": safebox_found,
                                             "card": card,
-                                            "content": record["payload"]
+                                            "action_mode":action_mode,
+                                            "content": content
                                             
-                                            
-
                                         })
 
 
