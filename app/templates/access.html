@@ -6,7 +6,7 @@
 
 
 
-<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
 
 
 
@@ -483,8 +483,8 @@ function getInvoiceStatus(ln_invoice_status) {
 {% block page_content %}
 <div class="center-text">
 
-  <h3 >{{branding}}</h3>  
-  <h4   id="heading_balance">{{safebox.balance}} sats</h4>  
+  <h1 >{{branding}}</h1>  
+  <h2   id="heading_balance">{{safebox.balance}} sats</h2>  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br>
   <span id="payment_notification">
@@ -508,11 +508,11 @@ function getInvoiceStatus(ln_invoice_status) {
     {% if action_mode == "lnaddress" %}
 
     {% else %}
-    <h4>Receive a Payment</h4>
+    <h2>Receive a Payment</h2>
       <br>
       <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
       <br>
-      <p id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></p>
+      <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
       <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
       <br><br>
@@ -520,41 +520,41 @@ function getInvoiceStatus(ln_invoice_status) {
       <hr>
     {% endif %}  
   
-    <h4>Pay with Lightning</h4>
+    <h2>Pay with Lightning</h2>
     <br><input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
     <br>
     
     <br><input type="number" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:40%">
     <br>
     <br>
-    <h5>Memo:</h5>
+    <h3>Memo:</h3>
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Lightning Address</button> 
   
   {% endif %}
   <hr>
-  <i><h4>Pay With Ecash</h4></i>
+  <i><h2>Pay With Ecash</h2></i>
   <button id="my_ecash_button" onclick="myEcash()" >Pay With Ecash</button> 
   <br><br>  
   <hr>
-  <i><h4>My Data</h4></i>
+  <i><h2>My Data</h2></i>
   <button id="my_private_data_button" onclick="privateData()" >Cards</button>
   <br><br>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
   <br><br>
-  <button id="my_private_healt_button" onclick="myHealthData()" >Health</button>
+  <button id="my_private_health_button" onclick="myHealthData()" >Health</button>
   <br><br>
  
  
   <br>
   <hr>
-  <i><h4>Friends and Family</h4></i>
+  <i><h2>Friends and Family</h2></i>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br>
   <hr>
 
-  <i><h4>Security Info</h4></i>
+  <i><h2>Security Info</h2></i>
   <p>My access_key: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
   <p>My recovery phrase: <br> 
@@ -566,11 +566,13 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>
   
+  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+  <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <hr>
  
  
-  <i><h4>Technical Support and Testing</h4></i>
+  <i><h2>Technical Support and Testing</h2></i>
   <p><i>Latest info at: <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
   Technical Info:
   <br>
@@ -583,6 +585,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
 <script>
 setActions(action_mode,action_data);
+setDarkMode();
 
 
 

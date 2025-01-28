@@ -45,7 +45,7 @@ async function createEcashToken() {
 
     user_confirm = confirm("Are you sure you want to proceed?")
     if (user_confirm == false) {return;}
-    
+
     qr_img_func.src = "/img/circle-256.gif";
     
     ecash_amount = parseInt(ecash_input_func.value);
@@ -79,6 +79,8 @@ await navigator.clipboard.writeText(global_ecash_issued);
 // alert(`Copied ${ecash_token} to clipboard!`);
 
 }
+
+
 
 </script>
 
@@ -117,7 +119,9 @@ await navigator.clipboard.writeText(global_ecash_issued);
     </div>
      
 
-
+<script>
+    setDarkMode();
+</script>
 
 {% endblock %}
 
