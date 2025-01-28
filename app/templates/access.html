@@ -546,6 +546,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Lightning Address</button> 
+    <br><br>
   
   {% endif %}
   <hr>
@@ -566,7 +567,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <hr>
   <i><h2>Friends and Family</h2></i>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
-  <br>
+  <br><br>
   <hr>
 
   <i><h2>Security Info</h2></i>
@@ -584,16 +585,18 @@ function getInvoiceStatus(ln_invoice_status) {
   <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
+  <br><br>
   <hr>
  
  
   <i><h2>Technical Support and Testing</h2></i>
-  <p><i>Latest info at: <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
+  
   Technical Info:
   <br>
   Mode: {{action_mode}} Data: {{action_data}}
   <br>
   <a href="/safebox/dangerzone">Danger Zone!</a>
+  <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>
 
             
 </div>
