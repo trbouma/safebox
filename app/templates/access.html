@@ -533,6 +533,7 @@ function getInvoiceStatus(ln_invoice_status) {
       <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
       <br><br>
       <button id="ln_create_invoice_button" onclick="createInvoice()">Receive Amount</button>
+      <br><br>
       <hr>
     {% endif %}  
   
@@ -541,43 +542,38 @@ function getInvoiceStatus(ln_invoice_status) {
     <br>
     
     <br><input type="number" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:40%">
-    <br>
-    <h3>Memo:</h3>
-    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
+    <br><br>
+    
+    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Lightning Address</button> 
     <br><br>
   
   {% endif %}
   <hr>
-  <i><h2>Pay With Ecash</h2></i>
+  <h2>Pay with Ecash</h2>
   <button id="my_ecash_button" onclick="myEcash()" >Pay With Ecash</button> 
   <br><br>  
   <hr>
-  <i><h2>Personal Data</h2></i>
+  <h2>Personal</h2>
   <button id="my_private_data_button" onclick="privateData()" >Cards</button>
-  <br><br>
-  <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
   <br><br>
   <button id="my_private_health_button" onclick="myHealthData()" >Health</button>
   <br><br>
- 
- 
-  <br>
   <hr>
-  <i><h2>Friends and Family</h2></i>
+  <h2>Professional</h2>
+  <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
+  <br><br>
+  <hr>
+  <h2>Friends and Family</h2>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br><br>
   <hr>
-
-  <i><h2>Security Info</h2></i>
+  <h2>Security</h2>
   <p>My access_key: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
   <p>My recovery phrase: <br> 
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
-  
-          
-
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>
