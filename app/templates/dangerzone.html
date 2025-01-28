@@ -31,7 +31,7 @@ async function setCustomHandle() {
     var input_custom_handle = document.getElementById("input_custom_handle");
 
     custom_handle = input_custom_handle.value;
-    user_confirm = confirm(`Are you sure you want to proceed with ${custom_handle} as your custom handle`);
+    user_confirm = confirm(`Are you sure you want to proceed with ${custom_handle.toLowerCase()} as your custom handle`);
     if (user_confirm == false) {return;}
     
 

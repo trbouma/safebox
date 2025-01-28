@@ -686,7 +686,7 @@ async def set_custom_handle(   request: Request,
                     ):
     """Protected access to private data stored in home relay"""
     status = "OK"
-    msg_out =""
+    detail =""
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
@@ -697,24 +697,25 @@ async def set_custom_handle(   request: Request,
 
     
     if custom_handle.custom_handle:
+        cust_db = custom_handle.custom_handle.lower().strip()
         try:
             with Session(engine) as session:   
                             
-                safebox_found.custom_handle = custom_handle.custom_handle
+                safebox_found.custom_handle = cust_db
                 session.add(safebox_found)
                 session.commit() 
-                msg_out = f"Congratulations, you now have {custom_handle.custom_handle}@{request.url.hostname}!"
+                detail = f"Congratulations, you now have {cust_db}@{request.url.hostname}!"
             
         except Exception as e:
             status = "ERROR"
-            msg_out = f"Custom handle maybe taken?"  
+            detail = f"Custom handle maybe taken?"  
 
         
     
       
 
 
-    return {"status": status, "detail": msg_out }  
+    return {"status": status, "detail": detail }  
 
 @router.post("/setownerdata", tags=["safebox", "protected"])
 async def set_owner_data(   request: Request, 
