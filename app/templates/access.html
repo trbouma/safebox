@@ -537,11 +537,10 @@ function getInvoiceStatus(ln_invoice_status) {
     {% endif %}  
   
     <h2>Pay with Lightning</h2>
-    <br><input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
+    <input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
     <br>
     
     <br><input type="number" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:40%">
-    <br>
     <br>
     <h3>Memo:</h3>
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
@@ -554,7 +553,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="my_ecash_button" onclick="myEcash()" >Pay With Ecash</button> 
   <br><br>  
   <hr>
-  <i><h2>My Data</h2></i>
+  <i><h2>Personal Data</h2></i>
   <button id="my_private_data_button" onclick="privateData()" >Cards</button>
   <br><br>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 

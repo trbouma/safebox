@@ -4,7 +4,7 @@
 {% block head %}
 {{ super() }}
 
-<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
 
 <script>
 
@@ -29,6 +29,7 @@ async function getStatus(return_result) {
   //issueEcash.value = return_value;
   global_ecash_issued = parsedResult.detail;
   qr_img_func.src = "/safebox/qr/"+ global_ecash_issued;
+  qr_img_func.addEventListener("click", copytoClipboard);
   await navigator.clipboard.writeText(global_ecash_issued);
 
   
@@ -76,7 +77,7 @@ async function copytoClipboard() {
 
 
 await navigator.clipboard.writeText(global_ecash_issued);
-// alert(`Copied ${ecash_token} to clipboard!`);
+alert(`Copied ecash to clipboard!`);
 
 }
 
@@ -92,8 +93,8 @@ await navigator.clipboard.writeText(global_ecash_issued);
 
 <div class="center-text">
     
-    <h3>Ecash</h3>
-    <span id="user_notification">Careful, this is ecash!</span>
+    <h1>Ecash</h1>
+    <h2 id="user_notification">Careful, this is ecash!</h2>
     <br>
 
     <img id="img_qr_display" src="/img/logo.png" onclick="copytoClipboard()">
