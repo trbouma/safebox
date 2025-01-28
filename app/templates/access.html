@@ -24,7 +24,7 @@
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{safebox.access_key}} \n\nRecovery Phrase (12 words):\n\n{{safebox.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
   var onboard_msg = "Welcome to OpenBalance Safebox! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
-
+  var lighting_invoice_data = "";
 
 
  
@@ -174,6 +174,16 @@ alert("{{lightning_address}}"+ " copied to clipboard!");
 
 }
 
+async function copyInvoicetoClipoboard(invoice_data) {
+
+await navigator.clipboard.writeText(lighting_invoice_data);
+alert("Lightning invoice copied to clipboard!");
+
+
+
+
+}
+
 function getCreateInvoiceStatus(ln_invoice_status) {
     const create_invoice_button = document.getElementById("ln_create_invoice_button");
     const img_qr_display_pic = document.getElementById("img_qr_display");
@@ -187,7 +197,10 @@ function getCreateInvoiceStatus(ln_invoice_status) {
     console.log(parsedObject.invoice);
     // img_qr_display_pic.src = "https://safebox.openbalance.app/safebox/qr/"+ parsedObject.invoice;
     img_qr_display_pic.src = "/safebox/qr/"+ parsedObject.invoice;
-    
+    lighting_invoice_data = parsedObject.invoice
+    img_qr_display_pic.removeEventListener("click", copyAddress);
+    img_qr_display_pic.addEventListener("click", copyInvoicetoClipoboard);
+
     // alert("Payment: " + parsedObject.status + parsedObject.invoice );
     create_invoice_button.textContent = "Invoice Created! ";
   
@@ -455,7 +468,10 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("heading_balance").innerText = `${balance} sats`;
       document.getElementById("payment_notification").innerText = `${message}`;
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+      document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
+      document.getElementById("img_qr_display").addEventListener("click", copyAddress);
       document.getElementById("ln_create_invoice_button").textContent = "Create Invoice";
+      
       }
 
   };
