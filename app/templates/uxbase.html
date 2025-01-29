@@ -182,6 +182,55 @@
     color: #aaaaaa;
   }
 </style>
+<style>
+  div {
+      margin-bottom: 16px;
+  }
+
+  #video-container {
+      line-height: 0;
+  }
+
+  #video-container.example-style-1 .scan-region-highlight-svg,
+  #video-container.example-style-1 .code-outline-highlight {
+      stroke: #64a2f3 !important;
+  }
+
+  #video-container.example-style-2 {
+      position: relative;
+      width: max-content;
+      height: max-content;
+      overflow: hidden;
+  }
+  #video-container.example-style-2 .scan-region-highlight {
+      border-radius: 30px;
+      outline: rgba(0, 0, 0, .25) solid 50vmax;
+  }
+  #video-container.example-style-2 .scan-region-highlight-svg {
+      display: none;
+  }
+  #video-container.example-style-2 .code-outline-highlight {
+      stroke: rgba(255, 255, 255, .5) !important;
+      stroke-width: 15 !important;
+      stroke-dasharray: none !important;
+  }
+
+  #flash-toggle {
+      display: none;
+  }
+
+  hr {
+      margin-top: 32px;
+  }
+  input[type="file"] {
+      display: block;
+      margin-bottom: 16px;
+  }
+
+
+</style>
+
+
 <script>
 function toggleDarkMode() {
   document.documentElement.classList.toggle('dark-mode');
