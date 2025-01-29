@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import asyncio
+import asyncio, os
 from contextlib import asynccontextmanager
 
 from monstr.encrypt import Keys
@@ -22,7 +22,8 @@ settings = Settings()
 # Periodic task function
 async def periodic_task(interval: int, stop_event: asyncio.Event):
     while not stop_event.is_set():
-        print("Executing periodic task...")
+        worker_id = os.getenv("GUNICORN_WORKER_ID", "1")
+        print(f"Executing periodic task... {worker_id}")
         # await refresh_currency_rates()
         await asyncio.sleep(interval)  # Wait for the next interval
 
@@ -48,7 +49,8 @@ SQLModel.metadata.create_all(engine)
 
 # Create an instance of the FastAPI application
 origins = ["*"]
-app = FastAPI(lifespan=lifespan)
+#TODO figure out how to lock a worker to do periodic tasks
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
