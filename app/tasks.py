@@ -64,6 +64,7 @@ async def invoice_poll_for_payment(safebox_found: RegisteredSafebox, quote: str,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     
     await acorn_obj.load_data()
+    #FIX ME DO THE POLLING HERE INSTEAD OF THE OBJECT
     await acorn_obj.poll_for_payment(quote=quote,amount=amount,mint=mint)
     print("We are done!!!!")
     

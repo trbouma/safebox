@@ -96,8 +96,8 @@ def info(ctx):
    
     click.echo(f"npub: {acorn_obj.pubkey_bech32}")
     # click.echo(f"instance: {acorn_obj.get_instance()}")
-    click.echo(f"tags: {acorn_obj.acorn_tags}")
-    acorn_obj.update_tags([["balance","26"]])
+    
+    
 
 @click.command(help="initialize a new safebox")
 

@@ -267,7 +267,7 @@ async def issue_ecash(   request: Request,
             raise ValueError("Could not find safebox!")
     
        
-
+        #FIXME I might need the session add
         safebox_found.balance = acorn_obj.balance
         session.add(safebox_found)
         session.commit()

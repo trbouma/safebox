@@ -101,7 +101,7 @@ class Acorn:
                     mints: List[str]|None=None,
                     home_relay:str|None=None, 
                     replicate = False, 
-                    logging_level=logging.DEBUG) -> None:
+                    logging_level=logging.INFO) -> None:
         
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging_level)  
@@ -1290,8 +1290,8 @@ class Acorn:
 
     async def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
         # make sure have latest kind
-        #TODO this is a workaround
-
+       
+        #FIXME This might be the offending error
         self.logger.debug(f"adding proofs_obj {proofs_arg}")
 
         #  proofs_to_store = json.dump
@@ -1307,7 +1307,9 @@ class Acorn:
             nip60_proofs.proofs.append(each)
         
         record = nip60_proofs.model_dump_json()
-        print(f"nip60 proofs text: {record}")
+        
+        
+        self.logger.debug(f"nip60 proofs text: {record}")
         await self._async_add_proofs(record, replicate_relays)
         
         return
@@ -1317,21 +1319,18 @@ class Acorn:
         #TODO this is a workaround
 
         self.logger.debug(f"writing proofs ")
-        await self.delete_proof_events()
-        # get proofs by keyset
-        all_proofs, amount = self._proofs_by_keyset()
-        
-        for key, value in all_proofs.items():
+        try:
+            await self.delete_proof_events()
+            # get proofs by keyset
+            all_proofs, amount = self._proofs_by_keyset()
+            
+            for key, value in all_proofs.items():
 
-            await self.add_proofs_obj(value)
-       
-        # for each in self.proofs:
-        #    pass
-        #    proof_to_store = [each.model_dump()]
-        #    text = json.dumps(proof_to_store)
-        #    asyncio.run(self._async_add_proofs(text, replicate_relays))
-        
-        await self._load_proofs()
+                await self.add_proofs_obj(value) 
+            await self._load_proofs()
+        except Exception as e:
+            raise Exception(e)
+
         
         return
 
@@ -1377,8 +1376,8 @@ class Acorn:
             c.publish(n_msg)
             await asyncio.sleep(0.2)
 
-    def add_proof_event(self, proofs:List[Proof]):
-        asyncio.run(self._async_add_proof_event(proofs))  
+    async def add_proof_event(self, proofs:List[Proof]):
+        await self._async_add_proof_event(proofs)  
     
     async def _async_add_proof_event(self, proofs: List[Proof]):
         """
@@ -1621,92 +1620,7 @@ class Acorn:
         return success_for_all
     
 
-    def pay(self, amount:int, lnaddress: str, comment: str = "Paid!"):
-        # This function is no longer used
-        melt_quote_url = f"{self.mints[0]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.mints[0]}/v1/melt/bolt11"
-        
-        headers = { "Content-Type": "application/json"}
-        callback = lightning_address_pay(amount, lnaddress,comment=comment)
-        pr = callback['pr']
-        
-        print(pr)
-        print(amount, lnaddress)
-        # need to get enough proofs to cover amount
-        data_to_send = {    "request": pr,
-                            "unit": "sat"
 
-                        }
-        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        
-        self.logger.debug(f"post melt response: {response.json()}")
-        post_melt_response = PostMeltQuoteResponse(**response.json())
-       
-        self.logger.debug(f"post melt response: {post_melt_response}")
-
-        proofs_to_use = []
-        proof_amount = 0
-        amount_needed = amount + post_melt_response.fee_reserve
-        
-        self.logger.debug(f"amount needed: {amount_needed}")
-        if amount_needed > self.balance:
-            print("insufficient balance")
-            return
-        while proof_amount < amount_needed:
-            pay_proof = self.proofs.pop()
-            proofs_to_use.append(pay_proof)
-            proof_amount += pay_proof.amount
-            print("pop", pay_proof.amount)
-            
-        
-        self.logger.debug(f"proofs to use: {proofs_to_use}")
-        self.logger.debug(f"proofs in wallet: {self.proofs}")
-        
-
-        # Now need to do the melt
-        proofs_remaining = self.swap_for_payment(proofs_to_use, amount_needed)
-        
-
-        self.logger.debug(f"proofs remaining: {proofs_remaining}")
-        self.logger.debug(f"amount needed: {amount_needed}")
-        sum_proofs =0
-        spend_proofs = []
-        keep_proofs = []
-        for each in proofs_remaining:
-            
-            sum_proofs += each.amount
-            if sum_proofs <= amount_needed:
-                spend_proofs.append(each)
-                self.logger.debug(f"pay with {each.amount}, {each.secret}")
-            else:
-                keep_proofs.append(each)
-                self.logger.debug(f"keep {each.amount}, {each.secret}")
-        self.logger.debug(f"spend proofs: {spend_proofs}")
-        self.logger.debug(f"keep proofs: {keep_proofs}")
-
-     
-
-        melt_proofs = []
-        for each_proof in spend_proofs:
-                melt_proofs.append(each_proof.model_dump())
-
-        data_to_send = {"quote": post_melt_response.quote,
-                      "inputs": melt_proofs }
-        
-        
-        self.logger.debug(f"we are here! data to send {data_to_send}")
-        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-           
-        self.logger.debug(f"response json {response.json()}")
-        # delete old proofs
-        for each in keep_proofs:
-            self.proofs.append(each)
-        
-        asyncio.run(self._async_delete_proof_events())
-        self.add_proof_event(self.proofs)
-        self._load_proofs()
-        
-        
 
     async def pay_multi(  self, 
                     amount:int, 
@@ -2234,32 +2148,35 @@ class Acorn:
 
     async def _async_delete_proof_events(self):
         """
-            Example showing how to post a text note (Kind 1) to relay
+            Delete proof events
         """
-
-        tags = []
-        for each_event in self.proof_events.proof_events:
-            tags.append(["e",each_event.id])
-            self.logger.debug(f"proof to delete: {each_event.id}")
-            # print(each_event.id)
-            for each_proof in each_event.proofs:
-                # self.logger.debug(f"{each_proof.id}, {each_proof.amount}")
-                pass
-        for each in self.proof_event_ids:
-            tags.append(["e",each])
-        tags.append(["k","7375"])
-        self.logger.debug(f"tags for proof events to delete {tags}")
-        
-        async with ClientPool([self.home_relay]) as c:
-        
-            n_msg = Event(kind=Event.KIND_DELETE,
-                        content=None,
-                        pub_key=self.pubkey_hex,
-                        tags=tags)
-            n_msg.sign(self.privkey_hex)
-            c.publish(n_msg)
-            # added a delay here so the delete event get published
-            await asyncio.sleep(1)
+        backup_proof_events = self.proof_events
+        try:
+            tags = []
+            for each_event in self.proof_events.proof_events:
+                tags.append(["e",each_event.id])
+                self.logger.debug(f"proof to delete: {each_event.id}")
+                # print(each_event.id)
+                for each_proof in each_event.proofs:
+                    # self.logger.debug(f"{each_proof.id}, {each_proof.amount}")
+                    pass
+            for each in self.proof_event_ids:
+                tags.append(["e",each])
+            tags.append(["k","7375"])
+            self.logger.debug(f"tags for proof events to delete {tags}")
+            
+            async with ClientPool([self.home_relay]) as c:
+            
+                n_msg = Event(kind=Event.KIND_DELETE,
+                            content=None,
+                            pub_key=self.pubkey_hex,
+                            tags=tags)
+                n_msg.sign(self.privkey_hex)
+                c.publish(n_msg)
+                # added a delay here so the delete event get published
+                await asyncio.sleep(1)
+        except:
+            raise Exception("error deleting proof events")    
 
     def swap_proofs(self, incoming_swap_proofs: List[Proof]):
         '''This function swaps proofs'''
