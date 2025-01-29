@@ -16,29 +16,39 @@ from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates
 
+# Create Settings:
+settings = Settings()
+
+# Periodic task function
+async def periodic_task(interval: int, stop_event: asyncio.Event):
+    while not stop_event.is_set():
+        print("Executing periodic task...")
+        # await refresh_currency_rates()
+        await asyncio.sleep(interval)  # Wait for the next interval
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    stop_event = asyncio.Event()  # Event to signal stopping
     # Create Task
-    asyncio.create_task(periodic_task())
+    task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
     yield
-    pass
+    stop_event.set()  # Stop the task
+    await task  # Ensure task finishes properly
    
 
-# Create Settings:
-settings = Settings()
-print(settings)
+
+
 service_key = Keys(settings.SERVICE_SECRET_KEY)
 
 # Create instance of database
 engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
-refresh_currency_rates()
+
 
 # Create an instance of the FastAPI application
 origins = ["*"]
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -55,6 +65,7 @@ app.include_router(scanner.router, prefix="/scanner")
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
+
 
 
 

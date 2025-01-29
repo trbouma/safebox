@@ -17,16 +17,10 @@ settings = Settings()
 engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
-def refresh_currency_rates():
+async def refresh_currency_rates():
     refresh_time = datetime.now()
-
-
+    print("refresh currency rates:")
     currency_table = json.loads(requests.get('https://blockchain.info/ticker').text)
-
-    
-  
-
-
     
     with Session(engine) as session:
         statement = select(CurrencyRate).where(CurrencyRate.currency_code.in_(settings.SUPPORTED_CURRENCIES))
