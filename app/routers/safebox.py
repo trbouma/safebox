@@ -81,7 +81,8 @@ async def login(request: Request, access_key: str = Form()):
 
 
     # Create JWT token
-    access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=1))
+    settings.TOKEN_EXPIRES_HOURS
+    access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
 
     # Create response with JWT as HttpOnly cookie
     response = RedirectResponse(url="/safebox/access", status_code=302)
