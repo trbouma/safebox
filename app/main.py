@@ -14,6 +14,7 @@ from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
+from app.rates import refresh_currency_rates
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ service_key = Keys(settings.SERVICE_SECRET_KEY)
 engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
 
+refresh_currency_rates()
 
 # Create an instance of the FastAPI application
 origins = ["*"]

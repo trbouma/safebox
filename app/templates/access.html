@@ -501,6 +501,8 @@ function getInvoiceStatus(ln_invoice_status) {
 
   <h1 >{{branding}}</h1>  
   <h2   id="heading_balance">{{safebox.balance}} sats</h2>  
+  ({{"{:.2f}".format(currency_rate * safebox.balance / 1e8)}} {{currency_code}})
+  <br><br>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br><br>
   <span id="payment_notification">

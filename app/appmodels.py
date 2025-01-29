@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 from typing import List
 from enum import Enum
+from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -33,6 +34,16 @@ class PaymentQuote(SQLModel, table=True):
     amount: int
     mint: str
     paid: bool
+
+class CurrencyRate(SQLModel, table=True):
+    currency_code: str = Field(primary_key=True)  # Primary Key & Unique
+    currency_rate: Optional[float] = None
+    currency_symbol: Optional[str] = None
+    currency_description: Optional[str] = None
+    refresh_time: Optional[datetime] = None
+    fractional_unit: Optional[str] = None
+    number_to_base: Optional[int] = None
+    
 
 class lnPayAddress(BaseModel):
     address: str 

@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -146,7 +146,15 @@ async def protected_route(    request: Request,
             out_name = safebox_found.handle
         else:
             raise ValueError("Could not find safebox!")
-    
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code==acorn_obj.local_currency)
+        currencies = session.exec(statement)
+        currency_found = currencies.one()
+        if currency_found:
+            currency_code = acorn_obj.local_currency
+            currency_rate = currency_found.currency_rate
+        else:
+            currency_code = "SAT"
+            currency_rate = 1e8
        
 
         safebox_found.balance = acorn_obj.balance
@@ -159,6 +167,8 @@ async def protected_route(    request: Request,
                                             "title": "Welcome Page", 
                                             "message": "Welcome to Safebox Web!", 
                                             "safebox":acorn_obj, 
+                                            "currency_code": currency_code,
+                                            "currency_rate": currency_rate,
                                             "lightning_address": lightning_address,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
