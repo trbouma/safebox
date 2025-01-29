@@ -750,6 +750,8 @@ async def set_owner_data(   request: Request,
     
     if owner_data.local_currency:
         owner_data.local_currency = owner_data.local_currency.upper().strip()
+        if owner_data.local_currency not in settings.SUPPORTED_CURRENCIES:
+            return {"status": "ERROR", "detail": "Not a supported currency!" }
     
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
