@@ -532,9 +532,9 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
-      <input type="number" placeholder="amount to receive" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
+      <input type="number" placeholder="enter invoice amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
       <br><br>
-      <button id="ln_create_invoice_button" onclick="createInvoice()">Receive Amount</button>
+      <button id="ln_create_invoice_button" onclick="createInvoice()">Invoice Amount</button>
       <br><br>
       <hr>
     {% endif %}  
@@ -571,7 +571,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
   <br><br>
   <hr>
-  <h2>My {{branding}} Account</h2>
+  <h2>My Account</h2>
   <p>My access_key: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
   <p>My recovery phrase: <br> 

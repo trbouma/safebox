@@ -11,7 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
 from app.config import Settings
@@ -783,3 +783,26 @@ async def set_owner_data(   request: Request,
 
 
     return {"status": status, "detail": msg_out }  
+
+@router.get("/nprofile", tags=["safebox", "protected"])
+async def get_nprofile(    request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    status = "OK"
+    detail = "None"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    try:
+        nprofile = await create_nprofile_from_hex(acorn_obj.pubkey_hex,[acorn_obj.home_relay])
+        detail = nprofile
+    except:
+        detail = "Not created"
+
+    return {"status": status, "detail": detail}

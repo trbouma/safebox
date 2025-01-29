@@ -10,13 +10,15 @@
 
 <center>
 <h1 id="header-msg">Scanning...</h1>
+<button onclick="backToWallet()">Back</button> 
+<br><br>
 <div id="video-container" >
-    <video id="qr-video" width="240"></video>
+    <video id="qr-video" style="width: 90%;"></video>
 </div>
 {% if acquire_mode == "public" %}
     <button onclick="backToProfile()">Back to Profile</button>
 {% else %}
-    <button onclick="backToWallet()">Back to Wallet</button> 
+    <button onclick="backToWallet()">Back</button> 
 {% endif %}
 <br>
 <br>

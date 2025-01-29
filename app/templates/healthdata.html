@@ -4,7 +4,7 @@
 {% block head %}
 {{ super() }}
 
-<script src="https://kit.fontawesome.com/19aae69877.js" crossorigin="anonymous"></script>
+
 
 <script>
 
@@ -17,6 +17,40 @@ window.location.href="/safebox/access" ;
 
 </script>
 
+<script>
+
+async function getStatus(return_result) {
+
+var qr_img_func = document.getElementById("img_qr_display");
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+
+var nprofile = parsedResult.detail;
+
+qr_img_func.src = "/safebox/qr/"+ nprofile;
+// qr_img_func.addEventListener("click", copytoClipboard);
+
+
+
+}
+
+  async function createQRCode() {
+    
+    var data;
+  
+
+   await fetch('/safebox/nprofile', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+              
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+}
+</script>
+
 {% endblock %}
 
 {% block page_content %}
@@ -24,7 +58,13 @@ window.location.href="/safebox/access" ;
 
 
 <div class="center-text">
-    <h1>Health Data Coming Soon!</h1>
+    <h1>Health Data </h1>
+    <button onclick="backToProfile()">Back</button>
+    <br><br>
+    <h2>My Health QR Code</h2>
+
+    <img id="img_qr_display" src="/img/logo.png" onclick="copytoClipboard()">
+    <br>
 </div>
 
 <div id="card-container"></div>
@@ -63,16 +103,10 @@ window.location.href="/safebox/access" ;
 
 <div class="center-text">
     
-
-        
-        
-        
-
-    <button onclick="backToProfile()">Home</button>
-      
  
 
-        
+    <button onclick="backToProfile()">Home</button>
+
      
         
 </div>
@@ -80,6 +114,7 @@ window.location.href="/safebox/access" ;
 
 <script>
   setDarkMode();
+  createQRCode();
 </script>
 
 {% endblock %}

@@ -186,7 +186,7 @@ def parse_nostr_bech32(encoded_string):
     return result
 
 
-def create_nprofile_from_hex(npub, relays=None):
+async def create_nprofile_from_hex(npub, relays=None):
     if len(npub) != 64:
         raise ValueError("Invalid public key length. Must be 32 bytes (64 hex characters).")
     
