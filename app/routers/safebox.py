@@ -11,7 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
 from app.config import Settings
@@ -799,8 +799,14 @@ async def get_nprofile(    request: Request,
     
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
+    # figure out to use the owner key or the wallet key
+    if acorn_obj.pubkey_bech32 != acorn_obj.owner:
+        pub_hex_to_use = npub_to_hex(acorn_obj.owner)
+    else:
+        pub_hex_to_use = acorn_obj.pubkey_hex
+
     try:
-        nprofile = await create_nprofile_from_hex(acorn_obj.pubkey_hex,[acorn_obj.home_relay])
+        nprofile = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])
         detail = nprofile
     except:
         detail = "Not created"

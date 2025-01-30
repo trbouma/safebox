@@ -251,3 +251,28 @@ def create_nprofile_from_npub(npub_bech32, relays=None):
     nprofile = bech32.bech32_encode("nprofile", converted_data)
     
     return nprofile
+
+def npub_to_hex(npub: str) -> str:
+    """
+    Converts a Nostr npub public key to its corresponding hex representation.
+    
+    :param npub: A Nostr public key in Bech32 format (starting with 'npub')
+    :return: The corresponding hex public key.
+    """
+    if not npub.startswith("npub"):
+        raise ValueError("Invalid npub format. It should start with 'npub'.")
+
+    # Decode Bech32 npub format
+    hrp, data = bech32.bech32_decode(npub)
+    
+    if hrp != "npub" or data is None:
+        raise ValueError("Invalid npub Bech32 encoding.")
+
+    # Convert 5-bit chunks to 8-bit bytes
+    decoded_bytes = bech32.convertbits(data, 5, 8, False)
+    
+    if decoded_bytes is None:
+        raise ValueError("Error in converting Bech32 data.")
+
+    # Convert bytes to hex string
+    return bytes(decoded_bytes).hex()

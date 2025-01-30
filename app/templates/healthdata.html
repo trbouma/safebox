@@ -19,15 +19,25 @@ window.location.href="/safebox/access" ;
 
 <script>
 
+var global_nprofile = "";
+
+async function copytoClipboard() {
+
+
+await navigator.clipboard.writeText(global_nprofile);
+alert(`Copied health QR code to clipboard!`);
+
+}
+
 async function getStatus(return_result) {
 
 var qr_img_func = document.getElementById("img_qr_display");
 
 parsedResult = JSON.parse(JSON.stringify(return_result));
 
-var nprofile = parsedResult.detail;
+ global_nprofile = parsedResult.detail;
 
-qr_img_func.src = "/safebox/qr/"+ nprofile;
+qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 // qr_img_func.addEventListener("click", copytoClipboard);
 
 

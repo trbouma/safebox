@@ -92,6 +92,12 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
     elif qr_code[:6] == "cashuA":
         action_mode = "ecash"
         action_data = qr_code
+    
+    elif qr_code[:8].lower() == "nprofile":
+            action_mode = "nprofile"
+            action_data = qr_code
+    elif qr_code[:5].lower() == 'https':
+        return RedirectResponse(qr_code)
        
 
     else:
