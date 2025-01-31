@@ -373,7 +373,7 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
             "balance": safebox_found.balance}
 
 @router.get("/privatedata", tags=["safebox", "protected"])
-async def private_data(       request: Request, 
+async def my_private_data(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
@@ -387,7 +387,7 @@ async def private_data(       request: Request,
     await acorn_obj.load_data()
     user_records = await acorn_obj.get_user_records()
     
-    msg_out = "To be implemented!"
+    
 
     return templates.TemplateResponse(  "privatedata.html", 
                                         {   "request": request,
@@ -396,7 +396,7 @@ async def private_data(       request: Request,
 
                                         })
 @router.get("/health", tags=["safebox", "protected"])
-async def my_health(       request: Request, 
+async def my_health_data(       request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
@@ -406,11 +406,17 @@ async def my_health(       request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
     
-    msg_out = "To be implemented!"
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    try:
+        health_records = await acorn_obj.get_user_records(record_kind=32225 )
+    except:
+        health_records = None
 
     return templates.TemplateResponse(  "healthdata.html", 
                                         {   "request": request,
-                                            "safebox": safebox_found 
+                                            "safebox": safebox_found,
+                                            "health_records": health_records 
 
                                         })
 
@@ -597,7 +603,8 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
     print("websocket connection closed")
 
 @router.get("/getrecords", tags=["safebox", "protected"])
-async def get_records(       request: Request, 
+async def get_records(      request: Request, 
+                            kind: str = 37375,
                             access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
@@ -610,7 +617,7 @@ async def get_records(       request: Request,
     
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
-    records_out = await acorn_obj.get_user_records()
+    records_out = await acorn_obj.get_user_records(record_kind=kind)
 
     return records_out
 

@@ -440,7 +440,7 @@ class Acorn:
         pass
         return "this is the instance"
 
-    async def get_user_records(self):
+    async def get_user_records(self, record_kind:int=37375):
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
@@ -453,7 +453,7 @@ class Acorn:
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
-            'kinds': [37375]   
+            'kinds': [record_kind]   
             
         }]
 
@@ -837,10 +837,10 @@ class Acorn:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None):
-        await self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays)  
+    async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None, record_kind: int=37375):
+        await self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays, record_kind=record_kind)  
     
-    async def _async_set_wallet_info(self, label:str, label_info: str, replicate_relays:List[str]=None):
+    async def _async_set_wallet_info(self, label:str, label_info: str, replicate_relays:List[str]=None, record_kind: int = 37375):
 
         m = hashlib.sha256()
         m.update(self.privkey_hex.encode())
@@ -864,7 +864,7 @@ class Acorn:
 
         async with ClientPool(write_relays) as c:
         # async with Client(relay) as c:
-            n_msg = Event(kind=37375,
+            n_msg = Event(kind=record_kind,
                         content=wallet_info_encrypt,
                         pub_key=self.pubkey_hex,
                         tags=tags)
@@ -878,7 +878,7 @@ class Acorn:
             await asyncio.sleep(0.2)
             self.logger.debug(f"wrote event {label} to {write_relays}")
 
-    async def get_wallet_info(self, label:str=None):
+    async def get_wallet_info(self, label:str=None, record_kind:int=37375):
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
@@ -897,7 +897,7 @@ class Acorn:
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
-            'kinds': [37375],
+            'kinds': [record_kind],
             '#d': [label_hash]   
             
             
@@ -916,7 +916,7 @@ class Acorn:
 
         return decrypt_content
     
-    async def delete_wallet_info(self, label:str=None):
+    async def delete_wallet_info(self, label:str=None, record_kind:int=37375):
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
@@ -935,7 +935,7 @@ class Acorn:
         FILTER = [{
             'limit': 100,
             'authors': [self.pubkey_hex],
-            'kinds': [37375],
+            'kinds': [record_kind],
             '#d': [label_hash]   
             
             
@@ -975,7 +975,7 @@ class Acorn:
             
             events = await c.query(filter)
             
-            self.logger.debug(f"37375 events: {len(events)}")
+            self.logger.debug(f"no of events: {len(events)}")
 
             return events[0]
 
@@ -1061,11 +1061,11 @@ class Acorn:
             
             return events[0]
 
-    async def put_record(self,record_name, record_value, record_type="generic"):
+    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375):
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("careful this is a reserved record.")
-            await self.set_wallet_info(record_name,record_value)
+            await self.set_wallet_info(record_name,record_value,record_kind=record_kind)
             return record_name
         else:
             record_obj = { "tag"   : [record_name],
@@ -1075,7 +1075,7 @@ class Acorn:
             record_json_str = json.dumps(record_obj)
             await self.update_tags([["user_record",record_name,record_type]])
 
-            await self.set_wallet_info(record_name,record_json_str)
+            await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)
             # print(user_records)
             return record_name
     

@@ -21,6 +21,7 @@ window.location.href="/safebox/access" ;
 
 var global_nprofile = "";
 
+
 async function copytoClipboard() {
 
 
@@ -80,6 +81,8 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 <div id="card-container"></div>
 
 <script>
+  const jsonUserData = {{ health_records | tojson }}; 
+
   // Function to create and add a card
   function addCard(title, content) {
     // Create a card element
@@ -106,8 +109,20 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   }
 
   // Example usage
-  addCard('Health Data Record 1', 'This is the content of the first health record.');
-  addCard('Healt Data Record 2', 'This is the content of the second health record.');
+  // addCard('Health Data Record 1', 'This is the content of the first health record.');
+  //addCard('Healt Data Record 2', 'This is the content of the second health record.');
+
+  for (let record of jsonUserData)
+  {
+    if (record.hasOwnProperty("tag")) {
+        console.log(`Name: ${record.name}`);
+        addCard(record.tag, record.payload);
+    } else {
+        console.log("This record does not have a 'name' property.");
+    }
+    // addCard('Private Data 1', JSON.stringify(record));
+
+  }
 </script>
 <br>
 
