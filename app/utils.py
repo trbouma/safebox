@@ -276,3 +276,22 @@ def npub_to_hex(npub: str) -> str:
 
     # Convert bytes to hex string
     return bytes(decoded_bytes).hex()
+
+def validate_local_part(local_part: str) -> bool:
+    """
+    Validates the local part of an email address.
+
+    Args:
+        local_part (str): The local part of the email (before @).
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    # Check length constraint
+    if not (1 <= len(local_part) <= 64):
+        return False
+
+    # Regular expression for valid local part
+    local_part_regex = r'^(?!\.)(?!.*\.\.)[A-Za-z0-9!#$%&\'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&\'*+/=?^_`{|}~-]+)*$'
+
+    return bool(re.fullmatch(local_part_regex, local_part))

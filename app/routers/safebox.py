@@ -11,7 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
 from app.config import Settings
@@ -720,19 +720,23 @@ async def set_custom_handle(   request: Request,
 
     
     if custom_handle.custom_handle:
+        
         cust_db = custom_handle.custom_handle.lower().strip()
-        try:
-            with Session(engine) as session:   
-                            
-                safebox_found.custom_handle = cust_db
-                session.add(safebox_found)
-                session.commit() 
-                detail = f"Congratulations, you now have {cust_db}@{request.url.hostname}!"
-            
-        except Exception as e:
+        if validate_local_part(cust_db):
+            try:
+                with Session(engine) as session:   
+                                
+                    safebox_found.custom_handle = cust_db
+                    session.add(safebox_found)
+                    session.commit() 
+                    detail = f"Congratulations, you now have {cust_db}@{request.url.hostname}!"
+                
+            except Exception as e:
+                status = "ERROR"
+                detail = f"Custom handle maybe taken?"  
+        else:
             status = "ERROR"
-            detail = f"Custom handle maybe taken?"  
-
+            detail = f"Handle has invalid characters, try again??" 
         
     
       
