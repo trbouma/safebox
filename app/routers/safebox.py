@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, Stre
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.templating import Jinja2Templates
-import asyncio,qrcode, io
+import asyncio,qrcode, io, urllib
 
 from datetime import datetime, timedelta
 from safebox.acorn import Acorn
@@ -373,8 +373,10 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
             "balance": safebox_found.balance}
 
 @router.get("/privatedata", tags=["safebox", "protected"])
-async def my_private_data(       request: Request, 
-                        access_token: str = Cookie(None)
+async def my_private_data(      request: Request,
+                                private_mode:str = "card", 
+                                kind:int = 37375,
+                                access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
     try:
@@ -385,14 +387,45 @@ async def my_private_data(       request: Request,
     
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
-    user_records = await acorn_obj.get_user_records()
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
     
-    
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     return templates.TemplateResponse(  "privatedata.html", 
                                         {   "request": request,
                                             "safebox": safebox_found ,
-                                            "user_records": user_records
+                                            "user_records": user_records,
+                                            "private_mode": private_mode,
+                                            "referer": referer
+                                            })
+
+@router.get("/consult", tags=["safebox", "protected"])
+async def do_consult(      request: Request,
+                                private_mode:str = "consult", 
+                                kind:int = 32227,   
+                                nprofile:str = None,                             
+                                access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    
+    
+
+    return templates.TemplateResponse(  "consult.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found ,
+                                            "user_records": user_records,
+                                            "record_kind": kind,
+                                            "private_mode": private_mode,
+                                            "nprofile": nprofile
 
                                         })
 @router.get("/health", tags=["safebox", "protected"])
@@ -482,8 +515,9 @@ async def my_danger_zone(       request: Request,
 
 
 @router.get("/displaycard", tags=["safebox", "protected"])
-async def display_card(      request: Request, 
+async def display_card(     request: Request, 
                             card: str = None,
+                            kind: int = 37375,
                             action_mode: str = None,
                             access_token: str = Cookie(None)
                     ):
@@ -497,17 +531,21 @@ async def display_card(      request: Request,
     if action_mode == 'edit':
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        record = await acorn_obj.get_record(record_name=card)
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        
         content = record["payload"]
     elif action_mode =='add':
         card = ""
         content =""
     
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     return templates.TemplateResponse(  "card.html", 
                                         {   "request": request,
                                             "safebox": safebox_found,
                                             "card": card,
+                                            "record_kind": kind,
+                                            "referer": referer,
                                             "action_mode":action_mode,
                                             "content": content
                                             
@@ -666,7 +704,7 @@ async def update_card(         request: Request,
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content)
+        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content, record_kind=update_card.kind)
         detail = "Update successful!"
     except Exception as e:
         status = "ERROR"
@@ -693,7 +731,7 @@ async def delete_card(         request: Request,
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title)
+        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title, record_kind=delete_card.kind)
         detail = f"Success! {msg_out}"
     except Exception as e:
         status = "ERROR"
@@ -811,10 +849,9 @@ async def get_nprofile(    request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     # figure out to use the owner key or the wallet key
-    if acorn_obj.pubkey_bech32 != acorn_obj.owner:
-        pub_hex_to_use = npub_to_hex(acorn_obj.owner)
-    else:
-        pub_hex_to_use = acorn_obj.pubkey_hex
+    # just use the wallet
+  
+    pub_hex_to_use = acorn_obj.pubkey_hex
 
     try:
         nprofile = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])

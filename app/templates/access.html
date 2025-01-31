@@ -27,8 +27,6 @@
   var lighting_invoice_data = "";
 
 
- 
-
   if (onboard=="True") {
   alert(onboard_msg);
   }
@@ -148,11 +146,19 @@ window.location.href="/safebox/ecash";
 async function myCredentials() {
 
 window.location.href="/safebox/credentials";
+
+}
+
+async function doConsult() {
+
+window.location.href="/safebox/consult";
+
 }
 
 async function myHealthData() {
 
 window.location.href="/safebox/health";
+
 }
 
 async function copytoClipboard() {
@@ -558,13 +564,15 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>  
   <hr>
   <h2>Personal</h2>
-  <button id="my_private_data_button" onclick="privateData()" >Cards</button>
+  <button id="my_private_data_button" onclick="privateData()" >My Cards</button>
   <br><br>
-  <button id="my_private_health_button" onclick="myHealthData()" >Health</button>
+  <button id="my_private_health_button" onclick="myHealthData()" >My Health</button>
   <br><br>
   <hr>
   <h2>Professional</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
+  <br><br>
+  <button id="do_consult_button" onclick="doConsult()" >Consult</button>  
   <br><br>
   <hr>
   <h2>Friends and Family</h2>

@@ -7,7 +7,8 @@
 
 
 <script>
-
+var record_kind = parseInt("{{record_kind}}");
+var referer = "{{referer}}";
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -44,7 +45,8 @@ async function updateCard() {
     
 
     const submit_data = {"title": input_card_title.value,
-                          "content": input_card_content.value };
+                          "content": input_card_content.value,
+                          "kind": record_kind };
 
     
 
@@ -56,7 +58,7 @@ async function updateCard() {
     .then((response) => response.json())
     .then((data) => getStatus(data));
 
-    window.location.href="/safebox/privatedata";
+    window.location.href=referer;
       }
 
 async function deleteCard() {
@@ -64,7 +66,7 @@ async function deleteCard() {
 
   user_confirm = confirm(`Are you sure you want to proceed with deleting ${input_card_title.value}?`) ;
 
-  const submit_data = {"title": input_card_title.value};
+  const submit_data = {"title": input_card_title.value, "kind": record_kind};
 
     
 
@@ -76,7 +78,7 @@ async function deleteCard() {
     .then((response) => response.json())
     .then((data) => getStatus(data));
 
-    window.location.href="/safebox/privatedata";
+    window.location.href=referer ;
 
 }      
 
@@ -115,7 +117,7 @@ async function deleteCard() {
      
 
     <button onclick="backToProfile()">Home</button>
-    <br><br>{{action_mode}}       
+    <br><br>{{action_mode}} {{record_kind}}  {{referer}}   
 </div>
 
      

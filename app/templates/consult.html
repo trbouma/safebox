@@ -1,0 +1,140 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Consult{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+<script>
+
+async function backToProfile() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function scanCode() {
+// alert("scan!");
+
+window.location.href="/scanner/scan";
+
+}
+
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h1>Consultation</h1>
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br><br>
+    <button onclick="addCardtoSafebox()">Add Record</button>
+
+    
+    
+</div>
+
+<div id="card-container"></div>
+
+<script>
+  const jsonUserData = {{ user_records | tojson }};
+  const record_kind = parseInt("{{ record_kind }}");
+  const nprofile = "{{nprofile}}";
+
+  // Function to create and add a card
+  function addCard(title, content) {
+    // Create a card element
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // Create and add the title element
+    const cardTitle = document.createElement('div');
+    cardTitle.className = 'card-title';
+    cardTitle.textContent = title;
+
+    // Create and add the content element
+    const cardContent = document.createElement('div');
+    cardContent.className = 'card-content';
+    cardContent.textContent = content;
+
+    // Append title and content to the card
+    card.appendChild(cardTitle);
+    card.appendChild(cardContent);
+
+    card.addEventListener('click', () => {
+        // alert(`You clicked on: ${title} with: ${content}`);
+        window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
+      });
+
+    // Append the card to the container
+    const container = document.getElementById('card-container');
+    container.appendChild(card);
+  }
+
+  // Example usage
+  // alert("hello"+ JSON.stringify(jsonUserData)); 
+  for (let record of jsonUserData)
+  {
+    if (record.hasOwnProperty("tag")) {
+        console.log(`Name: ${record.name}`);
+        addCard(record.tag, record.payload);
+    } else {
+        console.log("This record does not have a 'name' property.");
+    }
+    // addCard('Private Data 1', JSON.stringify(record));
+
+  }
+
+async function addCardtoSafebox() {
+// alert(`add card ${record_kind}`);
+window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
+
+
+}
+
+async function sendToNprofile() {
+ 
+    if (confirm("Are you sure?")) {
+      alert(`Sent to: ${nprofile}!`);
+    }
+  
+}
+
+setDarkMode();
+
+</script>
+   
+
+<div class="center-text">
+      
+  <button onclick="sendToNprofile()">Finalize and Send</button>   
+
+  <br><br>
+  <button onclick="backToProfile()">Home</button>
+  <br>
+ 
+      
+ 
+
+        
+     
+        
+</div>
+     
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

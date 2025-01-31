@@ -79,7 +79,10 @@ class addCard(BaseModel):
 class updateCard(BaseModel):
     title: str
     content: str
+    kind: int = 37375
 
 class deleteCard(BaseModel):
     title: str
+    kind: int = 37375
   
+

@@ -981,9 +981,9 @@ class Acorn:
 
 
         
-    async def get_record(self,record_name):
+    async def get_record(self,record_name, record_kind: int =37375):
         #FIXME - not sure if this function is used
-        record_out = await self.get_wallet_info(label=record_name)
+        record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind)
         try:
             record_obj = json.loads(record_out)
         except:

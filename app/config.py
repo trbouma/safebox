@@ -1,6 +1,6 @@
 import pathlib
 
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings
 
 from typing import List, Optional, Union
@@ -33,6 +33,14 @@ class Settings(BaseSettings):
         env_file = '.env'
         env_file_encoding ='utf-8'
         case_sensitive = True
+
+class modeEventKind(BaseModel):
+    mode: str
+    kind: int
+
+class mapEventKind(BaseModel):
+    mapping: List [modeEventKind]
+
 
 settings = Settings()
 
