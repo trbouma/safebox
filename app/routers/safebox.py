@@ -11,7 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation
 from app.config import Settings
@@ -407,6 +407,7 @@ async def do_consult(      request: Request,
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
+    nprofile_parse = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
     except:
@@ -417,6 +418,9 @@ async def do_consult(      request: Request,
     await acorn_obj.load_data()
     user_records = await acorn_obj.get_user_records(record_kind=kind)
     
+    if nprofile:
+        nprofile_parse = parse_nostr_bech32(nprofile)
+        pass
     
 
     return templates.TemplateResponse(  "consult.html", 
@@ -425,7 +429,8 @@ async def do_consult(      request: Request,
                                             "user_records": user_records,
                                             "record_kind": kind,
                                             "private_mode": private_mode,
-                                            "nprofile": nprofile
+                                            "nprofile": nprofile,
+                                            "nprofile_parse": nprofile_parse
 
                                         })
 @router.get("/health", tags=["safebox", "protected"])
@@ -877,13 +882,22 @@ async def transmit_consultation(        request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
     
+
+
     try:
+        nprofile_parse = parse_nostr_bech32(transmit_consultation.nprofile)
+        print(nprofile_parse)
+        pubhex = nprofile_parse['values']['pubhex']
+        npub = hex_to_npub(pubhex)
+        relay = pubhex = nprofile_parse['values']['relay']
+        print(f"transmit to: {npub} {relay}")
+
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.kind)
         for each_record in records_to_transmit:
-            print(each_record['tag'], each_record['payload'])
-            await acorn_obj.secure_dm('trbouma@openbalance.app',each_record['payload'], dm_relays=[safebox_found.home_relay])
+            print(f"transmitting: {each_record['tag']} {each_record['payload']}")
+            await acorn_obj.secure_dm(npub,each_record['payload'], dm_relays=relay)
 
         detail = f"Succesful"
         

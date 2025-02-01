@@ -460,6 +460,20 @@ def dm_recipient(nrecipient: str, message: str, relays:str):
     msg_out = asyncio.run(acorn_obj.secure_dm(nrecipient=nrecipient,message=message,dm_relays=dm_relays))
     click.echo(msg_out)
 
+@click.command("run", help='run as a service')
+@click.option('--relays','-r', default=HOME_RELAY)
+def run(relays):
+    # click.echo(WELCOME_MSG)
+    # click.echo(f"Running as a service...")
+    relay_array = []
+    relays_str = relays.split(',')
+    for each in relays_str:
+        each = "wss://" + each if not each.startswith("wss://") else each
+        relay_array.append(each)
+    acorn_obj = Acorn(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    asyncio.run(acorn_obj.load_data())    
+    acorn_obj.run(relay_array)
+
 @click.command("recover", help='Recover a wallet from seed phrase')
 @click.argument('seedphrase', default=None)
 @click.option('--homerelay','-h', default=HOME_RELAY)
@@ -497,6 +511,7 @@ cli.add_command(send)
 cli.add_command(recover)
 cli.add_command(set_owner)
 cli.add_command(dm_recipient)
+cli.add_command(run)
 
 
 if __name__ == "__main__":

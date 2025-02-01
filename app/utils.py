@@ -277,6 +277,33 @@ def npub_to_hex(npub: str) -> str:
     # Convert bytes to hex string
     return bytes(decoded_bytes).hex()
 
+def hex_to_npub(hex_key: str) -> str:
+    """
+    Converts a hex-encoded Nostr public key to its corresponding npub Bech32 representation.
+    
+    :param hex_key: A Nostr public key in hex format.
+    :return: The corresponding npub public key in Bech32 format.
+    """
+    if len(hex_key) != 64:
+        raise ValueError("Invalid hex key length. Must be 64 characters.")
+
+    try:
+        # Convert hex string to bytes
+        key_bytes = bytes.fromhex(hex_key)
+    except ValueError:
+        raise ValueError("Invalid hex key format.")
+
+    # Convert 8-bit bytes to 5-bit chunks
+    encoded_data = bech32.convertbits(key_bytes, 8, 5, True)
+    
+    if encoded_data is None:
+        raise ValueError("Error in converting hex data to Bech32 format.")
+
+    # Encode using Bech32 with 'npub' prefix
+    npub = bech32.bech32_encode("npub", encoded_data)
+    
+    return npub
+
 def validate_local_part(local_part: str) -> bool:
     """
     Validates the local part of an email address.

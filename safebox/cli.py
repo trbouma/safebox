@@ -514,7 +514,6 @@ def monitor(nrecipient, relays):
 
 @click.command(help='run as a service')
 @click.option('--relays','-r', default=HOME_RELAY)
-
 def run(relays):
     # click.echo(WELCOME_MSG)
     # click.echo(f"Running as a service...")
