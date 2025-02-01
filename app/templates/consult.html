@@ -33,7 +33,7 @@ window.location.href="/scanner/scan";
 
 <div class="center-text">
     <h1>Consultation</h1>
-    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
     <br><br>
     <button onclick="addCardtoSafebox()">Add Record</button>
 
@@ -99,13 +99,48 @@ window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
 
 }
 
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
 async function sendToNprofile() {
  
     if (confirm("Are you sure?")) {
       alert(`Sent to: ${nprofile}!`);
-    }
+    } else {return;}
   
-}
+    var data;
+   
+
+
+  
+   user_confirm = confirm(`Are you sure you want to proceed with sending?`) ;
+   if (user_confirm == false) {return;}
+   
+
+   const submit_data = {"nprofile": nprofile };
+
+   
+
+  await fetch('/safebox/transmit', {
+       method: "POST",
+       headers: {"Content-Type": "application/json"},        
+       body: JSON.stringify(submit_data)         
+      })
+   .then((response) => response.json())
+   .then((data) => getStatus(data));
+
+   // window.location.href=referer;
+     }
+
+
+
 
 setDarkMode();
 

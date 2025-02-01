@@ -16,6 +16,7 @@
 
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
+  var reveal_balance = true;
   var starting_balance = "{{safebox.balance}}";
   // var orginal_background = document.body.style.backgroundColor ;
   var onboard = "{{onboard}}";
@@ -84,6 +85,23 @@ async function scanCode() {
 window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}";
 
 }
+
+function revealBalance() {
+    var heading_balance = document.getElementById("heading_balance");
+    //alert("reveal balance");
+    if (reveal_balance == false) 
+    {
+        
+        // don't worry about linting
+        heading_balance.textContent = "{{"{:,}".format(safebox.balance)}} sats";
+        reveal_balance = true;
+    }
+    else
+    {
+        heading_balance.textContent = "*********";
+        reveal_balance = false;
+    }
+  } 
 
 function revealSeedPhrase() {
     var reveal_seed_phrase_text = document.getElementById("seed_phrase_reveal_text");
@@ -505,8 +523,8 @@ function getInvoiceStatus(ln_invoice_status) {
 {% block page_content %}
 <div class="center-text">
 
-  <h1 >{{branding}}</h1>  
-  <h2   id="heading_balance">{{safebox.balance}} sats</h2>  
+  
+  <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(safebox.balance)}} sats</h1>  
   ({{"{:.2f}".format(currency_rate * safebox.balance / 1e8)}} {{currency_code}})
   <br><br>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
@@ -572,7 +590,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <h2>Professional</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
   <br><br>
-  <button id="do_consult_button" onclick="doConsult()" >Consult</button>  
+  <button id="do_consult_button" onclick="doConsult()" >Consultation</button>  
   <br><br>
   <hr>
   <h2>Friends and Family</h2>

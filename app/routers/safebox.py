@@ -13,7 +13,7 @@ from time import sleep
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -860,3 +860,36 @@ async def get_nprofile(    request: Request,
         detail = "Not created"
 
     return {"status": status, "detail": detail}
+
+@router.post("/transmit", tags=["safebox", "protected"])
+async def transmit_consultation(        request: Request, 
+                                        transmit_consultation: trasmitConsultation,
+                                        access_token: str = Cookie(None)
+                    ):
+    """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
+
+    status = "OK"
+    detail = "Nothing yet"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    try:
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.kind)
+        for each_record in records_to_transmit:
+            print(each_record['tag'], each_record['payload'])
+            await acorn_obj.secure_dm('trbouma@openbalance.app',each_record['payload'], dm_relays=[safebox_found.home_relay])
+
+        detail = f"Succesful"
+        
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail}  

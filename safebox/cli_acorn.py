@@ -369,13 +369,14 @@ def get_records(kind):
     try:
         out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind))
         
-        
+        for each in out_info:
+            click.echo(f"RECORD: {each}")
+        click.echo(f"No. of RECORDS: {len(out_info)}" )
 
     except:
-        out_info = "No label found!"
+        click.echo("No label found!")
     
-    for each in out_info:
-        click.echo(f"RECORD: {each}")
+
 
 @click.command("balance", help="show balance")
 def balance():
@@ -441,6 +442,24 @@ def send(amount,nrecipient: str, relays:str, comment:str):
     out_msg = acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment)
     click.echo(out_msg)
 
+@click.command("dm", help="Send message to nip05 address or npub")
+@click.argument('nrecipient', default=None)
+@click.argument('message', default="hello")
+@click.option('--relays','-r', default=HOME_RELAY)
+def dm_recipient(nrecipient: str, message: str, relays:str):
+    dm_relays = []
+
+   
+    for each in relays.split(","):
+        each = "wss://" + each if not each.startswith("wss://") else each
+        dm_relays.append(each)
+    
+    click.echo(f"Send: {message} to {nrecipient} via {dm_relays}")
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    asyncio.run(acorn_obj.load_data())
+    msg_out = asyncio.run(acorn_obj.secure_dm(nrecipient=nrecipient,message=message,dm_relays=dm_relays))
+    click.echo(msg_out)
+
 @click.command("recover", help='Recover a wallet from seed phrase')
 @click.argument('seedphrase', default=None)
 @click.option('--homerelay','-h', default=HOME_RELAY)
@@ -477,6 +496,7 @@ cli.add_command(issue)
 cli.add_command(send)
 cli.add_command(recover)
 cli.add_command(set_owner)
+cli.add_command(dm_recipient)
 
 
 if __name__ == "__main__":

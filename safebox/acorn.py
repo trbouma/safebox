@@ -78,6 +78,8 @@ class Acorn:
     home_mint: str
     known_mints: dict = {}
     local_currency: str = "SAT"
+    authorities: List[str] = None
+    providers: List[str] = None
     user_records = []
     relays: List[str]
     mints: List[str]
@@ -444,37 +446,75 @@ class Acorn:
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
+        my_gift = GiftWrap(BasicKeySigner(self.k))
         m = hashlib.sha256()
         m.update(self.privkey_hex.encode())
         # m.update(label.encode())
         # label_hash = m.digest().hex()
         decrypt_content = None
+
+        if record_kind in [1059]:
         
-        FILTER = [{
-            'limit': 100,
-            'authors': [self.pubkey_hex],
-            'kinds': [record_kind]   
-            
-        }]
+            FILTER = [{
+                'limit': 100, 
+                '#p'  :  [self.pubkey_hex],              
+                'kinds': [record_kind]   
+                
+            }]
+        else:
+                FILTER = [{
+                'limit': 100,
+                'authors': [self.pubkey_hex],
+                'kinds': [record_kind]   
+                
+            }]
+
 
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER)           
         
         for each in events:
+            print(each.tags, each.kind)
             try:
                 decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
             except:
-                return f"Could not retrieve info."
+                # Try Gift Unwrapping
+                decrypt_event = my_enc.decrypt_event(each)
+                decrypt_content = decrypt_event.content
             
             try:
                 parsed_record = json.loads(decrypt_content)
             except:
-                parsed_record = decrypt_content
+                
+                parsed_record = {"payload": decrypt_content}
+            if record_kind == 1059:
+                print(f"need to  unwrap {type(each.content)} {each.content} ")
+                try:
+                    pass
+                    # print(f"content to decrypt: {each.content}")
+                    # decrypt_content = my_enc.decrypt(each.content,self.pubkey_hex)
+                    # print(f"decrypt content {decrypt_content}")
+
+                    unwrapped_event = await my_gift.unwrap(each)
+                    # print(f"unwrapped event content: {unwrapped_event.content}")
+                    try:
+                        parsed_record = json.loads(unwrapped_event.content)
+                    except:
+                
+                        parsed_record = {"payload":unwrapped_event.content}
+                
+                except Exception as e:
+                    print(f"error: {e}")
             
+                # unsealed_event = await my_gift.unwrap(each.content)
+                # print("unsealed:", unsealed_event.content)
+
+                
+                # each.content = decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+
             events_out.append(parsed_record)
         
         return events_out
-
 
 
     async def _async_query_client_profile(self, filter: List[dict]): 
@@ -776,7 +816,7 @@ class Acorn:
             print("hello again")   
 
             
-    def secure_dm(self,nrecipient:str, message: str, dm_relays: List[str]):
+    async def secure_dm(self,nrecipient:str, message: str, dm_relays: List[str]):
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
@@ -789,7 +829,8 @@ class Acorn:
             return "error"
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
-        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays))  
+        await self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays) 
+        return "message sent" 
     
     async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
        
