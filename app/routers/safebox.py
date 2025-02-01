@@ -399,6 +399,7 @@ async def my_private_data(      request: Request,
                                             "referer": referer
                                             })
 
+
 @router.get("/consult", tags=["safebox", "protected"])
 async def do_consult(      request: Request,
                                 private_mode:str = "consult", 
@@ -406,7 +407,7 @@ async def do_consult(      request: Request,
                                 nprofile:str = None,                             
                                 access_token: str = Cookie(None)
                     ):
-    """Protected access to private data stored in home relay"""
+    """Protected access to consulting recods in home relay"""
     nprofile_parse = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
@@ -433,6 +434,43 @@ async def do_consult(      request: Request,
                                             "nprofile_parse": nprofile_parse
 
                                         })
+
+
+@router.get("/inbox", tags=["safebox", "protected"])
+async def get_inbox(      request: Request,
+                                private_mode:str = "consult", 
+                                kind:int = 1059,   
+                                nprofile:str = None,                             
+                                access_token: str = Cookie(None)
+                    ):
+    """Protected access to inbox in home relay"""
+    nprofile_parse = None
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    
+    if nprofile:
+        nprofile_parse = parse_nostr_bech32(nprofile)
+        pass
+    
+
+    return templates.TemplateResponse(  "inbox.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found ,
+                                            "user_records": user_records,
+                                            "record_kind": kind,
+                                            "private_mode": private_mode,
+                                            "nprofile": nprofile,
+                                            "nprofile_parse": nprofile_parse
+
+                                        })
+
 @router.get("/health", tags=["safebox", "protected"])
 async def my_health_data(       request: Request, 
                         access_token: str = Cookie(None)

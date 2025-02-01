@@ -173,6 +173,12 @@ window.location.href="/safebox/consult";
 
 }
 
+async function myInbox() {
+
+window.location.href="/safebox/inbox";
+
+}
+
 async function myHealthData() {
 
 window.location.href="/safebox/health";
@@ -582,10 +588,11 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>  
   <hr>
   <h2>Personal</h2>
-  <button id="my_private_data_button" onclick="privateData()" >My Cards</button>
+  <button id="my_private_data_button" onclick="privateData()" >Personal Cards</button>
   <br><br>
-  <button id="my_private_health_button" onclick="myHealthData()" >My Health</button>
+  <button id="my_private_health_button" onclick="myHealthData()" >Health Data</button>
   <br><br>
+  <button id="my_inbox_button" onclick="myInbox()" >Inbox</button>
   <hr>
   <h2>Professional</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
