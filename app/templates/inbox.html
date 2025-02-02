@@ -32,9 +32,8 @@ window.location.href="/scanner/scan";
 
 
 <div class="center-text">
-    <h1>Inbox</h1>
-  
-
+    <h1>Records Received</h1>
+   
     
 </div>
 
@@ -46,7 +45,7 @@ window.location.href="/scanner/scan";
   const nprofile = "{{nprofile}}";
 
   // Function to create and add a card
-  function addCard(title, content) {
+  function addCard(title, created_at, content) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -56,6 +55,11 @@ window.location.href="/scanner/scan";
     cardTitle.className = 'card-title';
     cardTitle.textContent = title;
 
+      // Create and add the content element
+    const cardCreatedAt = document.createElement('div');
+    cardCreatedAt.className = 'card-content';
+    cardCreatedAt.textContent = created_at;
+
     // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
@@ -63,11 +67,12 @@ window.location.href="/scanner/scan";
 
     // Append title and content to the card
     card.appendChild(cardTitle);
+    card.appendChild(cardCreatedAt);
     card.appendChild(cardContent);
 
     card.addEventListener('click', () => {
-        // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
+        alert(`You clicked on: ${title} with: ${content}`);
+        // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
       });
 
     // Append the card to the container
@@ -81,7 +86,7 @@ window.location.href="/scanner/scan";
   {
     if (record.hasOwnProperty("tag")) {
         // console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.payload);
+        addCard(record.tag, record.created_at, record.payload);
     } else {
         console.log("This record does not have a 'name' property.");
     }
@@ -150,7 +155,9 @@ setDarkMode();
 
   <br><br>
   <button onclick="backToProfile()">Home</button>
-  <br>
+  <hr>
+  <br><br>
+  Record Kind: {{record_kind}}
  
     
  

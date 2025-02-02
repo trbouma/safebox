@@ -10,16 +10,16 @@
 
 <center>
 <h1 id="header-msg">Scanning...</h1>
-<button onclick="backToWallet()">Back</button> 
+
+
+
+<button onclick="goBack()">Back</button> 
 <br><br>
 <div id="video-container" >
     <video id="qr-video" style="width: 90%;"></video>
 </div>
-{% if acquire_mode == "public" %}
-    <button onclick="backToProfile()">Back to Profile</button>
-{% else %}
-    <button onclick="backToWallet()">Back</button> 
-{% endif %}
+
+
 <br>
 <br>
 <div>
@@ -189,14 +189,20 @@
 </script>
 <script>
 
+async function goBack() {
+    window.history.back();
+}
 async function backToWallet() {
 
 
     var header_msg = document.getElementById("header-msg");
-    header_msg.textContent = "Going Back to Safebox, Please Wait...";
-    window.location.href="/safebox/access";
+    header_msg.textContent = "Going back, please Wait...";
+    window.location.href="{{referer}}";
 
 }
+
+
+</script>
 
 async function backToProfile() {
 

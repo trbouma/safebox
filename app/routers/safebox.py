@@ -440,7 +440,7 @@ async def do_consult(      request: Request,
 @router.get("/inbox", tags=["safebox", "protected"])
 async def get_inbox(      request: Request,
                                 private_mode:str = "consult", 
-                                kind:int = 1059,   
+                                kind:int = 1060,   
                                 nprofile:str = None,                             
                                 access_token: str = Cookie(None)
                     ):
@@ -942,9 +942,10 @@ async def transmit_consultation(        request: Request,
                             "payload": each_record['payload']
                           }
             print(f"record obj: {record_obj}")
-            await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            await acorn_obj.secure_transmit(npub,json.dumps(record_obj), dm_relays=relay)
 
-        detail = f"Succesful"
+        detail = f"Successful"
         
     except Exception as e:
         status = "ERROR"

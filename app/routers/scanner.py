@@ -34,15 +34,19 @@ router = APIRouter()
 
 
 @router.get("/scan", tags=["scanner"], response_class=HTMLResponse)
-async def get_scanner(request: Request, qr_code: str = "none", wallet_name: str = "user"):
+async def get_scanner(request: Request, qr_code: str = "none", wallet_name:str = None):
     """return user information"""
     
-   
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+
+    
 
     
     return templates.TemplateResponse("acquirescan.html", 
                                       {"request": request,
+                                       "referer": referer,
                                        "wallet_name": wallet_name
+                                      
                                        
                                        
                                        } )
@@ -61,6 +65,8 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
     #remove any annoying url prepends
     qr_code = qr_code.replace('https://wallet.cashu.me/?token=',"")
     print(qr_code)
+
+    
 
     if check_ln_address(qr_code):
         action_mode ="lnaddress"

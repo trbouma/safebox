@@ -25,11 +25,14 @@ from monstr.encrypt import NIP44Encrypt, NIP4Encrypt
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 
+
 from monstr.signing.signing import BasicKeySigner
 from monstr.giftwrap import GiftWrap
 from monstr.util import util_funcs
 from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
+
+from safebox.monstrmore import TemporaryGiftWrap
 
 tail = util_funcs.str_tails
 
@@ -453,7 +456,7 @@ class Acorn:
         # label_hash = m.digest().hex()
         decrypt_content = None
 
-        if record_kind in [1059]:
+        if record_kind in [1059,1060,21059]:
         
             FILTER = [{
                 'limit': 100, 
@@ -476,7 +479,7 @@ class Acorn:
         for each in events:
             print(each.tags, each.kind)
 
-            if record_kind == 1059:
+            if record_kind in [1059, 1060]:
                 print(f"need to  unwrap {type(each.content)} {each.content} ")
                 try:
                     pass
@@ -488,6 +491,7 @@ class Acorn:
                     # print(f"unwrapped event content: {unwrapped_event.content}")
                     try:
                         parsed_record = json.loads(unwrapped_event.content)
+                        parsed_record['created_at'] = unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     except:
                 
                         parsed_record = {   "tag": ["message"],
@@ -869,9 +873,43 @@ class Acorn:
             c.publish(wrapped_evt)
             await asyncio.sleep(0.2)
                 
-                
-                
+    async def secure_transmit(self,nrecipient:str, message: str, dm_relays: List[str]):
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+                dm_relays = dm_relays
+            else:
+                npub_hex = bech32_to_hex(nrecipient)
+        except:
+            return "error"
+        self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
+
+        await self._async_secure_transmit(npub_hex=npub_hex, message=message,dm_relays=dm_relays) 
+        return "message sent" 
+    
+    async def _async_secure_transmit(self, npub_hex, message:str, dm_relays: List[str]):
+       
+        my_gift = TemporaryGiftWrap(BasicKeySigner(self.k))
         
+        # relays = [self.home_relay]
+        relays = dm_relays
+
+        async with ClientPool(relays) as c:
+
+
+            send_evt = Event(content=message,
+                         tags=[
+                             ['p', npub_hex]
+                         ])
+           
+            self.logger.debug(f"sending dm to {npub_hex} via {dm_relays}")
+            wrapped_evt, trans_k = await my_gift.wrap(send_evt,
+                                                  to_pub_k=npub_hex)
+            # wrapped_evt.sign(self.privkey_hex)
+            c.publish(wrapped_evt)
+            await asyncio.sleep(0.2)                
 
 
     def send_post(self,text):

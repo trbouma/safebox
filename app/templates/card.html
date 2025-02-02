@@ -30,7 +30,19 @@ alert(`${parsedResult.status} ${parsedResult.detail}`);
 
 }
 
+async function scanCode() {
+// alert("scan!");
 
+window.location.href="/scanner/scan";
+
+}
+
+
+async function shareCard() {
+
+  alert("Coming!");
+  
+}
 
 async function updateCard() {
     
@@ -94,11 +106,14 @@ async function deleteCard() {
 
 <div class="center-text">
     <h4>Update Card {{card}}</h4>
-    Update Card.
+    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
     <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
     <br><br>
     <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
+    <br><br>
     <button onclick="updateCard()">Save Card</button>
+    <br><br>
+    <button onclick="shareCard()">Share Card</button>
     <br><br>
     <button onclick="deleteCard()">Delete Card</button>
     <br><br>

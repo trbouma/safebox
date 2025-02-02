@@ -38,7 +38,7 @@ window.location.href="/safebox/access" ;
   
 
   // Function to create and add a card
-  function addCard(title, content) {
+  function addCard(title, created_at, content) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -49,12 +49,18 @@ window.location.href="/safebox/access" ;
     cardTitle.textContent = title;
 
     // Create and add the content element
+    const cardCreatedAt = document.createElement('div');
+    cardCreatedAt.className = 'card-content';
+    cardCreatedAt.textContent = created_at;
+
+    // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
     cardContent.textContent = content;
 
     // Append title and content to the card
     card.appendChild(cardTitle);
+    card.appendChild(cardCreatedAt);
     card.appendChild(cardContent);
 
     card.addEventListener('click', () => {
@@ -72,8 +78,8 @@ window.location.href="/safebox/access" ;
   for (let record of jsonUserData)
   {
     if (record.hasOwnProperty("tag")) {
-        console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.payload);
+        // console.log(`Name: ${record.name}`);
+        addCard(record.tag, record.created_at, record.payload);
     } else {
         console.log("This record does not have a 'name' property.");
     }
