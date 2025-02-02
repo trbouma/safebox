@@ -79,9 +79,9 @@ window.location.href="/scanner/scan";
   // alert("hello"+ JSON.stringify(jsonUserData)); 
   for (let record of jsonUserData)
   {
-    if (record.hasOwnProperty("payload")) {
+    if (record.hasOwnProperty("tag")) {
         // console.log(`Name: ${record.name}`);
-        addCard("Message", record.payload);
+        addCard(record.tag, record.payload);
     } else {
         console.log("This record does not have a 'name' property.");
     }

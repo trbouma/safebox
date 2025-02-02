@@ -9,6 +9,7 @@ import asyncio,qrcode, io, urllib
 from datetime import datetime, timedelta
 from safebox.acorn import Acorn
 from time import sleep
+import json
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub
@@ -935,7 +936,13 @@ async def transmit_consultation(        request: Request,
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.kind)
         for each_record in records_to_transmit:
             print(f"transmitting: {each_record['tag']} {each_record['payload']}")
-            await acorn_obj.secure_dm(npub,each_record['payload'], dm_relays=relay)
+
+            record_obj = { "tag"   : [each_record['tag']],
+                            "type"  : "32227",
+                            "payload": each_record['payload']
+                          }
+            print(f"record obj: {record_obj}")
+            await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
 
         detail = f"Succesful"
         

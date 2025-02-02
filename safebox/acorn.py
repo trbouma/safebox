@@ -475,18 +475,7 @@ class Acorn:
         
         for each in events:
             print(each.tags, each.kind)
-            try:
-                decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
-            except:
-                # Try Gift Unwrapping
-                decrypt_event = my_enc.decrypt_event(each)
-                decrypt_content = decrypt_event.content
-            
-            try:
-                parsed_record = json.loads(decrypt_content)
-            except:
-                
-                parsed_record = {"payload": decrypt_content}
+
             if record_kind == 1059:
                 print(f"need to  unwrap {type(each.content)} {each.content} ")
                 try:
@@ -501,7 +490,10 @@ class Acorn:
                         parsed_record = json.loads(unwrapped_event.content)
                     except:
                 
-                        parsed_record = {"payload":unwrapped_event.content}
+                        parsed_record = {   "tag": ["message"],
+                                            "type": "dm",
+                                            "created_at": unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                                            "payload":unwrapped_event.content}
                 
                 except Exception as e:
                     print(f"error: {e}")
@@ -510,9 +502,32 @@ class Acorn:
                 # print("unsealed:", unsealed_event.content)
 
                 
+            
                 # each.content = decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+            else:
+                try:
+                    decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+                except:
+                    # Try Gift Unwrapping
+                    decrypt_event = my_enc.decrypt_event(each)
+                    decrypt_content = decrypt_event.content
+            
+                try:
+                    parsed_record = json.loads(decrypt_content)
+                except:                
+                    parsed_record = {"payload": decrypt_content}
 
-            events_out.append(parsed_record)
+                # check for special wallet record which is a list
+                if isinstance(parsed_record,list):
+                    pass
+                else:
+                    parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+            #check to see if wallet record and skip
+            if isinstance(parsed_record,list):
+                pass
+            else:
+                events_out.append(parsed_record)
         
         return events_out
 

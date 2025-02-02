@@ -37,7 +37,7 @@ window.location.href="/scanner/scan";
     <br><br>
     <button onclick="addCardtoSafebox()">Add Record</button>
 
-    
+   
     
 </div>
 
@@ -49,7 +49,7 @@ window.location.href="/scanner/scan";
   const nprofile = "{{nprofile}}";
 
   // Function to create and add a card
-  function addCard(title, content) {
+  function addCard(title, created_at, content) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -59,6 +59,11 @@ window.location.href="/scanner/scan";
     cardTitle.className = 'card-title';
     cardTitle.textContent = title;
 
+    // Create and add the title element
+    const cardCreatedAt = document.createElement('div');
+    cardTitle.className = 'card-conten';
+    cardTitle.textContent = created_at;
+
     // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
@@ -66,6 +71,7 @@ window.location.href="/scanner/scan";
 
     // Append title and content to the card
     card.appendChild(cardTitle);
+    card.appendChild(cardCreatedAt);
     card.appendChild(cardContent);
 
     card.addEventListener('click', () => {
@@ -84,7 +90,7 @@ window.location.href="/scanner/scan";
   {
     if (record.hasOwnProperty("tag")) {
         console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.payload);
+        addCard(record.tag, record.created_at,record.payload);
     } else {
         console.log("This record does not have a 'name' property.");
     }
