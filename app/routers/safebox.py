@@ -486,7 +486,7 @@ async def my_health_data(       request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     try:
-        health_records = await acorn_obj.get_user_records(record_kind=32225 )
+        health_records = await acorn_obj.get_user_records(record_kind=1060 )
     except:
         health_records = None
 
