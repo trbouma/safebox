@@ -7,21 +7,24 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 from monstr.util import util_funcs
 
-KIND_OTHER_GIFT_WRAP = 1060
 
-class TemporaryGiftWrapException(Exception):
+
+class KindOtherGiftWrapException(Exception):
     pass
 
 
-class TemporaryGiftWrap:
+class KindOtherGiftWrap:
     """
         implementation of NIP59 https://github.com/nostr-protocol/nips/blob/master/59.md
         replaces our inbox class
     """
-    def __init__(self, signer: SignerInterface):
+    KIND_OTHER_GIFT_WRAP: int
+
+    def __init__(self, signer: SignerInterface, kind_gift_wrap: int = 1060):
         self._signer = signer
         # jitter is upto 2 days from now
         self._jitter = 60 * 60 * 24 * 2
+        self.KIND_OTHER_GIFT_WRAP = kind_gift_wrap
 
     def get_jittered_created_ticks(self):
         return util_funcs.date_as_ticks(datetime.now()) - random.SystemRandom().randint(0, self._jitter)
@@ -50,7 +53,7 @@ class TemporaryGiftWrap:
                          to_pub_k: Union[Keys, str]) -> Event:
 
         if rumour_evt.sig:
-            raise TemporaryGiftWrapException('TemporaryGiftWrap::_make_seal: rumour event should not be signed!')
+            raise KindOtherGiftWrapException('TemporaryGiftWrap::_make_seal: rumour event should not be signed!')
 
         if isinstance(to_pub_k, Keys):
             to_pub_k = to_pub_k.public_key_hex()
@@ -75,7 +78,7 @@ class TemporaryGiftWrap:
         rnd_k = Keys()
         rnd_sign = BasicKeySigner(rnd_k)
 
-        ret = Event(kind=KIND_OTHER_GIFT_WRAP,
+        ret = Event(kind=self.KIND_OTHER_GIFT_WRAP,
                     pub_key=rnd_k.public_key_hex(),
                     created_at=self.get_jittered_created_ticks(),
                     content=await rnd_sign.nip44_encrypt(plain_text=json.dumps(sealed_evt.data()),
@@ -99,9 +102,9 @@ class TemporaryGiftWrap:
         our_pub_k = await self._signer.get_public_key()
 
         if to_pub_k is None:
-            raise TemporaryGiftWrap('wraped event is not addressed to anyone, no p ptags!')
+            raise KindOtherGiftWrap('wraped event is not addressed to anyone, no p ptags!')
         if to_pub_k != our_pub_k:
-            raise TemporaryGiftWrap(f'wraped event is not addressed to us,'
+            raise KindOtherGiftWrap(f'wraped event is not addressed to us,'
                                     f' {util_funcs.str_tails(our_pub_k)} != {util_funcs.str_tails(to_pub_k)}')
 
         # unwrap the seal event

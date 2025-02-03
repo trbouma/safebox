@@ -100,10 +100,10 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
         action_data = qr_code
     
     elif qr_code[:8].lower() == "nprofile":
-            # Go directly to consultation
+            # Go directly to health consultation
             action_mode = "nprofile"
             action_data = qr_code
-            return RedirectResponse(f"/safebox/consult?nprofile={qr_code}")
+            return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)
        

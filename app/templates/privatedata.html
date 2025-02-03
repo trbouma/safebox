@@ -14,7 +14,9 @@ async function backToProfile() {
 window.location.href="/safebox/access" ;
 
 }
-
+async function goBack() {
+    window.history.back();
+}
 
 
 </script>
@@ -27,6 +29,7 @@ window.location.href="/safebox/access" ;
 
 <div class="center-text">
     <h1>Personal Cards</h1>
+    <button onclick="goBack()">Back</button>
     
     
 </div>

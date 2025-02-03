@@ -15,6 +15,15 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function goBack() {
+    window.history.back();
+}
+
+async function myInbox() {
+
+window.location.href="/safebox/inbox";
+
+}
 </script>
 
 <script>
@@ -69,13 +78,14 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
 
 <div class="center-text">
-    <h1>Health Data </h1>
-    <button onclick="backToProfile()">Back</button>
+    <h1>Health Records</h1>
+    <button onclick="goBack()">Back</button>
     <br><br>
     <h2>My Health QR Code</h2>
 
     <img id="img_qr_display" src="/img/logo.png" onclick="copytoClipboard()">
-    <br>
+    <br><br>
+    <button id="my_inbox_button" onclick="myInbox()" >Review Incoming Records</button>
 </div>
 
 <div id="card-container"></div>
@@ -130,7 +140,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
     
  
 
-    <button onclick="backToProfile()">Home</button>
+
 
      
         

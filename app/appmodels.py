@@ -87,5 +87,5 @@ class deleteCard(BaseModel):
   
 class trasmitConsultation(BaseModel):
     nprofile: str
-    kind: int = 32227
+    kind: int = 1060
 

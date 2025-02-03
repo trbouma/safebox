@@ -15,6 +15,10 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function goBack() {
+    window.history.back();
+}
+
 async function scanCode() {
 // alert("scan!");
 
@@ -32,7 +36,8 @@ window.location.href="/scanner/scan";
 
 
 <div class="center-text">
-    <h1>Records Received</h1>
+    <h1>Incoming Records</h1>
+    <button onclick="goBack()">Back</button>
    
     
 </div>
@@ -154,7 +159,7 @@ setDarkMode();
  
 
   <br><br>
-  <button onclick="backToProfile()">Home</button>
+  <button onclick="goBack()">Back</button>
   <hr>
   <br><br>
   Record Kind: {{record_kind}}

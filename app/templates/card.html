@@ -15,6 +15,10 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function goBack() {
+    window.history.back();
+}
+
 async function privateData() {
 
 window.location.href="/safebox/privatedata";
@@ -117,22 +121,18 @@ async function deleteCard() {
     <br><br>
     <button onclick="deleteCard()">Delete Card</button>
     <br><br>
-    <button onclick="privateData()">Back to Cards</button>
-    <hr>
-
-    
+    <button onclick="goBack()">Back</button>
+    <br><br>
+    <button onclick="backToProfile()">Home</button>
     
 </div>
 
 
    
 
-<div class="center-text">
-  <hr>
-     
-
-    <button onclick="backToProfile()">Home</button>
-    <br><br>{{action_mode}} {{record_kind}}  {{referer}}   
+<div class="center-text">    
+    <hr>
+    {{action_mode}} {{record_kind}}  {{referer}}   
 </div>
 
      

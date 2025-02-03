@@ -401,8 +401,8 @@ async def my_private_data(      request: Request,
                                             })
 
 
-@router.get("/consult", tags=["safebox", "protected"])
-async def do_consult(      request: Request,
+@router.get("/healthconsult", tags=["safebox", "protected"])
+async def do_health_consult(      request: Request,
                                 private_mode:str = "consult", 
                                 kind:int = 32227,   
                                 nprofile:str = None,                             
@@ -425,7 +425,7 @@ async def do_consult(      request: Request,
         pass
     
 
-    return templates.TemplateResponse(  "consult.html", 
+    return templates.TemplateResponse(  "healthconsult.html", 
                                         {   "request": request,
                                             "safebox": safebox_found ,
                                             "user_records": user_records,
@@ -486,7 +486,7 @@ async def my_health_data(       request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     try:
-        health_records = await acorn_obj.get_user_records(record_kind=1060 )
+        health_records = await acorn_obj.get_user_records(record_kind=32227 )
     except:
         health_records = None
 
@@ -943,7 +943,8 @@ async def transmit_consultation(        request: Request,
                           }
             print(f"record obj: {record_obj}")
             # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
-            await acorn_obj.secure_transmit(npub,json.dumps(record_obj), dm_relays=relay)
+            # 32227 are transmitted as kind 1060
+            await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
 
         detail = f"Successful"
         

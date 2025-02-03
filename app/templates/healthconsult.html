@@ -32,7 +32,7 @@ window.location.href="/scanner/scan";
 
 
 <div class="center-text">
-    <h1>Consultation</h1>
+    <h1>Health Consultation</h1>
     <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
     <br><br>
     <button onclick="addCardtoSafebox()">Add Record</button>
@@ -130,7 +130,7 @@ async function transmitToNprofile() {
    
 
 
-  const submit_data = {"nprofile": nprofile };
+  const submit_data = {"nprofile": nprofile, "kind":32227 };
 
    
 
@@ -155,7 +155,7 @@ setDarkMode();
 
 <div class="center-text">
       
-  <button onclick="transmitToNprofile()">Transmit</button>   
+  <button onclick="transmitToNprofile()">Transmit Records</button>   
 
   <br><br>
   <button onclick="backToProfile()">Home</button>

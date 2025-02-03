@@ -29,7 +29,7 @@
 
 
   if (onboard=="True") {
-  alert(onboard_msg);
+  // alert(onboard_msg);
   }
 
   async function getEcashStatus(data) {
@@ -167,17 +167,13 @@ window.location.href="/safebox/credentials";
 
 }
 
-async function doConsult() {
+async function doHealthConsult() {
 
-window.location.href="/safebox/consult";
-
-}
-
-async function myInbox() {
-
-window.location.href="/safebox/inbox";
+window.location.href="/safebox/healthconsult";
 
 }
+
+
 
 async function myHealthData() {
 
@@ -590,14 +586,13 @@ function getInvoiceStatus(ln_invoice_status) {
   <h2>Personal</h2>
   <button id="my_private_data_button" onclick="privateData()" >Personal Cards</button>
   <br><br>
-  <button id="my_private_health_button" onclick="myHealthData()" >Health Data</button>
-  <br><br>
-  <button id="my_inbox_button" onclick="myInbox()" >Records Received</button>
+  <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
+
   <hr>
   <h2>Professional</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
   <br><br>
-  <button id="do_consult_button" onclick="doConsult()" >Consultation</button>  
+  <button id="do_consult_button" onclick="doHealthConsult()" >Heath Consultation</button>  
   <br><br>
   <hr>
   <h2>Friends and Family</h2>

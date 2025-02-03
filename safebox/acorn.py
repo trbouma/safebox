@@ -32,7 +32,7 @@ from monstr.util import util_funcs
 from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
-from safebox.monstrmore import TemporaryGiftWrap
+from safebox.monstrmore import KindOtherGiftWrap
 
 tail = util_funcs.str_tails
 
@@ -456,7 +456,13 @@ class Acorn:
         # label_hash = m.digest().hex()
         decrypt_content = None
 
-        if record_kind in [1059,1060,21059]:
+        # handle records that are coming in via giftware
+        # 1059 are regular DMs
+        # 1060 are health records
+        # 1061 are shared notes
+        # 1062 are official docs and credentials
+
+        if record_kind in [1059,1060,1061,1062]:
         
             FILTER = [{
                 'limit': 100, 
@@ -480,7 +486,7 @@ class Acorn:
             print(each.tags, each.kind)
 
             if record_kind in [1059, 1060]:
-                print(f"need to  unwrap {type(each.content)} {each.content} ")
+                # print(f"need to  unwrap {type(each.content)} {each.content} ")
                 try:
                     pass
                     # print(f"content to decrypt: {each.content}")
@@ -502,12 +508,8 @@ class Acorn:
                 except Exception as e:
                     print(f"error: {e}")
             
-                # unsealed_event = await my_gift.unwrap(each.content)
-                # print("unsealed:", unsealed_event.content)
 
-                
-            
-                # each.content = decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+
             else:
                 try:
                     decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
@@ -873,7 +875,7 @@ class Acorn:
             c.publish(wrapped_evt)
             await asyncio.sleep(0.2)
                 
-    async def secure_transmit(self,nrecipient:str, message: str, dm_relays: List[str]):
+    async def secure_transmittal(self,nrecipient:str, message: str,  dm_relays: List[str],transmittal_kind: int=1060):
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
@@ -886,12 +888,12 @@ class Acorn:
             return "error"
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
-        await self._async_secure_transmit(npub_hex=npub_hex, message=message,dm_relays=dm_relays) 
+        await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, transmittal_kind=transmittal_kind,) 
         return "message sent" 
     
-    async def _async_secure_transmit(self, npub_hex, message:str, dm_relays: List[str]):
+    async def _async_secure_transmittal(self, npub_hex, message:str,  dm_relays: List[str],transmittal_kind: int=1060):
        
-        my_gift = TemporaryGiftWrap(BasicKeySigner(self.k))
+        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k),kind_gift_wrap=transmittal_kind)
         
         # relays = [self.home_relay]
         relays = dm_relays
