@@ -26,6 +26,39 @@ window.location.href="/scanner/scan";
 
 }
 
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
+async function acceptRecord(title,created_at, content,id) {
+
+  var data;
+
+if (confirm(`Are you sure you want to accept incoming record: ${title} into your own records?`)) {
+      alert(`Sending...${id}`);
+    } else {return;}
+  
+
+  const submit_data = {"id": id, "kind": 1060 };
+
+  await fetch('/safebox/acceptincomingrecord', {
+       method: "POST",
+       headers: {"Content-Type": "application/json"},        
+       body: JSON.stringify(submit_data)         
+      })
+   .then((response) => response.json())
+   .then((data) => getStatus(data));
+
+   // window.location.href=referer;
+     }
+
+
 
 </script>
 
@@ -36,7 +69,7 @@ window.location.href="/scanner/scan";
 
 
 <div class="center-text">
-    <h1>Incoming Records</h1>
+    <h1>Incoming Records</h1>    
     <button onclick="goBack()">Back</button>
    
     
@@ -50,7 +83,7 @@ window.location.href="/scanner/scan";
   const nprofile = "{{nprofile}}";
 
   // Function to create and add a card
-  function addCard(title, created_at, content) {
+  function addCard(title, created_at, content,id) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -59,6 +92,7 @@ window.location.href="/scanner/scan";
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
     cardTitle.textContent = title;
+    cardTitle.id = id;
 
       // Create and add the content element
     const cardCreatedAt = document.createElement('div');
@@ -76,7 +110,8 @@ window.location.href="/scanner/scan";
     card.appendChild(cardContent);
 
     card.addEventListener('click', () => {
-        alert(`You clicked on: ${title} with: ${content}`);
+        acceptRecord(title, created_at, content, id);
+        //alert(`You clicked on: ${title} with: ${content}`);
         // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
       });
 
@@ -91,7 +126,7 @@ window.location.href="/scanner/scan";
   {
     if (record.hasOwnProperty("tag")) {
         // console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.created_at, record.payload);
+        addCard(record.tag, record.created_at, record.payload, record.id);
     } else {
         console.log("This record does not have a 'name' property.");
     }
@@ -106,15 +141,7 @@ window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
 
 }
 
-async function getStatus(return_result) {
 
-
-parsedResult = JSON.parse(JSON.stringify(return_result));
-alert(`${parsedResult.status} ${parsedResult.detail}`);
-
- 
-
-}
 
 async function transmitToNprofile() {
 

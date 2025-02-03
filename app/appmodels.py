@@ -89,3 +89,8 @@ class trasmitConsultation(BaseModel):
     nprofile: str
     kind: int = 1060
 
+class incomingRecord(BaseModel):
+    id: str
+    kind: int = 1060
+
+

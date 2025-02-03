@@ -14,7 +14,7 @@ import json
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation, incomingRecord
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
@@ -486,7 +486,7 @@ async def my_health_data(       request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     try:
-        health_records = await acorn_obj.get_user_records(record_kind=32227 )
+        health_records = await acorn_obj.get_user_records(record_kind=32225 )
     except:
         health_records = None
 
@@ -947,6 +947,55 @@ async def transmit_consultation(        request: Request,
             await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
 
         detail = f"Successful"
+        
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail}  
+
+@router.post("/acceptincomingrecord", tags=["safebox", "protected"])
+async def accept_incoming_record(       request: Request, 
+                                        incoming_record: incomingRecord,
+                                        access_token: str = Cookie(None)
+                    ):
+    """ accept incoming NPI-17 1060 health record and store as a 32225 record"""
+
+    status = "OK"
+    detail = "Nothing yet"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+        
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+
+
+    try:
+
+
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        await acorn_obj.load_data()
+        records_to_transmit = await acorn_obj.get_user_records(record_kind=incoming_record.kind)
+        detail = f"Could not find incoming record"
+        for each_record in records_to_transmit:
+            print(f"incoming record id: {each_record['id']}")
+            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            # 32227 are transmitted as kind 1060
+            # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+            if each_record['id'] == incoming_record.id:
+                print(each_record)
+                print(each_record['tag'][0][0],each_record['payload'] )
+                # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
+                record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+                record_value = each_record['payload']
+                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=32225)
+                
+                detail = f"Matched record {incoming_record.id} accepted!"
+
+        
         
     except Exception as e:
         status = "ERROR"
