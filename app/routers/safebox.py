@@ -455,7 +455,7 @@ async def get_inbox(      request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     # since = None
-    since = int((datetime.now(timezone.utc)-timedelta(hours=2)).timestamp())
+    since = int((datetime.now(timezone.utc)-timedelta(hours=24)).timestamp())
     user_records = await acorn_obj.get_user_records(record_kind=kind, since=since)
     
     if nprofile:
