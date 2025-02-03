@@ -190,6 +190,19 @@ alert(backup_message);
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
 
 }
+
+async function copyfromClipboard() {
+
+  const clipboard_data = await navigator.clipboard.readText(); 
+  window.location.href="/scanner/scanresult?qr_code=" + clipboard_data; 
+
+
+
+
+
+
+
+}
 async function copyAddress() {
 
 await navigator.clipboard.writeText("{{lightning_address}}");
@@ -530,6 +543,8 @@ function getInvoiceStatus(ln_invoice_status) {
   ({{"{:.2f}".format(currency_rate * safebox.balance / 1e8)}} {{currency_code}})
   <br><br>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+  <br><br>
+  <button id="ln_clipboard_button" onclick="copyfromClipboard()">Use Clipboard</button>
   <br><br>
   <span id="payment_notification">
     {% if action_mode == 'lnaddress' %}
