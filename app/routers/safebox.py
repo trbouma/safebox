@@ -454,7 +454,9 @@ async def get_inbox(      request: Request,
     
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
-    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    # since = None
+    since = int((datetime.now()-timedelta(days=7)).timestamp())
+    user_records = await acorn_obj.get_user_records(record_kind=kind, since=since)
     
     if nprofile:
         nprofile_parse = parse_nostr_bech32(nprofile)
@@ -978,9 +980,10 @@ async def accept_incoming_record(       request: Request,
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        records_to_transmit = await acorn_obj.get_user_records(record_kind=incoming_record.kind)
+        
+        records_to_accept = await acorn_obj.get_user_records(record_kind=incoming_record.kind)
         detail = f"Could not find incoming record"
-        for each_record in records_to_transmit:
+        for each_record in records_to_accept:
             print(f"incoming record id: {each_record['id']}")
             # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
             # 32227 are transmitted as kind 1060

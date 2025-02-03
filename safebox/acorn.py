@@ -10,6 +10,7 @@ import bolt11
 import aioconsole
 import logging
 import httpx
+from zoneinfo import ZoneInfo
 
 from hotel_names import hotel_names
 # from coolname import generate, generate_slug
@@ -96,6 +97,7 @@ class Acorn:
     RESERVED_RECORDS: List[str] = ["balance","privkey"]
     wallet_reserved_records: object
     logger: object
+    TZ: str = "America/New_York"
     
 
 
@@ -445,7 +447,7 @@ class Acorn:
         pass
         return "this is the instance"
 
-    async def get_user_records(self, record_kind:int=37375):
+    async def get_user_records(self, record_kind:int=37375, since:int = None):
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
@@ -463,13 +465,23 @@ class Acorn:
         # 1062 are official docs and credentials
 
         if record_kind in [1059,1060,1061,1062]:
-        
-            FILTER = [{
+            
+           if since:        
+                FILTER = [{
                 'limit': 100, 
                 '#p'  :  [self.pubkey_hex],              
-                'kinds': [record_kind]   
+                'kinds': [record_kind],
+                'since': since
                 
-            }]
+                }]
+           else:
+                FILTER = [{
+                'limit': 100, 
+                '#p'  :  [self.pubkey_hex],              
+                'kinds': [record_kind]
+                
+                }]
+               
         else:
                 FILTER = [{
                 'limit': 100,
