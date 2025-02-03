@@ -542,6 +542,11 @@ function getInvoiceStatus(ln_invoice_status) {
   <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(safebox.balance)}} sats</h1>  
   ({{"{:.2f}".format(currency_rate * safebox.balance / 1e8)}} {{currency_code}})
   <br><br>
+  {% if onboard == true %}
+  Welcome! Please see the <a href="#fine-print">fine print</a> below.
+  <br><br>
+  {% endif %}
+  
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br><br>
   <button id="ln_clipboard_button" onclick="copyfromClipboard()">Use Clipboard</button>
@@ -629,8 +634,13 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>
   <hr>
  
- 
-  <i><h2>Technical Support and Testing</h2></i>
+ {% if onboard == true %}
+ <h2 id="fine-print" >The Fine Print</h2>
+ <h3>Welcome to {{branding}}! </h3>
+ <p>You are automatically and securely logged in! Write down your access key as soon as you can. You can find your access key and recovery phrase above. By continuing, you have agreed to the terms and conditions of this awesome experimental service! </p>
+ {% endif %}
+
+  <h2>Technical Support and Testing</h2>
   
   Technical Info:
   <br>
