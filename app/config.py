@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
     INVITE_CODES: List = ["alpha","sec2025", "rektuser"]
     REFRESH_CURRENCY_INTERVAL: int = 3600
+    HEALTH_SECURE_TRANSMITTAL_KIND: int = 1060
+    HEALTH_SECURE_AUTH_KIND: int = 1061
 
     class Config:
         env_file = '.env'

@@ -624,6 +624,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
   <p>My recovery phrase: <br> 
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
+  <br>
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>
@@ -642,11 +643,17 @@ function getInvoiceStatus(ln_invoice_status) {
 
   <h2>Technical Support and Testing</h2>
   
+
+  <a href="/safebox/dangerzone">Danger Zone!</a>
+  <br><br>
   Technical Info:
   <br>
-  Mode: {{action_mode}} Data: {{action_data}}
-  <br>
-  <a href="/safebox/dangerzone">Danger Zone!</a>
+  <br>Mode: {{action_mode}} Data: {{action_data}}
+  <br>npub: {{safebox.pubkey_bech32}}
+  <br>pubhex: {{safebox.pubkey_hex}}
+  <br> {{safebox.seed_phrase}}
+  
+  
   <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>
 
             

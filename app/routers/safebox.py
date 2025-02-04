@@ -10,9 +10,10 @@ from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
 from time import sleep
 import json
+from monstr.util import util_funcs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub, listen_for_request
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation, incomingRecord
 from app.config import Settings
@@ -31,6 +32,22 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 SQLModel.metadata.create_all(engine)
+
+
+##########################
+# Functions that need be part part of the module
+async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None):
+   
+    
+    await asyncio.sleep(5)
+
+    record_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now)
+    nprofile = "records since:" + json.dumps(record_out)
+    
+    return nprofile
+
+
+#################################
 
 @router.post("/login", tags=["safebox"])
 async def login(request: Request, access_key: str = Form()):
@@ -431,8 +448,8 @@ async def do_health_consult(      request: Request,
                                             "user_records": user_records,
                                             "record_kind": kind,
                                             "private_mode": private_mode,
-                                            "nprofile": nprofile,
-                                            "nprofile_parse": nprofile_parse
+                                            "client_nprofile": nprofile,
+                                            "client_nprofile_parse": nprofile_parse
 
                                         })
 
@@ -456,8 +473,10 @@ async def get_inbox(      request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     # since = None
-    since = int((datetime.now(timezone.utc)-timedelta(hours=24)).timestamp())
-    user_records = await acorn_obj.get_user_records(record_kind=kind, since=since)
+    since = util_funcs.date_as_ticks(datetime.now())
+    # since = int((datetime.now(timezone.utc)-timedelta(hours=24)).timestamp())
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    
     
     if nprofile:
         nprofile_parse = parse_nostr_bech32(nprofile)
@@ -467,8 +486,11 @@ async def get_inbox(      request: Request,
         print("naddr")
         parsed_result = parse_nostr_bech32(naddr)
         npub = hex_to_npub(parsed_result['values']['pubhex'])
-        print(npub)
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=safebox_found.npub,dm_relays=[safebox_found.home_relay],transmittal_kind=1060)
+        print(f"requesting npub: {npub}")
+        auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} fro"
+        # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
+        
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND)
         
 
     return templates.TemplateResponse(  "inbox.html", 
@@ -695,11 +717,10 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
     print("websocket connection closed")
 
 @router.websocket("/wsrequesttransmittal")
-async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
+async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie()):
 
     await websocket.accept()
 
-    # access_token = websocket.cookies.get("access_token")
     try:
        
        safebox_found = await fetch_safebox(access_token=access_token)
@@ -707,18 +728,23 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
         await websocket.close(code=1008)  # Policy violation
         return
 
-    naddr = safebox_found.npub
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
 
+    naddr = safebox_found.npub
+    # since_now = None
+    since_now = int((datetime.now(timezone.utc)-timedelta(hours=8)).timestamp())
 
     while True:
         try:
-            await listen_for_request()
+            await acorn_obj.load_data()
+            nprofile_out = await listen_for_request(acorn_obj=acorn_obj,kind=settings.HEALTH_SECURE_AUTH_KIND, since_now=since_now)
             
             
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
 
             
-            await websocket.send_json({"naddr": naddr})
+            await websocket.send_json({"nprofile": nprofile_out})
            
         
         except Exception as e:
@@ -1008,7 +1034,7 @@ async def transmit_consultation(        request: Request,
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.kind)
+        records_to_transmit = await acorn_obj.get_user_records(record_kind=32227)
         for each_record in records_to_transmit:
             print(f"transmitting: {each_record['tag']} {each_record['payload']}")
 
@@ -1079,3 +1105,5 @@ async def accept_incoming_record(       request: Request,
     
 
     return {"status": status, "detail": detail}  
+
+

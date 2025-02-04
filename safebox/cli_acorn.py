@@ -3,9 +3,10 @@ from typing import List
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
+from monstr.util import util_funcs
 from safebox.acorn import Acorn
 from safebox.models import nostrProfile, SafeboxItem
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from safebox.lightning import lightning_address_pay
 from time import sleep, time
@@ -360,14 +361,21 @@ def delete_record(label):
 
 @click.command("getrecords", help='get a private wallet record')
 @click.option('--kind','-k', default=37375)
-def get_records(kind):
+@click.option('--since','-s', default=None, help='since in hours')
+def get_records(kind, since):
     
     out_info = "None"
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
 
+    if since != None:
+        since_adjusted = util_funcs.date_as_ticks((datetime.now()-timedelta(hours=int(since))))
+        click.echo(since_adjusted)
+    else:
+        since_adjusted = None
+
     try:
-        out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind))
+        out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted))
         
         for each in out_info:
             click.echo(f"RECORD: {each}")

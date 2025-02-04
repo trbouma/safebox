@@ -11,6 +11,7 @@ import aioconsole
 import logging
 import httpx
 from zoneinfo import ZoneInfo
+from datetime import timezone
 
 from hotel_names import hotel_names
 # from coolname import generate, generate_slug
@@ -495,10 +496,12 @@ class Acorn:
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER)           
         
-        for each in events:
-            print(each.tags, each.kind)
+        events.sort(reverse=True)
 
-            if record_kind in [1059, 1060]:
+        for each in events:
+            print("x:", each.tags, each.kind, each.created_at)
+
+            if record_kind in [1059, 1060, 1061, 1062]:
                 # print(f"need to  unwrap {type(each.content)} {each.content} ")
                 try:
                     pass
@@ -905,10 +908,10 @@ class Acorn:
             return "error"
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
-        await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, transmittal_kind=transmittal_kind,) 
+        await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, transmittal_kind=transmittal_kind) 
         return "message sent" 
     
-    async def _async_secure_transmittal(self, npub_hex, message:str,  dm_relays: List[str],transmittal_kind: int=1060):
+    async def _async_secure_transmittal(self, npub_hex, message:str,  dm_relays: List[str],transmittal_kind):
        
         my_gift = KindOtherGiftWrap(BasicKeySigner(self.k),kind_gift_wrap=transmittal_kind)
         
@@ -921,7 +924,8 @@ class Acorn:
             send_evt = Event(content=message,
                          tags=[
                              ['p', npub_hex]
-                         ])
+                         ],
+                         created_at=int(datetime.now(timezone.utc).timestamp()))
            
             self.logger.debug(f"sending dm to {npub_hex} via {dm_relays}")
             wrapped_evt, trans_k = await my_gift.wrap(send_evt,

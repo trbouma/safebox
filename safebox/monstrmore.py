@@ -27,7 +27,8 @@ class KindOtherGiftWrap:
         self.KIND_OTHER_GIFT_WRAP = kind_gift_wrap
 
     def get_jittered_created_ticks(self):
-        return util_funcs.date_as_ticks(datetime.now()) - random.SystemRandom().randint(0, self._jitter)
+        # remove jittered ticks - deactivate
+        return util_funcs.date_as_ticks(datetime.now()) 
 
     async def _make_rumour(self, evt: Event) -> Event:
         """
