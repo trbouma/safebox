@@ -490,7 +490,7 @@ async def get_inbox(      request: Request,
         auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} fro"
         # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
         
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.HEALTH_SECURE_AUTH_KIND)
         
 
     return templates.TemplateResponse(  "inbox.html", 
@@ -733,7 +733,7 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
 
     naddr = safebox_found.npub
     # since_now = None
-    since_now = int((datetime.now(timezone.utc)-timedelta(hours=8)).timestamp())
+    since_now = int(datetime.now(timezone.utc).timestamp())
 
     while True:
         try:
