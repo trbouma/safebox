@@ -82,12 +82,14 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
     <button onclick="goBack()">Back</button>
     <br><br>
     <h2>My Health QR Code</h2>
+    (click to reveal)
+    <br><br>
 
-    <img id="img_qr_display" src="/img/logo.png" onclick="copytoClipboard()">
+    <img id="img_qr_display" src="/img/logo.png" onclick="createQRCode()">
         
     <br><br>
     <button id="my_inbox_button" onclick="myInbox()" >Accept Incoming Records</button>
-    <hr>
+    <br><br>
     <h2>My Health Records</h2>
     
 </div>
@@ -153,7 +155,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
 <script>
   setDarkMode();
-  createQRCode();
+  
 </script>
 
 {% endblock %}

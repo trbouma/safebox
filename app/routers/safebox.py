@@ -12,7 +12,7 @@ from time import sleep
 import json
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub, listen_for_request
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation, incomingRecord
 from app.config import Settings
@@ -441,7 +441,8 @@ async def do_health_consult(      request: Request,
 async def get_inbox(      request: Request,
                                 private_mode:str = "consult", 
                                 kind:int = 1060,   
-                                nprofile:str = None,                             
+                                nprofile:str = None,   
+                                naddr: str = None,                          
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to inbox in home relay"""
@@ -462,6 +463,13 @@ async def get_inbox(      request: Request,
         nprofile_parse = parse_nostr_bech32(nprofile)
         pass
     
+    if naddr:
+        print("naddr")
+        parsed_result = parse_nostr_bech32(naddr)
+        npub = hex_to_npub(parsed_result['values']['pubhex'])
+        print(npub)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=safebox_found.npub,dm_relays=[safebox_found.home_relay],transmittal_kind=1060)
+        
 
     return templates.TemplateResponse(  "inbox.html", 
                                         {   "request": request,
@@ -647,7 +655,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
 
     while True:
         try:
-            await db_state_change(safebox_found.id)
+            await db_state_change()
             
             # data = await websocket.receive_text()
             # print(f"message received: {data}")
@@ -677,6 +685,41 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             
            
             
+        
+        except Exception as e:
+            print(f"Websocket message: {e}")
+            break
+        
+        
+        
+    print("websocket connection closed")
+
+@router.websocket("/wsrequesttransmittal")
+async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
+
+    await websocket.accept()
+
+    # access_token = websocket.cookies.get("access_token")
+    try:
+       
+       safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        await websocket.close(code=1008)  # Policy violation
+        return
+
+    naddr = safebox_found.npub
+
+
+    while True:
+        try:
+            await listen_for_request()
+            
+            
+            asyncio.sleep(10)
+
+            
+            await websocket.send_json({"naddr": naddr})
+           
         
         except Exception as e:
             print(f"Websocket message: {e}")
@@ -902,6 +945,36 @@ async def get_nprofile(    request: Request,
     try:
         nprofile = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])
         detail = nprofile
+    except:
+        detail = "Not created"
+
+    return {"status": status, "detail": detail}
+
+@router.get("/naddr", tags=["safebox", "protected"])
+async def get_naddr(    request: Request, 
+                        access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    status = "OK"
+    detail = "None"
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    # figure out to use the owner key or the wallet key
+    # just use the wallet
+  
+    # pub_hex_to_use = acorn_obj.pubkey_hex
+    npub_to_use = acorn_obj.pubkey_bech32
+
+    try:
+        # nrequest = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])
+        naddr = create_naddr_from_npub(npub_to_use,[acorn_obj.home_relay])
+        detail = naddr
     except:
         detail = "Not created"
 

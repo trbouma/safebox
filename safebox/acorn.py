@@ -461,10 +461,11 @@ class Acorn:
         # handle records that are coming in via giftware
         # 1059 are regular DMs
         # 1060 are health records
-        # 1061 are shared notes
-        # 1062 are official docs and credentials
+        # 1061 are health authentication messages
+        # 1062 are shared notes
+        # 1063 are official docs and credentials
 
-        if record_kind in [1059,1060,1061,1062]:
+        if record_kind in [1059,1060,1061,1062,1063]:
             
            if since:        
                 FILTER = [{

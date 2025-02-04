@@ -88,6 +88,11 @@ async def db_state_change(id: int):
     await asyncio.sleep(5)
     return
 
+async def listen_for_request(kind: int = 1061):
+    # print(f"db state change for {id}")
+    await asyncio.sleep(5)
+    return
+
 def check_ln_address(ln_address: str):
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     # pass the regular expression
@@ -251,6 +256,41 @@ def create_nprofile_from_npub(npub_bech32, relays=None):
     nprofile = bech32.bech32_encode("nprofile", converted_data)
     
     return nprofile
+
+def create_naddr_from_npub(npub_bech32, relays=None):
+    # Decode the npub Bech32 string
+    hrp, data = bech32.bech32_decode(npub_bech32)
+    if hrp != "npub" or data is None:
+        raise ValueError("Invalid npub Bech32 string")
+    
+    # Convert 5-bit data back to 8-bit data
+    pubkey_bytes = bytes(convertbits(data, 5, 8, False))
+    if len(pubkey_bytes) != 32:
+        raise ValueError("Invalid public key length in npub Bech32 string")
+    
+    # Create the encoded data for nprofile
+    encoded_data = []
+
+    # Tag 0: Special (public key)
+    encoded_data.append(0)  # Tag 0
+    encoded_data.append(len(pubkey_bytes))  # Length of the public key (32 bytes)
+    encoded_data.extend(pubkey_bytes)  # Public key bytes
+
+    # Tag 1: Relay (optional)
+    if relays:
+        for relay in relays:
+            relay_bytes = relay.encode("ascii")
+            encoded_data.append(1)  # Tag 1
+            encoded_data.append(len(relay_bytes))  # Length of the relay string
+            encoded_data.extend(relay_bytes)  # Relay string as bytes
+
+    # Convert 8-bit data to 5-bit data for Bech32 encoding
+    converted_data = convertbits(encoded_data, 8, 5, True)
+
+    # Encode the data as a Bech32 string with the "naddr" prefix
+    nrequest = bech32.bech32_encode("naddr", converted_data)
+    
+    return nrequest
 
 def npub_to_hex(npub: str) -> str:
     """

@@ -104,6 +104,13 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
             action_mode = "nprofile"
             action_data = qr_code
             return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
+
+    elif qr_code[:5].lower() == "naddr":
+            # Go directly to health consultation
+            action_mode = "nprofile"
+            action_data = qr_code
+            return RedirectResponse(f"/safebox/inbox?naddr={qr_code}")    
+    
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)
        

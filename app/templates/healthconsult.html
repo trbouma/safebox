@@ -7,6 +7,26 @@
 
 
 <script>
+  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+    console.log("Message received:", event.data);
+    const response = JSON.parse(event.data);
+    const balance = response.balance;
+    const message = response.message;
+    const status = response.status
+
+
+
+};
+ws.onclose = () => console.log("WebSocket closed");
+
+</script>
+
+<script>
+
+var global_naddr = "";
 
 async function backToProfile() {
 
@@ -19,6 +39,37 @@ async function scanCode() {
 // alert("scan!");
 
 window.location.href="/scanner/scan";
+
+}
+
+async function getQRStatus(return_result) {
+
+var qr_img_func = document.getElementById("img_qr_display");
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+
+ global_naddr = parsedResult.detail;
+
+qr_img_func.src = "/safebox/qr/"+ global_naddr;
+// qr_img_func.addEventListener("click", copytoClipboard);
+
+
+
+}
+
+async function createQRCode() {
+    
+    var data;
+  
+
+   await fetch('/safebox/naddr', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+              
+       })
+    .then((response) => response.json())
+    .then((data) => getQRStatus(data));
+
 
 }
 
@@ -123,7 +174,7 @@ async function transmitToNprofile() {
     }
 
     if (confirm(`Are you sure you want to send to: ${nprofile}?`)) {
-      alert(`Sending...`);
+      // alert(`Sending...`);
     } else {return;}
   
     var data;
@@ -150,6 +201,7 @@ async function transmitToNprofile() {
 
 setDarkMode();
 
+
 </script>
    
 
@@ -160,11 +212,11 @@ setDarkMode();
   <br><br>
   <button onclick="backToProfile()">Home</button>
   <br>
- 
+ <h2>Client Scan</h2>
     
- 
-
-        
+ <img id="img_qr_display" onclick="createQRCode()"  src="/img/logo.png" >
+<br><br>
+{{ nprofile }}       
      
         
 </div>
