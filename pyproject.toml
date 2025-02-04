@@ -40,7 +40,7 @@ websockets = "^14.2"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
-safebox = "safebox.cli:cli"
+safebox = "safebox.cli_acorn:cli"
 acorn = "safebox.cli_acorn:cli"
 
 
