@@ -641,18 +641,14 @@ function getInvoiceStatus(ln_invoice_status) {
  <p>You are automatically and securely logged in! Write down your access key as soon as you can. You can find your access key and recovery phrase above. By continuing, you have agreed to the terms and conditions of this awesome experimental service! </p>
  {% endif %}
 
-  <h2>Technical Support and Testing</h2>
-  
+  <h2>Technical Info</h2>
 
-  <a href="/safebox/dangerzone">Danger Zone!</a>
-  <br><br>
-  Technical Info:
-  <br>
   <br>Mode: {{action_mode}} Data: {{action_data}}
   <br>npub: {{safebox.pubkey_bech32[:10]}}...{{safebox.pubkey_bech32[-8:]}}
   <br>pubhex: {{safebox.pubkey_hex[:10]}}...{{safebox.pubkey_hex[-8:]}}
   <br>home relay: {{safebox.home_relay}}
-  
+  <br><br>
+  <a href="/safebox/dangerzone">Danger Zone!</a>
   
   
   <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>
