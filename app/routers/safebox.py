@@ -715,7 +715,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             await listen_for_request()
             
             
-            asyncio.sleep(10)
+            await asyncio.sleep(10)
 
             
             await websocket.send_json({"naddr": naddr})
