@@ -649,9 +649,10 @@ function getInvoiceStatus(ln_invoice_status) {
   Technical Info:
   <br>
   <br>Mode: {{action_mode}} Data: {{action_data}}
-  <br>npub: {{safebox.pubkey_bech32}}
-  <br>pubhex: {{safebox.pubkey_hex}}
-  <br> {{safebox.seed_phrase}}
+  <br>npub: {{safebox.pubkey_bech32[:10]}}...{{safebox.pubkey_bech32[-8:]}}
+  <br>pubhex: {{safebox.pubkey_hex[:10]}}...{{safebox.pubkey_hex[-8:]}}
+  <br>home relay: {{safebox.home_relay}}
+  
   
   
   <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>
