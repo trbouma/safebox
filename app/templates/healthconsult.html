@@ -7,15 +7,20 @@
 
 
 <script>
+
+  const jsonUserData = {{ user_records | tojson }};
+  const record_kind = parseInt("{{ record_kind }}");
+  var client_nprofile = "{{client_nprofile}}";
+
   const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
     console.log("Message received:", event.data);
-    const response = JSON.parse(event.data);
-    const balance = response.balance;
-    const message = response.message;
-    const status = response.status
+    const response = JSON.parse(event.data);  
+    client_nprofile = response.nprofile;
+    alert(`Client is authenticated! Ready to transmit files`);
+
 
 
 
@@ -95,9 +100,7 @@ async function createQRCode() {
 <div id="card-container"></div>
 
 <script>
-  const jsonUserData = {{ user_records | tojson }};
-  const record_kind = parseInt("{{ record_kind }}");
-  const client_nprofile = "{{client_nprofile}}";
+
 
   // Function to create and add a card
   function addCard(title, created_at, content) {
@@ -216,7 +219,9 @@ setDarkMode();
     
  <img id="img_qr_display" onclick="createQRCode()"  src="/img/logo.png" >
 <br><br>
-{{ client_nprofile }}       
+{% if client_nprofile %}
+{{client_nprofile[:20] }}...{{ client_nprofile[-15:]}} 
+{% endif %}    
      
         
 </div>
