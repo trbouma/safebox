@@ -2261,6 +2261,51 @@ class Acorn:
         self.logger.info(msg_out)
         return msg_out
 
+    async def delete_kind_events(self, record_kind:int):
+        """
+            Delete kind events
+        """
+        # first, get all of the events for the kind
+
+        FILTER = [{
+                'limit': 100, 
+                '#p'  :  [self.pubkey_hex],              
+                'kinds': [record_kind]
+                
+                }]
+  
+
+        async with ClientPool([self.home_relay]) as c:  
+            events = await c.query(FILTER) 
+
+        for each in events:
+            print(each.id)
+        
+        tags = []
+        for each_event in events:
+            tags.append(["e",each_event.id])
+            
+        tags.append(["k",str(record_kind)])
+        print(f"tags for events to delete {tags}")
+        
+        
+        try:
+
+            async with ClientPool([self.home_relay]) as c:
+            
+                n_msg = Event(kind=Event.KIND_DELETE,
+                            content=None,
+                            pub_key=self.pubkey_hex,
+                            tags=tags)
+                n_msg.sign(self.privkey_hex)
+                c.publish(n_msg)
+                # added a delay here so the delete event get published
+                await asyncio.sleep(1)
+                print("should have deleted")
+        except:
+            raise Exception("error deleting proof events")  
+        
+        return f"events of kind {record_kind} deleted" 
 
 
     async def _async_delete_proof_events(self):

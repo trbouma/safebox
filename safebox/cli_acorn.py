@@ -359,6 +359,27 @@ def delete_record(label):
     
     click.echo(out_info)
 
+@click.command("deletekind", help='delete kind records')
+@click.option('--kind','-k', default=30000)
+def delete_kind(kind):
+    
+    if not click.confirm("Are you really sure? This is a dangerous option"):
+        return
+    
+    out_info = "None"
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+
+    try:
+        out_info = asyncio.run(acorn_obj.delete_kind_events(kind))
+        
+        pass
+
+    except:
+        out_info = "No label found!"
+    
+    click.echo(out_info)
+
 @click.command("getrecords", help='get a private wallet record')
 @click.option('--kind','-k', default=37375)
 @click.option('--since','-s', default=None, help='since in hours')
@@ -510,6 +531,7 @@ cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
 cli.add_command(delete_record)
+cli.add_command(delete_kind)
 cli.add_command(get_records)
 cli.add_command(balance)
 cli.add_command(zap)
