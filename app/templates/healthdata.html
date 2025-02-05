@@ -8,6 +8,13 @@
 
 <script>
 
+async function scanCode() {
+// alert("scan!");
+
+window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}";
+
+}
+
 async function backToProfile() {
 
 
@@ -86,6 +93,8 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
 <div class="center-text">
     <h1>Health Records</h1>
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br><br>
     <button onclick="gotoHome()">Home</button>
     <br><br>
     <h2>My Health QR Code</h2>
