@@ -510,6 +510,7 @@ async def get_inbox(      request: Request,
 @router.get("/health", tags=["safebox", "protected"])
 async def my_health_data(       request: Request, 
                                 naddr: str = None,
+                                nonce: str = None,
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
