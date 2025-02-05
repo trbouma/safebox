@@ -15,6 +15,13 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function gotoHome() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
 async function goBack() {
     window.history.back();
 }
@@ -79,7 +86,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
 <div class="center-text">
     <h1>Health Records</h1>
-    <button onclick="goBack()">Back</button>
+    <button onclick="gotoHome()">Home</button>
     <br><br>
     <h2>My Health QR Code</h2>
     (click to reveal)

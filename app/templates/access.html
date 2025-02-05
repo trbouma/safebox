@@ -191,7 +191,7 @@ alert(backup_message);
 
 }
 
-async function copyfromClipboard() {
+async function useClipboard() {
 
   const clipboard_data = await navigator.clipboard.readText(); 
   window.location.href="/scanner/scanresult?qr_code=" + clipboard_data; 
@@ -259,8 +259,8 @@ async function createInvoice() {
   create_invoice_button.textContent = "Creating invoice... ";
  
   if (ln_create_invoice_amount <=0 || isNaN(ln_create_invoice_amount)){
-    create_invoice_button.textContent = "Need Amount ";
-    //alert("need amount");
+    // create_invoice_button.textContent = "Need Amount ";
+    alert("Please enter invoice amount.");
 
   }
   else
@@ -549,8 +549,6 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br><br>
-  <button id="ln_clipboard_button" onclick="copyfromClipboard()">Use Clipboard</button>
-  <br><br>
   <span id="payment_notification">
     {% if action_mode == 'lnaddress' %}
       Enter amount and memo
@@ -580,12 +578,13 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <input type="number" placeholder="enter invoice amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:60%">
       <br><br>
-      <button id="ln_create_invoice_button" onclick="createInvoice()">Invoice Amount</button>
-      <br><br>
-      <hr>
-    {% endif %}  
-  
-    <h2>Pay with Lightning</h2>
+      <button id="ln_create_invoice_button" onclick="createInvoice()">Create Invoice</button>
+
+    {% endif %} 
+    <br><br>
+    <button id="ln_clipboard_button" onclick="useClipboard()">Use Clipboard</button> 
+    <hr>
+    <h2>Make a Payment</h2>
     <input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
     <br>
     
@@ -598,41 +597,38 @@ function getInvoiceStatus(ln_invoice_status) {
     <br><br>
   
   {% endif %}
-  <hr>
-  <h2>Pay with Ecash</h2>
+
   <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
-  <br><br>  
+  
   <hr>
   <h2>Personal</h2>
-  <button id="my_private_data_button" onclick="privateData()" >Personal Cards</button>
+  <button id="my_private_data_button" onclick="privateData()" >Personal Records</button>
   <br><br>
   <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
-
   <hr>
   <h2>Professional</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button>  
   <br><br>
   <button id="do_consult_button" onclick="doHealthConsult()" >Heath Consultation</button>  
-  <br><br>
+  <br>
   <hr>
-  <h2>Friends and Family</h2>
+  <h2>Community</h2>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Friend</button>
-  <br><br>
+  <br>
   <hr>
   <h2>My Account</h2>
   <p>My access_key: </b></p>
   <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
   <p>My recovery phrase: <br> 
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
-  <br>
+  
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
-  <br><br>
-  
+  <br><br>  
   <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
-  <br><br>
+  <br>
   <hr>
  
  {% if onboard == true %}
