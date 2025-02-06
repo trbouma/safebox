@@ -515,6 +515,9 @@ class Acorn:
                         parsed_record = json.loads(unwrapped_event.content)
                         parsed_record['created_at'] = unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         parsed_record['id']=unwrapped_event.id
+                        
+                        
+
                     except:
                 
                         parsed_record = {   "tag": ["message"],
@@ -523,7 +526,8 @@ class Acorn:
                                             "payload":unwrapped_event.content,
                                             "id": unwrapped_event.id
                                             }
-                
+
+
                 except Exception as e:
                     print(f"error: {e}")
             
@@ -548,6 +552,16 @@ class Acorn:
                 else:
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
+
+            # Convert payload to json
+            # See if payload is in stringifed json and convert
+                    
+            try:
+                payload_obj = json.loads(parsed_record['payload'])
+                parsed_record['payload'] = payload_obj
+                        
+            except:
+                pass
 
             #check to see if wallet record and skip
             if isinstance(parsed_record,list):
