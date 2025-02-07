@@ -31,7 +31,7 @@ templates = Jinja2Templates(directory="app/templates")
 router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine,checkfirst=True)
+# SQLModel.metadata.create_all(engine,checkfirst=True)
 
 
 ##########################

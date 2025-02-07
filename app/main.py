@@ -42,9 +42,7 @@ async def lifespan(app: FastAPI):
 
 service_key = Keys(settings.SERVICE_SECRET_KEY)
 
-# Create instance of database
-engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine,checkfirst=True)
+
 
 
 
@@ -72,7 +70,12 @@ app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 @app.on_event("startup")
 async def init_db():
-    await init_currency_rates()
+    try:
+        engine = create_engine(settings.DATABASE)
+        SQLModel.metadata.create_all(engine, checkfirst=True)
+    except:
+        pass
+    # await init_currency_rates()
 
 # Define a root endpoint
 @app.get("/", tags=["public"])

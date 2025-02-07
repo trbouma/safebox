@@ -13,7 +13,7 @@ from sqlmodel import Field, SQLModel
 class RegisteredSafebox(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     handle: str
-    custom_handle: str | None = Field(default=None,unique=True, nullable=True)
+    custom_handle: Optional[str] = Field(default=None,unique=True, nullable=True)
     npub: str
     nsec: str
     home_relay: str 

@@ -18,7 +18,7 @@ settings = Settings()
 # SECRET_KEY = "foobar"
 # ALGORITHM = "HS256"
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine,checkfirst=True)
+# SQLModel.metadata.create_all(engine,checkfirst=True)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
 def create_jwt_token(data: dict, expires_delta: timedelta = None):

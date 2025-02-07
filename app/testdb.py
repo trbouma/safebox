@@ -8,7 +8,7 @@ if __name__ == "__main__":
     print("hello")
 
     engine = create_engine("sqlite:///data/database.db")
-    SQLModel.metadata.create_all(engine,checkfirst=True)
+    # SQLModel.metadata.create_all(engine,checkfirst=True)
 
     satoshi = CurrencyRate(currency_code="SAT", currency_rate=1e8)
 

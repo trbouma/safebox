@@ -34,7 +34,7 @@ HOME_MINT = 'https://mint.nimo.cash'
 service_key_obj = Keys(priv_k=settings.SERVICE_SECRET_KEY)
 
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine, checkfirst=True)
+# SQLModel.metadata.create_all(engine, checkfirst=True)
 
 
 def generate_short_code(length: int = 12) -> str:
