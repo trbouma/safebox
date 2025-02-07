@@ -101,6 +101,23 @@ async function createQRCode() {
 
 <script>
 
+  function renderJSONObject(data) {
+    // render json object
+    // return "json object";
+    let content = document.createElement('div');
+    content.className = 'json-content';
+    // Loop through the JSON object and display key-value pairs
+        for (let key in data) {
+            if (key !== 'title') {
+                let row = document.createElement('p');
+                row.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
+                content.appendChild(row);
+            }
+        }
+    return content;
+
+  }
+
 
   // Function to create and add a card
   function addCard(title, created_at, content) {
@@ -122,11 +139,37 @@ async function createQRCode() {
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
     cardContent.textContent = content;
-
-    // Append title and content to the card
+   
     card.appendChild(cardTitle);
     card.appendChild(cardCreatedAt);
+
+
+    // figure out what to do with the card conte
+
+    // Append title and content to the card
+
+    try {
+
+        if (typeof cardContent == 'object' ) {
+        console.log(cardContent);
+
+
+
+        } else {
+          console.log("string");
+        }
+
+
+
+
+      } catch (error) {
+        console.error("Invalid JSON:", error.message);
+    }
+
+
     card.appendChild(cardContent);
+
+    
 
     card.addEventListener('click', () => {
         // alert(`You clicked on: ${title} with: ${content}`);
@@ -140,11 +183,17 @@ async function createQRCode() {
 
   // Example usage
   // alert("hello"+ JSON.stringify(jsonUserData)); 
+  var render_payload = "";
   for (let record of jsonUserData)
   {
     if (record.hasOwnProperty("tag")) {
-        // console.log(`Name: ${record.name}`);
+        console.log(`Name: ${record.tag} ${typeof record.payload}`);
+        // check to see if payload is json
+       
+
         addCard(record.tag, record.created_at,record.payload);
+
+
     } else {
         console.log("This record does not have a 'name' property.");
     }

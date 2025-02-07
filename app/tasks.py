@@ -28,7 +28,7 @@ MINTS = ['https://mint.nimo.cash']
 LOGGING_LEVEL=20
 
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine)
+SQLModel.metadata.create_all(engine, checkfirst=True)
 
 async def periodic_task():
     while True:

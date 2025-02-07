@@ -8,11 +8,7 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class Hero(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    secret_name: str
-    age: Optional[int] = None
+
 
 class RegisteredSafebox(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -20,11 +16,11 @@ class RegisteredSafebox(SQLModel, table=True):
     custom_handle: Optional[str] = None
     npub: str
     nsec: str
-    home_relay: str = None
-    onboard_code: str = None
+    home_relay: str 
+    onboard_code: str 
     access_key: str 
     balance: int = 0
-    owner: str = None
+    owner: Optional[str] = None
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -1,0 +1,117 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 14.5 (Ubuntu 14.5-0ubuntu0.22.04.1)
+-- Dumped by pg_dump version 14.13 (Homebrew)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: currencyrate; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.currencyrate (
+    currency_code text NOT NULL,
+    currency_rate numeric,
+    currency_symbol character varying,
+    currency_description text,
+    refresh_time timestamp without time zone,
+    fractional_unit text,
+    number_to_base integer
+);
+
+
+ALTER TABLE public.currencyrate OWNER TO postgres;
+
+--
+-- Data for Name: currencyrate; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY currencyrate (currency_code, currency_rate, currency_symbol, currency_description, refresh_time, fractional_unit, number_to_base) FROM stdin;
+UAH	999105.81	₴	Ukrainian hryvnia	\N	kopeck	100
+VND	699594225.70	₫	Viet Nam Dong	\N	hao	10
+XOF	17523097.96	R	West African Franc	\N	centime	100
+AWG	52449.9714	f	Aruba florin	\N	centime	100
+BTC	1	B	Bitcoin	\N	satoshi	100000000
+UGX	109976512.00	R	Uganda Shillings	\N	shilling	1
+BTN	2441712.23	Nu	Bhutanese Ngultrum	\N	chetrum	100
+SAT	100000000	≐	satoshis	\N	msat	1000
+NCR	1000000.0	nc	Narnia Crescent	\N	sat	100
+NSL	1000000.0	៛	Narnia Silverleaf	\N	sat	100
+XCD	275724.46	EC$	Eastern Caribbean Dollars	2025-01-28 06:00:00.623873	cent	100
+CZK	2472350.09	Kč	Czech Koruna	2025-01-28 06:00:00.623873	heller	100
+DKK	735253.67	kr	Danish Krone	2025-01-28 06:00:00.623873	ore	100
+BNA	564850	bn	Bananas	\N	banana	1
+HKD	800305.1	$	Hong Kong Dollars	2025-01-28 06:00:00.623873	cent	100
+HRK	473845.0	kn	Croatia Kuna	2025-01-28 06:00:00.623873	kuna	1
+HUF	40257665.02	Ft	Hungary Forint	2025-01-28 06:00:00.623873	filler	100
+INR	8892916.05	R	Indian Rupees	2025-01-28 06:00:00.623873	paisa	100
+ISK	13429936.32	kr	Iceland Krona	2025-01-28 06:00:00.623873	eyrir	100
+KRW	148500613.63	₩	Korean Won	2025-01-28 06:00:00.623873	jeon	100
+NZD	181642.41	$	New Zealand Dollar	2025-01-28 06:00:00.623873	cent	100
+PLN	414457.54	zł	Poland Zloty	2025-01-28 06:00:00.623873	grosz	100
+RON	490130.83	lei	Romania Leu	2025-01-28 06:00:00.623873	ban	100
+RUB	10054395.45	₽	Russian Rubles	2025-01-28 06:00:00.623873	kopeck	100
+SGD	138899.68	$	Singapore Dollars	2025-01-28 06:00:00.623873	cent	10
+THB	3485525.46	ϯ	Thailand Baht	2025-01-28 06:00:00.623873	satang	100
+TRY	3674040.93	₺	Turkey Lira	2025-01-28 06:00:00.623873	kurus	100
+TWD	3383202.44	NT$	Taiwan New Dollars	2025-01-28 06:00:00.623873	cent	100
+PHP	5941092.62	₱	Philippine Pesos	2025-01-28 06:00:00.623873	sentimo	100
+NGN	162571200.0	₦	Nigerian Naira	2025-01-28 06:00:00.623873	kobo	100
+NOK	1219284.0	kr	Norway Krone	2025-01-28 06:00:00.623873	ore	100
+PKR	28689035.29	₨	Pakistan Rupee	2025-01-28 06:00:00.623873	paisa	100
+SAR	375164.31	﷼	Saudia Arabia Riyal	2025-01-28 06:00:00.623873	halala	100
+ZAR	1950854.4	R	South Africa Rand	2025-01-28 06:00:00.623873	cent	100
+IDR	975427200.0	Rp	Indonesia Rupiah	2025-01-28 06:00:00.623873	sen	100
+MXN	2106754.21	$	Mexican Pesos	2025-01-28 06:00:00.623873	centavo	100
+QAR	375164.31	﷼	Qatar Riyal	2025-01-28 06:00:00.623873	dirham	100
+ARS	107836579.79	$	Argentina Dollars	2025-01-28 06:00:00.623873	centavo	100
+BRL	605534.29	R$	Brazilian Real	2025-01-28 06:00:00.623873	centavo	100
+CHF	93110.99	CHF	Swiss Franc	2025-01-28 06:00:00.623873	rappen	100
+SEK	1083808.0	kr	Sweden Krona	2025-01-28 06:00:00.623873	ore	100
+CLP	101427455.56	$	Chilean Peso	2025-01-28 06:00:00.623873	centavo	100
+KYD	85100.14	CI$	Cayman Islands Dollars	2025-01-28 06:00:00.623873	cent	100
+CAD	146861.86	$	Canadian Dollars	2025-01-29 14:23:50.320343	cent	100
+EUR	97809.2	€	Euro	2025-01-29 14:23:50.320588	cent	100
+GBP	81857.61	£	British Pounds	2025-01-29 14:23:50.320769	pence	100
+JPY	15805071.28	¥	Japanese Yen	2025-01-29 14:23:50.320945	sen	100
+USD	101724.26	$	United States Dollars	2025-01-29 14:23:50.321121	cent	100
+AUD	163546.06	$	Australian Dollars	2025-01-29 14:23:50.321297	cent	100
+CNY	729474.84	¥	Chinese Yuan Renminbi	2025-01-29 14:23:50.321471	jiao	10
+\.
+
+
+--
+-- Name: currencyrate currency_rate_currency_code_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.currencyrate
+    ADD CONSTRAINT currency_rate_currency_code_key UNIQUE (currency_code);
+
+
+--
+-- Name: currencyrate currency_rate_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.currencyrate
+    ADD CONSTRAINT currency_rate_pkey PRIMARY KEY (currency_code);
+
+
+--
+-- PostgreSQL database dump complete
+--
+

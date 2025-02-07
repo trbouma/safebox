@@ -31,7 +31,7 @@ templates = Jinja2Templates(directory="app/templates")
 router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine)
+SQLModel.metadata.create_all(engine,checkfirst=True)
 
 
 ##########################
@@ -167,7 +167,8 @@ async def protected_route(    request: Request,
             raise ValueError("Could not find safebox!")
         statement = select(CurrencyRate).where(CurrencyRate.currency_code==acorn_obj.local_currency)
         currencies = session.exec(statement)
-        currency_found = currencies.one()
+        # currency_found = currencies.first()
+        currency_found=None
         if currency_found:
             currency_code = acorn_obj.local_currency
             currency_rate = currency_found.currency_rate

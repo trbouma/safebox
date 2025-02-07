@@ -15,7 +15,7 @@ from app.config import Settings
 
 settings = Settings()
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine)
+SQLModel.metadata.create_all(engine, checkfirst=True)
 
 async def refresh_currency_rates():
     refresh_time = datetime.now()
@@ -30,6 +30,22 @@ async def refresh_currency_rates():
             record.currency_rate = currency_table[record.currency_code]['15m']
             record.refresh_time = datetime.now()
         session.commit()
+
+async def init_currency_rates():
+   
+
+
+    satoshi = CurrencyRate(currency_code="SAT", currency_rate=1e8)
+
+    with Session(engine) as session:
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code=='SAT')
+        result = session.exec(statement).first()
+        if not result:
+            session.add(satoshi)
+            session.commit()
+
+
+
 
 if __name__ == "__main__":
     refresh_currency_rates()

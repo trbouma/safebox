@@ -14,10 +14,11 @@ from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
-from app.rates import refresh_currency_rates
+from app.rates import refresh_currency_rates, init_currency_rates
 
 # Create Settings:
 settings = Settings()
+
 
 # Periodic task function
 async def periodic_task(interval: int, stop_event: asyncio.Event):
@@ -43,7 +44,7 @@ service_key = Keys(settings.SERVICE_SECRET_KEY)
 
 # Create instance of database
 engine = create_engine(settings.DATABASE)
-SQLModel.metadata.create_all(engine)
+SQLModel.metadata.create_all(engine,checkfirst=True)
 
 
 
@@ -69,7 +70,9 @@ app.mount("/src", StaticFiles(directory="app/src"), name="src")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 
-
+@app.on_event("startup")
+async def init_db():
+    await init_currency_rates()
 
 # Define a root endpoint
 @app.get("/", tags=["public"])
