@@ -98,6 +98,7 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
 async def get_nostr_name(request: Request, name: str, ):
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
+    engine = create_engine(settings.DATABASE)
     
     if name == "_":
         npub_hex = service_key.public_key_hex()
