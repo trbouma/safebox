@@ -536,9 +536,11 @@ async def my_health_data(       request: Request,
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("kind")        
         relays = parsed_result['values'].get("relay")
+        transmittal_relays = parsed_result['values'].get("transmitta_relay")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
         
 
-        print(f"requesting npub: {npub} and nonce: {nonce} relays: {relays} kind: {auth_kind}")
+        print(f"requesting npub: {npub} and nonce: {nonce} relays: {relays} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
         # auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} from"
         # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
         # now need to calculate client_nprofile to send
@@ -1043,7 +1045,12 @@ async def get_nauth(    request: Request,
 
     try:
         #TODO add in nonce to safebox table and change from naddr to nauth
-        detail = create_nauth_from_npub(npub_bech32=npub_to_use,relays=[settings.AUTH_RELAY], nonce=nonce, kind=settings.HEALTH_SECURE_AUTH_KIND)
+        detail = create_nauth_from_npub(    npub_bech32=npub_to_use,
+                                            relays=[settings.AUTH_RELAY], 
+                                            nonce=nonce,
+                                            kind=settings.HEALTH_SECURE_AUTH_KIND,
+                                            transmittal_relays=[settings.HOME_RELAY],
+                                            transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND)
         
         # detail = create_naddr_from_npub(npub_to_use,[acorn_obj.home_relay])
       

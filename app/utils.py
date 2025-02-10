@@ -198,6 +198,21 @@ def parse_nostr_bech32(encoded_string):
             else:
                 kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
                 result["values"]["kind"] = kind
+        elif tag == 4:  # Transmittal Relays
+             if hrp == "nauth":
+                transmittal_relay = value.decode("ascii")
+                if "transmittal_relay" not in result["values"]:
+                    result["values"]["transmittal_relay"] = []
+                result["values"]["transmittal_relay"].append(transmittal_relay)
+        
+        elif tag == 5:  # Transmittal Kind
+            if hrp == "nauth":
+                transmittal_kind = int(value.decode("ascii"))
+                result["values"]["transmittal_kind"] = transmittal_kind
+            else:
+                kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
+                result["values"]["transmittal_kind"] = transmittal_kind
+         
 
     return result
 
@@ -303,7 +318,13 @@ def create_naddr_from_npub(npub_bech32, relays=None):
     
     return naddr
 
-def create_nauth_from_npub(npub_bech32, relays=None, nonce:str=None, kind: int=None):
+def create_nauth_from_npub( npub_bech32, 
+                            relays=None, 
+                            nonce:str=None, 
+                            kind: int=None, 
+                            transmittal_relays = None, 
+                            transmittal_kind: int =None):
+    
     # Decode the npub Bech32 string
     hrp, data = bech32.bech32_decode(npub_bech32)
     if hrp != "npub" or data is None:
@@ -324,6 +345,7 @@ def create_nauth_from_npub(npub_bech32, relays=None, nonce:str=None, kind: int=N
 
     # Tag 1: Relay (optional)
     if relays:
+        relay = None
         for relay in relays:
             relay_bytes = relay.encode("ascii")
             encoded_data.append(1)  # Tag 1
@@ -345,6 +367,21 @@ def create_nauth_from_npub(npub_bech32, relays=None, nonce:str=None, kind: int=N
         encoded_data.append(len(kind_bytes))  # Length of the public key (32 bytes)
         encoded_data.extend(kind_bytes)  # Public key bytes
 
+    # Tag 4: Transmittal Relay (optional)
+    if transmittal_relays:
+        
+        for transmittal_relay in transmittal_relays:
+            transmittal_relay_bytes = transmittal_relay.encode("ascii")
+            encoded_data.append(4)  # Tag 4
+            encoded_data.append(len(transmittal_relay_bytes))  # Length of the relay string
+            encoded_data.extend(transmittal_relay_bytes)  # Relay string as bytes
+        
+    # Tag 5: transmittal kind (optional)    
+    if transmittal_kind:
+        transmittal_kind_bytes = str(transmittal_kind).encode("ascii")        
+        encoded_data.append(5)
+        encoded_data.append(len(transmittal_kind_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(transmittal_kind_bytes)  # 
 
 
     # Convert 8-bit data to 5-bit data for Bech32 encoding
