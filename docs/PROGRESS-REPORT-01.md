@@ -1,0 +1,57 @@
+# Progress Report
+Date Committed: 2025-02-XX
+Status: Working Draft
+
+This is the 90-day report as required by the Open Sats Funding Agreement, awarded on October 30th, 2024
+
+## Phase 1: Deliverables
+
+Four deliverables were outlined in Phase 1 of the Project for which Open Sats contributed funding. The deliverable are listed below accompanied with a progress report and points for consideration.
+
+### 1. A stable prototype implemented Python, which includes a documented cli command line utility.
+
+DELIVERED
+
+- a command line cli has been developed and is available in the Github repp
+
+### 2. Compiled Python binaries for mac-os and ubuntu to illustrate how Safebox can operate in a multi-platform environment
+
+DELIVERED
+
+- Binary versions are compiled and exist in a separate github repository 
+
+### 3. Demonstration of back-end integration into the openbalance.app Lightning Payment service, with a 'how-to' manual for others wishing to implement a payment service using Safebox as the custodial component.
+
+DELIVERED
+
+- The next generation of service of openbalance.app is now live as a working demo. It has also been branded as getsafebox.
+
+### 4. A draft specification for other reference implementations (Rust, Go, C, etc.). This includes feedback to NIP-60 and a new NIP, if required.
+
+DELIVERED
+
+- The core wallet functionality has been implemented as per the NIP-60 specification.
+- REST API clients can take advantage of the web app implementation (using FASTAPI) and the documented OpenAPI interface. An example of the Open API interface can be found here: [docs](https://getsafebox.app/docs)
+- Specifically, the wallet configuration data have beem implememented as kind 37375, and Cashu proofs implemented as kind 7375.
+- In theory, these events should be readable by any NIP-60 implementation, however, certain security safeguards for safebox implementation have been put in place. For example the #d tag is hashed using the private key as the seed. Only the owner of wallet who has knowledge of the  private key and the correct label can generate the #d tag to locate the record. It is anticipated that in Phase 2, NIP-60 compatibility will be explored given these
+
+### 5. Time permitting, the start of another reference implementation based on the spec (Go is the top implementation candidate being considered)
+
+PENDING 
+
+- The author is in continuing discussions with another developer to understand requirements for developing a hardware embedded version of safebox. 
+
+## Phase 1 Discussion and Considerations
+
+As indicated above, the author believes that all deliverables have been according the intention of the grant agreement.
+
+As with any pioneering project, however, nothing goes exactly to plan - both for the downsides and the upsides. The author believes that this project has illuminated many upside potentials, not only for safebox but for the nostr ecosystem as a whole.
+
+- Most significantly, safebox is exploiting an entirely new architectural capability for 'digital wallets' - an architecture where the instance of a 'digital wallet' can exist independently of a device (phone), app, and/or platform provider. This has significant strategic implications.
+
+- In developing safebox, a robust record management system needed to be developed to manage the Cashu proofs in an enviroment where mints lightning nodes, and/or other custodial lightning providers may or may not work. A comprehensive error handling framework is being developed. The author is confident that this framework is robust enough for a pilot phase but requires further testing before it can be put into production.
+- Relays are working well as a supporting infrastructure. The author has deployed his own relay (strfry) to support implementaton with near flawless performance.
+- The cli is evolving into a very powerful utility. When a new safebox capability requirement is identified (this the ongoing case in developing the web app), it is developed and tested using the cli before being integrated into an app. 
+
+
+
