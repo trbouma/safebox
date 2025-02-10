@@ -14,7 +14,7 @@ Four deliverables were outlined in Phase 1 of the Project for which Open Sats co
 DELIVERED WITH COMMEMTS
 
 - The code is available under MIT License at: [GetSafebox repo](https://github.com/trbouma/safebox)
-- A stable prototype is demonstrable at [GetSafebox app](https://getsafesafebox.app)
+- A stable prototype is demonstrable at [GetSafebox app](https://getsafebox.app)
 - A binary command line is available in a separate [GitHub] repo(https://github.com/trbouma/safebox-binaries)
 
 ### 2. Compiled Python binaries for mac-os and ubuntu to illustrate how Safebox can operate in a multi-platform environment
