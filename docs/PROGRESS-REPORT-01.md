@@ -1,6 +1,7 @@
 # Progress Report
 Date Committed: 2025-02-XX
 Status: Working Draft
+Proof of Work: 407 commits to main branch, demo instance [here](https://getsafebox.app). Invite code upon request
 
 This is the 90-day report as required by the Open Sats Funding Agreement, awarded on October 30th, 2024
 
