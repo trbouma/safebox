@@ -10,6 +10,8 @@
 
 <center>
 <h1 id="header-msg">Scanning...</h1>
+{{referer}}
+<br>
 
 
 
@@ -91,6 +93,7 @@
     const fileQrResult = document.getElementById('file-qr-result');
 
     function setResult(label, result) {
+        var referer = "{{referer}}";
         console.log(result.data);
         label.textContent = result.data;
         camQrResultTimestamp.textContent = new Date().toString();
@@ -102,7 +105,7 @@
         var header_msg = document.getElementById('header-msg');
         header_msg.innerText = "Success! Please wait a moment...";
         scanner.stop();
-        window.location.href="/scanner/scanresult?qr_code=" + result.data;
+        window.location.href= `/scanner/scanresult?qr_code=${result.data}&referer=${referer}`;
         
     }
 

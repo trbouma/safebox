@@ -21,6 +21,7 @@ class RegisteredSafebox(SQLModel, table=True):
     access_key: str 
     balance: int = 0
     owner: Optional[str] = None
+    session_nonce: Optional[str] = None
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -8,17 +8,19 @@ import random
 import string
 import asyncio
 from datetime import timedelta
-import qrcode, io, urllib
+import qrcode, io, urllib, json
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+
 from monstr.encrypt import Keys
+from monstr.event.event import Event
 from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment
-from app.utils import create_jwt_token
+from app.utils import create_jwt_token, send_zap_receipt
 from app.config import Settings
 
 settings = Settings()
@@ -155,8 +157,8 @@ async def ln_pay( amount: float,
     #FIXME Implement zaps here
 
     if nostr != None:
-        pass
-        # nostr_decode=urllib.parse.unquote(nostr)
+        task = asyncio.create_task(send_zap_receipt(nostr))
+
 
     success_obj = {     "tag": "message",
                             "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }

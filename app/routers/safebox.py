@@ -13,7 +13,7 @@ import json
 from monstr.util import util_funcs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, trasmitConsultation, incomingRecord
 from app.config import Settings
@@ -510,7 +510,7 @@ async def get_inbox(      request: Request,
 
 @router.get("/health", tags=["safebox", "protected"])
 async def my_health_data(       request: Request, 
-                                naddr: str = None,
+                                nauth: str = None,
                                 nonce: str = None,
                                 access_token: str = Cookie(None)
                     ):
@@ -528,17 +528,24 @@ async def my_health_data(       request: Request,
     except:
         health_records = None
 
-    if naddr:
-        print("naddr")
-        parsed_result = parse_nostr_bech32(naddr)
+    if nauth:
+        
+        print("nauth")
+        parsed_result = parse_nostr_bech32(nauth)
         npub = hex_to_npub(parsed_result['values']['pubhex'])
-        print(f"requesting npub: {npub}")
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("kind")        
+        relays = parsed_result['values'].get("relay")
+        
+
+        print(f"requesting npub: {npub} and nonce: {nonce} relays: {relays} kind: {auth_kind}")
         # auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} from"
         # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
         # now need to calculate client_nprofile to send
-        client_nprofile = create_nprofile_from_npub(acorn_obj.pubkey_bech32, [acorn_obj.home_relay])
+        # auth_msg = create_nprofile_from_npub(acorn_obj.pubkey_bech32, [acorn_obj.home_relay])
+        auth_msg = create_nauth_from_npub(npub_bech32=acorn_obj.pubkey_bech32,relays=[acorn_obj.home_relay],nonce=nonce,kind=auth_kind)
         
-        auth_msg = client_nprofile
+        
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.HEALTH_SECURE_AUTH_KIND)
     
     return templates.TemplateResponse(  "healthdata.html", 
@@ -778,7 +785,7 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         
         
     print("websocket connection closed")
@@ -1004,8 +1011,8 @@ async def get_nprofile(    request: Request,
 
     return {"status": status, "detail": detail}
 
-@router.get("/naddr", tags=["safebox", "protected"])
-async def get_naddr(    request: Request, 
+@router.get("/nauth", tags=["safebox", "protected"])
+async def get_nauth(    request: Request, 
                         access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
@@ -1024,18 +1031,29 @@ async def get_naddr(    request: Request,
   
     # pub_hex_to_use = acorn_obj.pubkey_hex
     npub_to_use = acorn_obj.pubkey_bech32
+    nonce = generate_nonce()
+    print(f"nonce: {nonce}")
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==safebox_found.access_key)
+        safeboxes = session.exec(statement)
+        safebox_for_nonce = safeboxes.first()
+        safebox_for_nonce.session_nonce = nonce
+        session.add(safebox_for_nonce)
+        session.commit()
 
     try:
-        # nrequest = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])
-        naddr = create_naddr_from_npub(npub_to_use,[acorn_obj.home_relay])
-        detail = naddr
+        #TODO add in nonce to safebox table and change from naddr to nauth
+        detail = create_nauth_from_npub(npub_bech32=npub_to_use,relays=[settings.AUTH_RELAY], nonce=nonce, kind=settings.HEALTH_SECURE_AUTH_KIND)
+        
+        # detail = create_naddr_from_npub(npub_to_use,[acorn_obj.home_relay])
+      
     except:
         detail = "Not created"
 
     return {"status": status, "detail": detail}
 
 @router.post("/transmit", tags=["safebox", "protected"])
-async def transmit_consultation(        request: Request, 
+async def transmit_records(        request: Request, 
                                         transmit_consultation: trasmitConsultation,
                                         access_token: str = Cookie(None)
                     ):
@@ -1058,6 +1076,7 @@ async def transmit_consultation(        request: Request,
         pubhex = nprofile_parse['values']['pubhex']
         npub = hex_to_npub(pubhex)
         relay = pubhex = nprofile_parse['values']['relay']
+        kind = nprofile_parse['values']['kind']
         print(f"transmit to: {npub} {relay}")
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
@@ -1073,7 +1092,7 @@ async def transmit_consultation(        request: Request,
             print(f"record obj: {record_obj}")
             # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
             # 32227 are transmitted as kind 1060
-            await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+            await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND)
 
         detail = f"Successful"
         

@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     HOME_RELAY: str = 'wss://relay.openbalance.app'
+    AUTH_RELAY: str = 'wss://relay.openbalance.app'
     SERVICE_NAME: str = 'Safebox'
     SERVICE_TAG_LINE: str = 'Your money. Your data'
     SERVICE_SECRET_KEY: str = "foobar"

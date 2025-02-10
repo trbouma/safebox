@@ -11,7 +11,7 @@
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}";
+window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}&referer=health-data";
 
 }
 
@@ -71,9 +71,9 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   async function createQRCode() {
     
     var data;
-  
-
-   await fetch('/safebox/nprofile', {
+  var qr_img_func = document.getElementById("img_qr_display");
+  qr_img_func.src="/img/circle-256.gif";
+   await fetch('/safebox/nauth', {
         method: "GET",
         headers: {"Content-Type": "application/json"}        
               

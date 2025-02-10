@@ -43,7 +43,7 @@ window.location.href="/safebox/access" ;
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan";
+window.location.href="/scanner/scan?referer=health-consult";
 
 }
 
@@ -65,9 +65,12 @@ qr_img_func.src = "/safebox/qr/"+ global_naddr;
 async function createQRCode() {
     
     var data;
+    var qr_img_func = document.getElementById("img_qr_display");
   
+    qr_img_func.src="/img/circle-256.gif";
+    
 
-   await fetch('/safebox/naddr', {
+   await fetch('/safebox/nauth', {
         method: "GET",
         headers: {"Content-Type": "application/json"}        
               

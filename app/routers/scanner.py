@@ -34,10 +34,13 @@ router = APIRouter()
 
 
 @router.get("/scan", tags=["scanner"], response_class=HTMLResponse)
-async def get_scanner(request: Request, qr_code: str = "none", wallet_name:str = None):
+async def get_scanner(  request: Request, 
+                        qr_code: str = "none", 
+                        wallet_name: str = None,
+                        referer: str = None):
     """return user information"""
     
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    # referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     
 
@@ -52,7 +55,9 @@ async def get_scanner(request: Request, qr_code: str = "none", wallet_name:str =
                                        } )
    
 @router.get("/scanresult", tags=["acquire"], response_class=HTMLResponse)
-async def get_scan_result(request: Request, qr_code: str = "none"):
+async def get_scan_result(  request: Request, 
+                            qr_code: str = "none",
+                            referer:str = "none"):
     """return wallet mode information"""
 
    
@@ -105,11 +110,14 @@ async def get_scan_result(request: Request, qr_code: str = "none"):
             action_data = qr_code
             return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
 
-    elif qr_code[:5].lower() == "naddr":
-            # Go directly to health consultation
+    elif qr_code[:5].lower() == "nauth":
+            # Go directly to health consultation 
             action_mode = "nprofile"
             action_data = qr_code
-            return RedirectResponse(f"/safebox/health?naddr={qr_code}")    
+            if referer == "health-data":
+                return RedirectResponse(f"/safebox/health?nauth={qr_code}")    
+            else:
+                return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
     
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)

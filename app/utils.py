@@ -2,11 +2,16 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import jwt, re, requests, bech32
 from time import sleep
-import asyncio
+import asyncio, json
 from zoneinfo import ZoneInfo
+import os
 
 from bech32 import bech32_decode, convertbits
 import struct
+from monstr.event.event import Event
+from monstr.encrypt import Keys
+from monstr.client.client import Client, ClientPool
+
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -149,7 +154,7 @@ def extract_leading_numbers(input_string: str) -> str:
 def parse_nostr_bech32(encoded_string):
     # Decode the Bech32 string
     hrp, data = bech32_decode(encoded_string)
-    if hrp not in {"nprofile", "nevent", "naddr","nsession"} or data is None:
+    if hrp not in {"nprofile", "nevent", "naddr","nauth"} or data is None:
         raise ValueError("Invalid Bech32 string or unsupported prefix")
 
     # Convert 5-bit data to 8-bit for processing
@@ -172,18 +177,27 @@ def parse_nostr_bech32(encoded_string):
 
         # Parse based on the tag
         if tag == 0:  # Special
-            if hrp in {"nprofile", "nevent", "naddr"}:
-                result["values"]["pubhex"] = value.hex()
+            if hrp in {"nprofile", "nevent", "naddr", "nauth"}:
+                result["values"]["pubhex"] = value.hex()    
+
         elif tag == 1:  # Relay
             relay = value.decode("ascii")
             if "relay" not in result["values"]:
                 result["values"]["relay"] = []
             result["values"]["relay"].append(relay)
-        elif tag == 2:  # Author
-            result["values"]["author"] = value.hex()
+        elif tag == 2:  # Author or nonce
+            if hrp == "nauth":
+                nonce = value.decode("ascii")
+                result["values"]["nonce"] = nonce
+            else:
+                result["values"]["author"] = value.hex()
         elif tag == 3:  # Kind
-            kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
-            result["values"]["kind"] = kind
+            if hrp == "nauth":
+                kind = int(value.decode("ascii"))
+                result["values"]["kind"] = kind
+            else:
+                kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
+                result["values"]["kind"] = kind
 
     return result
 
@@ -282,19 +296,14 @@ def create_naddr_from_npub(npub_bech32, relays=None):
             encoded_data.extend(relay_bytes)  # Relay string as bytes
         # Tag 1: Relay (optional)
     
-
-
     # Convert 8-bit data to 5-bit data for Bech32 encoding
     converted_data = convertbits(encoded_data, 8, 5, True)
-
     # Encode the data as a Bech32 string with the "naddr" prefix
     naddr = bech32.bech32_encode("naddr", converted_data)
     
     return naddr
 
-def create_nsession_from_npub(npub_bech32, relays=None, kind=1061, nonce=None):
-    #TODO Finish encoding function
-    CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+def create_nauth_from_npub(npub_bech32, relays=None, nonce:str=None, kind: int=None):
     # Decode the npub Bech32 string
     hrp, data = bech32.bech32_decode(npub_bech32)
     if hrp != "npub" or data is None:
@@ -321,28 +330,32 @@ def create_nsession_from_npub(npub_bech32, relays=None, kind=1061, nonce=None):
             encoded_data.append(len(relay_bytes))  # Length of the relay string
             encoded_data.extend(relay_bytes)  # Relay string as bytes
         # Tag 1: Relay (optional)
-
-    # Tag 2: Kind (default)
-    if kind:
-        kind_bytes = bytes(convertbits(kind, 5, 8, False))
-        encoded_data.append(2)  # Tag 2
-        encoded_data.append(len(nonce_bytes))  # Length of nonce bytes
-        encoded_data.extend(nonce_bytes)  # nonce bytes
-    
-    # Tag 3: None (optional)   
+       
+    # Tag 2: nonce (optional)
     if nonce:
-        nonce_bytes = bytes(convertbits(nonce, 5, 8, False))
-        encoded_data.append(2)  # Tag 2
-        encoded_data.append(len(nonce_bytes))  # Length of nonce bytes
-        encoded_data.extend(nonce_bytes)  # nonce bytes
+        nonce_bytes = nonce.encode("ascii")        
+        encoded_data.append(2)
+        encoded_data.append(len(nonce_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(nonce_bytes)  # Public key bytes
+    
+    # Tag 3: kind (optional)    
+    if kind:
+        kind_bytes = str(kind).encode("ascii")        
+        encoded_data.append(3)
+        encoded_data.append(len(kind_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(kind_bytes)  # Public key bytes
+
+
 
     # Convert 8-bit data to 5-bit data for Bech32 encoding
     converted_data = convertbits(encoded_data, 8, 5, True)
 
     # Encode the data as a Bech32 string with the "naddr" prefix
-    nsession = bech32.bech32_encode("nsession", converted_data)
+    nauth = bech32.bech32_encode("nauth", converted_data)
     
-    return nsession
+    return nauth
+
+
 
 def npub_to_hex(npub: str) -> str:
     """
@@ -414,3 +427,71 @@ def validate_local_part(local_part: str) -> bool:
     local_part_regex = r'^(?!\.)(?!.*\.\.)[A-Za-z0-9!#$%&\'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&\'*+/=?^_`{|}~-]+)*$'
 
     return bool(re.fullmatch(local_part_regex, local_part))
+
+def generate_nonce():
+    return os.urandom(16).hex()
+
+
+async def send_zap_receipt(nostr):
+
+    service_k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    try:
+        print(f"nostr parm: type: {type(nostr)} {nostr}")
+        # nostr_decode=urllib.parse.unquote(nostr)
+        # print(f"nostr_decode: {nostr_decode}")
+        try:
+            nostr_obj = json.loads(nostr)
+            print(f"nostr obj: {nostr_obj}")
+            zap_request = Event(    id=nostr_obj['id'],
+                                    pub_key=nostr_obj['pubkey'], 
+                                    kind=nostr_obj['kind'] ,
+                                    sig=nostr_obj['sig'],
+                                    content=nostr_obj['content'],
+                                    tags=nostr_obj['tags'], 
+                                    created_at=nostr_obj['created_at'])
+            print(f"zap receipt tags: {zap_request.tags}")
+        except:
+            print("could not load json object")
+
+        #Extract the tags we need
+        receipt_tags = []
+        zap_relays = None
+        for each in zap_request.tags:
+            if each[0] == "p":                
+                receipt_tags.append(["p",each[1]])
+            elif each[0] == "e":
+                receipt_tags.append(["e",each[1]])
+            elif each[0] == "relays":
+                zap_relays = each[1:]
+
+        description_hash = "6e05f9c603cb655a217e8c84d68d9117a2a405d8b3df3f08737fab92d5015d58"
+        receipt_tags.append(["description",nostr_obj])
+        receipt_tags.append(["bolt11", description_hash])
+
+        print(f"resulting: {receipt_tags} {zap_relays}")
+        # create zap receipt
+        zap_receipt = Event(    kind=9735,
+                                pub_key= service_k.public_key_hex(),
+                                created_at=zap_request.created_at,
+                                tags = receipt_tags,
+                                content= None
+                            )
+    
+
+
+        async with ClientPool(zap_relays) as c:
+            zap_receipt.sign(priv_key=service_k.private_key_hex())
+            print(f"zap receipt: {zap_receipt.is_valid()}")
+            print(f"zap relays: {zap_relays}")
+
+            c.publish(zap_receipt)
+            print("zap published!")
+
+       
+        # print("parsed zap receipt!")
+    except:
+        print("could not parse zap receipt!")
+    
+    # print(nostr_decode=urllib.parse.unquote(nostr))
+
+    return
