@@ -494,7 +494,7 @@ async def get_inbox(      request: Request,
         client_nprofile = create_nprofile_from_npub(acorn_obj.pubkey_bech32, [acorn_obj.home_relay])
         
         auth_msg = client_nprofile
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.HEALTH_SECURE_AUTH_KIND)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.AUTH_KIND)
         
 
     return templates.TemplateResponse(  "inbox.html", 
@@ -566,7 +566,7 @@ async def my_health_data(       request: Request,
         )
         
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=auth_relays,transmittal_kind=settings.HEALTH_SECURE_AUTH_KIND)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=auth_relays,transmittal_kind=settings.AUTH_KIND)
     
     return templates.TemplateResponse(  "healthdata.html", 
                                         {   "request": request,
@@ -785,7 +785,7 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
     while True:
         try:
             await acorn_obj.load_data()
-            records_out = await listen_for_request(acorn_obj=acorn_obj,kind=settings.HEALTH_SECURE_AUTH_KIND, since_now=since_now)
+            records_out = await listen_for_request(acorn_obj=acorn_obj,kind=settings.AUTH_KIND, since_now=since_now)
             
             # print(f"records out {records_out}")
             try:            
@@ -1071,13 +1071,13 @@ async def get_nauth(    request: Request,
         #                                    transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND
         # )
         
-        auth_kind = settings.HEALTH_SECURE_AUTH_KIND
+        auth_kind = settings.AUTH_KIND
         auth_relays = settings.AUTH_RELAYS
         detail = create_nauth(  npub=npub_to_use,
                                 nonce=nonce,
                                 auth_kind=auth_kind,
                                 auth_relays=auth_relays,
-                                transmittal_kind = settings.HEALTH_SECURE_TRANSMITTAL_KIND,
+                                transmittal_kind = settings.TRANSMITTAL_KIND,
                                 transmittal_relays=settings.TRANSMITTAL_RELAYS 
 
                                

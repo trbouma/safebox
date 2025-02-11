@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     AUTH_RELAYS: List = ['wss://relay.openbalance.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.openbalance.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
-    HEALTH_SECURE_TRANSMITTAL_KIND: int = 1060
-    HEALTH_SECURE_AUTH_KIND: int = 1061
+    TRANSMITTAL_KIND: int = 1060
+    AUTH_KIND: int = 1061
 
     class Config:
         env_file = '.env'
