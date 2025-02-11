@@ -150,35 +150,6 @@ window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
 
 
 
-async function transmitToNprofile() {
-
-    if (nprofile=="None") {
-      alert(`Please scan recipient QR Code!`);
-      return;
-    }
-
-    if (confirm(`Are you sure you want to send to: ${nprofile}?`)) {
-      alert(`Sending...`);
-    } else {return;}
-  
-    var data;
-   
-
-
-  const submit_data = {"nprofile": nprofile };
-
-   
-
-  await fetch('/safebox/transmit', {
-       method: "POST",
-       headers: {"Content-Type": "application/json"},        
-       body: JSON.stringify(submit_data)         
-      })
-   .then((response) => response.json())
-   .then((data) => getStatus(data));
-
-   // window.location.href=referer;
-     }
 
 
 

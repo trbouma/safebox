@@ -500,7 +500,7 @@ class Acorn:
         events.sort(reverse=True)
 
         for each in events:
-            print("x:", each.tags, each.kind, each.created_at)
+            # print("x:", each.tags, each.kind, each.created_at)
 
             if record_kind in [1059, 1060, 1061, 1062]:
                 # print(f"need to  unwrap {type(each.content)} {each.content} ")

@@ -10,7 +10,7 @@
 
   const jsonUserData = {{ user_records | tojson }};
   const record_kind = parseInt("{{ record_kind }}");
-  var client_nprofile = "{{client_nprofile}}";
+  var client_nauth = "{{client_nprofile}}";
 
   const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
 
@@ -18,8 +18,8 @@
   ws.onmessage = (event) => {
     console.log("Message received:", event.data);
     const response = JSON.parse(event.data);  
-    client_nprofile = response.nprofile;
-    alert(`Client is authenticated! Ready to transmit files`);
+    client_nauth = response.nauth;
+    alert(`Client is authenticated! ${client_nauth} Ready to transmit files`);
 
 
 
@@ -223,12 +223,12 @@ alert(`${parsedResult.status} ${parsedResult.detail}`);
 
 async function transmitToNprofile() {
 
-    if (client_nprofile=="None") {
+    if (client_nauth=="None") {
       alert(`Please scan client QR Code!`);
       return;
     }
 
-    if (confirm(`Are you sure you want to send to: ${client_nprofile}?`)) {
+    if (confirm(`Are you sure you want to send to: ${client_nauth}?`)) {
       // alert(`Sending...`);
     } else {return;}
   
@@ -236,7 +236,7 @@ async function transmitToNprofile() {
    
 
 
-  const submit_data = {"nprofile": client_nprofile, "kind":32227 };
+  const submit_data = {"nauth": client_nauth, "kind":32227 };
 
    
 
@@ -271,8 +271,8 @@ setDarkMode();
     
  <img id="img_qr_display" onclick="createQRCode()"  src="/img/logo.png" >
 <br><br>
-{% if client_nprofile %}
-{{client_nprofile[:20] }}...{{ client_nprofile[-15:]}} 
+{% if client_nauth %}
+{{client_nauth[:20] }}...{{ client_nauth[-15:]}} 
 {% endif %}    
      
         

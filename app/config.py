@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     HOME_RELAY: str = 'wss://relay.openbalance.app'
-    AUTH_RELAY: str = 'wss://relay.openbalance.app'
+    
     SERVICE_NAME: str = 'Safebox'
     SERVICE_TAG_LINE: str = 'Your money. Your data'
     SERVICE_SECRET_KEY: str = "foobar"
@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
     INVITE_CODES: List = ["alpha","sec2025", "rektuser"]
+    AUTH_RELAYS: List = ['wss://relay.openbalance.app']
+    TRANSMITTAL_RELAYS: List = ['wss://relay.openbalance.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
     HEALTH_SECURE_TRANSMITTAL_KIND: int = 1060
     HEALTH_SECURE_AUTH_KIND: int = 1061

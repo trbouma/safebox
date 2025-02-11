@@ -112,13 +112,15 @@ async def get_scan_result(  request: Request,
 
     elif qr_code[:5].lower() == "nauth":
             # Go directly to health consultation 
-            action_mode = "nprofile"
-            action_data = qr_code
+            action_mode = "nauth"
+            action_data = qr_code            
+    
             if referer == "health-data":
-                return RedirectResponse(f"/safebox/health?nauth={qr_code}")    
+                return RedirectResponse(f"/safebox/health?nauth={qr_code}") 
+                  
             else:
                 return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
-    
+               
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)
        

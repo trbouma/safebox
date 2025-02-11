@@ -327,6 +327,8 @@ def create_nauth_from_npub( npub_bech32,
                             transmittal_relays = None, 
                             transmittal_kind: int =None):
     
+    #TODO This function has been deprecated by create_nauth
+
     # Decode the npub Bech32 string
     hrp, data = bech32.bech32_decode(npub_bech32)
     if hrp != "npub" or data is None:
@@ -396,6 +398,159 @@ def create_nauth_from_npub( npub_bech32,
     
     return nauth
 
+def create_nauth(   npub, 
+                    nonce:str=None,                                                       
+                    auth_kind: int=None, 
+                    auth_relays=None,
+                    transmittal_kind= None,  
+                    transmittal_relays = None, 
+                ):
+    
+    # Decode the npub Bech32 string
+    hrp, data = bech32.bech32_decode(npub)
+    if hrp != "npub" or data is None:
+        raise ValueError("Invalid npub Bech32 string")
+    
+    # Convert 5-bit data back to 8-bit data
+    pubkey_bytes = bytes(convertbits(data, 5, 8, False))
+    if len(pubkey_bytes) != 32:
+        raise ValueError("Invalid public key length in npub Bech32 string")
+    
+    # Create the encoded data for nprofile
+    encoded_data = []
+
+    # Tag 0 : npub in hex
+    # Tag 1 : nonce
+    # Tag 2 : auth_kind
+    # Tag 3 : auth_relays
+    # Tag 4 : transmittal_kind
+    # Tag 5 : transmittal_relays 
+
+    # Tag 0: Special (public key)
+    encoded_data.append(0)  # Tag 0
+    encoded_data.append(len(pubkey_bytes))  # Length of the public key (32 bytes)
+    encoded_data.extend(pubkey_bytes)  # Public key bytes
+
+    # Tag 1: nonce (optional)
+    if nonce:
+        nonce_bytes = nonce.encode("ascii")        
+        encoded_data.append(1)
+        encoded_data.append(len(nonce_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(nonce_bytes)  # Public key bytes
+
+    # Tag 2: auth_kind (optional)    
+    if auth_kind:
+        # kind_bytes = str(kind).encode("ascii")  
+        auth_kind_bytes = struct.pack(">I", auth_kind)      
+        encoded_data.append(2)
+        encoded_data.append(len(auth_kind_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(auth_kind_bytes)  # Public key bytes
+
+    # Tag 3: Auth Relays (optional)
+    if auth_relays:
+        auth_relay = None
+        for auth_relay in auth_relays:
+            auth_relay_bytes = auth_relay.encode("ascii")
+            encoded_data.append(3)  # Tag 3
+            encoded_data.append(len(auth_relay_bytes))  # Length of the relay string
+            encoded_data.extend(auth_relay_bytes)  # Relay string as bytes
+    
+    
+    # Tag 4: transmittal_kind (optional)    
+    if transmittal_kind:
+        # kind_bytes = str(kind).encode("ascii")  
+        transmittal_kind_bytes = struct.pack(">I", transmittal_kind)      
+        encoded_data.append(4)
+        encoded_data.append(len(transmittal_kind_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(transmittal_kind_bytes)  # Public key bytes
+
+    # Tag 5: Transmittal Relay (optional)
+    if transmittal_relays:
+        
+        for transmittal_relay in transmittal_relays:
+            transmittal_relay_bytes = transmittal_relay.encode("ascii")
+            encoded_data.append(5)  # Tag 5
+            encoded_data.append(len(transmittal_relay_bytes))  # Length of the relay string
+            encoded_data.extend(transmittal_relay_bytes)  # Relay string as bytes
+        
+
+
+
+    # Convert 8-bit data to 5-bit data for Bech32 encoding
+    converted_data = convertbits(encoded_data, 8, 5, True)
+
+    # Encode the data as a Bech32 string with the "naddr" prefix
+    nauth = bech32.bech32_encode("nauth", converted_data)
+    
+    return nauth
+
+def parse_nauth(encoded_string):
+    # Decode the Bech32 string
+    hrp, data = bech32_decode(encoded_string)
+    print(f"hrp {hrp}")
+    if hrp not in {"nprofile", "nevent", "naddr","nauth"} or data is None:
+        raise ValueError("Invalid Bech32 string or unsupported prefix")
+
+    # Convert 5-bit data to 8-bit for processing
+    decoded_data = bytes(convertbits(data, 5, 8, False))
+
+    # Initialize result dictionary
+    result = {"prefix": hrp, "values": {}}
+
+    # Tag 0 : npub in hex
+    # Tag 1 : nonce
+    # Tag 2 : auth_kind
+    # Tag 3 : auth_relays
+    # Tag 4 : transmittal_kind
+    # Tag 5 : transmittal_relays 
+
+    index = 0
+    while index < len(decoded_data):
+        # Extract the tag and length
+        tag = decoded_data[index]
+        index += 1
+        length = decoded_data[index]
+        index += 1
+
+        # Extract the corresponding value based on length
+        value = decoded_data[index : index + length]
+        index += length
+
+        # Parse based on the tag
+        if tag == 0:  # Special
+            if hrp in {"nprofile", "nevent", "naddr", "nauth"}:
+                result["values"]["pubhex"] = value.hex()    
+
+        elif tag == 1:  # None
+            nonce = value.decode("ascii")
+            if "nonce" not in result["values"]:
+                result["values"]["nonce"] = nonce
+            # result["values"]["nonce"].append(nonce)
+        
+        elif tag == 2:  # auth_kind
+            
+            auth_kind = struct.unpack(">I", value)[0]
+            result["values"]["auth_kind"] = auth_kind
+            
+        elif tag == 3:  # Auth Relays
+            auth_relays = value.decode("ascii")
+            if "auth_relays" not in result["values"]:
+                result["values"]["auth_relays"] = []
+            result["values"]["auth_relays"].append(auth_relays)
+
+        elif tag == 4:  # transmittal_kind
+            
+            transmittal_kind = struct.unpack(">I", value)[0]
+            result["values"]["transmittal_kind"] = transmittal_kind  
+        
+        elif tag == 5:  # Transmittal Relays
+            transmittal_relays = value.decode("ascii")
+            if "transmittal_relays" not in result["values"]:
+                result["values"]["transmittal_relays"] = []
+            result["values"]["transmittal_relays"].append(transmittal_relays)
+      
+
+    return result
 
 
 def npub_to_hex(npub: str) -> str:
