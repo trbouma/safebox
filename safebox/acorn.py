@@ -174,18 +174,19 @@ class Acorn:
                     self.unit = each[2]
                 if each[0] == "mint":
                     self.home_mint = each[1]
-                    print(f"home mint: {self.home_mint}")
+                    # print(f"home mint: {self.home_mint}")
                 if each[0] == "name":
                     self.name = each[1]
                 if each[0] == "local_currency":
                     self.local_currency = each[1]
-                    print(f"name: {self.name}")
+                    # print(f"name: {self.name}")
                 if each[0] == "owner":
                     self.owner = each[1]
-                    print(f"owner: {self.owner}")
+                    # print(f"owner: {self.owner}")
                 if each[0] == "privkey":                    
-                    print(f"privkey: {each[1]}")
-                    print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
+                    # print(f"privkey: {each[1]}")
+                    # print(f"pubkey: {Keys(priv_k=each[1]).public_key_hex()}")
+                    pass
                 if each[0] == "seedphrase":
                     self.seed_phrase = each[1]
                 if each[0] == "local_currency":

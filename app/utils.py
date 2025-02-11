@@ -193,7 +193,8 @@ def parse_nostr_bech32(encoded_string):
                 result["values"]["author"] = value.hex()
         elif tag == 3:  # Kind
             if hrp == "nauth":
-                kind = int(value.decode("ascii"))
+                # kind = int(value.decode("ascii"))
+                kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
                 result["values"]["kind"] = kind
             else:
                 kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
@@ -207,7 +208,8 @@ def parse_nostr_bech32(encoded_string):
         
         elif tag == 5:  # Transmittal Kind
             if hrp == "nauth":
-                transmittal_kind = int(value.decode("ascii"))
+                #transmittal_kind = int(value.decode("ascii"))
+                transmittal_kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
                 result["values"]["transmittal_kind"] = transmittal_kind
             else:
                 kind = struct.unpack(">I", value)[0]  # Parse 32-bit big-endian integer
@@ -362,7 +364,8 @@ def create_nauth_from_npub( npub_bech32,
     
     # Tag 3: kind (optional)    
     if kind:
-        kind_bytes = str(kind).encode("ascii")        
+        # kind_bytes = str(kind).encode("ascii")  
+        kind_bytes = struct.pack(">I", kind)      
         encoded_data.append(3)
         encoded_data.append(len(kind_bytes))  # Length of the public key (32 bytes)
         encoded_data.extend(kind_bytes)  # Public key bytes
@@ -378,7 +381,8 @@ def create_nauth_from_npub( npub_bech32,
         
     # Tag 5: transmittal kind (optional)    
     if transmittal_kind:
-        transmittal_kind_bytes = str(transmittal_kind).encode("ascii")        
+        # transmittal_kind_bytes = str(transmittal_kind).encode("ascii")   
+        transmittal_kind_bytes = struct.pack(">I", transmittal_kind)     
         encoded_data.append(5)
         encoded_data.append(len(transmittal_kind_bytes))  # Length of the public key (32 bytes)
         encoded_data.extend(transmittal_kind_bytes)  # 
