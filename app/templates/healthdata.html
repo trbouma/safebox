@@ -35,9 +35,28 @@ async function goBack() {
 
 async function myInbox() {
 
-window.location.href="/safebox/inbox";
+window.location.href="/safebox/inbox?nauth={{nauth}}";
 
 }
+</script>
+
+<script>
+
+const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
+
+ws.onopen = () => console.log("WebSocket connected");
+ws.onmessage = (event) => {
+  console.log("Message received:", event.data);
+  const response = JSON.parse(event.data);  
+  client_nauth = response.nauth;
+  alert(`Client is authenticated! ${client_nauth} Ready to transmit files`);
+
+
+
+
+};
+ws.onclose = () => console.log("WebSocket closed");
+
 </script>
 
 <script>

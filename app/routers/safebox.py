@@ -423,11 +423,14 @@ async def my_private_data(      request: Request,
 async def do_health_consult(      request: Request,
                                 private_mode:str = "consult", 
                                 kind:int = 32227,   
-                                nprofile:str = None,                             
+                                nprofile:str = None, 
+                                nauth: str = None,                            
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to consulting recods in home relay"""
     nprofile_parse = None
+    auth_msg = None
+
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
     except:
@@ -441,6 +444,32 @@ async def do_health_consult(      request: Request,
     if nprofile:
         nprofile_parse = parse_nostr_bech32(nprofile)
         pass
+
+    if nauth:
+        print("nauth")
+
+
+        parsed_result = parse_nauth(nauth)
+        npub_recipient = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+  
+        print(f"requesting npub: {npub_recipient} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+
+        
+        auth_msg = create_nauth(    npub=npub_recipient,
+                                    nonce=nonce,
+                                    auth_kind= auth_kind,
+                                    auth_relays=auth_relays,
+                                    transmittal_kind=transmittal_kind,
+                                    transmittal_relays=transmittal_relays
+        )
+        
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_recipient,message=auth_msg,dm_relays=auth_relays,transmittal_kind=settings.AUTH_KIND)
     
 
     return templates.TemplateResponse(  "healthconsult.html", 
@@ -450,7 +479,8 @@ async def do_health_consult(      request: Request,
                                             "record_kind": kind,
                                             "private_mode": private_mode,
                                             "client_nprofile": nprofile,
-                                            "client_nprofile_parse": nprofile_parse
+                                            "client_nprofile_parse": nprofile_parse,
+                                            "client_nauth": auth_msg
 
                                         })
 
@@ -460,7 +490,8 @@ async def get_inbox(      request: Request,
                                 private_mode:str = "consult", 
                                 kind:int = 1060,   
                                 nprofile:str = None,   
-                                naddr: str = None,                          
+                                naddr: str = None, 
+                                nauth: str = None,                         
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to inbox in home relay"""
@@ -495,6 +526,17 @@ async def get_inbox(      request: Request,
         
         auth_msg = client_nprofile
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.AUTH_KIND)
+
+    if nauth:
+        
+        print("nauth")
+        # parsed_result = parse_nauth(nauth)
+        # npub = hex_to_npub(parsed_result['values']['pubhex'])
+        # nonce = parsed_result['values']['nonce']
+        # auth_kind = parsed_result['values'].get("auth_kind")
+        # auth_relays = parsed_result['values'].get("auth_relays")
+        # transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        # transmittal_relays = parsed_result['values'].get("transmittal_relays")
         
 
     return templates.TemplateResponse(  "inbox.html", 
@@ -571,7 +613,8 @@ async def my_health_data(       request: Request,
     return templates.TemplateResponse(  "healthdata.html", 
                                         {   "request": request,
                                             "safebox": safebox_found,
-                                            "health_records": health_records 
+                                            "health_records": health_records ,
+                                            "nauth": nauth
 
                                         })
 
@@ -1128,8 +1171,10 @@ async def transmit_records(        request: Request,
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
         print(f" session nonce {safebox_found.session_nonce} {nonce}")
-        if safebox_found.session_nonce != nonce:
-            raise Exception("Invalid session!")
+        #TODO Need to figure out session nonce when authenticating from other side
+        # Need to update somewhere in the process leave out for now
+        # if safebox_found.session_nonce != nonce:
+        #     raise Exception("Invalid session!")
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()

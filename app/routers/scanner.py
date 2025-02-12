@@ -118,8 +118,11 @@ async def get_scan_result(  request: Request,
             if referer == "health-data":
                 return RedirectResponse(f"/safebox/health?nauth={qr_code}") 
                   
-            else:
+            elif referer == "health-consult":
                 return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
+            else:
+                return RedirectResponse(f"/safebox/access?nauth={qr_code}") 
+
                
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)
