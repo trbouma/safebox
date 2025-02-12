@@ -22,8 +22,8 @@ from safebox.acorn import Acorn
 from app.config import Settings
 settings = Settings()
 
-# HOME_RELAY = 'wss://relay.openbalance.app'
-RELAYS = ['wss://relay.openbalance.app']
+# HOME_RELAY = 'wss://relay.getsafebox.app'
+RELAYS = ['wss://relay.getsafebox.app']
 MINTS = ['https://mint.nimo.cash']
 LOGGING_LEVEL=20
 

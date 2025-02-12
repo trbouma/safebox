@@ -4263,5 +4263,5 @@ if __name__ == "__main__":
     # url = ['wss://relay.0xchat.com','wss://relay.damus.io']
     # this relay seems to work the best with these kind of anon published events, atleast for now
     # others it seems to be a bit of hit and miss...
-    url = ['wss://relay.openbalance.app']
+    url = ['wss://relay.getsafebox.app']
     # asyncio.run(listen_notes(url))  

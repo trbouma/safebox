@@ -31,7 +31,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
         ]
 mints   = ["https://mint.nimo.cash"]
 wallet  = "default" 
-home_relay = "wss://relay.openbalance.app"
+home_relay = "wss://relay.getsafebox.app"
 replicate_relays = ["wss://nostr-pub.wellorder.net"]
 logging_level = 20
 
