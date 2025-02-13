@@ -403,7 +403,8 @@ def create_nauth(   npub,
                     auth_kind: int=None, 
                     auth_relays=None,
                     transmittal_kind= None,  
-                    transmittal_relays = None, 
+                    transmittal_relays = None,
+                    name: str = None 
                 ):
     
     # Decode the npub Bech32 string
@@ -424,7 +425,8 @@ def create_nauth(   npub,
     # Tag 2 : auth_kind
     # Tag 3 : auth_relays
     # Tag 4 : transmittal_kind
-    # Tag 5 : transmittal_relays 
+    # Tag 5 : transmittal_relays
+    # Tag 6 : name 
 
     # Tag 0: Special (public key)
     encoded_data.append(0)  # Tag 0
@@ -435,7 +437,7 @@ def create_nauth(   npub,
     if nonce:
         nonce_bytes = nonce.encode("ascii")        
         encoded_data.append(1)
-        encoded_data.append(len(nonce_bytes))  # Length of the public key (32 bytes)
+        encoded_data.append(len(nonce_bytes))  # Nonce
         encoded_data.extend(nonce_bytes)  # Public key bytes
 
     # Tag 2: auth_kind (optional)    
@@ -473,7 +475,12 @@ def create_nauth(   npub,
             encoded_data.append(len(transmittal_relay_bytes))  # Length of the relay string
             encoded_data.extend(transmittal_relay_bytes)  # Relay string as bytes
         
-
+    # Tag 6: nonce (optional)
+    if name:
+        name_bytes = nonce.encode("ascii")        
+        encoded_data.append(1)
+        encoded_data.append(len(name_bytes))  # Nonce
+        encoded_data.extend(name_bytes)  # Public key bytes
 
 
     # Convert 8-bit data to 5-bit data for Bech32 encoding
@@ -548,10 +555,60 @@ def parse_nauth(encoded_string):
             if "transmittal_relays" not in result["values"]:
                 result["values"]["transmittal_relays"] = []
             result["values"]["transmittal_relays"].append(transmittal_relays)
+        
+        elif tag == 6:  # None
+            nonce = value.decode("ascii")
+            if "name" not in result["values"]:
+                result["values"]["name"] = nonce
+            # result["values"]["nonce"].append(nonce)
       
 
     return result
 
+def parse_nembed(encoded_string):
+    # Decode the Bech32 string
+    hrp, data = bech32_decode(encoded_string)
+    # print(f"hrp {hrp} data {data}")
+    if hrp not in {"nembed"} or data is None:
+        raise ValueError("Invalid Bech32 string or unsupported prefix")
+
+    # Convert 5-bit data to 8-bit for processing
+    decoded_data = bytes(convertbits(data, 5, 8, False))
+
+    # Initialize result dictionary
+    result = {"prefix": hrp, "values": {}}
+
+    # Tag 0 : npub in hex
+    # Tag 1 : nonce
+    # Tag 2 : auth_kind
+    # Tag 3 : auth_relays
+    # Tag 4 : transmittal_kind
+    # Tag 5 : transmittal_relays 
+
+    index = 0
+    while index < len(decoded_data):
+        # Extract the tag and length
+        tag = decoded_data[index]
+        index += 1
+        length = decoded_data[index]
+        index += 1
+
+        # Extract the corresponding value based on length
+        value = decoded_data[index : index + length]
+        index += length
+
+        # Parse based on the tag
+        if tag == 0:  # None
+            full_record = value.decode("ascii")
+            if "full_record" not in result["values"]:
+                result["values"]["full_record"] = full_record
+    
+    try:
+        json_obj = json.loads(decoded_data)  
+    except:
+        json_obj = {}
+
+    return json_obj
 
 def npub_to_hex(npub: str) -> str:
     """
