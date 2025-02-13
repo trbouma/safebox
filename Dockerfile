@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM tiangolo/uvicorn-gunicorn-fastapi
 RUN apt-get update
 RUN apt-get install -y curl python3-dev autoconf g++
 RUN apt-get install -y libpq-dev
