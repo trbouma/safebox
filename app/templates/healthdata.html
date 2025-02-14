@@ -42,20 +42,14 @@ window.location.href="/safebox/inbox?nauth={{nauth}}";
 
 <script>
 
-const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
 
-ws.onopen = () => console.log("WebSocket connected");
-ws.onmessage = (event) => {
-  console.log("Message received:", event.data);
-  const response = JSON.parse(event.data);  
-  client_nauth = response.nauth;
-  alert(`Client is authenticated! ${client_nauth} Ready to transmit files`);
+  
 
 
 
 
-};
-ws.onclose = () => console.log("WebSocket closed");
+
+
 
 </script>
 
@@ -89,8 +83,24 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
   async function createQRCode() {
     
-    var data;
+  var data;
   var qr_img_func = document.getElementById("img_qr_display");
+
+  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+  console.log("Message received:", event.data);
+  const response = JSON.parse(event.data);  
+  client_nauth = response.nauth;
+  client_name = response.name;
+  // client_name = response.name;
+  alert(`Client is authenticated! ${client_name} Ready to transmit files`); 
+  ws.close()
+  };
+  ws.onclose = () => console.log("WebSocket closed");
+
+
   qr_img_func.src="/img/circle-256.gif";
    await fetch('/safebox/nauth', {
         method: "GET",
@@ -100,6 +110,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
     .then((response) => response.json())
     .then((data) => getStatus(data));
 
+  
 
 }
 </script>

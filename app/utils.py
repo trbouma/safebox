@@ -6,7 +6,7 @@ import asyncio, json
 from zoneinfo import ZoneInfo
 import os
 
-from bech32 import bech32_decode, convertbits
+from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
 from monstr.event.event import Event
 from monstr.encrypt import Keys
@@ -575,33 +575,7 @@ def parse_nembed(encoded_string):
     # Convert 5-bit data to 8-bit for processing
     decoded_data = bytes(convertbits(data, 5, 8, False))
 
-    # Initialize result dictionary
-    result = {"prefix": hrp, "values": {}}
 
-    # Tag 0 : npub in hex
-    # Tag 1 : nonce
-    # Tag 2 : auth_kind
-    # Tag 3 : auth_relays
-    # Tag 4 : transmittal_kind
-    # Tag 5 : transmittal_relays 
-
-    index = 0
-    while index < len(decoded_data):
-        # Extract the tag and length
-        tag = decoded_data[index]
-        index += 1
-        length = decoded_data[index]
-        index += 1
-
-        # Extract the corresponding value based on length
-        value = decoded_data[index : index + length]
-        index += length
-
-        # Parse based on the tag
-        if tag == 0:  # None
-            full_record = value.decode("ascii")
-            if "full_record" not in result["values"]:
-                result["values"]["full_record"] = full_record
     
     try:
         json_obj = json.loads(decoded_data)  
@@ -609,6 +583,17 @@ def parse_nembed(encoded_string):
         json_obj = {}
 
     return json_obj
+
+def create_nembed(json_obj):
+    encoded_data = []
+    if type(json_obj) != dict:
+        raise ValueError("not a json objecte")
+    json_obj_str = json.dumps(json_obj)
+    json_bytes = json_obj_str.encode("ascii") 
+    encoded_data.extend(json_bytes)  # Public key bytes    
+    converted_data = convertbits(encoded_data, 8, 5, True)
+    
+    return bech32_encode("nembed",converted_data )
 
 def npub_to_hex(npub: str) -> str:
     """

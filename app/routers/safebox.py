@@ -44,7 +44,7 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
     records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now)
     
     
-    return records_out
+    return records_out[0]["payload"]
 
 
 #################################
@@ -465,7 +465,8 @@ async def do_health_consult(      request: Request,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
                                     transmittal_kind=transmittal_kind,
-                                    transmittal_relays=transmittal_relays
+                                    transmittal_relays=transmittal_relays,
+                                    name=safebox_found.handle
         )
         
         # send the recipient nauth message
@@ -604,7 +605,8 @@ async def my_health_data(       request: Request,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
                                     transmittal_kind=transmittal_kind,
-                                    transmittal_relays=transmittal_relays
+                                    transmittal_relays=transmittal_relays,
+                                    name=safebox_found.handle
         )
         
         # send the recipient nauth message
@@ -828,18 +830,21 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
     while True:
         try:
             await acorn_obj.load_data()
-            records_out = await listen_for_request(acorn_obj=acorn_obj,kind=settings.AUTH_KIND, since_now=since_now)
-            
-            # print(f"records out {records_out}")
-            try:            
-                client_nauth = records_out[0]['payload']
-                
+            try:
+                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=settings.AUTH_KIND, since_now=since_now)
             except:
-                client_nauth = None
+                client_nauth=None
             
-            nprofile = {'nauth': client_nauth}
 
-            if client_nauth != nauth_old:  
+            
+            # parsed_nauth = parse_nauth(client_nauth)
+            # name = parsed_nauth['name']
+            # print(f"client nauth {client_nauth}")
+            
+
+            if client_nauth != nauth_old: 
+                nprofile = {'nauth': client_nauth, 'name': 'safebox user'}
+                print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
            
@@ -1121,7 +1126,8 @@ async def get_nauth(    request: Request,
                                 auth_kind=auth_kind,
                                 auth_relays=auth_relays,
                                 transmittal_kind = settings.TRANSMITTAL_KIND,
-                                transmittal_relays=settings.TRANSMITTAL_RELAYS 
+                                transmittal_relays=settings.TRANSMITTAL_RELAYS,
+                                name=acorn_obj.handle 
 
                                
                             )
