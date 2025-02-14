@@ -5,6 +5,8 @@ from time import sleep
 import asyncio, json
 from zoneinfo import ZoneInfo
 import os
+import io, gzip
+
 
 from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
@@ -594,6 +596,44 @@ def create_nembed(json_obj):
     converted_data = convertbits(encoded_data, 8, 5, True)
     
     return bech32_encode("nembed",converted_data )
+
+def create_nembed_compressed(json_obj):
+    buffer = io.BytesIO()
+    encoded_data = []
+    if type(json_obj) != dict:
+        raise ValueError("not a json objecte")
+    json_obj_str = json.dumps(json_obj)
+
+    with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
+        gz.write(json_obj_str.encode())
+    
+    json_bytes = buffer.getvalue() 
+    encoded_data.extend(json_bytes)  # Public key bytes    
+    converted_data = convertbits(encoded_data, 8, 5, True)
+    
+    return bech32_encode("nembed",converted_data )
+
+def parse_nembed_compressed(encoded_string):
+    # Decode the Bech32 string
+    hrp, data = bech32_decode(encoded_string)
+    # print(f"hrp {hrp} data {data}")
+    if hrp not in {"nembed"} or data is None:
+        raise ValueError("Invalid Bech32 string or unsupported prefix")
+
+    # Convert 5-bit data to 8-bit for processing
+    decoded_data = bytes(convertbits(data, 5, 8, False))
+    # this is gzipped data
+
+    buffer = io.BytesIO(decoded_data)
+    with gzip.GzipFile(fileobj=buffer, mode="rb") as gz:
+        decompressed_data = gz.read()
+    
+    try:
+        json_obj = json.loads(decompressed_data.decode())  
+    except:
+        json_obj = {}
+
+    return json_obj
 
 def npub_to_hex(npub: str) -> str:
     """

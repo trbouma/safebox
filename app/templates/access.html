@@ -565,7 +565,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
     <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Payment</button> 
-    <br>
+    <br><br>
   {% else %}
     {% if action_mode == "lnaddress" %}
 
@@ -582,7 +582,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
     {% endif %} 
     <br><br>
-    <button id="ln_clipboard_button" onclick="useClipboard()">Use Clipboard</button> 
+    <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
     <hr>
     <h2>Make a Payment</h2>
     <input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
