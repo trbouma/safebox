@@ -14,6 +14,9 @@ from monstr.event.event import Event
 from monstr.encrypt import Keys
 from monstr.client.client import Client, ClientPool
 
+from mnemonic import Mnemonic
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -773,3 +776,16 @@ async def send_zap_receipt(nostr):
     # print(nostr_decode=urllib.parse.unquote(nostr))
 
     return
+
+def recover_nsec_from_seed(seed_phrase: str):
+    mnemo = Mnemonic("english")
+    seed = Bip39SeedGenerator(seed_phrase).Generate()
+    bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+    seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
+   
+
+    data_bytes = bytes.fromhex(seed_private_key_hex)
+    data_5bit = convertbits(data_bytes, 8, 5)
+    bech32_address = bech32_encode("nsec", data_5bit)
+
+    return bech32_address

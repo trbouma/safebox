@@ -1,0 +1,102 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Recover{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+<script>
+
+async function backToProfile() {
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
+
+
+async function recoverSeedPhrase() {
+    
+    var data;
+   
+    var input_seed_phrase = document.getElementById("input_seed_phrase");
+
+    seed_phrase = input_seed_phrase.value;
+    user_confirm = confirm(`Are you sure you want to recover your safebox?`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"seed_phrase": seed_phrase, "home_relay": null, "keep_identity": true};
+
+   await fetch('/recoversafebox', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h1>Recover your Safebox</h1>
+
+    Recover
+      <br><br><input type="text" placeholder="enter seed phrase" id="input_seed_phrase"   value="" style="width:90%;">
+       <br><br>
+       <button onclick="recoverSeedPhrase()">Recover Safebox</button>
+       <br><br>
+    
+</div>
+
+
+   
+
+<div class="center-text">
+  <hr>
+    
+
+        
+        
+        
+
+    <button onclick="backToProfile()">Home</button>
+      
+ 
+
+        
+     
+        
+</div>
+     
+<script>
+  setDarkMode();
+</script>
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

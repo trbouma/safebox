@@ -10,17 +10,17 @@ import asyncio
 from datetime import timedelta
 import qrcode, io, urllib, json
 
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, create_engine, select, update
 
 
 from monstr.encrypt import Keys
 from monstr.event.event import Event
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment
-from app.utils import create_jwt_token, send_zap_receipt
+from app.utils import create_jwt_token, send_zap_receipt, recover_nsec_from_seed
 from app.config import Settings
 
 settings = Settings()
@@ -303,10 +303,72 @@ async def onboard_friend(request: Request, friend_handle:str ):
     
     return response  
 
+@router.get("/recover", response_class=HTMLResponse, tags=["public"]) 
+async def recover_page (request: Request):
+        
+    return templates.TemplateResponse( "recover.html", {"request": request, "title": "Welcome Page", "message": "You're Invited!" })
+
+@router.post("/recoversafebox", tags=["public"])
+async def recover_safebox(request: Request, recover: recoverIdentity):
+    status = "OK"
+    detail = "Not implemented"
+    handle = "None"
+    access_key = "None"
+    mode = "None"
+    onboard_code = "recovery"
+    safebox_new: RegisteredSafebox
+    
+    
+    try:
+        nsec_recover = recover_nsec_from_seed(recover.seed_phrase)
+        
+        k = Keys(priv_k=nsec_recover)
+        npub = k.public_key_bech32()
+        nsec = k.private_key_bech32()
+        detail = f"{npub} {nsec}"
+        
+    except:
+        status = "ERROR"
+        detail = "Not recovered"
+        return {"status": status, "detail": detail}
+
+    # Check to see if existing service identity exists
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            mode = "found"
+            handle = safebox_found.handle
+            access_key = safebox_found.access_key
+            
+        else:
+            acorn_obj = Acorn(nsec=nsec_recover, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
+            await acorn_obj.load_data()
+            mode = "new"
+            handle = acorn_obj.handle
+            access_key = acorn_obj.access_key
+            register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
+                                                    npub=acorn_obj.pubkey_bech32,
+                                                    nsec=acorn_obj.privkey_bech32,
+                                                    home_relay=acorn_obj.home_relay,
+                                                    onboard_code=onboard_code,
+                                                    access_key=acorn_obj.access_key
+                                            )
+            session.add(register_safebox)
+        
+        session.commit()
+
+            # raise HTTPException(status_code=404, detail=f"{npub} not found")
+
+    detail = f"Your {mode} handle: {handle} Your access key: {access_key}"
+
+    return {"status": status, "detail": detail}
+
 
 
 @router.post("/access", tags=["lnaddress"])
-async def acess_safebox(request: Request, access_key:str):
+async def access_safebox(request: Request, access_key:str):
     
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)

@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pydantic import BaseModel
-from typing import List
+from typing import List, Union
 from enum import Enum
 from datetime import datetime
 
@@ -89,5 +89,10 @@ class transmitConsultation(BaseModel):
 class incomingRecord(BaseModel):
     id: str
     kind: int = 1060
+
+class recoverIdentity(BaseModel):
+    seed_phrase: str
+    home_relay: Union[None,str]=None
+    keep_identity: bool = True
 
 
