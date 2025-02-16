@@ -198,9 +198,10 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
 
     # Use settings.HOME_RELAY for new safebox
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
+    nsec_new = await acorn_obj.create_instance()
     await acorn_obj.load_data()
     
-    nsec_new = await acorn_obj.create_instance()
+    
     profile_info = acorn_obj.get_profile()
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
