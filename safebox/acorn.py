@@ -194,9 +194,8 @@ class Acorn:
                 if each[0] == "user_record":
                     self.user_records.append(each[1])   
         except Exception as e:
-            print(f"error reading {e}")
-            wallet_info_str = "None"
-            # self.home_mint = mints[0]
+            raise Exception(f"No wallet data on {self.home_relay}")
+
 
         await self._load_proofs()
         return

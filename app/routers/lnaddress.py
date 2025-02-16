@@ -20,7 +20,7 @@ from safebox.acorn import Acorn
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment
-from app.utils import create_jwt_token, send_zap_receipt, recover_nsec_from_seed
+from app.utils import create_jwt_token, send_zap_receipt, recover_nsec_from_seed, format_relay_url, generate_new_identity
 from app.config import Settings
 
 settings = Settings()
@@ -331,7 +331,14 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
         status = "ERROR"
         detail = "Not recovered"
         return {"status": status, "detail": detail}
+    try:
+        relay_url = format_relay_url(recover.home_relay)
+    except ValueError as e:
+        status = "ERROR"
+        detail = f"Relay url not valid: {e}"
+        return {"status": status, "detail": detail}
 
+    new_handle, new_access_key = generate_new_identity()
     # Check to see if existing service identity exists
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
@@ -339,23 +346,45 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
         safebox_found = safeboxes.first()
         if safebox_found:
             mode = "found"
-            handle = safebox_found.handle
-            access_key = safebox_found.access_key
+           
+            if recover.new_identity:
+                handle = new_handle
+                access_key = new_access_key
+            else: 
+                handle = safebox_found.handle
+                access_key = safebox_found.access_key
             
+            npub = safebox_found.npub
+            nsec = safebox_found.nsec
+
         else:
-            acorn_obj = Acorn(nsec=nsec_recover, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
-            await acorn_obj.load_data()
+            acorn_obj = Acorn(nsec=nsec_recover, relays=RELAYS, mints=MINTS, home_relay=relay_url, logging_level=LOGGING_LEVEL)
+            try:
+                await acorn_obj.load_data()
+            except Exception as e:
+                status = "ERROR"
+                detail = f"{e}"
+                return {"status": status, "detail": detail}
+
             mode = "new"
-            handle = acorn_obj.handle
-            access_key = acorn_obj.access_key
-            register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
-                                                    npub=acorn_obj.pubkey_bech32,
-                                                    nsec=acorn_obj.privkey_bech32,
-                                                    home_relay=acorn_obj.home_relay,
+            if recover.new_identity:
+                handle = new_handle
+                access_key = new_access_key
+            else: 
+                handle = acorn_obj.handle
+                access_key = acorn_obj.access_key
+            npub = acorn_obj.pubkey_bech32
+            nsec = acorn_obj.privkey_bech32  
+            
+            
+        register_safebox = RegisteredSafebox(   handle=handle,
+                                                    npub=npub,
+                                                    nsec=nsec,
+                                                    home_relay=relay_url,
                                                     onboard_code=onboard_code,
-                                                    access_key=acorn_obj.access_key
+                                                    access_key=access_key
                                             )
-            session.add(register_safebox)
+        session.add(register_safebox)
         
         session.commit()
 

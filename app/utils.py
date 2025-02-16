@@ -6,6 +6,9 @@ import asyncio, json
 from zoneinfo import ZoneInfo
 import os
 import io, gzip
+import validators
+from urllib.parse import urlparse
+
 
 
 from bech32 import bech32_decode, convertbits, bech32_encode
@@ -84,6 +87,32 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
         
     return safebox_found
+
+def format_relay_url(relay: str) -> str:
+    """
+    Accepts a domain name, converts it to lowercase, strips spaces,
+    and ensures it has the 'wss://' prefix.
+    """
+    relay = relay.strip().lower()
+    if not relay.startswith("wss://"):
+        relay = "wss://" + relay
+    
+    # Parse and validate the URL
+    parsed_url = urlparse(relay)
+    
+    if not parsed_url.scheme or parsed_url.scheme != "wss":
+        raise ValueError(f"Invalid URL scheme: {parsed_url.scheme}")
+    
+    if not parsed_url.netloc:
+        raise ValueError(f"Invalid URL: {relay} (Missing hostname)")
+    
+    if "@" in parsed_url.netloc:
+        raise ValueError(f"Invalid URL: {relay} (User credentials should not be included)")
+    
+    return relay
+
+
+
 
 async def fetch_balance(id: int):
     with Session(engine) as session:
@@ -789,3 +818,69 @@ def recover_nsec_from_seed(seed_phrase: str):
     bech32_address = bech32_encode("nsec", data_5bit)
 
     return bech32_address
+
+def generate_name_from_hex(hex_string):
+    # Ensure the input is a valid 32-byte hex string
+    if len(hex_string) != 64:
+        raise ValueError("Input must be a 32-byte hex string (64 characters).")
+
+    # Load BIP-0039 word list
+    mnemonic = Mnemonic("english")
+    word_list = mnemonic.wordlist
+
+    # Extract the first four bytes (8 hex characters)
+    first_four_bytes = hex_string[:8]
+
+    # Convert these bytes to a binary string (32 bits)
+    binary_string = bin(int(first_four_bytes, 16))[2:].zfill(32)
+
+    # Split the binary string into two 11-bit values and one 10-bit value
+    first_11_bit = int(binary_string[:11], 2)
+    second_11_bit = int(binary_string[11:22], 2)
+    ten_bit = int(binary_string[22:32], 2)
+
+    # Look up the words corresponding to the 11-bit values
+    first_word = word_list[first_11_bit]
+    second_word = word_list[second_11_bit]
+
+    # Create the hyphen-separated name
+    name = f"{first_word}-{second_word}-{ten_bit}"
+
+    return name
+
+
+def generate_access_key_from_hex(hex_string):
+    # Ensure the input is a valid 32-byte hex string
+    if len(hex_string) != 64:
+        raise ValueError("Input must be a 32-byte hex string (64 characters).")
+
+    # Load BIP-0039 word list
+    mnemonic = Mnemonic("english")
+    word_list = mnemonic.wordlist
+
+    # Extract the first four bytes (8 hex characters)
+    first_four_bytes = hex_string[:8]
+
+    # Convert these bytes to a binary string (32 bits)
+    binary_string = bin(int(first_four_bytes, 16))[2:].zfill(32)
+
+    # Split the binary string into two 11-bit values and one 10-bit value
+    first_11_bit = int(binary_string[:11], 2)
+    second_11_bit = int(binary_string[11:22], 2)
+    ten_bit = int(binary_string[22:32], 2)
+
+    # Look up the words corresponding to the 11-bit values
+    first_word = word_list[first_11_bit]
+    second_word = word_list[second_11_bit]
+
+    # Create the hyphen-separated name
+    access_key = f"{ten_bit}-{first_word}-{second_word}"
+
+    return access_key
+
+def generate_new_identity():
+    # This function generates a new service identity
+    k = Keys()
+    handle = generate_name_from_hex(k.public_key_hex())
+    access_key = generate_access_key_from_hex(k.private_key_hex())
+    return handle, access_key

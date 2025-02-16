@@ -31,13 +31,15 @@ async function recoverSeedPhrase() {
     var data;
    
     var input_seed_phrase = document.getElementById("input_seed_phrase");
+    var input_home_relay = document.getElementById("input_home_relay");
+    var input_new_identity = document.getElementById("input_new_identity");
 
     seed_phrase = input_seed_phrase.value;
     user_confirm = confirm(`Are you sure you want to recover your safebox?`);
     if (user_confirm == false) {return;}
     
 
-    const submit_data = {"seed_phrase": seed_phrase, "home_relay": null, "keep_identity": true};
+    const submit_data = {"seed_phrase": seed_phrase, "home_relay": input_home_relay.value, "new_identity": input_new_identity.checked};
 
    await fetch('/recoversafebox', {
         method: "POST",
@@ -62,7 +64,13 @@ async function recoverSeedPhrase() {
 
     Recover
       <br><br><input type="text" placeholder="enter seed phrase" id="input_seed_phrase"   value="" style="width:90%;">
+      <br><br><input type="text" placeholder="enter home relay" id="input_home_relay"   value="" style="width:90%;">
        <br><br>
+       <label>
+        <input type="checkbox" id="input_new_identity" >
+        New Identity
+      </label>
+      <br><br>
        <button onclick="recoverSeedPhrase()">Recover Safebox</button>
        <br><br>
     

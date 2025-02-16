@@ -93,6 +93,6 @@ class incomingRecord(BaseModel):
 class recoverIdentity(BaseModel):
     seed_phrase: str
     home_relay: Union[None,str]=None
-    keep_identity: bool = True
+    new_identity: bool = False
 
 
