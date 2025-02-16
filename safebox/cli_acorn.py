@@ -102,20 +102,34 @@ def info(ctx):
 
 @click.command(help="initialize a new safebox")
 
-@click.option("--homerelay","-h", is_flag=True, show_default=True, default=False, help=HOME_RELAY_HELP)
+@click.option("--homerelay","-h", default=None, help=HOME_RELAY_HELP)
 @click.option("--keepkey","-k", is_flag=True, show_default=True, default=False, help="Keep existing key(nsec).")
 @click.option("--longseed","-l", is_flag=True, show_default=True, default=False, help="Generate long seed of 24 words")
-@click.option('--name', '-n', default="wallet", help=HOME_RELAY_HELP)
-def init(keepkey, longseed, homerelay,name):
-    click.echo(f"Creating a new acorn with relay: {HOME_RELAY} and mint: {MINTS}")
+
+def init(keepkey, longseed, homerelay):
+    #FIXME this is a bit of a logical mess, fix up later
+    if homerelay:
+        if "wss://" in homerelay:
+            homerelay = homerelay
+        elif "ws://" in homerelay:
+            homerelay = homerelay
+        else:
+            homerelay = f"wss://{homerelay}"
+        home_relay = homerelay
+    else:
+        home_relay = HOME_RELAY
     
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    asyncio.run(acorn_obj.load_data())
+    click.echo(f"Creating a new acorn with relay: {home_relay} and mint: {MINTS}")
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=home_relay, logging_level=LOGGING_LEVEL)
+    
 
     if keepkey:
         click.echo("Keep existing key")
     click.echo("Create new instance")
-    config_obj['nsec'] = asyncio.run(acorn_obj.create_instance(keepkey,longseed, name))
+    config_obj['nsec'] = asyncio.run(acorn_obj.create_instance(keepkey,longseed))
+    config_obj['home_relay'] = home_relay
+    asyncio.run(acorn_obj.load_data())
     
     # click.echo(acorn_obj.get_profile())
     write_config()
