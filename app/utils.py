@@ -438,7 +438,8 @@ def create_nauth(   npub,
                     auth_relays=None,
                     transmittal_kind= None,  
                     transmittal_relays = None,
-                    name: str = None 
+                    name: str = None,
+                    scope: str = None 
                 ):
     
     # Decode the npub Bech32 string
@@ -461,6 +462,7 @@ def create_nauth(   npub,
     # Tag 4 : transmittal_kind
     # Tag 5 : transmittal_relays
     # Tag 6 : name 
+    # Tag 7 : scope
 
     # Tag 0: Special (public key)
     encoded_data.append(0)  # Tag 0
@@ -509,12 +511,19 @@ def create_nauth(   npub,
             encoded_data.append(len(transmittal_relay_bytes))  # Length of the relay string
             encoded_data.extend(transmittal_relay_bytes)  # Relay string as bytes
         
-    # Tag 6: nonce (optional)
+    # Tag 6: name (optional)
     if name:
-        name_bytes = nonce.encode("ascii")        
-        encoded_data.append(1)
+        name_bytes = name.encode("ascii")        
+        encoded_data.append(6)
         encoded_data.append(len(name_bytes))  # Nonce
         encoded_data.extend(name_bytes)  # Public key bytes
+    
+    # Tag 7: scope (optional)
+    if scope:
+        scope_bytes =scope.encode("ascii")        
+        encoded_data.append(7)
+        encoded_data.append(len(scope_bytes))  # Nonce
+        encoded_data.extend(scope_bytes)  # Public key bytes
 
 
     # Convert 8-bit data to 5-bit data for Bech32 encoding
@@ -544,6 +553,8 @@ def parse_nauth(encoded_string):
     # Tag 3 : auth_relays
     # Tag 4 : transmittal_kind
     # Tag 5 : transmittal_relays 
+    # Tag 6 : name
+    # Tag 7 : scope
 
     index = 0
     while index < len(decoded_data):
@@ -591,10 +602,15 @@ def parse_nauth(encoded_string):
             result["values"]["transmittal_relays"].append(transmittal_relays)
         
         elif tag == 6:  # None
-            nonce = value.decode("ascii")
+            name = value.decode("ascii")
             if "name" not in result["values"]:
-                result["values"]["name"] = nonce
-            # result["values"]["nonce"].append(nonce)
+                result["values"]["name"] = name
+            
+        elif tag == 7:  # None
+            scope = value.decode("ascii")
+            if "scope" not in result["values"]:
+                result["values"]["scope"] = scope
+            
       
 
     return result

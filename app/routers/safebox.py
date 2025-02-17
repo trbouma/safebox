@@ -466,7 +466,8 @@ async def do_health_consult(      request: Request,
                                     auth_relays=auth_relays,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
-                                    name=safebox_found.handle
+                                    name=safebox_found.handle,
+                                    scope="transmit"
         )
         
         # send the recipient nauth message
@@ -606,7 +607,8 @@ async def my_health_data(       request: Request,
                                     auth_relays=auth_relays,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
-                                    name=safebox_found.handle
+                                    name=safebox_found.handle,
+                                    scope='transmit'
         )
         
         # send the recipient nauth message
@@ -1127,7 +1129,8 @@ async def get_nauth(    request: Request,
                                 auth_relays=auth_relays,
                                 transmittal_kind = settings.TRANSMITTAL_KIND,
                                 transmittal_relays=settings.TRANSMITTAL_RELAYS,
-                                name=acorn_obj.handle 
+                                name=acorn_obj.handle,
+                                scope='transmit' 
 
                                
                             )
