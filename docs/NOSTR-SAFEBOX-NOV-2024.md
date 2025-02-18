@@ -4,8 +4,8 @@
 ## 1) How did you spend your time?
 
 - I used the time to achieve the deliverables outlined in my project proposal:
-    - A stable prototype implemented in Python. Code repo is [here](https://github.com/safebox)
-    - Compiled binaries for mac-os and ubuntu. Binary repo is [here](https://github.com/safebox-binaries)
+    - A stable prototype implemented in Python. Code repo is [here](https://github.com/trbouma/safebox)
+    - Compiled binaries for mac-os and ubuntu. Binary repo is [here](https://github.com/trbouma/safebox-binaries)
     - Demonstrated of backend integration for [openbalance.app](https://openbalance.app)
     - Draft specification - an Open API REST API [docs](https://openbalance.app/docs) 
 
