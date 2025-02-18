@@ -448,7 +448,7 @@ class Acorn:
         pass
         return "this is the instance"
 
-    async def get_user_records(self, record_kind:int=37375, since:int = None):
+    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False):
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
@@ -496,7 +496,7 @@ class Acorn:
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER)           
         
-        events.sort(reverse=True)
+        events.sort(reverse=reverse)
 
         for each in events:
             # print("x:", each.tags, each.kind, each.created_at)
