@@ -1,6 +1,8 @@
 # Nostr Safebox NOVEMBER 2024
 ## Progress Report # 1: Nov 2024 - Feb 2025
 
+[Initial Proposal](INITIAL-PROPOSAL.md)
+
 ## 1) How did you spend your time?
 
 - I used the time to achieve the deliverables outlined in my project proposal:
