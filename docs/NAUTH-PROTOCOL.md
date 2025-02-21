@@ -2,15 +2,15 @@
 
 ## Overview and Rationale
 
-**nAuth** (or `nauth`) is a decentralized authentication and document transmittal protocol that leverages the unique properties of the Nost protocol to provide a secure authentication and sharing mechanism between two parties wishing to authenticate each other and securely share documents.
+**nAuth** (or `nauth`) is a decentralized authentication and document transmittal protocol that leverages the unique properties of the Nostr protocol to provide a secure authentication and sharing mechanism between two parties wishing to authenticate each other and securely share documents, without the intervention (wanted or unwanted) of a third party.
 
-The inception of the `nauth` came from exploring the requirements for sharing of health data (prescriptions, etc) between a patient and physician where the interaction is either in person or via video (Zoom) consultation session. 
+The inception of the `nauth` came from exploring the requirements for sharing of personal and sensitive health data (prescriptions, etc) between a patient and physician where the interaction may be initiated either in person or via video (Zoom) consultation session. 
 
-The `nauth` protocol has been developed so that either party can initiate the authentication - this is particularly important where either party might have a constrained device (i.e. no camera) and cannot easily initiate the authentication transaction (e.g. read a QR code, or received a text message).
+The `nauth` protocol has been developed so that either party can initiate the authentication - this is particularly important where either party might have a constrained device (i.e. no camera) and cannot easily initiate the authentication transaction (e.g. read a QR code, or receive a text message). 
 
-For what it's worth, the author has a working knowledge of the [OAuth 2.0 Protocol RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) used by the major authentication providers (Google etc.) and is trying to replicate a generic protocol that leverages the unique properties of Nostr, not contemplated in the older third-party centralized authentication protocols.
+It is worth stating upfront that the goal of this protocol is intended to cut third parties out of the loop who have become increasingly trustworthy of late, intercepting the data to train AI models or selling the data to advertisers or insurers. Should the physician or patient share the data, that is their prerogative, but this protocol is being designed to not be implicated in issues of human trust.
 
-This is the first crack at a two-party decentralized authentication protocol with the goal of producing something as consequential as OAuth 2.0.
+Finally, the author has a working knowledge of the [OAuth 2.0 Protocol RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) used by the major authentication providers (Google etc.) and is trying to replicate a generic protocol that leverages the unique properties of Nostr, not contemplated in the older third-party centralized authentication protocols. This is the first ambitional crack (read - likely to be improved or fail gloriously) at developing a two-party decentralized authentication protocol that may be as consequential as OAuth 2.0, but for decentralization.
 
 
 ## The Nauth Scheme
@@ -21,7 +21,7 @@ A fully-loaded `nauth` looks like below:
 
 `nauth1qqsxum7audk42s4j7uwtszt4e5q8kv23uryhwu3es93qn9ww75llj8spypsnzvecv5mrqvfnx9snxvphx3jnxcfhxvmrgwfkxymnxde4xvurjqsyqqq98xgrrfmhxue69uhhyetvv9ujuem9w3ekzen9vfhhstnpwpcqggpcenh5r2zue06fxhwzj6jx3gf0lzkw4h4d8xrkj6nayhdzlgmvmszsgqqq209svxnhwden5te0wfjkccte9enk2arnv9nx2cn00qhxzursqu8ksmmkv4ez6mr9v9mx2tf58qesszr5wfskuumdd96qu24x9s`
 
-`nauth` is not intended to be human-readable, save for the `nauth` prefix. However, `nauth` is intended to be easily handled by a human - cut-and-pastable, transmitted via text, email, passed as a query parameter or presented as a QR code. This is crucial for the initiation of the protocol that requires human interaction via a wide range of introduction scenerios using a wide variety of limited and capable devices.
+`nauth` is not intended to be human-readable, save for the `nauth` prefix. However, `nauth` is intended to be easily handled by a human, that is, cut-and-pastable, transmitted via text, email, passed as a query parameter or presented as a QR code. Human handleability (is that a word?) is crucial for the initiation of the `nauth` protocol that enables initial human-in-the-loop introduction interaction via a wide range of use case scenerios employing a wide variety of often limited and constrained devices.
 
 `nauth` is encoded using Bech32 and has defined the following TLV (type lengths value tags). The purpose of each tag will be described more fully in protocol description.
 
@@ -35,22 +35,22 @@ A fully-loaded `nauth` looks like below:
 - Tag 7: `name` (optional): human recognizable name
 - Tag 8: `scope` (optional): scope of authentication
 
-The astute observer will see that the only mandatory tag is `npub` meaning that `nauth` reduces to a `nbub` Bech32 encoded entity, which is perfectly fine - if no additional requirements are need then NIP-17 Private Direct Messages can be used. 
+The astute observer will see that the only mandatory tag is `npub` meaning that `nauth` without any optional parameters specified reduces to a `npub` Bech32 encoded entity, which is perfectly fine - if no additional requirements are needed then it reduces to NIP-17 Private Direct Messages scenario. 
 
-However, for secure transmittal of documents, an addtional set of parameters are needed (Tags 1 thru 8) are required for a robust, resilient protocol.
+However, for secure transmittal of documents, an addtional set of parameters are needed (Tags 1 thru 8) for a robust, resilient protocol beyond and above what NIP-17 provides.
 
-As for `auth_kind` and `transmittal_kind` the author has specified the ranges of `1400-1499` for regular events and `21400-21499` for emphemeral events. The intent that once authentication and transmittal has occurred, the events should disappear (be deleted) from relays. However, there may be situations were persistence (regular events) is required. The author is still investigating the optimal event kinds.
+As for `auth_kind` and `transmittal_kind` the author has specified the ranges of `1400-1499` for regular events and `21400-21499` for emphemeral events. The intent that once authentication and transmittal has occurred, the events should disappear (be deleted) from relays. However, there may be situations where persistence (regular events) are required. The author is still investigating the optimal event kinds.
 
 ## The Nauth Protocol
 
-The authentication and transmittal sequence is between an `initiator` and a `responder`. The protocol makes no distinction of who's in charge, both parties are equal and can verify/adjust the parameters of the protocol and can unilaterally exit at any time during the process. 
+The authentication and transmittal sequence is between two parties: an `initiator` and a `responder`. The protocol makes no distinction of who's in charge - both parties are equal, either party can assume either role and can verify/adjust the parameters of the protocol at any time, and most importantly can unilaterally exit. 
 
-The `nauth` protocol makes the assumption that if the two parties can communicate via NIP-44 Encryption and NIP-59 Giftwrapping, they are autenticated to one another (i.e., they have control of their respective channels.)
+The `nauth` protocol makes the assumption that if the two parties can communicate via NIP-44 Encryption and NIP-59 Giftwrapping, they are authenticated to one another (i.e., they have control of their respective channels). There is no need for a third-party authentication provider.
 
 
 ### Step 1: Intitiator generates nAuth Request
 
-The intitiator generates the `nauth' request, populating the parameters described above, as required. For example, initiator may include a nonce, and check for nonce value when the nauth response is received.
+The intitiator generates the `nauth` request, populating the parameters described above, as required. For example, initiator may include a nonce, and check for nonce value when the nauth response is received.
 
 This `nauth` request is transmitted by means of an appropriate introduction channel, in most cases, a QR code that is presented to the responder.
 
@@ -62,32 +62,33 @@ Via the introduction channel, the responder receives and inspects the `nauth` re
 
 For example, the responder may wish to use different `transmittal_kind` and `transmittal_relays` proposed in the orginal `nauth`. The responder specifies the `transmittal_npub` for which the secure transmittal documents are to be sent. Usually, it is the same as the responder `npub` but may be different.
 
-Once the responder is satified with the parameters, a responding `nauth` is formulated.  It is then sent as a NIP-44 encrypted/NIP-59 gift-wrapped message to the initiator.
+Once the responder is satisfied with the adjusted parameters, a responding `nauth` is formulated.  It is then sent as a NIP-44 encrypted/NIP-59 gift-wrapped message to the initiator.
 
 Before proceeding further, the responder may listen for an `ack` with a revised `nauth`, or a `nack` using the `auth_kind` and `auth_relays` specified in the request or as specified in revised `nauth`. In the current implementation, for sake of simplicity, the `ack` is assumed.
 
 ### Step 3
 
-The initator, listening for the message, receives, unwraps, decrypts (a la NIP-44/NIP-59), inspects and adjusts the `nauth` as required. The initiator may send  an `ack` with the adjusted `nauth` or a `nack` In the current implementation, the `nauth` is assumed to acceptable and no `ack` is sent.
+The initator, listening for the `nauth` message from the responder, unwraps, decrypts (a la NIP-44/NIP-59), decodes, inspects and adjusts the `nauth` as required. The initiator may send  an `ack` with the adjusted `nauth` or a `nack` 
 
 The initiator may also communicate or signal an `ack` via the (potentially insecure) introduction channel used at the outset.
 
-If necessary, the initiator and responder can go back and forth until a satisfactory `nauth` is negotiated (this can be really complicated, and likely not necessary!)
+In the current implementation, the responder `nauth` is assumed to acceptable, decoded and used as is. No `ack` is sent.
+
+If necessary, the initiator and responder may go back and forth until a satisfactory `nauth` is negotiated (this can be really complicated, and likely not necessary!)
 
 ### Step 4
 
-With the finalized `nauth`, the initiator has enough to carry out the secure transmittal of documents. The `nauth` may be passed as a parameter to other components of the application that parse the `nauth` for the necessary parameters to use. For example, a `transmit` function uses the parameters of `transmittal_npub_in_hex`, `transmittal_kind` and `transmittal_relays` to transmit documents, accordingly.
+With the finalized `nauth`, the initiator has enough to carry out the secure transmittal of documents. The finalized `nauth` may then be passed as a parameter to other components of the application that parse the `nauth` for the necessary parameters to use. For example, a `transmit` function uses the `nauth` parameters of `transmittal_npub_in_hex`, `transmittal_kind` and `transmittal_relays` to securely transmit documents, accordingly.
 
 ### Step 5
 
-Based on the finalized `nauth` the responder monitors for incoming messages (`transmittal_npub_in_hex`, `transmittal_kind` and `transmittal_relays`) and deals with them accordingly, such as reading them in and publishing new events based on the incoming messages. These messages are NIP-44 encrypted and NIP-55 giftwrapped. The reponder may also listen for additional control messages based on the finalized`auth_kind` and `auth_relays` (again, this could be possible but complicated)
-
+Based on the finalized `nauth` sent, the responder then monitors for incoming messages (`transmittal_npub_in_hex`, `transmittal_kind` and `transmittal_relays`) and deals with them accordingly, such as reading them in and publishing new events based on the incoming messages. These messages are NIP-44 encrypted and NIP-59 giftwrapped. The reponder may also listen for additional control messages based on the finalized `auth_kind` and `auth_relays` (again, this could be possible but complicated)
 
 
 ### Other Remarks
 
-For the initial implementation of `nauth` , the payload is transmittal of health records from a physician to patient. This specific use is outside the scope of the `nauth` protocol, which is intended to agnostic to the use cases and payloads. It is up to the implementor on how integrate into use case flows and to use-case-specific handle payloads.
+For the initial implementation of `nauth` , the use case employed the payload for transmittal of health records from a physician to patient. The `nauth` protocol is intended to be agnostic to this use case and payload. It is up to the implementor on how integrate into use case flows and to use-case-specific handle payloads.
 
-The intent of this protocol is to be symmetrical - it doesn't matter who initiates, and once the parameters are agreed upon, secure document transmittal can take place.
+The overarching of this protocol is to be symmetrical - to give no one an unfair advantage - it doesn't matter who initiates the protocol. And once the parameters are agreed upon, secure document transmittal can take place.
 
 The protocol is silent on the trustworthiness of either the responder or initiator `npub`. Implementors may wish to add a check, such as a NIP-05 verification of the `name`, for example or a trusted `npub' list before responding.
