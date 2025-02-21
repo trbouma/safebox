@@ -402,7 +402,7 @@ class Acorn:
 
     def get_profile(self, name="wallet"):
         mints = []
-        mnemo = Mnemonic("English")
+        mnemo = Mnemonic("english")
         try:
             for each in self.acorn_tags:
                 if each[0] == "balance":
