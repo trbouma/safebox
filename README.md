@@ -118,9 +118,9 @@ You can pay to a lightning address
 ```
 safebox pay 19 creampanther1@primal.net -c "This is from safebox!! "
 # Check your balance
-safebook balance
+safebox balance
 # Check your proofs
-safebook proofs
+safebox proofs
 ```
 You can put and retrieve secret information!
 ```
