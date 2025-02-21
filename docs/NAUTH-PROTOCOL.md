@@ -45,7 +45,7 @@ As for `auth_kind` and `transmittal_kind` the author has specified the ranges of
 
 The authentication and transmittal sequence is between two parties: an `initiator` and a `responder`. The protocol makes no distinction of who's in charge - both parties are equal, either party can assume either role and can verify/adjust the parameters of the protocol at any time, and most importantly can unilaterally exit. 
 
-The `nauth` protocol makes the assumption that if the two parties can communicate via NIP-44 Encryption and NIP-59 Giftwrapping, they are authenticated to one another (i.e., they have control of their respective channels). There is no need for a third-party authentication provider.
+The `nauth` protocol makes the assumption that if the two parties can communicate via NIP-44 Encryption and NIP-59 Giftwrapping, they are authenticated to one another (i.e., they have control of their respective private keys). There is no need for a third-party authentication provider.
 
 
 ### Step 1: Intitiator generates nAuth Request
