@@ -436,6 +436,7 @@ def create_nauth(   npub,
                     nonce:str=None,                                                       
                     auth_kind: int=None, 
                     auth_relays=None,
+                    transmittal_npub: str = None,
                     transmittal_kind= None,  
                     transmittal_relays = None,
                     name: str = None,
@@ -459,10 +460,11 @@ def create_nauth(   npub,
     # Tag 1 : nonce
     # Tag 2 : auth_kind
     # Tag 3 : auth_relays
-    # Tag 4 : transmittal_kind
-    # Tag 5 : transmittal_relays
-    # Tag 6 : name 
-    # Tag 7 : scope
+    # Tag 4 : transmittal_nub
+    # Tag 5 : transmittal_kind
+    # Tag 6 : transmittal_relays
+    # Tag 7 : name 
+    # Tag 8 : scope
 
     # Tag 0: Special (public key)
     encoded_data.append(0)  # Tag 0
@@ -493,35 +495,51 @@ def create_nauth(   npub,
             encoded_data.append(len(auth_relay_bytes))  # Length of the relay string
             encoded_data.extend(auth_relay_bytes)  # Relay string as bytes
     
-    
-    # Tag 4: transmittal_kind (optional)    
+    # Tag 4: Transmittal npub
+    if transmittal_npub:
+        # Decode the npub Bech32 string
+        transmittal_hrp, transmittal_data = bech32.bech32_decode(transmittal_npub)
+        if transmittal_hrp != "npub" or transmittal_hrp is None:
+            raise ValueError("Invalid transmittal npub Bech32 string")
+        
+        # Convert 5-bit data back to 8-bit data
+        transmittal_pubkey_bytes = bytes(convertbits(transmittal_data, 5, 8, False))
+        if len(transmittal_pubkey_bytes) != 32:
+            raise ValueError("Invalid public key length in transmittal npub Bech32 string")
+        # Tag 4:  (public key)
+        encoded_data.append(4)  # Tag 4
+        encoded_data.append(len(transmittal_pubkey_bytes))  # Length of the public key (32 bytes)
+        encoded_data.extend(transmittal_pubkey_bytes)  # Public key bytes
+
+
+    # Tag 5: transmittal_kind (optional)    
     if transmittal_kind:
         # kind_bytes = str(kind).encode("ascii")  
         transmittal_kind_bytes = struct.pack(">I", transmittal_kind)      
-        encoded_data.append(4)
+        encoded_data.append(5)
         encoded_data.append(len(transmittal_kind_bytes))  # Length of the public key (32 bytes)
         encoded_data.extend(transmittal_kind_bytes)  # Public key bytes
 
-    # Tag 5: Transmittal Relay (optional)
+    # Tag 6: Transmittal Relay (optional)
     if transmittal_relays:
         
         for transmittal_relay in transmittal_relays:
             transmittal_relay_bytes = transmittal_relay.encode("ascii")
-            encoded_data.append(5)  # Tag 5
+            encoded_data.append(6)  # Tag 6
             encoded_data.append(len(transmittal_relay_bytes))  # Length of the relay string
             encoded_data.extend(transmittal_relay_bytes)  # Relay string as bytes
         
-    # Tag 6: name (optional)
+    # Tag 7: name (optional)
     if name:
         name_bytes = name.encode("ascii")        
-        encoded_data.append(6)
+        encoded_data.append(7)
         encoded_data.append(len(name_bytes))  # Nonce
         encoded_data.extend(name_bytes)  # Public key bytes
     
-    # Tag 7: scope (optional)
+    # Tag 8: scope (optional)
     if scope:
         scope_bytes =scope.encode("ascii")        
-        encoded_data.append(7)
+        encoded_data.append(8)
         encoded_data.append(len(scope_bytes))  # Nonce
         encoded_data.extend(scope_bytes)  # Public key bytes
 
@@ -590,23 +608,27 @@ def parse_nauth(encoded_string):
                 result["values"]["auth_relays"] = []
             result["values"]["auth_relays"].append(auth_relays)
 
-        elif tag == 4:  # transmittal_kind
+        elif tag == 4:  # transmittal_npub
+            
+            result["values"]["transmittal_pubhex"] = value.hex() 
+
+        elif tag == 5:  # transmittal_kind
             
             transmittal_kind = struct.unpack(">I", value)[0]
             result["values"]["transmittal_kind"] = transmittal_kind  
         
-        elif tag == 5:  # Transmittal Relays
+        elif tag == 6:  # Transmittal Relays
             transmittal_relays = value.decode("ascii")
             if "transmittal_relays" not in result["values"]:
                 result["values"]["transmittal_relays"] = []
             result["values"]["transmittal_relays"].append(transmittal_relays)
         
-        elif tag == 6:  # None
+        elif tag == 7:  # None
             name = value.decode("ascii")
             if "name" not in result["values"]:
                 result["values"]["name"] = name
             
-        elif tag == 7:  # None
+        elif tag == 8:  # None
             scope = value.decode("ascii")
             if "scope" not in result["values"]:
                 result["values"]["scope"] = scope

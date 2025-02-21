@@ -446,32 +446,39 @@ async def do_health_consult(      request: Request,
         pass
 
     if nauth:
+        
         print("nauth")
 
 
         parsed_result = parse_nauth(nauth)
-        npub_recipient = hex_to_npub(parsed_result['values']['pubhex'])
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
-  
-        print(f"requesting npub: {npub_recipient} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+    
+        # leave the transmittal npub the same
 
-        
-        auth_msg = create_nauth(    npub=npub_recipient,
+        auth_msg = create_nauth(    npub=acorn_obj.pubkey_bech32,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
+                                    transmittal_npub=npub_initiator,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=safebox_found.handle,
-                                    scope="transmit"
+                                    scope='transmit'
         )
+
+        print(f"initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+
         
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_recipient,message=auth_msg,dm_relays=auth_relays,transmittal_kind=settings.AUTH_KIND)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=auth_msg,dm_relays=auth_relays,kind=auth_kind)
+
+    else:
+       pass
     
 
     return templates.TemplateResponse(  "healthconsult.html", 
@@ -489,15 +496,13 @@ async def do_health_consult(      request: Request,
 
 @router.get("/inbox", tags=["safebox", "protected"])
 async def get_inbox(      request: Request,
-                                private_mode:str = "consult", 
-                                kind:int = 1060,   
-                                nprofile:str = None,   
-                                naddr: str = None, 
+
                                 nauth: str = None,                         
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to inbox in home relay"""
     nprofile_parse = None
+ 
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
     except:
@@ -508,47 +513,32 @@ async def get_inbox(      request: Request,
     await acorn_obj.load_data()
     # since = None
     since = util_funcs.date_as_ticks(datetime.now())
-    # since = int((datetime.now(timezone.utc)-timedelta(hours=24)).timestamp())
-    user_records = await acorn_obj.get_user_records(record_kind=kind)
+   
     
     
-    if nprofile:
-        nprofile_parse = parse_nostr_bech32(nprofile)
-        pass
+
     
-    if naddr:
-        print("naddr")
-        parsed_result = parse_nostr_bech32(naddr)
-        npub = hex_to_npub(parsed_result['values']['pubhex'])
-        print(f"requesting npub: {npub}")
-        # auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} from"
-        # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
-        # now need to calculate client_nprofile to send
-        client_nprofile = create_nprofile_from_npub(acorn_obj.pubkey_bech32, [acorn_obj.home_relay])
-        
-        auth_msg = client_nprofile
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=settings.AUTH_KIND)
+
 
     if nauth:
         
         print("nauth")
-        # parsed_result = parse_nauth(nauth)
-        # npub = hex_to_npub(parsed_result['values']['pubhex'])
-        # nonce = parsed_result['values']['nonce']
-        # auth_kind = parsed_result['values'].get("auth_kind")
-        # auth_relays = parsed_result['values'].get("auth_relays")
-        # transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        # transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        parsed_result = parse_nauth(nauth)
+        npub = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind)
         
 
     return templates.TemplateResponse(  "inbox.html", 
                                         {   "request": request,
                                             "safebox": safebox_found ,
                                             "user_records": user_records,
-                                            "record_kind": kind,
-                                            "private_mode": private_mode,
-                                            "nprofile": nprofile,
-                                            "nprofile_parse": nprofile_parse
+                                            "record_kind": transmittal_kind,
+                                            "nauth": nauth
 
                                         })
 
@@ -559,6 +549,7 @@ async def my_health_data(       request: Request,
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
+    nauth_response = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
     except:
@@ -575,16 +566,11 @@ async def my_health_data(       request: Request,
     if nauth:
         
         print("nauth")
-        # parsed_result = parse_nostr_bech32(nauth)
-        # npub = hex_to_npub(parsed_result['values']['pubhex'])
-        # nonce = parsed_result['values']['nonce']
-        # auth_kind = parsed_result['values'].get("kind")        
-        # relays = parsed_result['values'].get("relay")
-        # transmittal_relays = parsed_result['values'].get("transmitta_relay")
-        # transmittal_kind = parsed_result['values'].get("transmittal_kind")
+
+        
 
         parsed_result = parse_nauth(nauth)
-        npub = hex_to_npub(parsed_result['values']['pubhex'])
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
@@ -593,32 +579,37 @@ async def my_health_data(       request: Request,
     
 
         
+        # also need to set transmittal npub 
 
-        print(f"requesting npub: {npub} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
-        # auth_msg = f"patient: {safebox_found.handle}{ safebox_found.npub} from"
-        # msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=[safebox_found.home_relay],transmittal_kind=1061)
-        # now need to calculate client_nprofile to send
-        # auth_msg = create_nprofile_from_npub(acorn_obj.pubkey_bech32, [acorn_obj.home_relay])
-        # auth_msg = create_nauth_from_npub(npub_bech32=acorn_obj.pubkey_bech32,relays=[acorn_obj.home_relay],nonce=nonce,kind=auth_kind)
-        
-        auth_msg = create_nauth(    npub=acorn_obj.pubkey_bech32,
+
+        nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
+                                    transmittal_npub=acorn_obj.pubkey_bech32,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=safebox_found.handle,
                                     scope='transmit'
         )
+
+        print(f"initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+
         
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub,message=auth_msg,dm_relays=auth_relays,transmittal_kind=settings.AUTH_KIND)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+
+    else:
+       pass
+
+        
+
     
     return templates.TemplateResponse(  "healthdata.html", 
                                         {   "request": request,
                                             "safebox": safebox_found,
                                             "health_records": health_records ,
-                                            "nauth": nauth
+                                            "nauth": nauth_response
 
                                         })
 
@@ -845,7 +836,9 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
             
 
             if client_nauth != nauth_old: 
-                nprofile = {'nauth': client_nauth, 'name': 'safebox user'}
+                parsed_nauth = parse_nauth(client_nauth)
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
+                nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
@@ -1152,6 +1145,8 @@ async def transmit_records(        request: Request,
 
     status = "OK"
     detail = "Nothing yet"
+    transmit_consultation.originating_kind = 32227
+    transmit_consultation.final_kind = 32225
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
@@ -1172,10 +1167,12 @@ async def transmit_records(        request: Request,
 
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
         pubhex = parsed_nauth['values']['pubhex']
-        npub = hex_to_npub(pubhex)
+        npub_recipient = hex_to_npub(pubhex)
         nonce = parsed_nauth['values']['nonce']
         auth_kind = parsed_nauth['values']['auth_kind']
         auth_relays = parsed_nauth['values']['auth_relays']
+        transmittal_pubhex = parsed_nauth['values']['transmittal_pubhex']
+        transmittal_npub = hex_to_npub(transmittal_pubhex)
         transmittal_kind = parsed_nauth['values']['transmittal_kind']
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
@@ -1187,19 +1184,19 @@ async def transmit_records(        request: Request,
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.kind)
+        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
         for each_record in records_to_transmit:
             print(f"transmitting: {each_record['tag']} {each_record['payload']}")
 
             record_obj = { "tag"   : [each_record['tag']],
-                            "type"  : str(transmit_consultation.kind),
+                            "type"  : str(transmit_consultation.final_kind),
                             "payload": each_record['payload']
                           }
             print(f"record obj: {record_obj}")
             # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
             # 32227 are transmitted as kind 1060
             
-            await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=transmittal_relays,transmittal_kind=transmittal_kind)
+            await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successful"
         

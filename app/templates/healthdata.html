@@ -8,6 +8,11 @@
 
 <script>
 
+var global_nprofile = "";
+  
+var global_client_nauth = "{{nauth}}";  
+
+
 async function scanCode() {
 // alert("scan!");
 
@@ -34,8 +39,20 @@ async function goBack() {
 }
 
 async function myInbox() {
+  
+if (global_client_nauth == "None"){
+  alert("Please authenticate!");
+  return;
+}
+else {
+  alert(`authenticated ${global_client_nauth}`);  
+  window.location.href=`/safebox/inbox?nauth=${global_client_nauth}`;
 
-window.location.href="/safebox/inbox?nauth={{nauth}}";
+}
+
+
+
+
 
 }
 </script>
@@ -55,7 +72,7 @@ window.location.href="/safebox/inbox?nauth={{nauth}}";
 
 <script>
 
-var global_nprofile = "";
+
 
 
 async function copytoClipboard() {
@@ -81,6 +98,8 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
 
 }
 
+
+
   async function createQRCode() {
     
   var data;
@@ -92,10 +111,11 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   ws.onmessage = (event) => {
   console.log("Message received:", event.data);
   const response = JSON.parse(event.data);  
-  client_nauth = response.nauth;
+  global_client_nauth = response.nauth;
   client_name = response.name;
+  client_transmittal_kind = response.transmittal_kind;
   // client_name = response.name;
-  alert(`Client is authenticated! ${client_name} Ready to transmit files`); 
+  alert(`Client is authenticated! ${client_name} ${client_transmittal_kind} Ready to transmit files`); 
   ws.close()
   };
   ws.onclose = () => console.log("WebSocket closed");
@@ -177,7 +197,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   for (let record of jsonUserData)
   {
     if (record.hasOwnProperty("tag")) {
-        console.log(`Name: ${record.name}`);
+        // console.log(`Name: ${record.name}`);
         addCard(record.tag, record.payload);
     } else {
         console.log("This record does not have a 'name' property.");

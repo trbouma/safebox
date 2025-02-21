@@ -194,7 +194,8 @@ class Acorn:
                 if each[0] == "user_record":
                     self.user_records.append(each[1])   
         except Exception as e:
-            raise Exception(f"No wallet data on {self.home_relay}")
+            await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
+            # raise Exception(f"No wallet data on {self.home_relay}")
 
 
         await self._load_proofs()
@@ -393,48 +394,54 @@ class Acorn:
             self.access_key = generate_access_key_from_hex(access_key_hash)
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
             await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+        else:
+            #keepkey = true
 
+            pass
         return self.privkey_bech32
 
     def get_profile(self, name="wallet"):
         mints = []
-        for each in self.acorn_tags:
-            if each[0] == "balance":
-                balance_amount = int(each[1])
-                balance_unit = each[2]
-            elif each[0] == "privkey":
-                lock_privkey = each[1]
-                lock_pubkey = Keys(each[1]).public_key_hex()
-            elif each[0] == "mint":
-                mints.append(each[1])
-            elif each[0] == "name":
-                name = each[1]
+        mnemo = Mnemonic("English")
+        try:
+            for each in self.acorn_tags:
+                if each[0] == "balance":
+                    balance_amount = int(each[1])
+                    balance_unit = each[2]
+                elif each[0] == "privkey":
+                    lock_privkey = each[1]
+                    lock_pubkey = Keys(each[1]).public_key_hex()
+                elif each[0] == "mint":
+                    mints.append(each[1])
+                elif each[0] == "name":
+                    name = each[1]
 
-        known_mints_cat=""
+            known_mints_cat=""
 
-        for index, (key, value) in enumerate(self.known_mints.items()):
-            known_mints_cat +=f"\n{index+1}. {value} {key}"
+            for index, (key, value) in enumerate(self.known_mints.items()):
+                known_mints_cat +=f"\n{index+1}. {value} {key}"
 
-        out_string = f"""   \nnpub: {self.pubkey_bech32}
-                            \nnsec: {self.privkey_bech32} 
-                            \npubhex: {self.pubkey_hex}  
-                            \nhandle: {self.handle}   
-                            \naccess key: {self.access_key}  
-                            \nowner: {self.owner}                     
-                            \nlock privkey: {lock_privkey}
-                            \nseed phrase: {self.seed_phrase}
-                            \nlock pubkey: {lock_pubkey}
-                            \nlocal currency: {self.local_currency}
-                            \nhome mints: {mints}
-                            \nknown mints: {self.known_mints}
-                            \nbalance: {self.balance} {self.unit}
-                            \nhome relay: {self.home_relay}
-                            \nuser records: {self.user_records}
-                            \nname: {name}
-                            \n{"*"*75}
+            out_string = f"""   \nnpub: {self.pubkey_bech32}
+                                \nnsec: {self.privkey_bech32} 
+                                \npubhex: {self.pubkey_hex}  
+                                \nhandle: {self.handle}   
+                                \naccess key: {self.access_key}  
+                                \nowner: {self.owner}                     
+                                \nlock privkey: {lock_privkey}
+                                \nseed phrase: {self.seed_phrase}
+                                \nlock pubkey: {lock_pubkey}
+                                \nlocal currency: {self.local_currency}
+                                \nhome mints: {mints}
+                                \nknown mints: {self.known_mints}
+                                \nbalance: {self.balance} {self.unit}
+                                \nhome relay: {self.home_relay}
+                                \nuser records: {self.user_records}
+                                \nname: {name}
+                                \n{"*"*75}
 
-        """
-
+            """
+        except:
+            out_string = f"No profile - seed phrase: {mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
         return out_string
 
 
@@ -909,7 +916,7 @@ class Acorn:
             c.publish(wrapped_evt)
             await asyncio.sleep(0.2)
                 
-    async def secure_transmittal(self,nrecipient:str, message: str,  dm_relays: List[str],transmittal_kind: int=1060):
+    async def secure_transmittal(self,nrecipient:str, message: str,  dm_relays: List[str],kind: int=1060):
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
@@ -922,12 +929,12 @@ class Acorn:
             return "error"
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
-        await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, transmittal_kind=transmittal_kind) 
+        await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, kind=kind) 
         return "message sent" 
     
-    async def _async_secure_transmittal(self, npub_hex, message:str,  dm_relays: List[str],transmittal_kind):
+    async def _async_secure_transmittal(self, npub_hex, message:str,  dm_relays: List[str],kind):
        
-        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k),kind_gift_wrap=transmittal_kind)
+        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k),kind_gift_wrap=kind)
         
         # relays = [self.home_relay]
         relays = dm_relays

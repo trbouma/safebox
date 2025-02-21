@@ -11,6 +11,7 @@ from datetime import timedelta
 import qrcode, io, urllib, json
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select, update
+from argon2 import PasswordHasher
 
 
 from monstr.encrypt import Keys
@@ -25,6 +26,7 @@ from app.config import Settings
 
 settings = Settings()
 templates = Jinja2Templates(directory="app/templates")
+password_hasher = PasswordHasher()
 
 # RELAYS = ['wss://relay.getsafebox.app']
 RELAYS = settings.RELAYS
@@ -272,6 +274,9 @@ async def onboard_friend(request: Request, friend_handle:str ):
     nsec_new = await acorn_obj.create_instance()
     # profile_info = acorn_obj.get_profile()
     await acorn_obj.load_data()
+    nsec_hash = password_hasher.hash(nsec_new)
+    nsec_verify = password_hasher.verify(nsec_hash,nsec_new)
+    print(f"nsec hash is: {nsec_hash} {nsec_verify}")
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,

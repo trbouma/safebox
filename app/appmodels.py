@@ -84,11 +84,12 @@ class deleteCard(BaseModel):
   
 class transmitConsultation(BaseModel):
     nauth: str
-    kind: int = 1060
+    originating_kind: int = 32227
+    final_kind: int = 32225
 
 class incomingRecord(BaseModel):
     id: str
-    kind: int = 1060
+    kind: int
 
 class recoverIdentity(BaseModel):
     seed_phrase: str

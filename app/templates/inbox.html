@@ -87,7 +87,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
 <script>
   const jsonUserData = {{ user_records | tojson }};
   const record_kind = parseInt("{{ record_kind }}");
-  const nprofile = "{{nprofile}}";
+  const nauth = "{{nauth}}";
 
   // Function to create and add a card
   function addCard(title, created_at, content,id) {

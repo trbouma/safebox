@@ -63,8 +63,9 @@ async function createQRCode() {
   const response = JSON.parse(event.data);  
   client_nauth = response.nauth;
   client_name = response.name;
+  client_transmittal_kind = response.transmittal_kind;
 // client_name = response.name;
-  alert(`Client is authenticated! ${client_name} Ready to transmit files`); 
+  alert(`Client is authenticated! ${client_name} ${client_transmittal_kind} Ready to transmit files`); 
   ws.close()
   };
   ws.onclose = () => console.log("WebSocket closed");
@@ -239,7 +240,7 @@ async function transmitToNprofile() {
    
 
 
-  const submit_data = {"nauth": client_nauth, "kind":32227 };
+  const submit_data = {"nauth": client_nauth };
 
    
 
