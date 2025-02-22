@@ -62,7 +62,7 @@ Via the introduction channel, the responder receives and inspects the `nauth` re
 
 For example, the responder may wish to use different `transmittal_kind` and `transmittal_relays` proposed in the orginal `nauth`. The responder specifies the `transmittal_npub` for which the secure transmittal documents are to be sent. Usually, it is the same as the responder `npub` but may be different.
 
-Once the responder is satisfied with the adjusted parameters, a responding `nauth` is formulated.  It is then sent as a NIP-44 encrypted/NIP-59 gift-wrapped message to the initiator.
+Once the responder is satisfied with the adjusted parameters, a responding `nauth` is formulated.  The responder should replace the initiator `npub` with its own `npub` (Tag 0), as it is now can be considered an originator. It is then sent as a NIP-44 encrypted/NIP-59 gift-wrapped message to the initiator.
 
 Before proceeding further, the responder may listen for an `ack` with a revised `nauth`, or a `nack` using the `auth_kind` and `auth_relays` specified in the request or as specified in revised `nauth`. In the current implementation, for sake of simplicity, the `ack` is assumed.
 
