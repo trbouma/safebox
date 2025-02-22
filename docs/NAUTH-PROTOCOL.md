@@ -8,16 +8,16 @@ The inception of the `nauth` came from exploring the requirements for sharing of
 
 The `nauth` protocol has been developed so that either party can initiate the authentication - this is particularly important where either party might have a constrained device (i.e. no camera) and cannot easily initiate the authentication transaction (e.g. read a QR code, or receive a text message). 
 
-It is worth stating upfront that the goal of this protocol is intended to cut third parties out of the loop who have become increasingly less trustworthy of late, intercepting the data to train AI models or selling the data to advertisers or insurers. Should the physician or patient share the data, that is their prerogative, but this protocol is being designed to not be implicated in issues of human trust.
+It is worth emphasizing that the goal of this protocol is intended to remove third parties from the loop as third parties have become increasingly less trustworthy of late, intercepting or reusing the data without permission to train AI models or to sell the data to advertisers or insurers. 
 
-Finally, the author has a working knowledge of the [OAuth 2.0 Protocol RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) used by the major authentication providers (Google etc.) and is trying to replicate a generic protocol that leverages the unique properties of Nostr, not contemplated in the older third-party centralized authentication protocols. This is the first ambitional crack (read - likely to be improved or fail gloriously) at developing a two-party decentralized authentication protocol that may be as consequential as OAuth 2.0, but for decentralization.
+To conclude this section, the author has a working knowledge of the [OAuth 2.0 Protocol RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) used by the major authentication providers (Google etc.) and is trying to replicate a generic authentication protocol that leverages the unique properties of Nostr, that were not available for the legacy third-party centralized authentication protocols to take advantage of. This document is the first ambitional crack at developing a two-party decentralized authentication protocol that may be as consequential as OAuth 2.0.
 
 
 ## The Nauth Scheme
 
 The name `nauth` refers to the human readable prefix of a Bech32 encoded entity that uses the same scheme as `nsec`, `npub`, `note`, etc.
 
-A fully-loaded `nauth` looks like below:
+A fully-loaded `nauth` is a NIP-19 Bech32 encoded entity that looks like below:
 
 `nauth1qqsxum7audk42s4j7uwtszt4e5q8kv23uryhwu3es93qn9ww75llj8spypsnzvecv5mrqvfnx9snxvphx3jnxcfhxvmrgwfkxymnxde4xvurjqsyqqq98xgrrfmhxue69uhhyetvv9ujuem9w3ekzen9vfhhstnpwpcqggpcenh5r2zue06fxhwzj6jx3gf0lzkw4h4d8xrkj6nayhdzlgmvmszsgqqq209svxnhwden5te0wfjkccte9enk2arnv9nx2cn00qhxzursqu8ksmmkv4ez6mr9v9mx2tf58qesszr5wfskuumdd96qu24x9s`
 
