@@ -466,14 +466,17 @@ class Acorn:
         # label_hash = m.digest().hex()
         decrypt_content = None
 
-        # handle records that are coming in via giftware
+        # handle records that are coming in via giftwraps
         # 1059 are regular DMs
         # 1060 are health records
         # 1061 are health authentication messages
         # 1062 are shared notes
         # 1063 are official docs and credentials
+        # 1400-1499: regular events
+        # 21400-21400: emphemeral events
 
-        if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063]:
+        if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
+            (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
             
            if since:        
                 FILTER = [{
@@ -508,7 +511,8 @@ class Acorn:
         for each in events:
             # print("x:", each.tags, each.kind, each.created_at)
 
-            if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063]:
+            if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
+                (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
                 # print(f"need to  unwrap {type(each.content)} {each.content} ")
                 try:
                     pass

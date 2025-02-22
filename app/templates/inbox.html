@@ -8,6 +8,10 @@
 
 <script>
 
+var global_client_transmittal_kind = parseInt("{{transmittal_kind}}");
+
+// alert(`transmittal kind ${global_client_transmittal_kind}`);
+
 async function backToProfile() {
 
 
@@ -50,7 +54,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
     } else {return;}
   
 
-  const submit_data = {"id": id, "kind": 1060 };
+  const submit_data = {"id": id, "kind": global_client_transmittal_kind };
 
   await fetch('/safebox/acceptincomingrecord', {
        method: "POST",
@@ -86,7 +90,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
 
 <script>
   const jsonUserData = {{ user_records | tojson }};
-  const record_kind = parseInt("{{ record_kind }}");
+  const transmittal_kind = parseInt("{{ transmittal_kind }}");
   const nauth = "{{nauth}}";
 
   // Function to create and add a card
@@ -143,7 +147,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
 
 async function addCardtoSafebox() {
 // alert(`add card ${record_kind}`);
-window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
+window.location.href=`/safebox/displaycard?action_mode=add&kind=${transmittal_kind}`;
 
 
 }
@@ -167,7 +171,7 @@ setDarkMode();
   <button onclick="backToProfile()">Home</button>
   <hr>
   <br><br>
-  Record Kind: {{record_kind}}
+  Record Kind: {{transmittal_kind}}
  
     
  

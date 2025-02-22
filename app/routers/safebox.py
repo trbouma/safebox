@@ -458,7 +458,7 @@ async def do_health_consult(      request: Request,
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
     
-        # leave the transmittal npub the same
+        #TODO  transmittal npub from nauth
 
         auth_msg = create_nauth(    npub=acorn_obj.pubkey_bech32,
                                     nonce=nonce,
@@ -537,7 +537,7 @@ async def get_inbox(      request: Request,
                                         {   "request": request,
                                             "safebox": safebox_found ,
                                             "user_records": user_records,
-                                            "record_kind": transmittal_kind,
+                                            "transmittal_kind": transmittal_kind,
                                             "nauth": nauth
 
                                         })

@@ -460,7 +460,7 @@ def create_nauth(   npub,
     # Tag 1 : nonce
     # Tag 2 : auth_kind
     # Tag 3 : auth_relays
-    # Tag 4 : transmittal_nub
+    # Tag 4 : transmittal_npub in hex
     # Tag 5 : transmittal_kind
     # Tag 6 : transmittal_relays
     # Tag 7 : name 

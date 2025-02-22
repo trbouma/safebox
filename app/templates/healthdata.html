@@ -11,6 +11,7 @@
 var global_nprofile = "";
   
 var global_client_nauth = "{{nauth}}";  
+var global_client_transmittal_kind = null;
 
 
 async function scanCode() {
@@ -113,9 +114,9 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   const response = JSON.parse(event.data);  
   global_client_nauth = response.nauth;
   client_name = response.name;
-  client_transmittal_kind = response.transmittal_kind;
+  global_client_transmittal_kind = response.transmittal_kind;
   // client_name = response.name;
-  alert(`Client is authenticated! ${client_name} ${client_transmittal_kind} Ready to transmit files`); 
+  alert(`Client is authenticated! ${client_name} ${global_client_transmittal_kind} Ready to transmit files`); 
   ws.close()
   };
   ws.onclose = () => console.log("WebSocket closed");
