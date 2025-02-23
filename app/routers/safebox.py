@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRout
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 import asyncio,qrcode, io, urllib
 
@@ -36,12 +36,12 @@ engine = create_engine(settings.DATABASE)
 
 ##########################
 # Functions that need be part part of the module
-async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None):
+async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
    
     
     
 
-    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now)
+    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
     
     
     return records_out[0]["payload"]
@@ -141,6 +141,8 @@ async def protected_route(    request: Request,
                         action_comment: str = None,
                         access_token: str = Cookie(None)
                     ):
+    account_access_key = None # This may be different than the original
+ 
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
     except:
@@ -180,13 +182,17 @@ async def protected_route(    request: Request,
         safebox_found.balance = acorn_obj.balance
         session.add(safebox_found)
         session.commit()
+        account_access_key = safebox_found.access_key
+        
+        
 
     # Token is valid, proceed
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
                                             "message": "Welcome to Safebox Web!", 
-                                            "safebox":acorn_obj, 
+                                            "acorn" : acorn_obj,
+                                            "account_access_key":account_access_key, 
                                             "currency_code": currency_code,
                                             "currency_rate": currency_rate,
                                             "lightning_address": lightning_address,
@@ -447,7 +453,7 @@ async def do_health_consult(      request: Request,
 
     if nauth:
         
-        print("nauth")
+        print(f"nauth from do consult {nauth}")
 
 
         parsed_result = parse_nauth(nauth)
@@ -471,7 +477,7 @@ async def do_health_consult(      request: Request,
                                     scope='transmit'
         )
 
-        print(f"initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+        print(f"do consult initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
 
         
         # send the recipient nauth message
@@ -593,7 +599,7 @@ async def my_health_data(       request: Request,
                                     scope='transmit'
         )
 
-        print(f"initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+        print(f"my health data initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
 
         
         # send the recipient nauth message
@@ -800,10 +806,19 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
         
     print("websocket connection closed")
 
-@router.websocket("/wsrequesttransmittal")
-async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie()):
+@router.websocket("/wsrequesttransmittal/{nauth}")
+async def websocket_requesttransmittal(websocket: WebSocket, nauth:str=None, access_token=Cookie()):
+
+    print(f"ws nauth: {nauth}")
+    auth_relays = None
 
     await websocket.accept()
+
+    if nauth:
+        parsed_nauth = parse_nauth(nauth)   
+        auth_kind = parsed_nauth['values'] ['auth_kind']   
+        auth_relays = parsed_nauth['values']['auth_relays']
+        print(f"ws auth relays {auth_relays}")
 
     try:
        
@@ -824,7 +839,7 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
         try:
             await acorn_obj.load_data()
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=settings.AUTH_KIND, since_now=since_now)
+                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
                 client_nauth=None
             
@@ -838,7 +853,8 @@ async def websocket_requesttransmittal(websocket: WebSocket, access_token=Cookie
             if client_nauth != nauth_old: 
                 parsed_nauth = parse_nauth(client_nauth)
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
-                nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind}
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
@@ -1129,7 +1145,7 @@ async def get_nauth(    request: Request,
                             )
         
 
-        print(f"nauth: {detail}")
+        print(f"generated nauth: {detail}")
       
     except:
         detail = "Not created"
@@ -1157,13 +1173,7 @@ async def transmit_records(        request: Request,
 
 
     try:
-        # nprofile_parse = parse_nostr_bech32(transmit_consultation.nauth)        
-        # print(nprofile_parse)
-        # pubhex = nprofile_parse['values']['pubhex']
-        # npub = hex_to_npub(pubhex)
-        # relay = pubhex = nprofile_parse['values']['relay']
-        # kind = nprofile_parse['values']['kind']
-        # print(f"transmit to: {npub} {relay}")
+
 
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
         pubhex = parsed_nauth['values']['pubhex']
@@ -1196,7 +1206,7 @@ async def transmit_records(        request: Request,
             # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
             # 32227 are transmitted as kind 1060
             
-            await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
+            msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successful"
         

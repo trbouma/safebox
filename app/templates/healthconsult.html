@@ -12,6 +12,7 @@
   const record_kind = parseInt("{{ record_kind }}");
   //There are two ways to receive client nauth 1) from scan, 2) from websockets
   var client_nauth = "{{client_nauth}}";
+  
 
   
 
@@ -20,6 +21,7 @@
 <script>
 
 var global_naddr = "";
+var global_transmit_nauth = "None";
 
 async function backToProfile() {
 
@@ -41,9 +43,10 @@ var qr_img_func = document.getElementById("img_qr_display");
 
 parsedResult = JSON.parse(JSON.stringify(return_result));
 
- global_naddr = parsedResult.detail;
 
-qr_img_func.src = "/safebox/qr/"+ global_naddr;
+ global_nauth = parsedResult.detail;
+
+qr_img_func.src = "/safebox/qr/"+ global_nauth;
 // qr_img_func.addEventListener("click", copytoClipboard);
 
 
@@ -55,32 +58,35 @@ async function createQRCode() {
     var data;
     var qr_img_func = document.getElementById("img_qr_display");
 
-    const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
+    qr_img_func.src="/img/circle-256.gif";    
+
+    await fetch('/safebox/nauth', {
+      method: "GET",
+      headers: {"Content-Type": "application/json"}        
+           
+      })
+ .then((response) => response.json())
+ .then((data) => getQRStatus(data));
+
+ const ws = new WebSocket(`wss://{{request.url.hostname}}/safebox/wsrequesttransmittal/${global_nauth}`);
+
+   
 
     ws.onopen = () => console.log("WebSocket connected");
     ws.onmessage = (event) => {
   console.log("Message received:", event.data);
   const response = JSON.parse(event.data);  
-  client_nauth = response.nauth;
+  global_transmit_nauth = response.nauth;
   client_name = response.name;
   client_transmittal_kind = response.transmittal_kind;
+  client_transmittal_relays = response.transmittal_relays;
 // client_name = response.name;
-  alert(`Client is authenticated! ${client_name} ${client_transmittal_kind} Ready to transmit files`); 
+  alert(`Client is authenticated! ${global_transmit_nauth} ${client_transmittal_kind} Ready to transmit files via ${client_transmittal_relays}`); 
   ws.close()
   };
   ws.onclose = () => console.log("WebSocket closed");
   
-    qr_img_func.src="/img/circle-256.gif";
 
-    
-
-   await fetch('/safebox/nauth', {
-        method: "GET",
-        headers: {"Content-Type": "application/json"}        
-              
-       })
-    .then((response) => response.json())
-    .then((data) => getQRStatus(data));
 
 
 }
@@ -227,20 +233,28 @@ alert(`${parsedResult.status} ${parsedResult.detail}`);
 
 async function transmitToNprofile() {
 
-    if (client_nauth=="None") {
-      alert(`Please scan client QR Code!`);
+    
+    if (global_transmit_nauth=="None" && client_nauth == "None" ) {
+      alert(`Please authenticate the other party!`);
       return;
     }
 
-    if (confirm(`Are you sure you want to send to: ${client_nauth}?`)) {
+    if (confirm(`Are you sure you want to send?`)) {
       // alert(`Sending...`);
     } else {return;}
   
     var data;
+    if (global_transmit_nauth == "None"){
+      
+      nauth_to_transmit = client_nauth;
+
+    } else {
+      nauth_to_transmit = global_transmit_nauth;
+    }
    
 
 
-  const submit_data = {"nauth": client_nauth };
+  const submit_data = {"nauth": nauth_to_transmit };
 
    
 

@@ -14,7 +14,7 @@ from app.routers import lnaddress, safebox, scanner
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
-from app.rates import refresh_currency_rates, init_currency_rates
+from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 # Create Settings:
 settings = Settings()
@@ -41,7 +41,8 @@ async def lifespan(app: FastAPI):
 
 
 service_key = Keys(settings.SERVICE_SECRET_KEY)
-
+# asyncio.run(init_currency_rates())
+# asyncio.run(refresh_currency_rates())
 
 
 

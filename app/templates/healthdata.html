@@ -8,7 +8,7 @@
 
 <script>
 
-var global_nprofile = "";
+var global_nauth = "";
   
 var global_client_nauth = "{{nauth}}";  
 var global_client_transmittal_kind = null;
@@ -90,9 +90,9 @@ var qr_img_func = document.getElementById("img_qr_display");
 
 parsedResult = JSON.parse(JSON.stringify(return_result));
 
- global_nprofile = parsedResult.detail;
+global_nauth = parsedResult.detail;
 
-qr_img_func.src = "/safebox/qr/"+ global_nprofile;
+qr_img_func.src = "/safebox/qr/"+ global_nauth;
 // qr_img_func.addEventListener("click", copytoClipboard);
 
 
@@ -106,7 +106,16 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   var data;
   var qr_img_func = document.getElementById("img_qr_display");
 
-  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/wsrequesttransmittal");
+  qr_img_func.src="/img/circle-256.gif";
+   await fetch('/safebox/nauth', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+              
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+  const ws = new WebSocket(`wss://{{request.url.hostname}}/safebox/wsrequesttransmittal/${global_nauth}`);
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
@@ -122,14 +131,7 @@ qr_img_func.src = "/safebox/qr/"+ global_nprofile;
   ws.onclose = () => console.log("WebSocket closed");
 
 
-  qr_img_func.src="/img/circle-256.gif";
-   await fetch('/safebox/nauth', {
-        method: "GET",
-        headers: {"Content-Type": "application/json"}        
-              
-       })
-    .then((response) => response.json())
-    .then((data) => getStatus(data));
+
 
   
 

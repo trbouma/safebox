@@ -455,7 +455,7 @@ class Acorn:
         pass
         return "this is the instance"
 
-    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False):
+    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
@@ -465,6 +465,11 @@ class Acorn:
         # m.update(label.encode())
         # label_hash = m.digest().hex()
         decrypt_content = None
+
+        if relays:
+            relays_to_use = relays
+        else:
+            relays_to_use = [self.home_relay]
 
         # handle records that are coming in via giftwraps
         # 1059 are regular DMs
@@ -502,8 +507,8 @@ class Acorn:
                 
             }]
 
-
-        async with ClientPool([self.home_relay]) as c:  
+        print(f"kind: {record_kind} relays to use: {relays_to_use}")
+        async with ClientPool(relays_to_use) as c:  
             events = await c.query(FILTER)           
         
         events.sort(reverse=reverse)

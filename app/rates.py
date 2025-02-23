@@ -31,25 +31,40 @@ async def refresh_currency_rates():
             record.refresh_time = datetime.now()
         session.commit()
 
+async def get_online_currency_rates():
+    return json.loads(requests.get('https://blockchain.info/ticker').text)
+   
+
+
+
 async def init_currency_rates():
    
     supported_currencies = []
 
-    satoshi = CurrencyRate(currency_code="SAT", currency_rate=1e8)
+    
     cad     = CurrencyRate(currency_code="CAD", currency_rate=1e8)
     usd     = CurrencyRate(currency_code="USD", currency_rate=1e8)
     gbp     = CurrencyRate(currency_code="GBP", currency_rate=1e8)
     eur     = CurrencyRate(currency_code="EUR", currency_rate=1e8)
+    jpy     = CurrencyRate(currency_code="JPY", currency_rate=1e8)
     
-    supported_currencies = [satoshi,cad,usd,gbp,eur]
+    supported_currencies = [cad,usd,gbp,eur,jpy]
 
     with Session(engine) as session:
         
-        statement = select(CurrencyRate).where(CurrencyRate.currency_code=='SAT')
-        result = session.exec(statement).first()
-        if not result:
-            session.add(satoshi)
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code=='SATX')
+        found_rate = session.exec(statement).first()
+        if found_rate:
+            session.add(found_rate)
             session.commit()
+            pass
+        else:
+            print("not found!")
+        # user = session.exec(statement).first()
+        # satoshi = CurrencyRate(currency_code="SAT", currency_rate=1e8)
+        # session.add(satoshi)
+        # session.commit()
+        # pass
 
 
 

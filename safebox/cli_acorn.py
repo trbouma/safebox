@@ -397,9 +397,20 @@ def delete_kind(kind):
 @click.command("getrecords", help='get a private wallet record')
 @click.option('--kind','-k', default=37375)
 @click.option('--since','-s', default=None, help='since in hours')
-def get_records(kind, since):
+@click.option('--relays', '-r', default=None, help=RELAYS_HELP)
+def get_records(kind, since, relays):
     
     out_info = "None"
+    relay_array = None
+    if relays != None:
+        
+        relay_array = str(relays).replace(" ","").split(',')
+        relay_array_wss = []
+        for each in relay_array:
+            relay_array_wss.append(each if "wss://" in each else "wss://"+each)
+        print(relay_array_wss)
+
+
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
 
@@ -410,7 +421,7 @@ def get_records(kind, since):
         since_adjusted = None
 
     try:
-        out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted))
+        out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted, relays=relay_array_wss))
         
         for each in out_info:
             click.echo(f"RECORD: {each}")

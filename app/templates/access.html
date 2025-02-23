@@ -17,12 +17,12 @@
   var reveal_seed_phrase = false;
   var reveal_access_key = false;
   var reveal_balance = true;
-  var starting_balance = "{{safebox.balance}}";
+  var starting_balance = "{{acorn.balance}}";
   // var orginal_background = document.body.style.backgroundColor ;
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
-  var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{safebox.access_key}} \n\nRecovery Phrase (12 words):\n\n{{safebox.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
+  var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{account_access_key}} \n\nRecovery Phrase (12 words):\n\n{{acorn.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
   var onboard_msg = "Welcome to {{branding}}! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
   var lighting_invoice_data = "";
@@ -82,7 +82,7 @@
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan/?wallet_name={{safebox.handle}}";
+window.location.href="/scanner/scan/?wallet_name={{acorn.handle}}";
 
 }
 
@@ -93,7 +93,7 @@ function revealBalance() {
     {
         
         // don't worry about linting
-        heading_balance.textContent = "{{"{:,}".format(safebox.balance)}} sats";
+        heading_balance.textContent = "{{"{:,}".format(acorn.balance)}} sats";
         reveal_balance = true;
     }
     else
@@ -110,7 +110,7 @@ function revealSeedPhrase() {
     {
         
         
-        reveal_seed_phrase_text.textContent = "{{safebox.seed_phrase}}";
+        reveal_seed_phrase_text.textContent = "{{acorn.seed_phrase}}";
         reveal_seed_phrase = true;
     }
     else
@@ -127,7 +127,7 @@ function revealSeedPhrase() {
     {
         
         
-        access_key_reveal_text.textContent = "{{safebox.access_key}}";
+        access_key_reveal_text.textContent = "{{account_access_key}}";
         reveal_access_key = true;
     }
     else
@@ -141,14 +141,14 @@ function revealSeedPhrase() {
 
 function receivePayment() {
 
-  //alert("Receive Payment {{safebox.handle}}");
-  window.location.href="/safebox/profile/{{safebox.handle}}";
+  //alert("Receive Payment {{acorn.handle}}");
+  window.location.href="/safebox/profile/{{acorn.handle}}";
 }
 
 function onboardFriend() {
 
   //alert("Onboard");
-  window.location.href="/invite?onboard_code={{safebox.handle}}";
+  window.location.href="/invite?onboard_code={{acorn.handle}}";
 }
 
 async function privateData() {
@@ -539,8 +539,8 @@ function getInvoiceStatus(ln_invoice_status) {
 <div class="center-text">
 
   
-  <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(safebox.balance)}} sats</h1>  
-  ({{"{:.2f}".format(currency_rate * safebox.balance / 1e8)}} {{currency_code}})
+  <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
+  ({{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})
   <br><br>
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
@@ -641,9 +641,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <h2>Technical Info</h2>
 
   <br>Mode: {{action_mode}} Data: {{action_data}}
-  <br>npub: {{safebox.pubkey_bech32[:10]}}...{{safebox.pubkey_bech32[-8:]}}
-  <br>pubhex: {{safebox.pubkey_hex[:10]}}...{{safebox.pubkey_hex[-8:]}}
-  <br>home relay: {{safebox.home_relay}}
+  <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+  <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
+  <br>home relay: {{acorn.home_relay}}
   <br><br>
   <a href="/safebox/dangerzone">Danger Zone!</a>
   
