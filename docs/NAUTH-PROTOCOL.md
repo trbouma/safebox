@@ -4,7 +4,7 @@
 
 **nAuth** (or `nauth`) is a decentralized authentication and document transmittal protocol that leverages the unique properties of the Nostr protocol to provide a secure authentication and sharing mechanism between two parties wishing to authenticate each other and securely share documents, without the intervention (wanted or unwanted) of a third party.
 
-The inception of the `nauth` came from exploring the requirements for sharing of personal and sensitive health data (prescriptions, etc) between a patient and physician where the interaction may be initiated either in person or via video (Zoom) consultation session. 
+The inception of the `nauth` came from exploring the requirements for sharing of personal and sensitive health data (prescriptions, etc) between a patient and physician where the interaction may be initiated either in person or via video consultation session. 
 
 The `nauth` protocol has been developed so that either party can initiate the authentication - this is particularly important where either party might have a constrained device (i.e. no camera) and cannot easily initiate the authentication transaction (e.g. read a QR code, or receive a text message). 
 
@@ -37,9 +37,9 @@ A fully-loaded `nauth` is a NIP-19 Bech32 encoded entity that looks like below:
 
 The astute observer will see that the only mandatory tag is `npub` meaning that `nauth` without any optional parameters specified reduces to a `npub` Bech32 encoded entity, which is perfectly fine - if no additional requirements are needed then it reduces to NIP-17 Private Direct Messages scenario. 
 
-However, for secure transmittal of documents, an addtional set of parameters are needed (Tags 1 thru 8) for a robust, resilient protocol beyond and above what NIP-17 provides.
+However, for secure transmittal of documents, an additional set of parameters are needed (Tags 1 thru 8) for a robust, resilient protocol beyond and above what NIP-17 provides.
 
-As for `auth_kind` and `transmittal_kind` the author has specified the ranges of `1400-1499` for regular events and `21400-21499` for emphemeral events. The intent that once authentication and transmittal has occurred, the events should disappear (be deleted) from relays. However, there may be situations where persistence (regular events) are required. The author is still investigating the optimal event kinds.
+As for `auth_kind` and `transmittal_kind` the author has specified the ranges of `1400-1499` for regular events and `21400-21499` for ephemeral events. The intent that once authentication and transmittal has occurred, the events should disappear (be deleted) from relays. However, there may be situations where persistence (regular events) are required. The author is still investigating the optimal event kinds.
 
 ## The Nauth Protocol
 
@@ -48,7 +48,7 @@ The authentication and transmittal sequence is between two parties: an `initiato
 The `nauth` protocol makes the assumption that if the two parties can communicate via NIP-44 Encryption and NIP-59 Giftwrapping, they are authenticated to one another (i.e., they have control of their respective private keys). There is no need for a third-party authentication provider.
 
 
-### Step 1: Intitiator generates nAuth Request
+### Step 1: Initiator generates nAuth Request
 
 The intitiator generates the `nauth` request, populating the parameters described above, as required. For example, initiator may include a nonce, and check for nonce value when the nauth response is received.
 
