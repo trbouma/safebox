@@ -94,6 +94,10 @@ def format_relay_url(relay: str) -> str:
     and ensures it has the 'wss://' prefix.
     """
     relay = relay.strip().lower()
+
+    if relay.startswith("ws://"):
+        return relay
+
     if not relay.startswith("wss://"):
         relay = "wss://" + relay
     
