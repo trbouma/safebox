@@ -50,6 +50,8 @@ from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex
 
+RECORD_LIMIT = 1024
+
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:

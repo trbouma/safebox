@@ -162,7 +162,7 @@ async def protected_route(    request: Request,
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
         safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
+        safebox_found = safeboxes.first()
         if safebox_found:
             out_name = safebox_found.handle
         else:
@@ -459,10 +459,10 @@ async def do_health_consult(      request: Request,
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
     
         #TODO  transmittal npub from nauth
 
@@ -532,11 +532,12 @@ async def get_inbox(      request: Request,
         parsed_result = parse_nauth(nauth)
         npub = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind)
+        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
         
 
     return templates.TemplateResponse(  "inbox.html", 

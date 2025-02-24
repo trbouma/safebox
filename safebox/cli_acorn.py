@@ -407,6 +407,8 @@ def get_records(kind, since, relays):
         relay_array = str(relays).replace(" ","").split(',')
         relay_array_wss = []
         for each in relay_array:
+            if each.startswith("ws://"):
+                continue
             relay_array_wss.append(each if "wss://" in each else "wss://"+each)
         print(relay_array_wss)
 
