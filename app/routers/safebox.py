@@ -1237,12 +1237,19 @@ async def accept_incoming_record(       request: Request,
 
 
     try:
-
+        parsed_result = parse_nauth(incoming_record.nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
 
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
         
-        records_to_accept = await acorn_obj.get_user_records(record_kind=incoming_record.kind)
+        records_to_accept = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+        
         detail = f"Could not find incoming record"
         for each_record in records_to_accept:
             print(f"incoming record id: {each_record['id']}")

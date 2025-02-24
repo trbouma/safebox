@@ -9,6 +9,7 @@
 <script>
 
 var global_client_transmittal_kind = parseInt("{{transmittal_kind}}");
+var global_nauth = "{{nauth}}"
 
 // alert(`transmittal kind ${global_client_transmittal_kind}`);
 
@@ -53,8 +54,8 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
       alert(`Accepting ${id}, please wait...`);
     } else {return;}
   
-
-  const submit_data = {"id": id, "kind": global_client_transmittal_kind };
+    alert(global_nauth);
+  const submit_data = {"id": id, "kind": global_client_transmittal_kind, "nauth":global_nauth };
 
   await fetch('/safebox/acceptincomingrecord', {
        method: "POST",
@@ -172,6 +173,7 @@ setDarkMode();
   <hr>
   <br><br>
   Record Kind: {{transmittal_kind}}
+  Nauth: {{nauth}}
  
     
  

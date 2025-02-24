@@ -90,6 +90,7 @@ class transmitConsultation(BaseModel):
 class incomingRecord(BaseModel):
     id: str
     kind: int
+    nauth: str
 
 class recoverIdentity(BaseModel):
     seed_phrase: str
