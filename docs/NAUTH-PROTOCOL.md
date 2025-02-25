@@ -13,7 +13,7 @@ It is worth emphasizing that the goal of this protocol is intended to remove thi
 To conclude this section, the author has a working knowledge of the [OAuth 2.0 Protocol RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) used by the major authentication providers (Google etc.) and is trying to replicate a generic authentication protocol that leverages the unique properties of Nostr, that were not available for the legacy third-party centralized authentication protocols to take advantage of. This document is the first ambitional crack at developing a two-party decentralized authentication protocol that may be as consequential as OAuth 2.0.
 
 ## nAuth Interaction Diagram
-The following diagram shows the general sequence of a a nAuth interaction between an Initiator (right) and a Responder (left). The tags that are defined in a nAuth are depicted on the righthand side of the diagram.
+The following diagram shows the general sequence of a nAuth interaction between an Initiator (right) and a Responder (left). The tags that are defined in a nAuth are depicted on the righthand side of the diagram.
 
 ![nAuth Interaction Diagram](./img/nAuth-interaction.png)
 
