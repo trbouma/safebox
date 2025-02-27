@@ -173,7 +173,10 @@ setDarkMode();
   <hr>
   <br><br>
   Record Kind: {{transmittal_kind}}
-  Nauth: {{nauth}}
+  <br>
+  {% if nauth %}
+    nauth: {{nauth[:10] }}...{{ nauth[-10:]}} 
+  {% endif %}   
  
     
  

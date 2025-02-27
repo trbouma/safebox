@@ -16,6 +16,8 @@ from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
+from app.relay import run_relay
+
 # Create Settings:
 settings = Settings()
 
@@ -76,7 +78,11 @@ async def init_db():
         SQLModel.metadata.create_all(engine, checkfirst=True)
     except:
         pass
-    # await init_currency_rates()
+    
+    asyncio.create_task(run_relay()) 
+    
+
+
 
 # Define a root endpoint
 @app.get("/", tags=["public"])
