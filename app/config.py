@@ -10,11 +10,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    HOME_RELAY: str = 'wss://relay.getsafebox.app'
+    HOME_RELAY: str = 'ws://localhost:8735'
     HOME_MINT: str= 'https://mint.getsafebox.app'      
     SERVICE_NAME: str = 'Safebox'
     SERVICE_TAG_LINE: str = 'Your money. Your data'
-    SERVICE_SECRET_KEY: str = "foobar"
+    SERVICE_SECRET_KEY: str|None = 'nsec1s7kq8yqregp0pa0v4vmcan4s8m8dn6az6k6u8pe9gz4thzst595sl7grfd'
     TZ: str = "America/New_York"
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
@@ -28,12 +28,12 @@ class Settings(BaseSettings):
     BRANDING: str = "Get SafeBox"
     BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
-    INVITE_CODES: List = ["alpha","sec2025", "rektuser"]
+    INVITE_CODES: List = ["alpha", "rektuser"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
-    TRANSMITTAL_KIND: int = 1060
-    AUTH_KIND: int = 1061
+    TRANSMITTAL_KIND: int = 21060
+    AUTH_KIND: int = 21061
 
     class Config:
         env_file = '.env'

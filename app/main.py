@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from monstr.encrypt import Keys
 
 from app.config import Settings
-from app.routers import lnaddress, safebox, scanner
+from app.routers import lnaddress, safebox, scanner, prescriptions
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
@@ -32,17 +32,28 @@ async def periodic_task(interval: int, stop_event: asyncio.Event):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    stop_event = asyncio.Event()  # Event to signal stopping
+    # stop_event = asyncio.Event()  # Event to signal stopping
+    try:
+        engine = create_engine(settings.DATABASE)
+        SQLModel.metadata.create_all(engine, checkfirst=True)
+    except:
+        pass
+    
+    asyncio.create_task(run_relay())
+    
+    print("let's start up!")
     # Create Task
-    task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
+    # task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
     yield
-    stop_event.set()  # Stop the task
-    await task  # Ensure task finishes properly
+    # stop_event.set()  # Stop the task
+    # await task  # Ensure task finishes properly
    
 
 
 
-service_key = Keys(settings.SERVICE_SECRET_KEY)
+SERVICE_KEY = Keys(settings.SERVICE_SECRET_KEY)
+
+
 # asyncio.run(init_currency_rates())
 # asyncio.run(refresh_currency_rates())
 
@@ -52,7 +63,7 @@ service_key = Keys(settings.SERVICE_SECRET_KEY)
 # Create an instance of the FastAPI application
 origins = ["*"]
 #TODO figure out how to lock a worker to do periodic tasks
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -65,22 +76,11 @@ app.add_middleware(
 app.include_router(lnaddress.router) 
 app.include_router(safebox.router, prefix="/safebox") 
 app.include_router(scanner.router, prefix="/scanner") 
+app.include_router(prescriptions.router, prefix="/prescriptions") 
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
-
-
-@app.on_event("startup")
-async def init_db():
-    try:
-        engine = create_engine(settings.DATABASE)
-        SQLModel.metadata.create_all(engine, checkfirst=True)
-    except:
-        pass
-    
-    asyncio.create_task(run_relay()) 
-    
 
 
 
@@ -108,7 +108,7 @@ async def get_nostr_name(request: Request, name: str, ):
     engine = create_engine(settings.DATABASE)
     
     if name == "_":
-        npub_hex = service_key.public_key_hex()
+        npub_hex = SERVICE_KEY.public_key_hex()
         return {
         "names": {
             "_": npub_hex
