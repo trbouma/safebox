@@ -1,3 +1,12 @@
+console.log("Script Loaded: ui-utils.js againxx");
+
+
+function sendMessage(){
+    alert("Send Message from ui");
+}
+
+
+
 function toggleEdit(ev, currentValueFn, setNewValueFn, editObject) {
     let id = ev.target.id
     let current = currentValueFn();
@@ -49,19 +58,33 @@ function updateListSection(listName, list) {
     })
 }
 
+function testClick(){
+    alert('testxxxxx');
+}
+
 
 
 function glassesClick() {
-    $("#head-inter-add").show()
-    $("#head-add").show()
-    $("#head-pd").show()
+    console.log("testzzz");
+    $("#head-inter-add").show()    
+    $("#head-inter-add-2").show()
+    $("#head-add").show()   
+    $("#head-add").val("tess") 
+    $("#head-add-2").show()
+    $("#head-pd").show()    
+    $("#head-pd-2").show()
     $("#head-pd-spacer-container").show()
     $("#head-prism-spacer-container").show()
     $("#head-prism-value").show()
+    $("#head-prism-value-2").show()
     $("#head-prism-base").show()
+    $("#head-prism-base-2").show()
     $("#head-curve").hide()
+    $("#head-curve-2").hide()
     $("#head-diameter").hide()
+    $("#head-diameter-2").hide()
     $("#head-brand").hide()
+    $("#head-brand-2").hide()
 
     $("#right-inter-add-container").show()
     $("#right-add-container").show()
@@ -88,15 +111,23 @@ function glassesClick() {
 
 function contactsClick() {
     $("#head-inter-add").hide()
+    $("#head-inter-add-2").hide()
     $("#head-add").hide()
+    $("#head-add-2").hide()
     $("#head-pd").hide()
+    $("#head-pd-2").hide()
     $("#head-pd-spacer-container").hide()
     $("#head-prism-spacer-container").hide()
     $("#head-prism-value").hide()
+    $("#head-prism-value-2").hide()
     $("#head-prism-base").hide()
+    $("#head-prism-base-2").hide()
     $("#head-curve").show()
+    $("#head-curve-2").show()
     $("#head-diameter").show()
+    $("#head-diameter-2").show()
     $("#head-brand").show()
+    $("#head-brand-2").show()
 
     $("#right-inter-add-container").hide()
     $("#right-add-container").hide()

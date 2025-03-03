@@ -444,7 +444,8 @@ def create_nauth(   npub,
                     transmittal_kind= None,  
                     transmittal_relays = None,
                     name: str = None,
-                    scope: str = None 
+                    scope: str = None,
+                    grant: str = None 
                 ):
     
     # Decode the npub Bech32 string
@@ -469,6 +470,7 @@ def create_nauth(   npub,
     # Tag 6 : transmittal_relays
     # Tag 7 : name 
     # Tag 8 : scope
+    # Tag 9 : grant
 
     # Tag 0: Special (public key)
     encoded_data.append(0)  # Tag 0
@@ -547,6 +549,13 @@ def create_nauth(   npub,
         encoded_data.append(len(scope_bytes))  # Nonce
         encoded_data.extend(scope_bytes)  # Public key bytes
 
+    # Tag 9: scope (optional)
+    if grant:
+        grant_bytes =grant.encode("ascii")        
+        encoded_data.append(9)
+        encoded_data.append(len(grant_bytes))  # Nonce
+        encoded_data.extend(grant_bytes)  # Public key bytes
+
 
     # Convert 8-bit data to 5-bit data for Bech32 encoding
     converted_data = convertbits(encoded_data, 8, 5, True)
@@ -573,11 +582,14 @@ def parse_nauth(encoded_string):
     # Tag 1 : nonce
     # Tag 2 : auth_kind
     # Tag 3 : auth_relays
-    # Tag 4 : transmittal_kind
-    # Tag 5 : transmittal_relays 
-    # Tag 6 : name
-    # Tag 7 : scope
+    # Tag 4 : transmittal_npub in hex
+    # Tag 5 : transmittal_kind
+    # Tag 6 : transmittal_relays 
+    # Tag 7 : name
+    # Tag 8 : scope
+    # Tag 9 : grant
 
+ 
     index = 0
     while index < len(decoded_data):
         # Extract the tag and length
@@ -636,6 +648,11 @@ def parse_nauth(encoded_string):
             scope = value.decode("ascii")
             if "scope" not in result["values"]:
                 result["values"]["scope"] = scope
+
+        elif tag == 9:  # None
+            grant = value.decode("ascii")
+            if "grant" not in result["values"]:
+                result["values"]["grant"] = grant
             
       
 
@@ -784,24 +801,24 @@ def generate_nonce():
     return os.urandom(16).hex()
 
 
-async def send_zap_receipt(nostr):
+async def send_zap_receipt(nostr:str, lninvoice:str=None):
 
     service_k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
     try:
-        print(f"nostr parm: type: {type(nostr)} {nostr}")
+        # print(f"nostr parm: type: {type(nostr)} {nostr}")
         # nostr_decode=urllib.parse.unquote(nostr)
         # print(f"nostr_decode: {nostr_decode}")
         try:
             nostr_obj = json.loads(nostr)
-            print(f"nostr obj: {nostr_obj}")
+            # print(f"nostr obj: {nostr_obj}")
             zap_request = Event(    id=nostr_obj['id'],
                                     pub_key=nostr_obj['pubkey'], 
-                                    kind=nostr_obj['kind'] ,
+                                    kind=nostr_obj['kind'],
                                     sig=nostr_obj['sig'],
                                     content=nostr_obj['content'],
                                     tags=nostr_obj['tags'], 
                                     created_at=nostr_obj['created_at'])
-            print(f"zap receipt tags: {zap_request.tags}")
+            # print(f"zap receipt tags: {zap_receipt.tags}")
         except:
             print("could not load json object")
 
@@ -816,11 +833,11 @@ async def send_zap_receipt(nostr):
             elif each[0] == "relays":
                 zap_relays = each[1:]
 
-        description_hash = "6e05f9c603cb655a217e8c84d68d9117a2a405d8b3df3f08737fab92d5015d58"
-        receipt_tags.append(["description",nostr_obj])
-        receipt_tags.append(["bolt11", description_hash])
+        
+        receipt_tags.append(["description",json.dumps(nostr_obj)])
+        receipt_tags.append(["bolt11", lninvoice])
 
-        print(f"resulting: {receipt_tags} {zap_relays}")
+        # print(f"resulting: {receipt_tags} {zap_relays}")
         # create zap receipt
         zap_receipt = Event(    kind=9735,
                                 pub_key= service_k.public_key_hex(),
@@ -833,11 +850,11 @@ async def send_zap_receipt(nostr):
 
         async with ClientPool(zap_relays) as c:
             zap_receipt.sign(priv_key=service_k.private_key_hex())
-            print(f"zap receipt: {zap_receipt.is_valid()}")
-            print(f"zap relays: {zap_relays}")
+            # print(f"zap receipt: {zap_receipt.is_valid()}")
+            # print(f"zap relays: {zap_relays}")
 
             c.publish(zap_receipt)
-            print("zap published!")
+            # print("zap published!")
 
        
         # print("parsed zap receipt!")

@@ -80,6 +80,7 @@ app.include_router(prescriptions.router, prefix="/prescriptions")
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
+app.mount("/js", StaticFiles(directory="app/js"), name="js")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
 
 

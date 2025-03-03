@@ -20,7 +20,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment
+from app.tasks import service_poll_for_payment, handle_payment
 from app.utils import create_jwt_token, send_zap_receipt, recover_nsec_from_seed, format_relay_url, generate_new_identity
 from app.config import Settings
 
@@ -153,15 +153,13 @@ async def ln_pay( amount: float,
     cli_quote = acorn_obj.deposit(sat_amount)
 
 
-    task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
+    # task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
     
-    # do here with a wrapper
-    # task2 = asyncio.create_task(service_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, mint=HOME_MINT, amount=sat_amount))
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr))
 
-    #FIXME Implement zaps here
+ 
 
-    if nostr != None:
-        task = asyncio.create_task(send_zap_receipt(nostr))
+
 
 
     success_obj = {     "tag": "message",

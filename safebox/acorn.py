@@ -47,6 +47,7 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
+from safebox.models import TxHistory
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex
 
@@ -986,6 +987,14 @@ class Acorn:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
+    async def add_tx_history(self):
+        self.logger.debug("Add tx history")
+        pass
+
+    async def get_tx_history(self):
+        self.logger.debug("Get tx history")
+        
+
     async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None, record_kind: int=37375):
         await self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays, record_kind=record_kind)  
     
@@ -1382,7 +1391,7 @@ class Acorn:
         # print(mint_quote)
         invoice = response.json()['request']
         quote = response.json()['quote']
-        # print(f"Please pay invoice: {invoice}") 
+        print(f"invoice: {invoice}") 
         # print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
 
@@ -1412,18 +1421,21 @@ class Acorn:
         start_time = time()  # Record the start time
         end_time = start_time + 60  # Set the loop to run for 60 seconds
         success = False
+        lninvoice = None
         #FIXME figure out the prefit
         mint = mint.replace("https://","")
         while time() < end_time:
             
             self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
-            success = await self.check_quote(quote=quote, amount=amount,mint=mint)
+            success, lninvoice = await self.check_quote(quote=quote, amount=amount,mint=mint)
             if success:
                 self.logger.debug("quote is paid!")
                 break
             sleep(3)  # Sleep for 3 seconds
         
         self.logger.debug("polling done!")
+        return success, lninvoice
+        
     
     def withdraw(self, lninvoice:str):
 
@@ -1698,7 +1710,8 @@ class Acorn:
     async def _check_quote(self,quote, amount:int, mint:str = None):
         # print("check quote", quote)
         #TODO error handling
-        success_mint = True    
+        success_mint = True  
+        lninvoice = None  
           
         if mint:
             url = f"https://{mint}/v1/mint/quote/bolt11/{quote}"
@@ -1713,17 +1726,16 @@ class Acorn:
         mint_quote = mintQuote(**response.json())
         if mint_quote.paid == True:
                 success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
+                lninvoice = mint_quote.request
 
-
-                    
-                    
                     
                     
                 # return mint_quote.paid
         else:
                 success_mint = False
+      
 
-        return success_mint
+        return success_mint, lninvoice
 
         event_quotes = [] 
         # event_quote_info_list = self.get_wallet_info("quote")

@@ -245,6 +245,7 @@ def set_owner(owner, currency):
 @click.argument('amount')
 @click.option('--mint', '-m', default=None, help="deposit mint")
 def deposit(amount: int, mint:str):
+    lninvoice = None
     if mint:
         mint = mint.replace("https://", "")
     qr = qrcode.QRCode()
@@ -266,14 +267,14 @@ def deposit(amount: int, mint:str):
         while time() < end_time:
             
             print("checking")
-            success = asyncio.run(acorn_obj.check_quote(cli_quote.quote, amount, mint))
+            success, lninvoice = asyncio.run(acorn_obj.check_quote(cli_quote.quote, amount, mint))
             if success:
                 break
             sleep(3)  # Sleep for 3 seconds
 
         click.echo("Loop completed.")
 
-    click.echo("Done!")
+    click.echo(f"Done! {lninvoice}")
  
 @click.command("proofs", help="list proofs") 
 def proofs():

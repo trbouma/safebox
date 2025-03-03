@@ -1,3 +1,5 @@
+console.log("Script loaded prescription kooglemidxx");
+
 function roundByQuarter(value) {
     var inv = 1.0 / 0.25;
     return Math.round(value * inv) / inv;

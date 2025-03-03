@@ -575,3 +575,11 @@ class Zevent(Event):
 class NIP60Proofs(BaseModel):
     mint: str
     proofs: List[Proof] = []
+
+class TxHistory(BaseModel):
+    create_time: int
+    tx_type: str
+    amount: int
+    comment: str
+    tendered_amount: float 
+    tendered_currency: str

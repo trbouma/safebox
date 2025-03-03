@@ -97,3 +97,41 @@ For the initial implementation of `nauth` , the use case employed the payload fo
 The overarching of this protocol is to be symmetrical - to give no one an unfair advantage - it doesn't matter who initiates the protocol. And once the parameters are agreed upon, secure document transmittal can take place.
 
 The protocol is silent on the trustworthiness of either the responder or initiator `npub`. Implementors may wish to add a check, such as a NIP-05 verification of the `name`, for example or a trusted `npub' list before responding.
+
+### Scope
+Follows the same format at OAuth2
+
+A scope token is a string used to specify the level of access a client application is requesting from a resource server. It helps define the permissions when a grant is request. nAuth uses the same format as the OAuth2 specification (RFC 6749, Section 3.3) which defines the scope parameter as a space-separated list of strings
+
+```
+scope       = scope-token *( SP scope-token )
+scope-token = 1*( %x21 / %x23-5B / %x5D-7E )  ; Any printable ASCII character except space and a few reserved characters
+```
+
+### Grant
+A grant is the finalized scope. A grant may have addional tag values specified
+```
+tag-value-spec  = tag ":" value *( SP tag ":" value )
+tag             = 1*( %x21 / %x23-3A / %x3C-5B / %x5D-7E )  ; Any printable ASCII character except space, '=', and a few reserved characters
+value           = 1*( %x21 / %x23-5B / %x5D-7E )            ; Similar to scope-token, but without spaces
+
+```
+
+The combined syntax may be defined as:
+
+```
+mapping-spec = [ scope *( SP ) ] [ tag-value-spec ]
+```
+
+### Examples
+```
+read write execute
+
+priority:high category:security type:confidential
+
+admin read role:manager access:full
+
+incoming:32324 finalized:32325
+```
+
+The last example specifies what are the incoming record kinds and how they should be finalized once they are accepted.

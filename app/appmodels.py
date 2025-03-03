@@ -97,4 +97,10 @@ class recoverIdentity(BaseModel):
     home_relay: Union[None,str]=None
     new_identity: bool = False
 
-
+class txHistory(BaseModel):
+    create_time: int
+    tx_type: str
+    amount: int
+    comment: str
+    tendered_amount: float 
+    tendered_currency: str

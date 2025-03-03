@@ -3,10 +3,14 @@
 {% block title %}Safebox{% endblock %}
 {% block head %}
 {{ super() }}
-<script src="/src/jquery-3.6.2.min.js"></script>
-<script src="/src/ui-utils.js"></script>
-<script src="/src/ui-prescription-utils.js"></script>
-<script src="/src/tx-utils.js"></script>
+<script src="/js/jquery-3.6.2.min.js"></script>
+
+<script src="/js/ui-utils.js"></script>
+<script src="/js/tx-utils.js"></script>
+<script src="/js/ui-prescription-utils.js"></script>
+
+
+
 
 
 
@@ -50,31 +54,23 @@
                         <input type="radio" id="contacts" name="type" value="contacts" onchange="contactsClick();"><label for="contacts"></label>&nbsp;&nbsp;Contact Lenses</label>
                     </div>
 
-                    <div class="extra-top-margin" id="table"><hr>
+                    <div class="extra-top-margin" id="table">
                         <table>
                             <tr>
                                 <th></th>
                                 <th class="right-text">Sphere</th>
                                 <th class="right-text">Cylinder</th>
                                 <th class="right-text">Axis</th>
-                                <th id="head-pd-spacer-container">&nbsp;&nbsp;&nbsp;&nbsp;</th>
                                 <th class="right-text" id="head-pd">PD</th>
-                                <th>&nbsp;&nbsp;&nbsp;&nbsp;</th>
-                                <th class="right-text" id="head-inter-add">Inter Add</th>
-                                <th class="right-text" id="head-add">Add</th>
-                                <th id="head-prism-spacer-container">&nbsp;&nbsp;&nbsp;&nbsp;</th>
-                                <th class="right-text" id="head-prism-value">Prism</th>
-                                <th class="right-text" id="head-prism-base">Base</th>
-                                <th class="right-text" id="head-curve" style="display: none;">Curve</th>
-                                <th class="right-text" id="head-diameter" style="display: none;">Diam</th>
-                                <th class="right-text" id="head-brand" style="display: none;">Brand</th>
+                                <th>&nbsp;</th>
+
+
                             </tr>
                             <tr>
                                 <td>OD:</td>
                                 <td><input class="cool-field right-text" type="text" id="right-sphere" size="6" placeholder="-0.00" onblur="validateSph(this);"></td>
                                 <td><input class="cool-field right-text" type="text" id="right-cylinder" size="6" placeholder="-0.00" onblur="validateCyl(this);"></td>
                                 <td><input class="cool-field right-text" type="text" id="right-axis" size="6" placeholder="180" onblur="validateAxis(this);"></td>
-                                <td id="right-pd-spacer-container"></td>
                                 <td id="right-pd-container"><input class="cool-field right-text" type="text" id="right-pd" size="6" placeholder="31" onblur="validatePD(this);"></td>
                                 <td></td>
                                 
@@ -82,8 +78,7 @@
                             <tr>
                                 <td>...</td>
                                 <th class="right-text" id="head-inter-add">Inter Add</th>
-                                <th class="right-text" id="head-add">Add</th>
-                                <th id="head-prism-spacer-container">&nbsp;</th>
+                                <th class="right-text" id="head-add">Add</th>                               
                                 <th class="right-text" id="head-prism-value">Prism</th>
                                 <th class="right-text" id="head-prism-base">Base</th>
                                 <th class="right-text" id="head-curve" style="display: none;">Curve</th>
@@ -94,7 +89,6 @@
                                 <td></td>
                             <td id="right-inter-add-container"><input class="cool-field right-text" type="text" id="right-inter-add" size="6" placeholder="+0.00" onblur="validateAdd(this);"></td>
                                 <td id="right-add-container"><input class="cool-field right-text" type="text" id="right-add" size="6" placeholder="+0.00" onblur="validateAdd(this);"></td>
-                                <td id="right-prism-spacer-container"></td>
                                 <td id="right-prism-value-container"><input class="cool-field right-text" type="text" id="right-prism-value" size="6" placeholder="" onblur="validatePrismValue(this);"></td>
                                 <td id="right-prism-base-container">
                                     <select class="cool-field" name="right-prism-base" id="right-prism-base">
@@ -111,16 +105,39 @@
                             </tr>
                             <tr><hr></tr>
                             <tr>
+                                <th></th>
+                                <th class="right-text">Sphere</th>
+                                <th class="right-text">Cylinder</th>
+                                <th class="right-text">Axis</th>
+                                <th class="right-text" id="head-pd-2">PD</th>
+                                <th>&nbsp;</th>
+
+                                <th class="right-text" id="head-curve" style="display: none;">Curve</th>
+                                <th class="right-text" id="head-diameter" style="display: none;">Diam</th>
+                                <th class="right-text" id="head-brand" style="display: none;">Brand</th>
+                            </tr>
+                            <tr>
                                 <td>OS:</td>
                                 <td><input class="cool-field right-text" type="text" id="left-sphere" size="6" placeholder="-0.00" onblur="validateSph(this);"></td>
                                 <td><input class="cool-field right-text" type="text" id="left-cylinder" size="6" placeholder="-0.00" onblur="validateCyl(this);"></td>
                                 <td><input class="cool-field right-text" type="text" id="left-axis" size="6" placeholder="180" onblur="validateAxis(this);"></td>
-                                <td id="left-pd-spacer-container"></td>
                                 <td id="left-pd-container"><input class="cool-field right-text" type="text" id="left-pd" size="6" placeholder="31" onblur="validatePD(this);"></td>
+                                
+                            </tr>
+                            <tr>
+                                <td>...</td>
+                                <th class="right-text" id="head-inter-add-2">Inter Add</th>
+                                <th class="right-text" id="head-add-2">Add</th>                               
+                                <th class="right-text" id="head-prism-value-2">Prism</th>
+                                <th class="right-text" id="head-prism-base-2">Base</th>
+                                <th class="right-text" id="head-curve-2" style="display: none;">Curve</th>
+                                <th class="right-text" id="head-diameter-2" style="display: none;">Diam</th>
+                                <th class="right-text" id="head-brand-2" style="display: none;">Brand</th>
+                            </tr>
+                            <tr>
                                 <td></td>
                                 <td id="left-inter-add-container"><input class="cool-field right-text" type="text" id="left-inter-add" size="6" placeholder="+0.00" onblur="validateAdd(this);"></td>
                                 <td id="left-add-container"><input class="cool-field right-text" type="text" id="left-add" size="6" placeholder="+0.00" onblur="validateAdd(this);"></td>
-                                <td id="left-prism-spacer-container"></td>
                                 <td id="left-prism-value-container"><input class="cool-field right-text" type="text" id="left-prism-value" size="6" placeholder="" onblur="validatePrismValue(this);"></td>
                                 <td id="left-prism-base-container">
                                     <select class="cool-field" name="left-prism-base" id="left-prism-base">

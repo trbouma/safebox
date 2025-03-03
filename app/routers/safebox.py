@@ -463,6 +463,7 @@ async def do_health_consult(      request: Request,
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        scope = parsed_result['values'].get("scope")
     
         #TODO  transmittal npub from nauth
 
@@ -474,7 +475,8 @@ async def do_health_consult(      request: Request,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=safebox_found.handle,
-                                    scope='transmit'
+                                    scope='transmit',
+                                    grant=scope
         )
 
         print(f"do consult initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
@@ -583,6 +585,7 @@ async def my_health_data(       request: Request,
         auth_relays = parsed_result['values'].get("auth_relays")
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        scope = parsed_result['values'].get("scope")
     
 
         
@@ -597,7 +600,8 @@ async def my_health_data(       request: Request,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=safebox_found.handle,
-                                    scope='transmit'
+                                    scope='transmit',
+                                    grant=scope
         )
 
         print(f"my health data initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")

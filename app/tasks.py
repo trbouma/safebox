@@ -19,7 +19,11 @@ from monstr.client.client import Client, ClientPool
 from datetime import datetime, timedelta
 from app.appmodels import RegisteredSafebox, PaymentQuote
 from safebox.acorn import Acorn
+from safebox.models import cliQuote
 from app.config import Settings
+
+from app.utils import send_zap_receipt
+
 settings = Settings()
 
 # HOME_RELAY = 'wss://relay.getsafebox.app'
@@ -240,4 +244,16 @@ async def listen_nip17(self, url):
         c.end()
 
        
+async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint:str, nostr: str = None ):
+
+    success = False
+    lninvoice = None
+    success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
+    pass
+    #FIXME Implement zaps here
+
+    if nostr :
+        # print(f"do the zap receipt here with {lninvoice}")
+        task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
+
 
