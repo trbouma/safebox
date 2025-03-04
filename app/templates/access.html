@@ -181,6 +181,12 @@ window.location.href="/safebox/health";
 
 }
 
+async function doAccountHistory() {
+
+window.location.href="/safebox/txhistory";
+
+}
+
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(clipboard_data);
@@ -626,7 +632,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>  
-  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+  <button onclick="doAccountHistory()">Account History</button>
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <br>

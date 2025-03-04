@@ -987,12 +987,67 @@ class Acorn:
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
-    async def add_tx_history(self):
+    async def add_tx_history(   self, 
+                                tx_type:str, 
+                                amount:int, 
+                                comment:str = "", 
+                                tendered_amount: float=None,
+                                tendered_currency: str = "SAT"
+                                ):
         self.logger.debug("Add tx history")
-        pass
+        my_enc = NIP44Encrypt(self.k)
+
+        if tendered_amount == None:
+            tendered_amount = amount
+        created_at = int(datetime.now().timestamp())
+        tx_history = TxHistory( create_time=created_at,
+                                tx_type=tx_type,
+                                amount= amount,
+                                comment= comment,
+                                tendered_amount=tendered_amount,
+                                tendered_currency=tendered_currency  
+                                )
+        tx_history_str = json.dumps(tx_history.model_dump())
+        tx_history_encrypt = my_enc.encrypt(tx_history_str,to_pub_k=self.pubkey_hex)
+        async with ClientPool([self.home_relay]) as c:
+       
+            n_msg = Event(                        
+                        kind=7377,
+                        content=tx_history_encrypt,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            await asyncio.sleep(0.2)
+            
+
 
     async def get_tx_history(self):
         self.logger.debug("Get tx history")
+        tx_history = []
+        my_enc = NIP44Encrypt(self.k)
+        decrypt_content = None
+
+        filter = [{
+            'limit': 1024,
+            'authors': [self.pubkey_hex],
+            'kinds': [7377] 
+            
+        }]
+
+        async with ClientPool([self.home_relay]) as c:  
+            events = await c.query(filter) 
+            for each in events:
+                decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
+                
+                json_obj = json.loads(decrypt_content) 
+                # Convert create_time to datetime
+                json_obj['create_time'] = datetime.fromtimestamp(json_obj['create_time']).strftime('%Y-%m-%d %H:%M:%S')
+
+                tx_history.append(json_obj)         
+           
+        return tx_history
+
+            
         
 
     async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None, record_kind: int=37375):

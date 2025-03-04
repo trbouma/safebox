@@ -6,6 +6,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 import signal, sys, string, cbor2, base64,os
 import aioconsole
+import json
 
 from typing import Any, Dict, List, Optional, Union
 
@@ -244,16 +245,18 @@ async def listen_nip17(self, url):
         c.end()
 
        
-async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint:str, nostr: str = None ):
+async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint:str, nostr: str = None, comment: str ="" ):
 
     success = False
     lninvoice = None
     success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
     pass
-    #FIXME Implement zaps here
+
 
     if nostr :
+        comment= "Zap: " + json.loads(nostr)['content']
         # print(f"do the zap receipt here with {lninvoice}")
         task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
 
-
+    #FIXME Implement zaps here
+    await acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=comment)

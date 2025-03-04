@@ -424,6 +424,30 @@ async def my_private_data(      request: Request,
                                             "referer": referer
                                             })
 
+@router.get("/txhistory", tags=["safebox", "protected"])
+async def my_tx_history(    request: Request,
+                                
+                            access_token: str = Cookie(None)
+                    ):
+    """Protected access to private data stored in home relay"""
+    try:
+        safebox_found = await fetch_safebox(access_token=access_token)
+    except:
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    await acorn_obj.load_data()
+    tx_history = await acorn_obj.get_tx_history()
+    
+    print(f"tx history {tx_history}")
+
+    return templates.TemplateResponse(  "txhistory.html", 
+                                        {   "request": request,
+                                            "safebox": safebox_found ,
+                                            "tx_history": tx_history
+                                            
+                                            })
 
 @router.get("/healthconsult", tags=["safebox", "protected"])
 async def do_health_consult(      request: Request,

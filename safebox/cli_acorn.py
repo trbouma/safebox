@@ -239,7 +239,14 @@ def set_owner(owner, currency):
     asyncio.run(acorn_obj.load_data())
     msg_out = asyncio.run(acorn_obj.set_owner_data(npub=owner,local_currency=currency))
     click.echo(msg_out)
-    
+
+@click.command("txhistory", help="transaction history")
+def tx_history():   
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
+    tx_history = asyncio.run(acorn_obj.get_tx_history())
+    for each in tx_history:
+        click.echo(each)
+
 
 @click.command("deposit", help="deposit funds into wallet via lightning invoice")
 @click.argument('amount')
@@ -275,6 +282,8 @@ def deposit(amount: int, mint:str):
         click.echo("Loop completed.")
 
     click.echo(f"Done! {lninvoice}")
+    asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount))
+    # asyncio.run(acorn_obj.get_tx_history())
  
 @click.command("proofs", help="list proofs") 
 def proofs():
@@ -552,6 +561,7 @@ cli.add_command(init)
 cli.add_command(set)
 cli.add_command(get_balance)
 cli.add_command(get_profile)
+cli.add_command(tx_history)
 cli.add_command(deposit)
 cli.add_command(proofs)
 cli.add_command(swap)
