@@ -85,6 +85,8 @@ async def invoice_poll_for_payment(safebox_found: RegisteredSafebox, quote: str,
     #FIX ME DO THE POLLING HERE INSTEAD OF THE OBJECT
     await acorn_obj.poll_for_payment(quote=quote,amount=amount,mint=mint)
     print("We are done!!!!")
+
+    await acorn_obj.add_tx_history(tx_type='D',amount=amount, comment="lightning invoice")
     
     
     
