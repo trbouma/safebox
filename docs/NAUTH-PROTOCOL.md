@@ -38,7 +38,8 @@ A fully-loaded `nauth` is a NIP-19 Bech32 encoded entity that looks like below:
 - Tag 5: `transmittal_kind` (optional): event kind that is used for the secure transmittal of documents
 - Tag 6: `transmittal_relays` (optional): relays that are used for the secure transmittal of documents
 - Tag 7: `name` (optional): human recognizable name
-- Tag 8: `scope` (optional): scope of authentication
+- Tag 8: `scope` (optional): scope of authentication (medical record, verifiable credential, etc.)
+- Tag 9: `grant` (options): finalized grant (may be the same as the scope for confirmation, but could be anything relevant to the nAuth context)
 
 The astute observer will see that the only mandatory tag is `npub` meaning that `nauth` without any optional parameters specified reduces to a `npub` Bech32 encoded entity, which is perfectly fine - if no additional requirements are needed then it reduces to NIP-17 Private Direct Messages scenario. 
 
