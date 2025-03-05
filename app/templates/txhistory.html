@@ -49,19 +49,19 @@ window.location.href="/";
   <br><br>
       <table width="90%">
         <tr>
-          <th>Date</th>
+          <th align="center" >Date</th>
           <th>Type</th>
           <th>Amount</th>
           <th>Unit</th>
-          <th>Details</th>          
+          <th align="left">Details</th>          
         </tr>
         {% for entry in tx_history %}
         <tr>
           <td>{{ entry['create_time']}}</td>
           <td>{{ entry['tx_type']}}</td>
-          <td>{{entry['tendered_amount']}}</td>
+          <td align="right" valign="top">{{entry['tendered_amount']}}</td>
           <td>{{entry['tendered_currency']}}</td>
-          <td>{{entry['comment']}}</td>
+          <td align="left" valign="top">{{entry['comment']}}</td>
 
         </tr>
         {% endfor %}
