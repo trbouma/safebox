@@ -77,16 +77,16 @@ async def service_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amou
         session.commit()
     return
 
-async def invoice_poll_for_payment(safebox_found: RegisteredSafebox, quote: str, mint: str, amount: int ):
+async def invoice_poll_for_payment(acorn_obj: Acorn, safebox_found: RegisteredSafebox, quote: str, mint: str, amount: int ):
     
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     
-    await acorn_obj.load_data()
+    # await acorn_obj.load_data()
     #FIX ME DO THE POLLING HERE INSTEAD OF THE OBJECT
     await acorn_obj.poll_for_payment(quote=quote,amount=amount,mint=mint)
     print("We are done!!!!")
 
-    await acorn_obj.add_tx_history(tx_type='D',amount=amount, comment="lightning invoice")
+    await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment="lightning invoice")
     
     
     
@@ -261,4 +261,4 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
         task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
 
     #FIXME Implement zaps here
-    await acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=comment)
+    await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment=comment)

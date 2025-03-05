@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
 from time import sleep
 import json
+import bolt11
 from monstr.util import util_funcs
 
 
@@ -216,6 +217,7 @@ async def ln_pay_address(   request: Request,
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
         msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment)
     except Exception as e:
         return {f"detail": f"error {e}"}
 
@@ -247,6 +249,14 @@ async def ln_pay_invoice(   request: Request,
         await acorn_obj.load_data()
 
         msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
+        decoded_invoice = bolt11.decode(ln_invoice.invoice)
+       
+        print(f"decoded invoice: {decoded_invoice}")
+        amount = decoded_invoice.amount_msat//1000
+        description = decoded_invoice.description
+
+        await acorn_obj.add_tx_history(tx_type='D',amount=amount,comment=description)
+
     except Exception as e:
         return {f"detail": "error {e}"}
 
@@ -355,12 +365,8 @@ async def ln_invoice_payment(   request: Request,
     await acorn_obj.load_data()
     cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )   
 
-    
 
-
-
-
-    task2 = asyncio.create_task(invoice_poll_for_payment(safebox_found=safebox_found,quote=cli_quote.quote, amount=ln_invoice.amount, mint=HOME_MINT))
+    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj, safebox_found=safebox_found,quote=cli_quote.quote, amount=ln_invoice.amount, mint=HOME_MINT))
     return {"status": "ok", "invoice": cli_quote.invoice}
 
     # Do the update for the polling balance
@@ -440,7 +446,7 @@ async def my_tx_history(    request: Request,
     await acorn_obj.load_data()
     tx_history = await acorn_obj.get_tx_history()
     
-    print(f"tx history {tx_history}")
+    # print(f"tx history {tx_history}")
 
     return templates.TemplateResponse(  "txhistory.html", 
                                         {   "request": request,

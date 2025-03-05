@@ -282,7 +282,7 @@ def deposit(amount: int, mint:str):
         click.echo("Loop completed.")
 
     click.echo(f"Done! {lninvoice}")
-    asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount))
+    asyncio.run(acorn_obj.add_tx_history(tx_type='C',amount=amount))
     # asyncio.run(acorn_obj.get_tx_history())
  
 @click.command("proofs", help="list proofs") 
