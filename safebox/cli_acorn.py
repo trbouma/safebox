@@ -298,6 +298,7 @@ def proofs():
     all_proofs, keyset_amounts = acorn_obj._proofs_by_keyset()
     click.echo(f"{keyset_amounts}")
     click.echo(f"Known mints: {acorn_obj.known_mints}")
+    # asyncio.run(acorn_obj.backup_proof_events())
 
 @click.command("swap", help="swap proofs for new proofs")
 @click.option("--consolidate","-c", is_flag=True, show_default=True, default=False, help="Consolidate proofs")

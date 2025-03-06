@@ -37,6 +37,13 @@ window.location.href="/scanner/scan?referer=health-consult";
 
 }
 
+async function addEyePrescription() {
+// alert("scan!");
+
+window.location.href="/prescriptions/eye";
+
+}
+
 async function getQRStatus(return_result) {
 
 var qr_img_func = document.getElementById("img_qr_display");
@@ -105,6 +112,8 @@ async function createQRCode() {
     <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
     <br><br>
     <button onclick="addCardtoSafebox()">Add Record</button>
+    <br><br>
+    <button onclick="addEyePrescription()">Eye Prescription</button>
 
    
     
@@ -280,8 +289,7 @@ setDarkMode();
 
 <div class="center-text">
       
-  <button onclick="transmitToNprofile()">Transmit Records</button>   
-
+  <button onclick="transmitToNprofile()">Transmit Records</button>  
   <br><br>
   <button onclick="backToProfile()">Home</button>
   <br>

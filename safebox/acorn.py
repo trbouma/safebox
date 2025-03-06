@@ -1521,12 +1521,38 @@ class Acorn:
         nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
         for each in proofs_arg:
             nip60_proofs.proofs.append(each)
-        
+   
         record = nip60_proofs.model_dump_json()
         
         
         self.logger.debug(f"nip60 proofs text: {record}")
         await self._async_add_proofs(record, replicate_relays)
+        
+        return
+
+    async def add_backup_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
+        # make sure have latest kind
+       
+        #FIXME This might be the offending error
+        self.logger.debug(f"adding backup proofs_obj {proofs_arg}")
+
+        #  proofs_to_store = json.dump
+        # for each in proofs_arg:
+        #    pass
+        #    proof_to_store = [each.model_dump()]
+        #    text = json.dumps(proof_to_store)
+        #    asyncio.run(self._async_add_proofs(text, replicate_relays))
+        
+        # Create the format for NIP 60 proofs
+        nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
+        for each in proofs_arg:
+            nip60_proofs.proofs.append(each)
+        
+        record = nip60_proofs.model_dump_json()
+        
+        
+        self.logger.debug(f"nip60 proofs text: {record}")
+        await self._async_add_backup_proofs(record, replicate_relays)
         
         return
 
@@ -1536,6 +1562,7 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         try:
+            
             await self.delete_proof_events()
             # get proofs by keyset
             all_proofs, amount = self._proofs_by_keyset()
@@ -1585,6 +1612,32 @@ class Acorn:
             
             #FIXME kind
             n_msg = Event(kind=7375,
+                        content=payload_encrypt,
+                        pub_key=self.pubkey_hex)
+            n_msg.sign(self.privkey_hex)
+            self.logger.debug(f"proof event content {n_msg.kind} {text}")
+            c.publish(n_msg)
+            await asyncio.sleep(0.2)
+
+    async def _async_add_backup_proofs(self, text:str, replicate_relays: List[str]=None):
+        """
+            Example showing how to post a text note (Kind 1) to relay
+        """
+        # print("length of proof text:", len(text), text)
+        my_enc = NIP44Encrypt(self.k)
+        payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
+        
+        if replicate_relays:
+            write_relays = replicate_relays
+            
+        else:
+            write_relays = [self.home_relay]
+
+
+        async with ClientPool(write_relays) as c:
+            
+            #FIXME kind
+            n_msg = Event(kind=7378,
                         content=payload_encrypt,
                         pub_key=self.pubkey_hex)
             n_msg.sign(self.privkey_hex)
@@ -1739,6 +1792,22 @@ class Acorn:
             
             return proofs
     
+    async def backup_proof_events(self):
+        self.logger.debug("backup proofs")
+        try:
+            all_proofs, amount = self._proofs_by_keyset()
+            for key, value in all_proofs.items():
+
+                await self.add_backup_proofs_obj(value) 
+                self.logger.debug(f"backup proof value: {value}")
+
+        except Exception as e:
+            raise Exception(e)
+
+            
+
+        pass
+
     async def delete_proof_events(self):
         await self._async_delete_proof_events()
 
@@ -2411,6 +2480,7 @@ class Acorn:
         """
             Delete proof events
         """
+        #FIXME I don't this code does anything
         backup_proof_events = self.proof_events
         try:
             tags = []
@@ -2421,6 +2491,7 @@ class Acorn:
                 for each_proof in each_event.proofs:
                     # self.logger.debug(f"{each_proof.id}, {each_proof.amount}")
                     pass
+            #FIXME end of fix me
             for each in self.proof_event_ids:
                 tags.append(["e",each])
             tags.append(["k","7375"])

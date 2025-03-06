@@ -3,15 +3,15 @@
 {% block title %}Safebox{% endblock %}
 {% block head %}
 {{ super() }}
-<script src="/js/jquery-3.6.2.min.js"></script>
 
+<script src="/js/jquery-3.6.2.min.js"></script>
 <script src="/js/ui-utils.js"></script>
 <script src="/js/tx-utils.js"></script>
 <script src="/js/ui-prescription-utils.js"></script>
 
+{% endblock %}
 
-
-
+{% block page_content %}
 
 
     <div class="center-text"
@@ -25,14 +25,14 @@
                 </div>
             </div>
             <div class="section row">
-                <h2 class="col">Receiver</h2>
+                <h1 class="col">Eye Prescription</h1>
                 <div class="section-text col-right">
                     <div id="receiver-section" class="extra-top-margin">
-                        <input class="cool-field" type="text" id="receiver" size="60" placeholder="nprofile1..." onblur="onPubKeyFocusLost(event);" onkeyup="onPubKeyUp(event);">
+                        <input class="cool-field" style="width:80%;" type="text" id="receiver" size="60" placeholder="nprofile1..." onblur="onPubKeyFocusLost(event);" onkeyup="onPubKeyUp(event);">
                     </div>
                     <div id="receiver-name-section" class="extra-top-margin">
-                        <span id="receiver-name" class="emph"></span> (<span id="receiver-email"></span>) <br>
-                        <span id="receiver-relays-label" class="emph">Relays:</span><br>
+                       
+             
                         <ul id="receiver-relays-ul" class="relays"><br>
                         </ul>
                     </div>
@@ -42,7 +42,7 @@
                 <h2 class="col">Message</h2>
                 <div class="section-text col-right">
                     <div id="message-section" class="extra-top-margin">
-                        <textarea class="cool-field-area" rows="5" id="message" spellcheck="false"></textarea>
+                        <textarea class="cool-field-area" style="width:80%;" rows="6" id="message" spellcheck="false"></textarea>
                     </div>
                 </div>
             </div>
@@ -173,14 +173,17 @@
                 <h2 class="col">Privacy Notice</h2>
                 <div class="section-text col-right">
                     <div id="message-section" class="extra-top-margin">
-                        This website is for demonstration purposes only. <br><br>While we take steps to protect your privacy using NIP-17 encrypted DMs, we cannot guarantee that your health information is protected according to HIPAA standards. By using this site, you acknowledge and accept that your data may not be safeguarded in compliance with applicable healthcare privacy laws.
+                        This is for demonstration purposes only. <br><br>While we take steps to protect your privacy using NIP-17 encrypted DMs, we cannot guarantee that your health information is protected according to HIPAA standards. By using this site, you acknowledge and accept that your data may not be safeguarded in compliance with applicable healthcare privacy laws.
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-
+    <script>
+    
+    setDarkMode();   
+    </script>
 
 
 {% endblock %}
