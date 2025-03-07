@@ -330,6 +330,7 @@ def pay(amount,lnaddress: str, comment:str):
     try:
         msg_out = asyncio.run(acorn_obj.pay_multi(amount,lnaddress,comment))
         click.echo(msg_out)
+        asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=f"to {lnaddress} {comment}"))
     except Exception as e:
         click.echo(f"Error: {e}")
 
