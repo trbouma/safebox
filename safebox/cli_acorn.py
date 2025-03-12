@@ -548,7 +548,17 @@ def run(relays):
 def recover(seedphrase, homerelay):
     nsec = recover_nsec_from_seed(seed_phrase=seedphrase)
    
-    homerelay = "wss://" + homerelay if not homerelay.startswith("wss://") else homerelay
+    
+
+
+        
+    if homerelay != None:
+        if "wss://" in homerelay:
+            home_relay = homerelay
+        elif "ws://" in homerelay:
+            home_relay = homerelay
+        else:
+            home_relay = f"wss://{homerelay}"
     
     if click.confirm(f"Do you want to recover to this wallet using {homerelay}?"):
         click.echo(f"Recover seed phrase {nsec}")

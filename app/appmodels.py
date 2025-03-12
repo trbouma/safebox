@@ -77,8 +77,8 @@ class updateCard(BaseModel):
     title: str
     content: str
     kind: int = 37375
-    originating_kind: int = 32225
-    final_kind: int = 32227
+    originating_kind: int = 37375
+    final_kind: int = 37375
 
 
 class deleteCard(BaseModel):
