@@ -583,3 +583,4 @@ class TxHistory(BaseModel):
     comment: str
     tendered_amount: float 
     tendered_currency: str
+    fees: int

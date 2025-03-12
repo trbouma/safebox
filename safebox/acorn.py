@@ -167,10 +167,19 @@ class Acorn:
         self.logger.debug("load data")
 
         try:
-            wallet_info = await self.get_wallet_info(label="wallet")
-            self.acorn_tags = json.loads(wallet_info)
-            # self.acorn_tags = json.loads(self.get_wallet_info(label="wallet"))
-           
+
+          
+            wallet_config= await self.get_wallet_config()
+            if wallet_config:
+                self.acorn_tags = wallet_config
+            else:
+                #FIXME get rid of this eventually
+                wallet_info = await self.get_wallet_info(label="wallet")
+                self.acorn_tags = json.loads(wallet_info)
+
+
+            
+
             for each in self.acorn_tags:
                 if each[0]== "balance":
                     self.balance = int(each[1])
@@ -396,7 +405,8 @@ class Acorn:
             access_key_hash = access_key_digest.hexdigest()
             self.access_key = generate_access_key_from_hex(access_key_hash)
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
-            await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+            # await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+            await self.set_wallet_config()
         else:
             #keepkey = true
 
@@ -992,7 +1002,8 @@ class Acorn:
                                 amount:int, 
                                 comment:str = "", 
                                 tendered_amount: float=None,
-                                tendered_currency: str = "SAT"
+                                tendered_currency: str = "SAT",
+                                fees: int =0
                                 ):
         self.logger.debug("Add tx history")
         my_enc = NIP44Encrypt(self.k)
@@ -1005,7 +1016,8 @@ class Acorn:
                                 amount= amount,
                                 comment= comment,
                                 tendered_amount=tendered_amount,
-                                tendered_currency=tendered_currency  
+                                tendered_currency=tendered_currency,
+                                fees=fees  
                                 )
         tx_history_str = json.dumps(tx_history.model_dump())
         tx_history_encrypt = my_enc.encrypt(tx_history_str,to_pub_k=self.pubkey_hex)
@@ -1047,8 +1059,59 @@ class Acorn:
            
         return tx_history
 
-            
+
+    async def set_wallet_config(self):
+        # this function will eventually get rid of set_wallet_info_wallet("wallet")     
+        m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
+        wallet_config_data = json.dumps(self.acorn_tags)
+        m.update(wallet_config_data.encode())
+                 
+        label_name_hash = m.digest().hex()
         
+        # print(label, label_info)
+        my_enc = NIP44Encrypt(self.k)
+        wallet_config_data_encrypt = my_enc.encrypt(wallet_config_data,to_pub_k=self.pubkey_hex) 
+        write_relays = [self.home_relay]
+        async with ClientPool(write_relays) as c:
+        # async with Client(relay) as c:
+            n_msg = Event(kind=17375,
+                        content=wallet_config_data_encrypt,
+                        pub_key=self.pubkey_hex
+                        )
+            
+            # n_msg = my_enc.encrypt_event(evt=n_msg,
+            #                         to_pub_k=self.pubkey_hex)
+            
+            n_msg.sign(self.privkey_hex)
+            # print("label, event id:", label, n_msg.id)
+            c.publish(n_msg)
+            await asyncio.sleep(0.2)
+            self.logger.debug(f"wrote event {wallet_config_data} to {write_relays}")
+
+    async def get_wallet_config(self):  
+        wallet_config_info = None
+        events = None  
+        my_enc = NIP44Encrypt(self.k)
+        decrypt_content = None
+        FILTER = [{
+            'limit': 1,
+            'authors': [self.pubkey_hex],
+            'kinds': [17375] 
+        }]
+        async with ClientPool([self.home_relay]) as c:       
+            
+            events = await c.query(FILTER)
+            
+            self.logger.debug(f"get wallet info no of events: {len(events)}")
+
+        if events:
+            wallet_config_info = json.loads(my_enc.decrypt(events[0].content, self.pubkey_hex))
+       
+        
+        return wallet_config_info
+
+       
 
     async def set_wallet_info(self,label: str,label_info: str, replicate_relays: List[str]=None, record_kind: int=37375):
         await self._async_set_wallet_info(label,label_info,replicate_relays=replicate_relays, record_kind=record_kind)  
@@ -1290,6 +1353,7 @@ class Acorn:
 
             await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)
             # print(user_records)
+            await   self.set_wallet_config()
             return record_name
     
     async def update_tags(self,tag_values):
@@ -2178,9 +2242,11 @@ class Acorn:
             self.proofs = post_payment_proofs
             
             await self.write_proofs()
-            msg_out = f"Payment of {amount} sats with single mint fee {amount_needed-amount} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
+            final_fees = amount_needed - amount
+            msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
             self.logger.info(msg_out)
-            return msg_out
+            
+            return msg_out, final_fees
 
     def _multi_melt(self, keysets_to_use):
 

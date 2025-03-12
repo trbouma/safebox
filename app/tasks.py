@@ -256,7 +256,7 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
 
 
     if nostr :
-        comment= "Zap: " + json.loads(nostr)['content']
+        comment= "⚡️ " + json.loads(nostr)['content']
         # print(f"do the zap receipt here with {lninvoice}")
         task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
 

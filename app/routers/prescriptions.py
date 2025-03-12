@@ -35,5 +35,10 @@ engine = create_engine(settings.DATABASE)
 
 @router.get("/eye", response_class=HTMLResponse, tags=["prescription"]) 
 async def list_page (request: Request):
+
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
         
-    return templates.TemplateResponse( "eyeprescription.html", {"request": request, "title": "Welcome Page", "message": "You're Invited!" })
+    return templates.TemplateResponse(      "eyeprescription.html", 
+                                        {   "request": request,
+                                            "title": "Welcome Page", "message": "You're Invited!", 
+                                            "referer": referer })

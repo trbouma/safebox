@@ -4,10 +4,53 @@
 {% block head %}
 {{ super() }}
 
+<script>
+
+var referer = "{{referer}}";
+
+</script>
+
 <script src="/js/jquery-3.6.2.min.js"></script>
 <script src="/js/ui-utils.js"></script>
 <script src="/js/tx-utils.js"></script>
 <script src="/js/ui-prescription-utils.js"></script>
+<script>
+
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
+async function savePrescription() {
+    if (confirm("Save Prescription?")==false)
+    { return;}
+    const submit_data = {"title": "eye prescription",
+                          "content": "eye prescription data",
+                          "originating_kind": 32227,
+                          "final_kind": 32225,
+                          "kind": 32227 };
+
+    
+
+   await fetch('/safebox/updatecard', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+    window.location.href="/safebox/healthconsult";
+    
+      }
+
+
+</script>
 
 {% endblock %}
 
@@ -159,8 +202,8 @@
 
             <div class="section row">
                 <div class="section-text col-right row">
-                    <button id="send" onclick="sendMessage(); return false;">
-                        Send
+                    <button id="send" onclick="savePrescription();">
+                        Save Prescription
                     </button>
                 </div>
 

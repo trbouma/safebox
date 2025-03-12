@@ -328,9 +328,9 @@ def pay(amount,lnaddress: str, comment:str):
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     try:
-        msg_out = asyncio.run(acorn_obj.pay_multi(amount,lnaddress,comment))
+        msg_out, final_fees = asyncio.run(acorn_obj.pay_multi(amount,lnaddress,comment))
         click.echo(msg_out)
-        asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=f"to {lnaddress} {comment}"))
+        asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=f"to {lnaddress} {comment}", fees=final_fees))
     except Exception as e:
         click.echo(f"Error: {e}")
 

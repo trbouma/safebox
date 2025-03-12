@@ -216,8 +216,8 @@ async def ln_pay_address(   request: Request,
         safebox_found = await fetch_safebox(access_token=access_token)
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
-        msg_out = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
-        await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment)
+        msg_out, final_fees = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment, fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}
 
@@ -248,7 +248,7 @@ async def ln_pay_invoice(   request: Request,
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
 
-        msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
+        msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         decoded_invoice = bolt11.decode(ln_invoice.invoice)
        
         print(f"decoded invoice: {decoded_invoice}")
@@ -965,10 +965,13 @@ async def update_card(         request: Request,
         response = RedirectResponse(url="/", status_code=302)
         return response
     
+    
+    # This is where we can do specialized handling for records that need to be transmittee
+
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content, record_kind=update_card.kind)
+        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content, record_kind=update_card.originating_kind)
         detail = "Update successful!"
     except Exception as e:
         status = "ERROR"
