@@ -971,7 +971,7 @@ async def update_card(         request: Request,
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content, record_kind=update_card.originating_kind)
+        await acorn_obj.put_record(record_name=update_card.title,record_value=update_card.content, record_kind=update_card.final_kind)
         detail = "Update successful!"
     except Exception as e:
         status = "ERROR"
