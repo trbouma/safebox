@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SERVICE_NAME: str = 'Safebox'
     SERVICE_TAG_LINE: str = 'Your money. Your data'
     SERVICE_SECRET_KEY: str|None = 'nsec1s7kq8yqregp0pa0v4vmcan4s8m8dn6az6k6u8pe9gz4thzst595sl7grfd'
+    SERVICE_RELAY_DB_FILE: str = "data/relay.db"
     TZ: str = "America/New_York"
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
