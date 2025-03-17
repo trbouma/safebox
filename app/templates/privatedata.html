@@ -29,8 +29,12 @@ async function goBack() {
 
 <div class="center-text">
     <h1>Personal Cards</h1>
+
     <button onclick="goBack()">Back</button>
-    
+    <br><br>
+    <button onclick="addCardtoSafebox()">Add Card</button>
+    <br><br>
+    Click on card to edit.    
     
 </div>
 
@@ -50,6 +54,7 @@ async function goBack() {
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
     cardTitle.textContent = title;
+    
 
     // Create and add the content element
     const cardCreatedAt = document.createElement('div');
@@ -59,7 +64,7 @@ async function goBack() {
     // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
-    cardContent.textContent = content;
+    cardContent.textContent = content
 
     // Append title and content to the card
     card.appendChild(cardTitle);
