@@ -260,5 +260,6 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
         # print(f"do the zap receipt here with {lninvoice}")
         task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
 
+
     #FIXME Implement zaps here
     await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment=comment)

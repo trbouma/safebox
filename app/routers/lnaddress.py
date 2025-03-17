@@ -21,7 +21,12 @@ from safebox.acorn import Acorn
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment
-from app.utils import create_jwt_token, send_zap_receipt, recover_nsec_from_seed, format_relay_url, generate_new_identity
+from app.utils import ( create_jwt_token, 
+                        send_zap_receipt, 
+                        recover_nsec_from_seed, 
+                        format_relay_url, 
+                        generate_new_identity,
+                        generate_pnr)
 from app.config import Settings
 
 settings = Settings()
@@ -201,7 +206,7 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
     nsec_new = await acorn_obj.create_instance()
     await acorn_obj.load_data()
     
-    
+    await acorn_obj.put_record("medical emergency card", "Please complete!")
     profile_info = acorn_obj.get_profile()
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
@@ -209,7 +214,8 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
                                             nsec=acorn_obj.privkey_bech32,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
-                                            access_key=acorn_obj.access_key
+                                            access_key=acorn_obj.access_key,
+                                            emergency_code= generate_pnr()
                                             )
     
     with Session(engine) as session:
@@ -275,13 +281,16 @@ async def onboard_friend(request: Request, friend_handle:str ):
     nsec_hash = password_hasher.hash(nsec_new)
     nsec_verify = password_hasher.verify(nsec_hash,nsec_new)
     print(f"nsec hash is: {nsec_hash} {nsec_verify}")
+    await acorn_obj.put_record("medical emergency card", "Please complete!")
 
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=friend_handle,
-                                            access_key=acorn_obj.access_key
+                                            access_key=acorn_obj.access_key,
+                                            emergency_code= generate_pnr()
+                                           
                                             )
     
     with Session(engine) as session:

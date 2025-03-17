@@ -1,0 +1,39 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Safebox{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+
+
+
+
+
+
+{% endblock %}
+
+{% block page_content %}
+
+
+<div class="center-text">
+    
+        <h1>{{ message }}</h1>        
+       {{emergency_info | safe}}
+
+        
+</div>
+     
+    <script>
+        setDarkMode();
+    </script>
+
+
+    {% endblock %}
+
+    {% block scripts %}
+    {{ super() }}
+    
+    
+    {% endblock %}

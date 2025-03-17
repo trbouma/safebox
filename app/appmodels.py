@@ -22,6 +22,7 @@ class RegisteredSafebox(SQLModel, table=True):
     balance: int = 0
     owner: Optional[str] = None
     session_nonce: Optional[str] = None
+    emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

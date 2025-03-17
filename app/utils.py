@@ -8,6 +8,7 @@ import os
 import io, gzip
 import validators
 from urllib.parse import urlparse
+import secrets
 
 
 
@@ -943,3 +944,8 @@ def generate_new_identity():
     handle = generate_name_from_hex(k.public_key_hex())
     access_key = generate_access_key_from_hex(k.private_key_hex())
     return handle, access_key
+
+def generate_pnr(length=6):
+    """Generates a six-character PNR using a cryptographically secure method."""
+    characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excludes I, O, 0, 1
+    return ''.join(secrets.choice(characters) for _ in range(length))

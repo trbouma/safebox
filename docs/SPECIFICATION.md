@@ -5,10 +5,12 @@ Currently, safebox is being prototyped and implemented using Python. As features
 ### NIPS
 Safebox takes its primary inspiration from [NIP-60 Cashu Wallet](https://github.com/nostr-protocol/nips/blob/master/60.md). 
  * `kind 17375` will be used to store and manage wallet configuration - just implemented
- * `kind:37375` `wallet` is used to manage wallet configuration and state - will be deprecated 
+ * `kind:37375` `wallet` is used to manage wallet configuration and state - will be deprecated and the replaceable event above will be used instead.
+ * `kind:37375` with `d` tag of sha256 digest of `nsec||record_name`  for storing of records having `record_name`. This is an addressable event and the wallet needs to now how to recreate the digest for the d tag to retrieve the right record'
+
  * `kind:7375` is used to store proofs that are used to generate Cashu tokens
- * `kind:7376` is not used.
- * `kind:7377` is used for storing transaction histor.
+ * `kind:7376` is not used. Used by NIP-60
+ * `kind:7377` is used for storing transaction history.
  * `kind:7378` is used to store backup proofs
 
  ### Storing safebox records

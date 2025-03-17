@@ -1007,6 +1007,8 @@ class Acorn:
                                 ):
         self.logger.debug("Add tx history")
         my_enc = NIP44Encrypt(self.k)
+        if comment == None: #sometimes none get passed in
+            comment = ""
 
         if tendered_amount == None:
             tendered_amount = amount
