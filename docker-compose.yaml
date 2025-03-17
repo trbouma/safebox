@@ -8,7 +8,7 @@ services:
     ports:
       - "7375:7375"
     environment:
-      - HOME_RELAY=wss://relay.getsafebox.app
+      - HOME_RELAY=ws://localhost:8735
     volumes:
       - ./app/templates:/app/app/templates
       - ./data:/app/data
