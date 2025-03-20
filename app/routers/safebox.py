@@ -53,6 +53,7 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
 @router.post("/login", tags=["safebox"])
 async def login(request: Request, access_key: str = Form()):
 
+
     access_key=access_key.strip().lower()
     match = False
     # Authenticate user
@@ -102,6 +103,9 @@ async def login(request: Request, access_key: str = Form()):
     # Create JWT token
     settings.TOKEN_EXPIRES_HOURS
     access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
+    
+
+    
 
     # Create response with JWT as HttpOnly cookie
     response = RedirectResponse(url="/safebox/access", status_code=302)

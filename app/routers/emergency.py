@@ -37,6 +37,13 @@ engine = create_engine(settings.DATABASE)
 async def emergency_help (request: Request, emergency_code: str=""):
 
     emergency__info = {"status": "OK", "detail":f"emergency info {emergency_code}"}
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        ip = forwarded_for.split(",")[0]  # Get the first IP in the list
+    else:
+        ip = request.client.host
+
+    # print(f"requesting ip: {ip}")
 
     with Session(engine) as session:
             statement = select(RegisteredSafebox).where(RegisteredSafebox.emergency_code==emergency_code.upper().strip())

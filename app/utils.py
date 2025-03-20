@@ -15,7 +15,7 @@ import secrets
 from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
 from monstr.event.event import Event
-from monstr.encrypt import Keys
+from monstr.encrypt import Keys, NIP44Encrypt
 from monstr.client.client import Client, ClientPool
 
 from mnemonic import Mnemonic
@@ -36,7 +36,10 @@ engine = create_engine(settings.DATABASE)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
 def create_jwt_token(data: dict, expires_delta: timedelta = None):
-    
+    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+
+    my_enc = NIP44Encrypt(k.private_key_bech32())
+
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone) + expires_delta
@@ -44,11 +47,19 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
         expire = datetime.now(timezone) + timedelta(days=1)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SERVICE_SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
+    encrypted_encoded_jwt = my_enc.encrypt(encoded_jwt,k.public_key_hex())
+    print(f"encrypted encoded jwt: {encrypted_encoded_jwt}")
+    
+    return encrypted_encoded_jwt
 
 def decode_jwt_token(token: str):
+    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k.private_key_bech32())
+   
+
     try:
-        decoded_token = jwt.decode(token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decrypt_token = my_enc.decrypt(token, k.public_key_hex())
+        decoded_token = jwt.decode(decrypt_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
         return decoded_token
     except jwt.ExpiredSignatureError:
         return "Token has expired"
@@ -63,10 +74,15 @@ def authenticate_user(username: str, password: str):
     return None
 
 async def fetch_safebox(access_token) -> RegisteredSafebox:
+    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k.private_key_bech32())
+    
+
     if not access_token:
         raise HTTPException(status_code=401, detail="Missing access token")
     try:
-        payload = jwt.decode(access_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decrypt_access_token = my_enc.decrypt(access_token, k.public_key_hex())
+        payload = jwt.decode(decrypt_access_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
         access_key = payload.get("sub")
         if not access_key:
             raise HTTPException(status_code=401, detail="Invalid token")
