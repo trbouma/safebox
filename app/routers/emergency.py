@@ -11,6 +11,7 @@ from safebox.acorn import Acorn
 from time import sleep
 import json
 from monstr.util import util_funcs
+import ipinfo
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth
@@ -35,7 +36,7 @@ engine = create_engine(settings.DATABASE)
 
 @router.get("/eqr/{emergency_code}", tags=["emergency"]) 
 async def emergency_help (request: Request, emergency_code: str=""):
-
+    details = None
     emergency__info = {"status": "OK", "detail":f"emergency info {emergency_code}"}
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
@@ -43,6 +44,11 @@ async def emergency_help (request: Request, emergency_code: str=""):
     else:
         ip = request.client.host
 
+    try:
+        handler = ipinfo.getHandler(settings.IP_INFO_TOKEN)
+        details = handler.getDetails(ip)
+    except:
+        pass
     # print(f"requesting ip: {ip}")
 
     with Session(engine) as session:
@@ -55,13 +61,17 @@ async def emergency_help (request: Request, emergency_code: str=""):
                 await acorn_obj.load_data()
                 emergency_card = await acorn_obj.get_record("medical emergency card")
                 emergency__info = emergency_card['payload']
+                if safebox_found.owner:
+                    print(f"send message to owner")
+                    message = f"Your Emergency QR Code has been scanned from {details.city}"
+                    await acorn_obj.secure_transmittal(nrecipient=safebox_found.owner, message=message, dm_relays=settings.RELAYS, kind=1059)
             except:
                 emergency__info = "Not available"
 
             final_text = emergency__info.encode().decode('unicode_escape').replace("\n","<br>") 
             # emergency__info.replace("\n", "<br>")
 
-    return templates.TemplateResponse( "eqr.html", {"request": request, "title": "Medical Emergency Card", "message": "Medical Emergency Card", "emergency_info": final_text})
+    return templates.TemplateResponse( "eqr.html", {"request": request, "title": "Medical Emergency Card", "message": "Medical Emergency Card", "emergency_info": final_text, "ip": ip})
 
 
 

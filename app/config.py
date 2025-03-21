@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']
+    IP_INFO_TOKEN: str = "notset"
     LOCAL_RELAY_PORT: int = 8735
     TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8
