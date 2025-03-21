@@ -6,15 +6,6 @@
 
 
 
-    
- 
-
-
-
-
-
-
-
 {% endblock %}
 
 {% block page_content %}
@@ -23,13 +14,23 @@
 <div class="center-text">
         
     
-        <h1>{{ message }}</h1>        
-       {{emergency_info | safe}}
-
+    <h1>{{ message }}</h1>        
+    {{emergency_info | safe}}
         
 </div>
+<hr>
+<div class="center-text">
+    <form action="/eqr/submitmessage/{{emergency_code}}" method="post">
+        <label for="message">Emergency Message:</label><br>
+        <textarea id="message" name="message" rows="5" style="width:80%;" placeholder="Type your message here..."></textarea><br><br>
+        <button type="submit">Send</button>
+      </form>
+    <br><br>
+   
+</div>
 
-<a href="/safebox/access" hx-boost="true">Settings</a>
+
+
      
     <script>
         setDarkMode();

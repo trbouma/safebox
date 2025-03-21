@@ -52,7 +52,8 @@ async def emergency_help (request: Request, emergency_code: str=""):
         country = details.country_name
         details_all = details.all
     except:
-        city = "Not located"
+        city = "Unknown"
+        country = "Unknown"
         location = "Not located"
         details_all = None
 
@@ -70,7 +71,7 @@ async def emergency_help (request: Request, emergency_code: str=""):
                 emergency__info = emergency_card['payload']
                 if safebox_found.owner:
                     print(f"send message to owner")
-                    message = f"Your Emergency QR Code has been scanned from {details_all}"
+                    message = f"A Safebox Emergency QR Code has been scanned from {city}, {country}. Location {location}. You are receiving this message because you have been designated as an emergency contact. Please stand by, you may be receiving an other message shortly."
                     await acorn_obj.secure_transmittal(nrecipient=safebox_found.owner, message=message, dm_relays=settings.RELAYS, kind=1059)
             except:
                 emergency__info = "Not available"
@@ -78,7 +79,7 @@ async def emergency_help (request: Request, emergency_code: str=""):
             final_text = emergency__info.encode().decode('unicode_escape').replace("\n","<br>") 
             # emergency__info.replace("\n", "<br>")
 
-    return templates.TemplateResponse( "eqr.html", {"request": request, "title": "Medical Emergency Card", "message": "Medical Emergency Card", "emergency_info": final_text, "ip": ip})
+    return templates.TemplateResponse( "eqr.html", {"request": request, "title": "Medical Emergency Card", "message": "Medical Emergency Card", "emergency_code": emergency_code, "emergency_info": final_text, "ip": ip})
 
 
 
@@ -91,3 +92,24 @@ def create_inviteqr(request: Request, emergency_code: str):
     img.save(buf)
     buf.seek(0) # important here!
     return StreamingResponse(buf, media_type="image/jpeg")
+
+@router.post("/eqr/submitmessage/{emergency_code}", tags=["emergency"])
+async def submit_message(request: Request, emergency_code:str, message:str= Form(...)):
+        
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.emergency_code==emergency_code.upper().strip())
+            safeboxes = session.exec(statement)
+
+            try:
+                safebox_found = safeboxes.one()
+                acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=settings.MINTS)
+                await acorn_obj.load_data()
+               
+                if safebox_found.owner:
+                    print(f"send message to owner")
+                    
+                    await acorn_obj.secure_transmittal(nrecipient=safebox_found.owner, message=message, dm_relays=settings.RELAYS, kind=1059)
+            except:
+                 message = "Could not send"
+    
+        return {"message": message}

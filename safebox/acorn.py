@@ -86,6 +86,7 @@ class Acorn:
     home_mint: str
     known_mints: dict = {}
     local_currency: str = "SAT"
+    emergency_contacts: List[str] = None
     authorities: List[str] = None
     providers: List[str] = None
     user_records = []
