@@ -47,8 +47,15 @@ async def emergency_help (request: Request, emergency_code: str=""):
     try:
         handler = ipinfo.getHandler(settings.IP_INFO_TOKEN)
         details = handler.getDetails(ip)
+        city = details.city
+        location = details.loc
+        country = details.country_name
+        details_all = details.all
     except:
-        pass
+        city = "Not located"
+        location = "Not located"
+        details_all = None
+
     # print(f"requesting ip: {ip}")
 
     with Session(engine) as session:
@@ -63,7 +70,7 @@ async def emergency_help (request: Request, emergency_code: str=""):
                 emergency__info = emergency_card['payload']
                 if safebox_found.owner:
                     print(f"send message to owner")
-                    message = f"Your Emergency QR Code has been scanned from {details.city}"
+                    message = f"Your Emergency QR Code has been scanned from {details_all}"
                     await acorn_obj.secure_transmittal(nrecipient=safebox_found.owner, message=message, dm_relays=settings.RELAYS, kind=1059)
             except:
                 emergency__info = "Not available"
