@@ -144,28 +144,11 @@ async def protected_route(    request: Request,
                         action_data: str = None,
                         action_amount: int = None,
                         action_comment: str = None,
-                        access_token: str = Cookie(None)
+                        acorn_obj = Depends(get_acorn)
                     ):
-    account_access_key = None # This may be different than the original
- 
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
-        
-    if safebox_found.custom_handle:
-        lightning_address = f"{safebox_found.custom_handle}@{request.url.hostname}"
-    else:
-        lightning_address = f"{safebox_found.handle}@{request.url.hostname}"
-        
-    #TODO Update balance here
 
-    print(f"onboard {onboard} action_mode {action_mode} acquire_data: {action_data}")
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-    await acorn_obj.load_data()
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==acorn_obj.handle)
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
         if safebox_found:
@@ -189,7 +172,10 @@ async def protected_route(    request: Request,
         session.commit()
         account_access_key = safebox_found.access_key
         
-        
+    if safebox_found.custom_handle:
+        lightning_address = f"{safebox_found.custom_handle}@{request.url.hostname}"
+    else:
+        lightning_address = f"{safebox_found.handle}@{request.url.hostname}"   
 
     # Token is valid, proceed
     return templates.TemplateResponse(  "access.html", 

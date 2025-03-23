@@ -164,11 +164,12 @@ async def ln_pay( amount: float,
 
  
 
-
+    # message = f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"
+    message = "Payment being sent..."
 
 
     success_obj = {     "tag": "message",
-                            "message" : f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"  }
+                            "message" : message  }
 
     
 
@@ -178,7 +179,7 @@ async def ln_pay( amount: float,
                 "successAction": success_obj
             } 
 
-    return name
+    
 
 
     
