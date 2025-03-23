@@ -1994,7 +1994,8 @@ class Acorn:
         except Exception as e:
             msg_out = f"Could not resolve {lnaddress}. Check if correct address"
             self.logger.error(msg_out)
-            return msg_out
+            raise ValueError(msg_out)
+            # return msg_out, 0
 
         for each in keyset_amounts:
             available_amount += keyset_amounts[each]
@@ -2002,9 +2003,9 @@ class Acorn:
         
         print("available amount:", available_amount)
         if available_amount < amount:
-            msg_out = "insufficient balance. you need more funds!"
-            
-            return msg_out
+            msg_out = "Insufficient balance. you need more funds!"
+            raise ValueError(msg_out)
+            # return msg_out,0
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             # print(key, keyset_amounts[key])
@@ -2103,7 +2104,7 @@ class Acorn:
             # self.write_proofs()
 
             msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
-            return msg_out
+            return msg_out, total_fees
             # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
 
         else: # Can pay with a single keyset
@@ -2137,8 +2138,9 @@ class Acorn:
                         self.logger.debug(f"new chosen keyset: {key}")
                         break
                 if not chosen_keyset:
-                    print("you don't have a sufficient balance in a keyset, you need to swap")
-                    return
+                    msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
+                    raise ValueError(msg_out)
+                    
                 
                 # Set to new mints and redo the calls
                 melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
@@ -2158,8 +2160,8 @@ class Acorn:
                 # print("mint response:", post_melt_response)
 
                 if not chosen_keyset:
-                    print("insufficient balance in any one keyset, you need to swap!") 
-                    return 
+                    msg_out ="insufficient balance in any one keyset, you need to swap!"
+                    raise ValueError(msg_out) 
                 
             # Print now we should be all set to go
             
@@ -2340,7 +2342,8 @@ class Acorn:
         try:
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
         except Exception as e:
-            return f"error {e}"
+            raise ValueError(f"{e}")
+            # return f"error {e}",0
 
         self.logger.debug("pay from multiple mints")
         available_amount = 0
@@ -2494,9 +2497,10 @@ class Acorn:
            
         
         await self.write_proofs()
-        msg_out = f"Paid {ln_amount} sats with fee {amount_needed-ln_amount} sats successful! \nYou have {self.balance} sats remaining."
+        final_fees = amount_needed-ln_amount
+        msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful! \nYou have {self.balance} sats remaining."
         self.logger.info(msg_out)
-        return msg_out
+        return msg_out, final_fees
 
     async def delete_kind_events(self, record_kind:int):
         """

@@ -9,7 +9,7 @@ import io, gzip
 import validators
 from urllib.parse import urlparse
 import secrets
-
+from fastapi import Depends, Cookie, HTTPException
 
 
 from bech32 import bech32_decode, convertbits, bech32_encode
@@ -20,6 +20,7 @@ from monstr.client.client import Client, ClientPool
 
 from mnemonic import Mnemonic
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+from safebox.acorn import Acorn
 
 
 from fastapi import FastAPI, HTTPException
@@ -104,6 +105,30 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
             raise HTTPException(status_code=404, detail=f"{access_key} not found")
         
     return safebox_found
+
+async def get_safebox(access_token: str = Cookie(None)):
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Access token missing")
+    
+    safebox_found = await fetch_safebox(access_token=access_token)
+    
+    if not safebox_found:
+        raise HTTPException(status_code=404, detail="Safebox not found")
+    
+    return safebox_found
+
+async def get_acorn(access_token: str = Cookie(None)):
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Access token missing")
+    
+    safebox_found = await fetch_safebox(access_token=access_token)
+    
+    if not safebox_found:
+        raise HTTPException(status_code=404, detail="Safebox not found")
+    
+    acorn_found = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+    await acorn_found.load_data()
+    return acorn_found
 
 def format_relay_url(relay: str) -> str:
     """

@@ -14,7 +14,7 @@ import bolt11
 from monstr.util import util_funcs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
@@ -213,44 +213,31 @@ async def protected_route(    request: Request,
 
 @router.post("/payaddress", tags=["protected"])
 async def ln_pay_address(   request: Request, 
-                        ln_pay: lnPayAddress,
-                        access_token: str = Cookie(None)):
+                            ln_pay: lnPayAddress,
+                            acorn_obj = Depends(get_acorn)):
     msg_out ="No payment"
     try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
+        
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        # await acorn_obj.load_data()
         msg_out, final_fees = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
         await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment, fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
-        safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
-        if safebox_found:
-            out_name = safebox_found.handle
-        else:
-            raise ValueError("Could not find safebox!")
-    
-       
 
-        safebox_found.balance = acorn_obj.balance
-        session.add(safebox_found)
-        session.commit()
 
     return {"detail": msg_out}
 
 @router.post("/payinvoice", tags=["protected"])
 async def ln_pay_invoice(   request: Request, 
                         ln_invoice: lnPayInvoice,
-                        access_token: str = Cookie(None)):
+                        acorn_obj = Depends(get_acorn)):
     msg_out ="No payment"
     try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
+        # safebox_found = await fetch_safebox(access_token=access_token)
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        # await acorn_obj.load_data()
 
         msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         decoded_invoice = bolt11.decode(ln_invoice.invoice)
@@ -264,20 +251,7 @@ async def ln_pay_invoice(   request: Request,
     except Exception as e:
         return {f"detail": "error {e}"}
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
-        safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
-        if safebox_found:
-            out_name = safebox_found.handle
-        else:
-            raise ValueError("Could not find safebox!")
-    
-       
 
-        safebox_found.balance = acorn_obj.balance
-        session.add(safebox_found)
-        session.commit()
     
     return {"detail": msg_out}
 
