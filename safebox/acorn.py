@@ -2356,7 +2356,8 @@ class Acorn:
         self.logger.debug(f"available amount: {available_amount}")
         if available_amount < ln_amount:
             msg_out ="insufficient balance. you need more funds!"
-            return msg_out
+            raise ValueError(msg_out)
+            
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             self.logger.debug(f"{key}, {keyset_amounts[key]}")
@@ -2402,8 +2403,8 @@ class Acorn:
                     self.logger.debug(f"new chosen keyset: {key}")
                     break
             if not chosen_keyset:
-                self.logger.debug("you don't have a sufficient balance in a keyset, you need to swap")
-                return
+                msg_out="you don't have a sufficient balance in a keyset, you need to swap"
+                raise ValueError(msg_out)
             
             # Set to new mints and redo the calls
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
@@ -2425,8 +2426,8 @@ class Acorn:
             self.logger.debug(f"mint response: {post_melt_response}")
 
             if not chosen_keyset:
-                self.logger.debug("insufficient balance in any one keyset, you need to swap!") 
-                return 
+                msg_out ="insufficient balance in any one keyset, you need to swap!"
+                raise ValueError(msg_out) 
             
         # Print now we should be all set to go
         self.logger.debug("---we have a sufficient mint---")
