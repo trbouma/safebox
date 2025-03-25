@@ -148,7 +148,7 @@ async def protected_route(    request: Request,
                     ):
 
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==acorn_obj.handle)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub ==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
         if safebox_found:
@@ -244,12 +244,12 @@ async def ln_pay_invoice(   request: Request,
 @router.post("/issueecash", tags=["protected"])
 async def issue_ecash(   request: Request, 
                         ecash_request: ecashRequest,
-                        access_token: str = Cookie(None)):
+                        acorn_obj = Depends(get_acorn)):
     msg_out ="No payment"
     try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
+        # safebox_found = await fetch_safebox(access_token=access_token)
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        # await acorn_obj.load_data()
 
         # msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         msg_out = await acorn_obj.issue_token(ecash_request.amount)
@@ -257,20 +257,7 @@ async def issue_ecash(   request: Request,
         return {    "status": "ERROR",
                     f"detail": "error {e}"}
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
-        safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
-        if safebox_found:
-            out_name = safebox_found.handle
-        else:
-            raise ValueError("Could not find safebox!")
-    
-       
-        #FIXME I might need the session add
-        safebox_found.balance = acorn_obj.balance
-        session.add(safebox_found)
-        session.commit()
+
     
     return {    "status": "OK",
                 "detail": msg_out
@@ -279,34 +266,19 @@ async def issue_ecash(   request: Request,
 @router.post("/acceptecash", tags=["protected"])
 async def accept_ecash(   request: Request, 
                         ecash_accept: ecashAccept,
-                        access_token: str = Cookie(None)):
+                        acorn_obj = Depends(get_acorn)):
     msg_out ="No payment"
     try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
-
-       
+        # safebox_found = await fetch_safebox(access_token=access_token)
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        # await acorn_obj.load_data()       
         
         msg_out = await acorn_obj.accept_token(ecash_accept.ecash_token)
     except Exception as e:
         return {    "status": "ERROR",
                     "detail": f"error {e}"}
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==safebox_found.handle)
-        safeboxes = session.exec(statement)
-        safebox_found = safeboxes.one()
-        if safebox_found:
-            out_name = safebox_found.handle
-        else:
-            raise ValueError("Could not find safebox!")
-    
-       
 
-        safebox_found.balance = acorn_obj.balance
-        session.add(safebox_found)
-        session.commit()
     
     return {    "status": "OK",
                 "detail": msg_out

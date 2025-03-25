@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from monstr.encrypt import Keys
 
 from app.config import Settings
-from app.routers import lnaddress, safebox, scanner, prescriptions, emergency
+from app.routers import lnaddress, safebox, scanner, prescriptions, emergency, pos
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
@@ -78,11 +78,13 @@ app.include_router(safebox.router, prefix="/safebox")
 app.include_router(scanner.router, prefix="/scanner") 
 app.include_router(prescriptions.router, prefix="/prescriptions") 
 app.include_router(emergency.router) 
+app.include_router(pos.router, prefix="/pos")
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
 app.mount("/js", StaticFiles(directory="app/js"), name="js")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 

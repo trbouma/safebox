@@ -1,0 +1,62 @@
+{% extends "uxbase.html" %}
+
+{% block title %}POS{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+{% endblock %}
+
+{% block page_content %}
+
+<link rel="stylesheet" href="/static/mobile.css">
+
+<h1 class="calculator-title">Point of Sale </h1>
+
+
+    
+    <div class="calculator">
+        <form id="calc-form" hx-post="/pos/calculate" hx-target="#display" hx-swap="innerHTML">
+            <input type="hidden" name="expression" id="expression">
+            <div id="display" class="display">{{ expression }}</div>
+        </form>
+        <div class="buttons">
+            {% for row in [["7", "8", "9", "/"], ["4", "5", "6", "*"], ["1", "2", "3", "-"], ["0", ".", "=", "+"]] %}
+                {% for char in row %}
+                    {% if char == "=" %}
+                        <button onclick="submitCalc()">=</button>
+                    {% else %}
+                        <button onclick="appendChar('{{ char }}')">{{ char }}</button>
+                    {% endif %}
+                {% endfor %}
+               
+            {% endfor %}
+            <button onclick="clearCalc()" class="clear">C</button>
+        </div>
+    </div>
+
+    <script>
+        function appendChar(char) {
+            const input = document.getElementById("expression");
+            input.value += char;
+            document.getElementById("display").innerText = input.value;
+        }
+
+        function clearCalc() {
+            const input = document.getElementById("expression");
+            input.value = "";
+            document.getElementById("display").innerText = "";
+        }
+
+        function submitCalc() {
+            htmx.trigger("#calc-form", "submit");
+        }
+    </script>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}
