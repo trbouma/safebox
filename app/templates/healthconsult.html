@@ -109,7 +109,7 @@ async function createQRCode() {
 
 <div class="center-text">
     <h1>Health Consultation</h1>
-    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
+    <button id="ln_scan_button" onclick="scanCode()">Authenticate QR Code</button>
     <br><br>
     <button onclick="addCardtoSafebox()">Consult</button>
     <br><br>
@@ -295,7 +295,7 @@ setDarkMode();
   <br>
  <h2>Client Scan</h2>
     
- <img id="img_qr_display" onclick="createQRCode()"  src="/img/logo.png" >
+ <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
 <br><br>
 {% if client_nauth %}
 {{client_nauth[:20] }}...{{ client_nauth[-15:]}} 

@@ -11,7 +11,7 @@ body {
 .calculator-title {
     text-align: center;
     font-size: 1.75rem;
-    color: #2c3e50;
+    color: #ebefe8;
     margin-bottom: 1rem;
 }
 
@@ -44,8 +44,7 @@ body {
 .buttons {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    background-color: orange; 
     gap: 0.5rem;
 }
 
-/* Buttons */
-.buttons button
