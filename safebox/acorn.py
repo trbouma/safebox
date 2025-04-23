@@ -1625,7 +1625,8 @@ class Acorn:
 
     async def write_proofs(self, replicate_relays: List[str]=None):
         # make sure have latest kind
-        #TODO this is a workaround
+        #TODO Need to add some error checking
+
 
         self.logger.debug(f"writing proofs ")
         try:
@@ -1994,18 +1995,18 @@ class Acorn:
         except Exception as e:
             msg_out = f"Could not resolve {lnaddress}. Check if correct address"
             self.logger.error(msg_out)
-            raise ValueError(msg_out)
+            raise Exception(msg_out)
             # return msg_out, 0
 
         for each in keyset_amounts:
             available_amount += keyset_amounts[each]
         
         
-        print("available amount:", available_amount)
+        # print("available amount:", available_amount)
         if available_amount < amount:
-            msg_out = "Insufficient balance. you need more funds!"
-            raise ValueError(msg_out)
-            # return msg_out,0
+            msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
+            raise Exception(msg_out)
+          
         
         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
             # print(key, keyset_amounts[key])
@@ -2018,6 +2019,8 @@ class Acorn:
                
         
         if multi_path:
+            raise Exception("Multipath payments are not implemented yet!")
+            #TODO the remaining code is for multipath
             amount_multi =0
             keysets_to_use_for_multi = []
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
@@ -2083,14 +2086,17 @@ class Acorn:
                                     "unit": "sat",
                                     "options": {"mpp": {"amount": amount_to_pay}}
                             }
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=5)
+                    response.raise_for_status()
                     post_melt_response = PostMeltQuoteResponse(**response.json())
                     print(f"adjusted post melt response {post_melt_response}")
                     amount_remaining = amount_remaining - amount_to_pay   
                     print(f"amount remaining after adjusted {amount_remaining}")                                   
                     keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
-                except:
-                    pass
+                except requests.exceptions.RequestException as err:
+                    # raise Exception("Could not access mint")
+                    print(f"An mint error occurred: {err}")
+                    # pass
                     # print(f"{self.known_mints[each_keyset]} does not support")
             if amount_remaining > 0:
                  raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
@@ -2120,7 +2126,13 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+            try:
+                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
+                response.raise_for_status()
+            except requests.exceptions.Timeout as timeout_err:
+                print(f"Mint Timeout error: {timeout_err}")  # Request timed out
+                raise Exception(f"Mint {self.known_mints[chosen_keyset]} not available")
+
             # print("post melt response:", response.json())
             post_melt_response = PostMeltQuoteResponse(**response.json())
             # print("mint response:", post_melt_response)
@@ -2129,7 +2141,7 @@ class Acorn:
             amount_needed = amount + post_melt_response.fee_reserve
             self.logger.debug(f"amount needed: {amount_needed}")
             if amount_needed > keyset_amounts[chosen_keyset]:
-                print("insufficient balance in keyset. you need to swap, or use another keyset")
+                print("Insufficient balance in keyset. you need to swap, or use another keyset")
                 chosen_keyset = None
                 for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
                     # print(key, keyset_amounts[key])
@@ -2570,6 +2582,7 @@ class Acorn:
                 tags.append(["e",each])
             tags.append(["k","7375"])
             self.logger.debug(f"tags for proof events to delete {tags}")
+            print(f"tags for proof events to delete {tags}")
             
             async with ClientPool([self.home_relay]) as c:
             
