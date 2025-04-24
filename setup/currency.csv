@@ -1,0 +1,51 @@
+currency_code,currency_rate,currency_symbol,currency_description,refresh_time,fractional_unit,number_to_base
+UAH,999105.81,₴,Ukrainian hryvnia,,kopeck,100
+VND,699594225.70,₫,Viet Nam Dong,,hao,10
+XOF,17523097.96,R,West African Franc,,centime,100
+AWG,52449.9714,f,Aruba florin,,centime,100
+BTC,1,B,Bitcoin,,satoshi,100000000
+UGX,109976512.00,R,Uganda Shillings,,shilling,1
+BTN,2441712.23,Nu,Bhutanese Ngultrum,,chetrum,100
+SAT,100000000,≐,satoshis,,msat,1000
+NCR,1000000.0,nc,Narnia Crescent,,sat,100
+NSL,1000000.0,៛,Narnia Silverleaf,,sat,100
+XCD,275724.46,EC$,Eastern Caribbean Dollars,2025-01-28 06:00:00.623873,cent,100
+CZK,2472350.09,Kč,Czech Koruna,2025-01-28 06:00:00.623873,heller,100
+DKK,735253.67,kr,Danish Krone,2025-01-28 06:00:00.623873,ore,100
+BNA,564850,bn,Bananas,,banana,1
+HKD,800305.1,$,Hong Kong Dollars,2025-01-28 06:00:00.623873,cent,100
+HRK,473845.0,kn,Croatia Kuna,2025-01-28 06:00:00.623873,kuna,1
+HUF,40257665.02,Ft,Hungary Forint,2025-01-28 06:00:00.623873,filler,100
+INR,8892916.05,R,Indian Rupees,2025-01-28 06:00:00.623873,paisa,100
+ISK,13429936.32,kr,Iceland Krona,2025-01-28 06:00:00.623873,eyrir,100
+KRW,148500613.63,₩,Korean Won,2025-01-28 06:00:00.623873,jeon,100
+NZD,181642.41,$,New Zealand Dollar,2025-01-28 06:00:00.623873,cent,100
+PLN,414457.54,zł,Poland Zloty,2025-01-28 06:00:00.623873,grosz,100
+RON,490130.83,lei,Romania Leu,2025-01-28 06:00:00.623873,ban,100
+RUB,10054395.45,₽,Russian Rubles,2025-01-28 06:00:00.623873,kopeck,100
+SGD,138899.68,$,Singapore Dollars,2025-01-28 06:00:00.623873,cent,10
+THB,3485525.46,ϯ,Thailand Baht,2025-01-28 06:00:00.623873,satang,100
+TRY,3674040.93,₺,Turkey Lira,2025-01-28 06:00:00.623873,kurus,100
+TWD,3383202.44,NT$,Taiwan New Dollars,2025-01-28 06:00:00.623873,cent,100
+PHP,5941092.62,₱,Philippine Pesos,2025-01-28 06:00:00.623873,sentimo,100
+NGN,162571200.0,₦,Nigerian Naira,2025-01-28 06:00:00.623873,kobo,100
+NOK,1219284.0,kr,Norway Krone,2025-01-28 06:00:00.623873,ore,100
+PKR,28689035.29,₨,Pakistan Rupee,2025-01-28 06:00:00.623873,paisa,100
+SAR,375164.31,﷼,Saudia Arabia Riyal,2025-01-28 06:00:00.623873,halala,100
+ZAR,1950854.4,R,South Africa Rand,2025-01-28 06:00:00.623873,cent,100
+IDR,975427200.0,Rp,Indonesia Rupiah,2025-01-28 06:00:00.623873,sen,100
+MXN,2106754.21,$,Mexican Pesos,2025-01-28 06:00:00.623873,centavo,100
+QAR,375164.31,﷼,Qatar Riyal,2025-01-28 06:00:00.623873,dirham,100
+ARS,107836579.79,$,Argentina Dollars,2025-01-28 06:00:00.623873,centavo,100
+BRL,605534.29,R$,Brazilian Real,2025-01-28 06:00:00.623873,centavo,100
+CHF,93110.99,CHF,Swiss Franc,2025-01-28 06:00:00.623873,rappen,100
+SEK,1083808.0,kr,Sweden Krona,2025-01-28 06:00:00.623873,ore,100
+CLP,101427455.56,$,Chilean Peso,2025-01-28 06:00:00.623873,centavo,100
+KYD,85100.14,CI$,Cayman Islands Dollars,2025-01-28 06:00:00.623873,cent,100
+CAD,146861.86,$,Canadian Dollars,2025-01-29 14:23:50.320343,cent,100
+EUR,97809.2,€,Euro,2025-01-29 14:23:50.320588,cent,100
+GBP,81857.61,£,British Pounds,2025-01-29 14:23:50.320769,pence,100
+JPY,15805071.28,¥,Japanese Yen,2025-01-29 14:23:50.320945,sen,100
+USD,101724.26,$,United States Dollars,2025-01-29 14:23:50.321121,cent,100
+AUD,163546.06,$,Australian Dollars,2025-01-29 14:23:50.321297,cent,100
+CNY,729474.84,¥,Chinese Yuan Renminbi,2025-01-29 14:23:50.321471,jiao,10

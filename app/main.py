@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     print("let's start up!")
     # Create Task
     # task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
+    await refresh_currency_rates()
     yield
     # stop_event.set()  # Stop the task
     # await task  # Ensure task finishes properly
