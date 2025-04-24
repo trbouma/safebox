@@ -31,6 +31,14 @@ async def refresh_currency_rates():
             record.refresh_time = datetime.now()
             session.commit()
 
+async def get_currency_rates():
+    with Session(engine) as session:
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code.in_(settings.SUPPORTED_CURRENCIES))
+        results = session.exec(statement).all()
+
+    return results
+
+
 async def get_online_currency_rates():
     return json.loads(requests.get('https://blockchain.info/ticker').text)
    

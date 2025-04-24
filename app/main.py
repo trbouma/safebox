@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from monstr.encrypt import Keys
 
 from app.config import Settings
-from app.routers import lnaddress, safebox, scanner, prescriptions, emergency, pos
+from app.routers import lnaddress, safebox, scanner, prescriptions, emergency, pos, public
 from app.tasks import periodic_task
 from app.utils import fetch_safebox
 from app.appmodels import RegisteredSafebox
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     print("let's start up!")
     # Create Task
     # task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
-    await refresh_currency_rates()
+    
     yield
     # stop_event.set()  # Stop the task
     # await task  # Ensure task finishes properly
@@ -80,6 +80,7 @@ app.include_router(scanner.router, prefix="/scanner")
 app.include_router(prescriptions.router, prefix="/prescriptions") 
 app.include_router(emergency.router) 
 app.include_router(pos.router, prefix="/pos")
+app.include_router(public.router, prefix="/public")
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/src", StaticFiles(directory="app/src"), name="src")

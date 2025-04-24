@@ -1,0 +1,43 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Safebox{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">    
+        <h1>Rates</h1>
+        <table width="80%">
+        {% for rate in rates %}
+            <tr> 
+                <td>{{rate.currency_code}} </td>
+                <td align="left">{{rate.currency_description}}</td>                  
+                <td align="right">{{rate.currency_symbol}}{{rate.currency_rate}} </td>       
+                <td>{{rate.number_to_base}}</td>
+                <td>{{rate.fractional_unit}} </td>
+            </tr>
+        {% endfor %}
+        </table>
+      
+  
+</div>
+     
+
+<script>
+    setDarkMode();
+</script>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}
