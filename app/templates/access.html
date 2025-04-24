@@ -546,7 +546,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
   
   <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
-  ({{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})
+  ({{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})
   <br><br>
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.

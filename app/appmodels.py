@@ -23,6 +23,7 @@ class RegisteredSafebox(SQLModel, table=True):
     owner: Optional[str] = None
     session_nonce: Optional[str] = None
     emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
+    currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -38,6 +38,12 @@ async def get_currency_rates():
 
     return results
 
+async def get_currency_rate(currency_code: str):
+    with Session(engine) as session:
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code==currency_code)
+        result = session.exec(statement).one()
+
+    return result
 
 async def get_online_currency_rates():
     return json.loads(requests.get('https://blockchain.info/ticker').text)

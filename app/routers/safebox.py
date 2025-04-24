@@ -19,6 +19,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
+from app.rates import get_currency_rate
 
 import logging, jwt
 
@@ -155,17 +156,17 @@ async def protected_route(    request: Request,
             out_name = safebox_found.handle
         else:
             raise ValueError("Could not find safebox!")
-        statement = select(CurrencyRate).where(CurrencyRate.currency_code==acorn_obj.local_currency)
-        currencies = session.exec(statement)
-        # currency_found = currencies.first()
-        currency_found=None
-        if currency_found:
-            currency_code = acorn_obj.local_currency
-            currency_rate = currency_found.currency_rate
-        else:
+
+        
+        try:
+            fiat_currency = await get_currency_rate(safebox_found.currency_code)
+            currency_code  = fiat_currency.currency_code
+            currency_rate = fiat_currency.currency_rate
+            currency_symbol = fiat_currency.currency_symbol
+        except:
             currency_code = "SAT"
             currency_rate = 1e8
-       
+            currency_symbol = ""
 
         safebox_found.balance = acorn_obj.balance
         session.add(safebox_found)
@@ -186,6 +187,7 @@ async def protected_route(    request: Request,
                                             "account_access_key":account_access_key, 
                                             "currency_code": currency_code,
                                             "currency_rate": currency_rate,
+                                            "currency_symbol": currency_symbol,
                                             "lightning_address": lightning_address,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
