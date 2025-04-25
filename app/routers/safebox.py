@@ -769,7 +769,8 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             currency_rate = fiat_currency.currency_rate
             currency_symbol = fiat_currency.currency_symbol
             
-            fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
+            # fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
+            fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {safebox_found.currency_code}"
             await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
             starting_balance = new_balance
           
