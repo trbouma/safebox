@@ -173,7 +173,11 @@ window.location.href="/safebox/healthconsult";
 
 }
 
+async function doIssueCredential() {
 
+window.location.href="/credentials/issue";
+
+}
 
 async function myHealthData() {
 
@@ -548,8 +552,8 @@ function getInvoiceStatus(ln_invoice_status) {
 
   
   <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
-  <span id="fiat_balance">({{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})</span>
-  <br><br>
+  <h2 id="fiat_balance">({{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})</h2>
+  
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
   <br><br>
@@ -609,16 +613,19 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
   
   <hr>
-  <h2>Official Documentation</h2>
-  <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
+  <h2>Official</h2>
+  <button id="my_credentials_button" onclick="myCredentials()" >Present a Credential</button> 
   <hr>
-  <h2>Personal Information</h2>
-  <button id="my_private_data_button" onclick="privateData()" >Personal Records</button>
+  <h2>Personal</h2>
+  <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
   <br><br>
   <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
   <hr>
-  <h2>Professional Duties</h2>   
-  <button id="do_consult_button" onclick="doHealthConsult()" >Heath Consultation</button>  
+  <h2>Professional</h2>   
+  <button id="do_consult_button" onclick="doHealthConsult()" >Perform a Consultation</button>  
+  <br>
+  <br>
+  <button id="do_issue_credential" onclick="doIssueCredential()" >Issue a Credential</button>  
   <br>
   <hr>
   <h2>Community</h2>

@@ -235,6 +235,7 @@ async def ln_pay_invoice(   request: Request,
         description = decoded_invoice.description
 
         await acorn_obj.add_tx_history(tx_type='D',amount=amount,comment=description)
+       
 
     except Exception as e:
         return {f"detail": "error {e}"}
@@ -648,7 +649,8 @@ async def my_danger_zone(       request: Request,
 
     return templates.TemplateResponse(  "dangerzone.html", 
                                         {   "request": request,
-                                            "safebox": safebox_found 
+                                            "safebox": safebox_found,
+                                            "currencies": settings.SUPPORTED_CURRENCIES 
 
                                         })
 

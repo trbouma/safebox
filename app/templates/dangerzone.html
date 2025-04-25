@@ -77,7 +77,7 @@ async function setCustomHandle() {
    
     var input_owner_npbub = document.getElementById("input_owner_currency");
 
-    owner_currency = input_owner_currency.value;
+    owner_currency = select_currency.value;
     user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_currency} as your owner currency?`);
     if (user_confirm == false) {return;}
     
@@ -117,8 +117,13 @@ async function setCustomHandle() {
      <br><br>
      <button onclick="setOwnerNpub()">Set Owner Npub</button>
      <br><br>
-     Set your owner currency.
-     <br><br><input type="text" placeholder="enter currency" id="input_owner_currency"   value="" style="width:90%;">
+     Set your owner currency: 
+     <select id="select_currency" name="select_currency">
+      {% for entry in currencies %}
+      <option >{{entry}}</option>         
+      {% endfor %}
+      </select>
+     
       <br><br>
       <button onclick="setOwnerCurrency()">Set Owner Currency</button>
       <br><br>
