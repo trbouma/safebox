@@ -732,6 +732,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
         await websocket.close(code=1008)  # Policy violation
         return
 
+
     starting_balance = safebox_found.balance
     new_balance = starting_balance
     message = "All payments up to date!"
@@ -763,8 +764,13 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
                 message = f"Payment Ready."
                 status = "OK"
 
+            fiat_currency = await get_currency_rate(safebox_found.currency_code)
+            currency_code  = fiat_currency.currency_code
+            currency_rate = fiat_currency.currency_rate
+            currency_symbol = fiat_currency.currency_symbol
             
-            await websocket.send_json({"balance":new_balance, "message": message, "status": status})
+            fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
+            await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
             starting_balance = new_balance
           
             
@@ -1012,6 +1018,10 @@ async def set_owner_data(   request: Request,
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()   
         await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
+        with Session(engine) as session:                 
+            safebox_found.currency_code = owner_data.local_currency
+            session.add(safebox_found)
+            session.commit() 
         msg_out = "successful"
     except:
         return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
