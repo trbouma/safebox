@@ -1014,17 +1014,17 @@ async def set_owner_data(   request: Request,
         if owner_data.local_currency not in settings.SUPPORTED_CURRENCIES:
             return {"status": "ERROR", "detail": "Not a supported currency!" }
     
-    try:
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-        await acorn_obj.load_data()   
-        await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
-        with Session(engine) as session:                 
-            safebox_found.currency_code = owner_data.local_currency
-            session.add(safebox_found)
-            session.commit() 
-        msg_out = "successful"
-    except:
-        return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
+        try:
+            acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+            await acorn_obj.load_data()   
+            await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
+            with Session(engine) as session:                 
+                safebox_found.currency_code = owner_data.local_currency
+                session.add(safebox_found)
+                session.commit() 
+            msg_out = "successful"
+        except:
+            return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
    
             
     if owner_data.npub:
