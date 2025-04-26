@@ -433,7 +433,7 @@ def get_records(kind, since, relays):
         click.echo(since_adjusted)
     else:
         since_adjusted = None
-
+    
     try:
         out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted, relays=relay_array_wss))
         
@@ -441,8 +441,8 @@ def get_records(kind, since, relays):
             click.echo(f"RECORD: {each}")
         click.echo(f"No. of RECORDS: {len(out_info)}" )
 
-    except:
-        click.echo("No label found!")
+    except Exception as e:
+        click.echo(f"No label found! {e}")
     
 
 

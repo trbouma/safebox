@@ -120,6 +120,11 @@ async def get_scan_result(  request: Request,
                   
             elif referer == "health-consult":
                 return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
+            
+            elif referer == "my-credentials":
+                return RedirectResponse(f"/credentials/present?nauth={qr_code}")
+            elif referer == "credential-offer":
+                return RedirectResponse(f"/credentials/offer?nauth={qr_code}")
             else:
                 return RedirectResponse(f"/safebox/access?nauth={qr_code}") 
 

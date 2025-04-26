@@ -163,9 +163,11 @@ window.location.href="/safebox/ecash";
 
 async function myCredentials() {
 
-window.location.href="/safebox/credentials";
+window.location.href="/credentials/present";
 
 }
+
+
 
 async function doHealthConsult() {
 
@@ -173,9 +175,9 @@ window.location.href="/safebox/healthconsult";
 
 }
 
-async function doIssueCredential() {
+async function doOfferCredential() {
 
-window.location.href="/credentials/issue";
+window.location.href="/credentials/offer";
 
 }
 
@@ -614,7 +616,8 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <hr>
   <h2>Official</h2>
-  <button id="my_credentials_button" onclick="myCredentials()" >Present a Credential</button> 
+  <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
+
   <hr>
   <h2>Personal</h2>
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
@@ -622,10 +625,10 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
   <hr>
   <h2>Professional</h2>   
-  <button id="do_consult_button" onclick="doHealthConsult()" >Perform a Consultation</button>  
+  <button id="do_consult_button" onclick="doHealthConsult()" >Health Consultation</button>  
   <br>
   <br>
-  <button id="do_issue_credential" onclick="doIssueCredential()" >Issue a Credential</button>  
+  <button id="do_issue_credential" onclick="doOfferCredential()" >Credential Offer</button>  
   <br>
   <hr>
   <h2>Community</h2>

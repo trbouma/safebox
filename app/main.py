@@ -17,6 +17,7 @@ from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 from app.relay import run_relay
+from app.nwc import listen_nwc
 
 # Create Settings:
 settings = Settings()
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
         pass
     
     asyncio.create_task(run_relay())
+    asyncio.create_task(listen_nwc())
     
     print("let's start up!")
     # Create Task

@@ -346,26 +346,19 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
 async def my_private_data(      request: Request,
                                 private_mode:str = "card", 
                                 kind:int = 37375,
-                                access_token: str = Cookie(None)
+                                acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
-    
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
+
+
+
     user_records = await acorn_obj.get_user_records(record_kind=kind)
     
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     return templates.TemplateResponse(  "privatedata.html", 
-                                        {   "request": request,
-                                            "safebox": safebox_found ,
-                                            "user_records": user_records,
-                                            "private_mode": private_mode,
+                                        {   "request": request,                                            
+                                            "user_records": user_records,                                          
                                             "referer": referer
                                             })
 
@@ -400,20 +393,13 @@ async def do_health_consult(      request: Request,
                                 kind:int = 32227,   
                                 nprofile:str = None, 
                                 nauth: str = None,                            
-                                access_token: str = Cookie(None)
+                                acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to consulting recods in home relay"""
     nprofile_parse = None
     auth_msg = None
 
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
-    
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
+
     user_records = await acorn_obj.get_user_records(record_kind=kind)
     
     if nprofile:
@@ -443,7 +429,7 @@ async def do_health_consult(      request: Request,
                                     transmittal_npub=npub_initiator,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
-                                    name=safebox_found.handle,
+                                    name=acorn_obj.handle,
                                     scope='transmit',
                                     grant=scope
         )
@@ -460,7 +446,7 @@ async def do_health_consult(      request: Request,
 
     return templates.TemplateResponse(  "healthconsult.html", 
                                         {   "request": request,
-                                            "safebox": safebox_found ,
+                                           
                                             "user_records": user_records,
                                             "record_kind": kind,
                                             "private_mode": private_mode,
@@ -660,18 +646,13 @@ async def display_card(     request: Request,
                             card: str = None,
                             kind: int = 37375,
                             action_mode: str = None,
-                            access_token: str = Cookie(None)
+                            acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
+
     
     if action_mode == 'edit':
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-        await acorn_obj.load_data()
+
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
         
         content = record["payload"]
@@ -683,7 +664,7 @@ async def display_card(     request: Request,
 
     return templates.TemplateResponse(  "card.html", 
                                         {   "request": request,
-                                            "safebox": safebox_found,
+                                            
                                             "card": card,
                                             "record_kind": kind,
                                             "referer": referer,

@@ -45,7 +45,7 @@ async def public_rates (    request: Request,
     await refresh_currency_rates()
     rates = await get_currency_rates()
     
-    return templates.TemplateResponse("rates.html", {"request": request, "rates": rates})
+    return templates.TemplateResponse("public/rates.html", {"request": request, "rates": rates})
 
 
 
