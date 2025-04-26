@@ -770,7 +770,10 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
     print("websocket connection closed")
 
 @router.websocket("/wsrequesttransmittal/{nauth}")
-async def websocket_requesttransmittal(websocket: WebSocket, nauth:str=None, access_token=Cookie()):
+async def websocket_requesttransmittal( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj = Depends(get_acorn)
+                                        ):
 
     print(f"ws nauth: {nauth}")
     auth_relays = None
@@ -781,26 +784,21 @@ async def websocket_requesttransmittal(websocket: WebSocket, nauth:str=None, acc
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
-        print(f"ws auth relays {auth_relays}")
+        print(f"ws auth relays: {auth_relays}")
 
-    try:
-       
-       safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        await websocket.close(code=1008)  # Policy violation
-        return
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
 
-    naddr = safebox_found.npub
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+
+    naddr = acorn_obj.pubkey_bech32
     nauth_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
 
     while True:
         try:
-            await acorn_obj.load_data()
+            # await acorn_obj.load_data()
             try:
                 client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
@@ -1062,19 +1060,15 @@ async def get_nprofile(    request: Request,
 
 @router.get("/nauth", tags=["safebox", "protected"])
 async def get_nauth(    request: Request, 
-                        access_token: str = Cookie(None)
+                        acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
     status = "OK"
     detail = "None"
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
+
     
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
     # figure out to use the owner key or the wallet key
     # just use the wallet
   
@@ -1083,7 +1077,7 @@ async def get_nauth(    request: Request,
     nonce = generate_nonce()
     print(f"nonce: {nonce}")
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==safebox_found.access_key)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_for_nonce = safeboxes.first()
         safebox_for_nonce.session_nonce = nonce
@@ -1125,7 +1119,7 @@ async def get_nauth(    request: Request,
 @router.post("/transmit", tags=["safebox", "protected"])
 async def transmit_records(        request: Request, 
                                         transmit_consultation: transmitConsultation,
-                                        access_token: str = Cookie(None)
+                                        acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
 
@@ -1133,12 +1127,7 @@ async def transmit_records(        request: Request,
     detail = "Nothing yet"
     transmit_consultation.originating_kind = 32227
     transmit_consultation.final_kind = 32225
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
+
     
 
 
@@ -1156,14 +1145,14 @@ async def transmit_records(        request: Request,
         transmittal_kind = parsed_nauth['values']['transmittal_kind']
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
-        print(f" session nonce {safebox_found.session_nonce} {nonce}")
+        # print(f" session nonce {safebox_found.session_nonce} {nonce}")
         #TODO Need to figure out session nonce when authenticating from other side
         # Need to update somewhere in the process leave out for now
         # if safebox_found.session_nonce != nonce:
         #     raise Exception("Invalid session!")
 
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-        await acorn_obj.load_data()
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        # await acorn_obj.load_data()
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
         for each_record in records_to_transmit:
             print(f"transmitting: {each_record['tag']} {each_record['payload']}")

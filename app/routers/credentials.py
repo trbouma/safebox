@@ -227,9 +227,9 @@ async def my_credentials(       request: Request,
     
 
     try:
-        health_records = await acorn_obj.get_user_records(record_kind=32225 )
+        credential_records = await acorn_obj.get_user_records(record_kind=34002 )
     except:
-        health_records = None
+        credential_records = None
 
     if nauth:
         
@@ -277,9 +277,101 @@ async def my_credentials(       request: Request,
     
     return templates.TemplateResponse(  "credentials/present.html", 
                                         {   "request": request,
-                                            "safebox": "test",
                                             
-                                            "health_records": health_records ,
+                                            
+                                            "credential_records": credential_records ,
                                             "nauth": nauth_response
 
                                         })
+
+@router.get("/accept", tags=["credentials", "protected"])
+async def get_inbox(      request: Request,
+
+                                nauth: str = None,                         
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to inbox in home relay"""
+    nprofile_parse = None
+ 
+
+    
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+    # since = None
+    since = util_funcs.date_as_ticks(datetime.now())
+   
+
+
+    if nauth:
+        
+        print("nauth")
+        parsed_result = parse_nauth(nauth)
+        npub = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+        
+
+    return templates.TemplateResponse(  "credentials/accept.html", 
+                                        {   "request": request,
+                                            
+                                            "user_records": user_records,
+                                            "transmittal_kind": transmittal_kind,
+                                            "nauth": nauth
+
+                                        })
+
+@router.post("/acceptincomingcredential", tags=["safebox", "protected"])
+async def accept_incoming_credential(       request: Request, 
+                                        incoming_record: incomingRecord,
+                                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """ accept incoming NPI-17 1060 health record and store as a 32225 record"""
+
+    status = "OK"
+    detail = "Nothing yet"
+
+
+
+    try:
+        parsed_result = parse_nauth(incoming_record.nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+
+        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+        # await acorn_obj.load_data()
+        
+        records_to_accept = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+        
+        detail = f"Could not find incoming record"
+        for each_record in records_to_accept:
+            print(f"incoming record id: {each_record['id']}")
+            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            # 32227 are transmitted as kind 1060
+            # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+            if each_record['id'] == incoming_record.id:
+                print(each_record)
+                print(each_record['tag'][0][0],each_record['payload'] )
+                # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
+                record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+                record_value = each_record['payload']
+                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=34002)
+                
+                detail = f"Matched record {incoming_record.id} accepted!"
+
+        
+        
+    except Exception as e:
+        status = "ERROR"
+        detail = f"Error: {e}"
+    
+
+    return {"status": status, "detail": detail}  
