@@ -375,3 +375,35 @@ async def accept_incoming_credential(       request: Request,
     
 
     return {"status": status, "detail": detail}  
+
+@router.get("/displaycredential", tags=["credentials", "protected"])
+async def display_card(     request: Request, 
+                            card: str = None,
+                            kind: int = 34002,
+                            action_mode: str = None,
+                            acorn_obj = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
+
+    
+    if action_mode == 'edit':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        
+        content = record["payload"]
+    elif action_mode =='add':
+        card = ""
+        content =""
+    
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+
+    return templates.TemplateResponse(  "credentials/credential.html", 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "referer": referer,
+                                            "action_mode":action_mode,
+                                            "content": content
+                                            
+                                        })
