@@ -165,6 +165,35 @@ async def get_nostr_name(request: Request, name: str, ):
     return JSONResponse(content=nostr_names, headers=headers)
     # return nostr_names
 
+@app.get("/user/{user}/did.json",tags=["public"])
+def get_user_did_doc(user: str, request: Request):
+    """did:web:asats.io:wallet:wallet_id"""
+
+
+
+    did_doc = {
+               
+                "id": f"did:web:{request.url.hostname}:user:{user}",
+                "verificationMethod":[{
+                                        "id": f"did:web:{request.url.hostname}:user:{user}#pubkey",
+                                        "controller": f"did:web:{request.url.hostname}:user:{user}",
+                                        "type": "EcdsaSecp256k1RecoveryMethod2020",
+                                        "publicKeyHex": "tbd"
+                                      }],
+                "authentication":[{
+                                        "id": f"did:web:{request.url.hostname}:user:{user}#pubkey",
+                                        "controller": f"did:web:{request.url.hostname}:user:{user}",
+                                        "type": "EcdsaSecp256k1VerificationKey2019",
+                                        "publicKeyHex": "tbd"
+                                      }]
+
+                }
+               
+                
+
+    return did_doc 
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

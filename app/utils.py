@@ -21,7 +21,7 @@ from monstr.client.client import Client, ClientPool
 from mnemonic import Mnemonic
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
 from safebox.acorn import Acorn
-
+from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
@@ -990,3 +990,16 @@ def generate_pnr(length=6):
     """Generates a six-character PNR using a cryptographically secure method."""
     characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excludes I, O, 0, 1
     return ''.join(secrets.choice(characters) for _ in range(length))
+
+async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
+   
+    
+    
+
+    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
+    
+    
+    return records_out[0]["payload"]
+
+
+#################################

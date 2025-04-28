@@ -819,6 +819,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
+                break
            
         
         except Exception as e:
@@ -1060,6 +1061,7 @@ async def get_nprofile(    request: Request,
 
 @router.get("/nauth", tags=["safebox", "protected"])
 async def get_nauth(    request: Request, 
+                        scope: str = 'transmit',
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
@@ -1103,7 +1105,7 @@ async def get_nauth(    request: Request,
                                 transmittal_kind = settings.TRANSMITTAL_KIND,
                                 transmittal_relays=settings.TRANSMITTAL_RELAYS,
                                 name=acorn_obj.handle,
-                                scope='transmit' 
+                                scope=scope 
 
                                
                             )

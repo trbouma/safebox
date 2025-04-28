@@ -14,7 +14,8 @@ from monstr.util import util_funcs
 import ipinfo
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request
+
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
@@ -407,3 +408,135 @@ async def display_card(     request: Request,
                                             "content": content
                                             
                                         })
+
+@router.websocket("/listen/{nauth}")
+async def websocket_requesttransmittal( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj = Depends(get_acorn)
+                                        ):
+
+    print(f"ws nauth: {nauth}")
+    auth_relays = None
+
+    await websocket.accept()
+
+    if nauth:
+        parsed_nauth = parse_nauth(nauth)   
+        auth_kind = parsed_nauth['values'] ['auth_kind']   
+        auth_relays = parsed_nauth['values']['auth_relays']
+        print(f"ws auth relays: {auth_relays}")
+
+
+
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+
+    naddr = acorn_obj.pubkey_bech32
+    nauth_old = None
+    # since_now = None
+    since_now = int(datetime.now(timezone.utc).timestamp())
+    start_time = datetime.now()
+
+    while True:
+        if datetime.now() - start_time > timedelta(minutes=1):
+            print("1 minute has passed. Exiting loop.")
+            await websocket.send_json({"test":"test"})
+            break
+        try:
+            # await acorn_obj.load_data()
+            try:
+                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+            except:
+                client_nauth=None
+            
+
+            
+            # parsed_nauth = parse_nauth(client_nauth)
+            # name = parsed_nauth['name']
+            # print(f"client nauth {client_nauth}")
+            
+
+            if client_nauth != nauth_old: 
+                parsed_nauth = parse_nauth(client_nauth)
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
+                print(f"send {client_nauth}") 
+                await websocket.send_json(nprofile)
+                nauth_old = client_nauth
+                print("authentication successful!")
+                break
+           
+        
+        except Exception as e:
+            print(f"Websocket message: {e}")
+            break
+        
+        await asyncio.sleep(5)
+        
+        
+        
+    print("websocket connection closed")
+
+@router.websocket("/presentation/{nauth}")
+async def websocket_requesttransmittal( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj = Depends(get_acorn)
+                                        ):
+
+    print(f"ws nauth: {nauth}")
+    auth_relays = None
+
+    await websocket.accept()
+
+    if nauth:
+        parsed_nauth = parse_nauth(nauth)   
+        auth_kind = parsed_nauth['values'] ['auth_kind']   
+        auth_relays = parsed_nauth['values']['auth_relays']
+        print(f"ws auth relays: {auth_relays}")
+
+
+
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+
+    naddr = acorn_obj.pubkey_bech32
+    nauth_old = None
+    # since_now = None
+    since_now = int(datetime.now(timezone.utc).timestamp())
+    start_time = datetime.now()
+
+    while True:
+        if datetime.now() - start_time > timedelta(minutes=1):
+            print("1 minute has passed. Exiting loop.")
+            await websocket.send_json({"test":"test"})
+            break
+        try:
+            # await acorn_obj.load_data()
+            try:
+                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+            except:
+                client_nauth=None
+            
+
+
+            if client_nauth != nauth_old: 
+                parsed_nauth = parse_nauth(client_nauth)
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
+                print(f"send {client_nauth}") 
+                await websocket.send_json(nprofile)
+                nauth_old = client_nauth
+                print("authentication successful!")
+                break
+           
+        
+        except Exception as e:
+            print(f"Websocket message: {e}")
+            break
+        
+        await asyncio.sleep(5)
+     
+        
+    print("websocket connection closed")
