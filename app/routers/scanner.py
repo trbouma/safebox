@@ -9,7 +9,7 @@ import asyncio
 import logging
 from urllib.parse import urlparse
 
-from app.utils import check_ln_address, decode_lnurl
+from app.utils import check_ln_address, decode_lnurl, parse_nauth
 
 from fastapi import FastAPI, File, UploadFile
 import shutil
@@ -111,10 +111,17 @@ async def get_scan_result(  request: Request,
             return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
 
     elif qr_code[:5].lower() == "nauth":
-            # Go directly to health consultation 
+            # Do nauth handling
             action_mode = "nauth"
             action_data = qr_code            
     
+            parsed_nauth = parse_nauth(qr_code)
+            
+            if "vpresent" in parsed_nauth['values']['scope']:
+                print(f"We have a credential presentation! {parsed_nauth['values']['scope']}")
+                return RedirectResponse(f"/credentials/verify?nauth={qr_code}")
+
+
             if referer == "health-data":
                 return RedirectResponse(f"/safebox/health?nauth={qr_code}") 
                   

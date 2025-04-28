@@ -121,7 +121,74 @@ async def do_credential_offer(      request: Request,
 
                                         })
 
+@router.get("/verify", tags=["credentials", "protected"])
+async def do_credential_verify(      request: Request,
+                                    private_mode:str = "offer", 
+                                    kind:int = 34001,   
+                                    nprofile:str = None, 
+                                    nauth: str = None,                            
+                                    acorn_obj = Depends(get_acorn)
+                    ):
+    """Protected access to consulting recods in home relay"""
+    nprofile_parse = None
+    auth_msg = None
 
+
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    
+    if nprofile:
+        nprofile_parse = parse_nostr_bech32(nprofile)
+        pass
+
+    if nauth:
+        
+        print(f"nauth from do consult {nauth}")
+
+
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        scope = parsed_result['values'].get("scope")
+    
+        #TODO  transmittal npub from nauth
+
+        auth_msg = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                    nonce=nonce,
+                                    auth_kind= auth_kind,
+                                    auth_relays=auth_relays,
+                                    transmittal_npub=npub_initiator,
+                                    transmittal_kind=transmittal_kind,
+                                    transmittal_relays=transmittal_relays,
+                                    name=acorn_obj.handle,
+                                    scope='transmit',
+                                    grant=scope
+        )
+
+        print(f"do credential offer initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+
+        
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=auth_msg,dm_relays=auth_relays,kind=auth_kind)
+
+    else:
+       pass
+    
+
+    return templates.TemplateResponse(  "credentials/credentialverify.html", 
+                                        {   "request": request,
+                                           
+                                            "user_records": user_records,
+                                            "record_kind": kind,
+                                            "private_mode": private_mode,
+                                            "client_nprofile": nprofile,
+                                            "client_nprofile_parse": nprofile_parse,
+                                            "client_nauth": auth_msg
+
+                                        })
 
 
 
@@ -378,11 +445,11 @@ async def accept_incoming_credential(       request: Request,
     return {"status": status, "detail": detail}  
 
 @router.get("/displaycredential", tags=["credentials", "protected"])
-async def display_card(     request: Request, 
+async def display_credential(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
                             action_mode: str = None,
-                            acorn_obj = Depends(get_acorn)
+                            acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
 
@@ -390,8 +457,9 @@ async def display_card(     request: Request,
     if action_mode == 'edit':
 
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
-        
+        label_hash = await acorn_obj.get_label_hash(label=card)
         content = record["payload"]
+        # record_id = record["id"]
     elif action_mode =='add':
         card = ""
         content =""
@@ -403,6 +471,7 @@ async def display_card(     request: Request,
                                             
                                             "card": card,
                                             "record_kind": kind,
+                                            "label_hash": label_hash,
                                             "referer": referer,
                                             "action_mode":action_mode,
                                             "content": content

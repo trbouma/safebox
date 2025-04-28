@@ -1157,6 +1157,16 @@ class Acorn:
             await asyncio.sleep(0.2)
             self.logger.debug(f"wrote event {label} to {write_relays}")
 
+    async def get_label_hash(self, label:str=None):
+        """get label hash used for d tag"""
+
+        m = hashlib.sha256()
+        m.update(self.privkey_hex.encode())
+        m.update(label.encode())
+        label_hash = m.digest().hex()
+
+        return label_hash
+
     async def get_wallet_info(self, label:str=None, record_kind:int=37375):
         my_enc = NIP44Encrypt(self.k)
 
