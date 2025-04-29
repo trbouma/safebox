@@ -122,16 +122,18 @@ async def do_credential_offer(      request: Request,
                                         })
 
 @router.get("/verifyrequest", tags=["credentials", "protected"])
-async def do_credential_verify(      request: Request,
+async def do_credential_verify_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34001,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
                                     acorn_obj = Depends(get_acorn)
                     ):
-    """Protected access to consulting recods in home relay"""
+    """This function display the verification page"""
+    """The page sets up a websocket to listen for the incoming credential"""
+    
     nprofile_parse = None
-    auth_msg = None
+    response_nauth = None
 
 
     user_records = await acorn_obj.get_user_records(record_kind=kind)
@@ -156,7 +158,7 @@ async def do_credential_verify(      request: Request,
     
         #TODO  transmittal npub from nauth
 
-        auth_msg = create_nauth(    npub=acorn_obj.pubkey_bech32,
+        response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
@@ -172,7 +174,7 @@ async def do_credential_verify(      request: Request,
 
         
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=auth_msg,dm_relays=auth_relays,kind=auth_kind)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
 
     else:
        pass
@@ -186,7 +188,8 @@ async def do_credential_verify(      request: Request,
                                             "private_mode": private_mode,
                                             "client_nprofile": nprofile,
                                             "client_nprofile_parse": nprofile_parse,
-                                            "client_nauth": auth_msg
+                                            "client_nauth": response_nauth,
+                                            "nauth": nauth
 
                                         })
 
@@ -481,8 +484,8 @@ async def display_credential(     request: Request,
                                             
                                         })
 
-@router.get("/select", tags=["credentials", "protected"])
-async def select_credential(       request: Request, 
+@router.get("/sendcredential", tags=["credentials", "protected"])
+async def send_credential(      request: Request, 
                                 nauth: str = None,                                
                                 acorn_obj = Depends(get_acorn)
                     ):
@@ -491,11 +494,29 @@ async def select_credential(       request: Request,
 
     if nauth:
         parsed_nauth = parse_nauth(nauth)
+
         scope = parsed_nauth['values']['scope']
         grant = parsed_nauth['values']['grant']
-        print(f"scope: {scope} grant:{grant}")
+        
 
-    return {"status": "OK", "result": True, "detail": "success!"}
+        
+        pubhex = parsed_nauth['values']['pubhex']
+        npub_recipient = hex_to_npub(pubhex)
+        nonce = parsed_nauth['values']['nonce']
+        auth_kind = parsed_nauth['values']['auth_kind']
+        auth_relays = parsed_nauth['values']['auth_relays']
+        transmittal_pubhex = parsed_nauth['values']['transmittal_pubhex']
+        transmittal_npub = hex_to_npub(transmittal_pubhex)
+        transmittal_kind = parsed_nauth['values']['transmittal_kind']
+        transmittal_relays = parsed_nauth['values']['transmittal_relays']
+
+        print(f"npub: {npub_recipient} scope: {scope} grant:{grant}")
+
+        #TODO Need to select the right credential and send over the to verifier
+
+        msg_out = await acorn_obj.secure_transmittal(transmittal_npub,scope, dm_relays=transmittal_relays,kind=transmittal_kind)
+
+    return {"status": "OK", "result": True, "detail": "Successfully sent for verification!"}
 
 
 @router.websocket("/ws/offer/{nauth}")
@@ -567,12 +588,12 @@ async def ws_credential_offer( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/presentation/{nauth}")
-async def ws_credential_presentation( websocket: WebSocket, 
+@router.websocket("/ws/listenforverifier/{nauth}")
+async def ws_listen_for_verifier( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
-
+    """After presenting a QR code, listen for verifier reponse using nauth parameters"""
     print(f"ws nauth: {nauth}")
     auth_relays = None
 
@@ -601,8 +622,8 @@ async def ws_credential_presentation( websocket: WebSocket,
             await websocket.send_json({"status":"TIMEOUT"})
             break
         try:
-            # await acorn_obj.load_data()
-            # This is waiting for the QR code to be scanned
+            # Error handling
+            
             try:
                 client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
@@ -614,7 +635,7 @@ async def ws_credential_presentation( websocket: WebSocket,
                 parsed_nauth = parse_nauth(client_nauth)
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
-                msg_out =   {   "status": "PRESENTED",
+                msg_out =   {   "status": "PRESENTACK",
                                 'nauth': client_nauth, 
                                 'name': 'safebox user', 
                                 'transmittal_kind': transmittal_kind, 
@@ -635,21 +656,21 @@ async def ws_credential_presentation( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/verify/{nauth}")
-async def ws_credential_verify( websocket: WebSocket, 
+@router.websocket("/ws/listenforcredential/{nauth}")
+async def ws_credential_listen( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
 
-    print(f"ws nauth: {nauth}")
+    print(f"listen with: {nauth}")
     auth_relays = None
 
     await websocket.accept()
 
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
-        auth_kind = parsed_nauth['values'] ['auth_kind']   
-        auth_relays = parsed_nauth['values']['auth_relays']
+        transmittal_kind = parsed_nauth['values'] ['transmittal_kind']   
+        transmittal_relays = parsed_nauth['values']['auth_relays']
         print(f"ws auth relays: {auth_relays}")
 
 
@@ -658,7 +679,7 @@ async def ws_credential_verify( websocket: WebSocket,
     # await acorn_obj.load_data()
 
     naddr = acorn_obj.pubkey_bech32
-    nauth_old = None
+    client_credential_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
     start_time = datetime.now()
@@ -671,25 +692,24 @@ async def ws_credential_verify( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_credenntia = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
             except:
-                client_nauth=None
+                client_credential=None
             
 
 
-            if client_nauth != nauth_old: 
-                parsed_nauth = parse_nauth(client_nauth)
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
-                msg_out =   {   "status": "PRESENTED",
-                                'nauth': client_nauth, 
-                                'name': 'safebox user', 
-                                'transmittal_kind': transmittal_kind, 
-                                'transmittal_relays': transmittal_relays}
-                print(f"send {client_nauth}") 
+            if client_credential != client_credential_old: 
+                # parsed_nauth = parse_nauth(client_nauth)
+                # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
+                # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                msg_out =   {   "status": "RECEIVED",
+                                'client_credential': client_credential, 
+                               
+                               }
+                print(f"send {client_credential}") 
                 await websocket.send_json(msg_out)
-                nauth_old = client_nauth
-                print("credential presentation successful!")
+                client_credential_old = client_credential
+                print("credential receipt successful!")
                 break
            
         
