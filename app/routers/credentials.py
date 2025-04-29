@@ -122,12 +122,12 @@ async def do_credential_offer(      request: Request,
                                         })
 
 @router.get("/verifyrequest", tags=["credentials", "protected"])
-async def do_credential_verify_request(      request: Request,
+async def credential_verify_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34001,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
-                                    acorn_obj = Depends(get_acorn)
+                                    acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
@@ -152,6 +152,7 @@ async def do_credential_verify_request(      request: Request,
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_npub = acorn_obj.pubkey_bech32 # It is the verifier that receives the credential
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
@@ -162,7 +163,7 @@ async def do_credential_verify_request(      request: Request,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
-                                    transmittal_npub=npub_initiator,
+                                    transmittal_npub=transmittal_npub,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=acorn_obj.handle,
@@ -484,6 +485,66 @@ async def display_credential(     request: Request,
                                             
                                         })
 
+@router.get("/nauth", tags=["safebox", "protected"])
+async def generate_nauth(    request: Request, 
+                        scope: str = 'transmit',
+                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to private data stored in home relay"""
+    status = "OK"
+    detail = "None"
+
+    
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+    # figure out to use the owner key or the wallet key
+    # just use the wallet
+  
+    # pub_hex_to_use = acorn_obj.pubkey_hex
+    npub_to_use = acorn_obj.pubkey_bech32
+    nonce = generate_nonce()
+    print(f"nonce: {nonce}")
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_for_nonce = safeboxes.first()
+        safebox_for_nonce.session_nonce = nonce
+        session.add(safebox_for_nonce)
+        session.commit()
+
+    try:
+        #TODO add in nonce to safebox table and change from naddr to nauth
+        # detail = create_nauth_from_npub(    npub_bech32=npub_to_use,
+        #                                    relays=[settings.AUTH_RELAY], 
+        #                                    nonce=nonce,
+        #                                    kind=settings.HEALTH_SECURE_AUTH_KIND,
+        #                                    transmittal_relays=[settings.HOME_RELAY],
+        #                                    transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND
+        # )
+        
+        auth_kind = settings.AUTH_KIND
+        auth_relays = settings.AUTH_RELAYS
+        detail = create_nauth(  npub=npub_to_use,
+                                nonce=nonce,
+                                auth_kind=auth_kind,
+                                auth_relays=auth_relays,
+                                transmittal_kind = settings.TRANSMITTAL_KIND,
+                                transmittal_relays=settings.TRANSMITTAL_RELAYS,
+                                name=acorn_obj.handle,
+                                scope=scope 
+
+                               
+                            )
+        
+
+        print(f"generated nauth: {detail}")
+      
+    except:
+        detail = "Not created"
+
+    return {"status": status, "detail": detail}
+
+
 @router.get("/sendcredential", tags=["credentials", "protected"])
 async def send_credential(      request: Request, 
                                 nauth: str = None,                                
@@ -513,6 +574,7 @@ async def send_credential(      request: Request,
         print(f"npub: {npub_recipient} scope: {scope} grant:{grant}")
 
         #TODO Need to select the right credential and send over the to verifier
+        # just send scope for now
 
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,scope, dm_relays=transmittal_relays,kind=transmittal_kind)
 
@@ -692,7 +754,7 @@ async def ws_credential_listen( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_credenntia = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
+                client_credential = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
             except:
                 client_credential=None
             
@@ -703,7 +765,7 @@ async def ws_credential_listen( websocket: WebSocket,
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
                 msg_out =   {   "status": "RECEIVED",
-                                'client_credential': client_credential, 
+                                'detail': client_credential, 
                                
                                }
                 print(f"send {client_credential}") 
