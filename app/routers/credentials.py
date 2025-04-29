@@ -14,7 +14,7 @@ from monstr.util import util_funcs
 import ipinfo
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
@@ -548,7 +548,7 @@ async def generate_nauth(    request: Request,
 @router.get("/sendcredential", tags=["credentials", "protected"])
 async def send_credential(      request: Request, 
                                 nauth: str = None,                                
-                                acorn_obj = Depends(get_acorn)
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Select credential for verification"""
     nauth_response = None
@@ -572,11 +572,17 @@ async def send_credential(      request: Request,
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
         print(f"npub: {npub_recipient} scope: {scope} grant:{grant}")
+        record_hash = scope.replace("vpresent:","")
+        print(f"need to select credential with record hash {record_hash}")
+        record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
+        print(record_out)
+        nembed = create_nembed_compressed(record_out)
+        # print(nembed)
 
         #TODO Need to select the right credential and send over the to verifier
         # just send scope for now
 
-        msg_out = await acorn_obj.secure_transmittal(transmittal_npub,scope, dm_relays=transmittal_relays,kind=transmittal_kind)
+        msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
 
     return {"status": "OK", "result": True, "detail": "Successfully sent for verification!"}
 
@@ -764,8 +770,9 @@ async def ws_credential_listen( websocket: WebSocket,
                 # parsed_nauth = parse_nauth(client_nauth)
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                credential_json = parse_nembed_compressed(client_credential)
                 msg_out =   {   "status": "RECEIVED",
-                                'detail': client_credential, 
+                                'detail': credential_json, 
                                
                                }
                 print(f"send {client_credential}") 

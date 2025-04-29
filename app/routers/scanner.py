@@ -120,7 +120,8 @@ async def get_scan_result(  request: Request,
             if "vpresent" in parsed_nauth['values']['scope']:
                 print(f"We have a credential presentation! {parsed_nauth['values']['scope']}")
                 return RedirectResponse(f"/credentials/verifyrequest?nauth={qr_code}")
-
+            elif "voffer" in parsed_nauth['values']['scope']:
+                return RedirectResponse(f"/credentials/present?nauth={qr_code}")
 
             if referer == "health-data":
                 return RedirectResponse(f"/safebox/health?nauth={qr_code}") 

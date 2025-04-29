@@ -1167,13 +1167,17 @@ class Acorn:
 
         return label_hash
 
-    async def get_wallet_info(self, label:str=None, record_kind:int=37375):
+    async def get_wallet_info(self, label:str=None, record_kind:int=37375, record_by_hash: str = None):
         my_enc = NIP44Encrypt(self.k)
 
-        m = hashlib.sha256()
-        m.update(self.privkey_hex.encode())
-        m.update(label.encode())
-        label_hash = m.digest().hex()
+        if record_by_hash:
+            label_hash = record_by_hash
+        else:
+            m = hashlib.sha256()
+            m.update(self.privkey_hex.encode())
+            m.update(label.encode())
+            label_hash = m.digest().hex()
+        
         decrypt_content = None
         
         # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
@@ -1270,9 +1274,9 @@ class Acorn:
 
 
         
-    async def get_record(self,record_name, record_kind: int =37375):
+    async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None):
         #FIXME - not sure if this function is used
-        record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind)
+        record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
         try:
             record_obj = json.loads(record_out)
         except:
