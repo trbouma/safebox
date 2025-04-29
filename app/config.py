@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     REFRESH_CURRENCY_INTERVAL: int = 3600
     TRANSMITTAL_KIND: int = 21060
     AUTH_KIND: int = 21061
+    CREDENTIAL_TRANSMITTAL_KIND: int = 21062
 
     class Config:
         env_file = '.env'

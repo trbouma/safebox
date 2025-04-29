@@ -528,7 +528,7 @@ async def generate_nauth(    request: Request,
                                 nonce=nonce,
                                 auth_kind=auth_kind,
                                 auth_relays=auth_relays,
-                                transmittal_kind = settings.TRANSMITTAL_KIND,
+                                transmittal_kind = settings.CREDENTIAL_TRANSMITTAL_KIND,
                                 transmittal_relays=settings.TRANSMITTAL_RELAYS,
                                 name=acorn_obj.handle,
                                 scope=scope 
