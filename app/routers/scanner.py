@@ -119,7 +119,7 @@ async def get_scan_result(  request: Request,
             
             if "vpresent" in parsed_nauth['values']['scope']:
                 print(f"We have a credential presentation! {parsed_nauth['values']['scope']}")
-                return RedirectResponse(f"/credentials/verify?nauth={qr_code}")
+                return RedirectResponse(f"/credentials/verifyrequest?nauth={qr_code}")
 
 
             if referer == "health-data":
