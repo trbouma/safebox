@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     TRANSMITTAL_KIND: int = 21060
     AUTH_KIND: int = 21061
     CREDENTIAL_TRANSMITTAL_KIND: int = 21062
+    CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
 
     class Config:
         env_file = '.env'

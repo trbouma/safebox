@@ -2003,7 +2003,7 @@ class Acorn:
             callback = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr']  
         except Exception as e:
-            msg_out = f"Could not resolve {lnaddress}. Check if correct address"
+            msg_out = f"Could not resolve {lnaddress}. {e} Check if correct address"
             self.logger.error(msg_out)
             raise Exception(msg_out)
             # return msg_out, 0
@@ -2162,25 +2162,29 @@ class Acorn:
                 if not chosen_keyset:
                     msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
                     raise ValueError(msg_out)
-                    
+
+                # Adding in some additional error handling to head off a random fatal error    
+                try:
+                    # Set to new mints and redo the calls
+                    melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+                    melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+                    # print(melt_quote_url,melt_url)
+                    # callback = lightning_address_pay(amount, lnaddress,comment=comment)
+                    # pr = callback['pr']        
+                    # print(pr)
+                    self.logger.debug(f"{amount}, {lnaddress}")
+                    data_to_send = {    "request": pr,
+                                    "unit": "sat"
+
+                                }
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                    # print("post melt response:", response.json())
+                    post_melt_response = PostMeltQuoteResponse(**response.json())
+                    # print("mint response:", post_melt_response)
                 
-                # Set to new mints and redo the calls
-                melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-                melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-                # print(melt_quote_url,melt_url)
-                # callback = lightning_address_pay(amount, lnaddress,comment=comment)
-                # pr = callback['pr']        
-                # print(pr)
-                self.logger.debug(f"{amount}, {lnaddress}")
-                data_to_send = {    "request": pr,
-                                "unit": "sat"
-
-                            }
-                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-                # print("post melt response:", response.json())
-                post_melt_response = PostMeltQuoteResponse(**response.json())
-                # print("mint response:", post_melt_response)
-
+                except Exception as e:
+                    raise Exception(f"Problem with mints {e}")
+                
                 if not chosen_keyset:
                     msg_out ="insufficient balance in any one keyset, you need to swap!"
                     raise ValueError(msg_out) 
@@ -2200,9 +2204,11 @@ class Acorn:
                 # print("pop", pay_proof.amount)
                 
 
-        
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-            
+            try:
+                proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            except Exception as e:
+                raise Exception(f"Error: {e}")
+                
 
             # print("proofs remaining:", proofs_remaining)
             # print(f"amount needed: {amount_needed}")
@@ -2232,12 +2238,15 @@ class Acorn:
         
             
             self.logger.debug(f"lightning payment we are here!: {data_to_send}")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+            try:
+                response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+            except Exception as e:
+                raise Exception(f"error: {e}")
             
             self.logger.debug(f"response json: {response.json()}")
             payment_json = response.json()
             #TODO Need to do some error checking
-            
+           
             self.logger.debug(f"need to do some error checking")
             # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
             # add keep proofs back into selected keyset proofs

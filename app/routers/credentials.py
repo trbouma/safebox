@@ -522,14 +522,14 @@ async def generate_nauth(    request: Request,
         #                                    transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND
         # )
         
-        auth_kind = settings.AUTH_KIND
-        auth_relays = settings.AUTH_RELAYS
+         
+       
         detail = create_nauth(  npub=npub_to_use,
                                 nonce=nonce,
-                                auth_kind=auth_kind,
-                                auth_relays=auth_relays,
+                                auth_kind=settings.AUTH_KIND,
+                                auth_relays=settings.AUTH_RELAYS,
                                 transmittal_kind = settings.CREDENTIAL_TRANSMITTAL_KIND,
-                                transmittal_relays=settings.TRANSMITTAL_RELAYS,
+                                transmittal_relays=settings.CREDENTIAL_TRANSMITTAL_RELAYS,
                                 name=acorn_obj.handle,
                                 scope=scope 
 
