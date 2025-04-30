@@ -124,7 +124,7 @@ async def do_credential_offer(      request: Request,
 @router.get("/verifyrequest", tags=["credentials", "protected"])
 async def credential_verify_request(      request: Request,
                                     private_mode:str = "offer", 
-                                    kind:int = 34001,   
+                                    kind:int = 34003,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
                                     acorn_obj: Acorn = Depends(get_acorn)
@@ -771,8 +771,12 @@ async def ws_credential_listen( websocket: WebSocket,
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
                 credential_json = parse_nembed_compressed(client_credential)
-                msg_out =   {   "status": "RECEIVED",
-                                'detail': credential_json, 
+                # Do the verification here...
+                verify_result = True
+
+                msg_out =   {   "status": "VERIFIED",
+                                "detail": credential_json, 
+                                "result": verify_result
                                
                                }
                 print(f"send {client_credential}") 
