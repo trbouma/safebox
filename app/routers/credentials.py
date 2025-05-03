@@ -171,7 +171,7 @@ async def credential_presentation_request(      request: Request,
                                     transmittal_relays=transmittal_relays,
                                     name=acorn_obj.handle,
                                     scope=scope,
-                                    grant=scope.replace("vpresent","vselect")
+                                    grant=scope.replace("prover","vselect")
         )
 
         print(f"do credential offer initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
@@ -343,28 +343,29 @@ async def my_credentials(       request: Request,
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
         scope = parsed_result['values'].get("scope")
     
-        if "vrequest" in scope:
+        if "verifier" in scope:
             credential_select = True
+            nauth_response = nauth
         
-
+        else:
 
         
-        # also need to set transmittal npub 
+            # also need to set transmittal npub 
 
 
-        nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
-                                    nonce=nonce,
-                                    auth_kind= auth_kind,
-                                    auth_relays=auth_relays,
-                                    transmittal_npub=transmittal_npub,
-                                    transmittal_kind=transmittal_kind,
-                                    transmittal_relays=transmittal_relays,
-                                    name=acorn_obj.handle,
-                                    scope=scope,
-                                    grant=scope
-        )
+            nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                        nonce=nonce,
+                                        auth_kind= auth_kind,
+                                        auth_relays=auth_relays,
+                                        transmittal_npub=transmittal_npub,
+                                        transmittal_kind=transmittal_kind,
+                                        transmittal_relays=transmittal_relays,
+                                        name=acorn_obj.handle,
+                                        scope=scope,
+                                        grant=scope
+            )
 
-        print(f"my health data initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+
 
         
         # send the recipient nauth message
@@ -591,7 +592,7 @@ async def send_credential(      request: Request,
         parsed_nauth = parse_nauth(nauth)
 
         scope = parsed_nauth['values']['scope']
-        grant = parsed_nauth['values']['grant']
+        grant = parsed_nauth['values'].get("grant")
         
 
         
@@ -607,17 +608,19 @@ async def send_credential(      request: Request,
         print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
         # Need to inspect scope to determine what to do
-        if "vpresent" in scope:
+        if "prover" in scope:
             # this means the presentation has the corresponding record hash
-            record_hash = scope.replace("vpresent:","")
+            record_hash = scope.replace("prover:","")
             print(f"need to select credential with record hash {record_hash}")
             record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
             transmittal_npub = hex_to_npub(transmittal_pubhex)
-        elif "vrequest" in scope:
+        elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
-            record_out = {"test": scope}
+            #need to figure how to pass in the label to look up
+            record_out = await acorn_obj.get_record(record_name="test credential", record_kind=34002)
+            # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
-            record_out = {"test": f"unknown {scope}"}
+            record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
 
         print(record_out)
         

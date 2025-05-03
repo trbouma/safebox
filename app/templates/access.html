@@ -181,6 +181,12 @@ window.location.href="/credentials/offer";
 
 }
 
+async function doVerifyCredential() {
+// alert('Coming soon!');
+window.location.href="/credentials/verificationrequest";
+
+}
+
 async function myHealthData() {
 
 window.location.href="/safebox/health";
@@ -629,6 +635,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <br>
   <br>
   <button id="do_issue_credential" onclick="doOfferCredential()" >Credential Offer</button>  
+  <br>
+  <br>
+  <button id="do_verify_credential" onclick="doVerifyCredential()" >Credential Verify</button> 
   <br>
   <hr>
   <h2>Community</h2>
