@@ -102,3 +102,6 @@ class recoverIdentity(BaseModel):
     home_relay: Union[None,str]=None
     new_identity: bool = False
 
+class sendCredentialParms(BaseModel):
+    nauth: str
+

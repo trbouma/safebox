@@ -17,7 +17,7 @@ import ipinfo
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
@@ -578,18 +578,17 @@ async def generate_nauth(    request: Request,
 
     return {"status": status, "detail": detail}
 
-
-@router.get("/sendcredential", tags=["credentials", "protected"])
-async def send_credential(      request: Request, 
-                                nauth: str = None,                                
+@router.post("/sendcredential", tags=["credentials", "protected"])
+async def post_send_credential(      request: Request, 
+                                credential_parms: sendCredentialParms,                                
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Select credential for verification"""
     nauth_response = None
-    print(f"send credential {nauth}")
+    print(f"send credential {credential_parms.nauth}")
 
-    if nauth:
-        parsed_nauth = parse_nauth(nauth)
+    if credential_parms.nauth:
+        parsed_nauth = parse_nauth(credential_parms.nauth)
 
         scope = parsed_nauth['values']['scope']
         grant = parsed_nauth['values'].get("grant")
@@ -633,7 +632,6 @@ async def send_credential(      request: Request,
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
 
     return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
-
 
 @router.websocket("/ws/credentialdata")
 async def ws_credential_data( websocket: WebSocket,                                          
