@@ -58,7 +58,7 @@ async def do_credential_offer(      request: Request,
                                     kind:int = 34001,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
-                                    acorn_obj = Depends(get_acorn)
+                                    acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to consulting recods in home relay"""
     nprofile_parse = None
@@ -81,9 +81,12 @@ async def do_credential_offer(      request: Request,
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_pubhex = parsed_result['values'].get("transmittal_pubhex")
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
+
+        transmittal_npub = hex_to_npub(transmittal_pubhex)
     
         #TODO  transmittal npub from nauth
 
@@ -91,11 +94,11 @@ async def do_credential_offer(      request: Request,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
-                                    transmittal_npub=npub_initiator,
+                                    transmittal_npub=transmittal_npub,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=acorn_obj.handle,
-                                    scope='transmit',
+                                    scope=scope,
                                     grant=scope
         )
 
@@ -121,8 +124,8 @@ async def do_credential_offer(      request: Request,
 
                                         })
 
-@router.get("/verifyrequest", tags=["credentials", "protected"])
-async def credential_verify_request(      request: Request,
+@router.get("/presentationrequest", tags=["credentials", "protected"])
+async def credential_presentation_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34003,   
                                     nprofile:str = None, 
@@ -152,7 +155,7 @@ async def credential_verify_request(      request: Request,
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
-        transmittal_npub = acorn_obj.pubkey_bech32 # It is the verifier that receives the credential
+        transmittal_npub = parsed_result['values'].get("transmittal_npub") # It is the verifier that receives the credential
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
@@ -163,7 +166,7 @@ async def credential_verify_request(      request: Request,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
-                                    transmittal_npub=transmittal_npub,
+                                    transmittal_npub=acorn_obj.pubkey_bech32,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=acorn_obj.handle,
@@ -181,7 +184,7 @@ async def credential_verify_request(      request: Request,
        pass
     
 
-    return templates.TemplateResponse(  "credentials/credentialverify.html", 
+    return templates.TemplateResponse(  "credentials/presentationrequest.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
@@ -193,7 +196,22 @@ async def credential_verify_request(      request: Request,
                                             "nauth": nauth
 
                                         })
+@router.get("/verificationrequest", tags=["credentials", "protected"])
+async def credential_verfication_request(      request: Request,
+                          
+                                    acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """This function display the verification page"""
+    """The page sets up a websocket to listen for the incoming credential"""
 
+    
+    credential_types = ["id_card","passport","drivers_license"]
+
+    return templates.TemplateResponse(  "credentials/verificationrequest.html", 
+                                        {   "request": request,   
+                                            "credential_types": credential_types
+
+                                        })
 
 
 @router.get("/display", tags=["credentials", "protected"])
@@ -241,7 +259,7 @@ async def transmit_records(        request: Request,
     transmit_consultation.final_kind = 34002
 
     
-
+    print(f"transmit nauth: {transmit_consultation.nauth}")
 
     try:
 
@@ -249,11 +267,17 @@ async def transmit_records(        request: Request,
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
+        scope = parsed_nauth['values']['scope']
         nonce = parsed_nauth['values']['nonce']
         auth_kind = parsed_nauth['values']['auth_kind']
         auth_relays = parsed_nauth['values']['auth_relays']
+
+
+        
         transmittal_pubhex = parsed_nauth['values']['transmittal_pubhex']
         transmittal_npub = hex_to_npub(transmittal_pubhex)
+        
+        
         transmittal_kind = parsed_nauth['values']['transmittal_kind']
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
@@ -295,7 +319,7 @@ async def my_credentials(       request: Request,
                     ):
     """Protected access to private data stored in home relay"""
     nauth_response = None
-
+    credential_select = False
     
 
     try:
@@ -314,10 +338,15 @@ async def my_credentials(       request: Request,
         nonce = parsed_result['values']['nonce']
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_npub = parsed_result['values'].get("transmittal_npub")
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
         scope = parsed_result['values'].get("scope")
     
+        if "vrequest" in scope:
+            credential_select = True
+        
+
 
         
         # also need to set transmittal npub 
@@ -327,11 +356,11 @@ async def my_credentials(       request: Request,
                                     nonce=nonce,
                                     auth_kind= auth_kind,
                                     auth_relays=auth_relays,
-                                    transmittal_npub=acorn_obj.pubkey_bech32,
+                                    transmittal_npub=transmittal_npub,
                                     transmittal_kind=transmittal_kind,
                                     transmittal_relays=transmittal_relays,
                                     name=acorn_obj.handle,
-                                    scope='transmit',
+                                    scope=scope,
                                     grant=scope
         )
 
@@ -352,7 +381,8 @@ async def my_credentials(       request: Request,
                                             
                                             
                                             "credential_records": credential_records ,
-                                            "nauth": nauth_response
+                                            "nauth": nauth_response,
+                                            "credential_select": credential_select
 
                                         })
 
@@ -436,7 +466,8 @@ async def accept_incoming_credential(       request: Request,
                 print(each_record)
                 print(each_record['tag'][0][0],each_record['payload'] )
                 # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
-                record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+                # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+                record_name = f"{each_record['tag'][0][0]}" 
                 record_value = each_record['payload']
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=34002)
                 
@@ -499,11 +530,12 @@ async def generate_nauth(    request: Request,
     # await acorn_obj.load_data()
     # figure out to use the owner key or the wallet key
     # just use the wallet
-  
+    print("this is the credentials/nauth")
+
     # pub_hex_to_use = acorn_obj.pubkey_hex
     npub_to_use = acorn_obj.pubkey_bech32
     nonce = generate_nonce()
-    print(f"nonce: {nonce}")
+    print(f"scope: {scope} nonce: {nonce}")
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
@@ -522,12 +554,13 @@ async def generate_nauth(    request: Request,
         #                                    transmittal_kind=settings.HEALTH_SECURE_TRANSMITTAL_KIND
         # )
         
-         
+        transmittal_npub = acorn_obj.pubkey_bech32
        
         detail = create_nauth(  npub=npub_to_use,
                                 nonce=nonce,
                                 auth_kind=settings.AUTH_KIND,
                                 auth_relays=settings.AUTH_RELAYS,
+                                transmittal_npub=transmittal_npub,
                                 transmittal_kind = settings.CREDENTIAL_TRANSMITTAL_KIND,
                                 transmittal_relays=settings.CREDENTIAL_TRANSMITTAL_RELAYS,
                                 name=acorn_obj.handle,
@@ -552,6 +585,7 @@ async def send_credential(      request: Request,
                     ):
     """Select credential for verification"""
     nauth_response = None
+    print(f"send credential {nauth}")
 
     if nauth:
         parsed_nauth = parse_nauth(nauth)
@@ -566,16 +600,27 @@ async def send_credential(      request: Request,
         nonce = parsed_nauth['values']['nonce']
         auth_kind = parsed_nauth['values']['auth_kind']
         auth_relays = parsed_nauth['values']['auth_relays']
-        transmittal_pubhex = parsed_nauth['values']['transmittal_pubhex']
-        transmittal_npub = hex_to_npub(transmittal_pubhex)
+        transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex',acorn_obj.pubkey_hex)
         transmittal_kind = parsed_nauth['values']['transmittal_kind']
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
 
-        print(f"npub: {npub_recipient} scope: {scope} grant:{grant}")
-        record_hash = scope.replace("vpresent:","")
-        print(f"need to select credential with record hash {record_hash}")
-        record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
+        print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
+
+        # Need to inspect scope to determine what to do
+        if "vpresent" in scope:
+            # this means the presentation has the corresponding record hash
+            record_hash = scope.replace("vpresent:","")
+            print(f"need to select credential with record hash {record_hash}")
+            record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
+            transmittal_npub = hex_to_npub(transmittal_pubhex)
+        elif "vrequest" in scope:
+            transmittal_npub = hex_to_npub(transmittal_pubhex)
+            record_out = {"test": scope}
+        else:
+            record_out = {"test": f"unknown {scope}"}
+
         print(record_out)
+        
         nembed = create_nembed_compressed(record_out)
         # print(nembed)
 
@@ -584,8 +629,15 @@ async def send_credential(      request: Request,
 
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
 
-    return {"status": "OK", "result": True, "detail": "Successfully sent for verification!"}
+    return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
 
+
+@router.websocket("/ws/credentialdata")
+async def ws_credential_data( websocket: WebSocket,                                          
+                                        acorn_obj = Depends(get_acorn)
+                                        ):
+    await websocket.accept()
+    return
 
 @router.websocket("/ws/offer/{nauth}")
 async def ws_credential_offer( websocket: WebSocket, 
@@ -727,7 +779,7 @@ async def ws_listen_for_verifier( websocket: WebSocket,
 @router.websocket("/ws/listenforcredential/{nauth}")
 async def ws_credential_listen( websocket: WebSocket, 
                                         nauth:str=None, 
-                                        acorn_obj = Depends(get_acorn)
+                                        acorn_obj: Acorn = Depends(get_acorn)
                                         ):
 
     print(f"listen with: {nauth}")
@@ -761,7 +813,7 @@ async def ws_credential_listen( websocket: WebSocket,
             # await acorn_obj.load_data()
             try:
                 client_credential = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
-            except:
+            except Exception as e:
                 client_credential=None
             
 
@@ -794,3 +846,81 @@ async def ws_credential_listen( websocket: WebSocket,
      
         
     print("websocket connection closed")
+
+@router.websocket("/wsrequesttransmittal/{nauth}")
+async def websocket_requesttransmittal( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj = Depends(get_acorn)
+                                        ):
+
+    print(f"ws nauth: {nauth}")
+    auth_relays = None
+
+    await websocket.accept()
+
+    if nauth:
+        parsed_nauth = parse_nauth(nauth)   
+        auth_kind = parsed_nauth['values'] ['auth_kind']   
+        auth_relays = parsed_nauth['values']['auth_relays']
+        print(f"ws auth relays: {auth_relays}")
+
+
+
+    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
+    # await acorn_obj.load_data()
+
+    naddr = acorn_obj.pubkey_bech32
+    nauth_old = None
+    # since_now = None
+    since_now = int(datetime.now(timezone.utc).timestamp())
+
+    while True:
+        try:
+            # await acorn_obj.load_data()
+            try:
+                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+            except:
+                client_nauth=None
+            
+
+            
+            # parsed_nauth = parse_nauth(client_nauth)
+            # name = parsed_nauth['name']
+            # print(f"client nauth {client_nauth}")
+            
+
+            if client_nauth != nauth_old: 
+                parsed_nauth = parse_nauth(client_nauth)
+                pubhex = parsed_nauth['values'].get('pubhex')
+                transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                
+                # Need to create a new nauth where the transmittal npub points back to the initiator
+                new_nauth = create_nauth (  npub= hex_to_npub(pubhex),
+                                            nonce = parsed_nauth['values'].get('nonce'),
+                                            auth_kind = parsed_nauth['values'].get('auth_kind'),
+                                            auth_relays = parsed_nauth['values'].get('auth_relays'),
+                                            transmittal_npub = hex_to_npub(pubhex),
+                                            transmittal_kind=  transmittal_kind,
+                                            transmittal_relays= transmittal_relays,
+                                            scope= parsed_nauth['values'].get('scope'),
+                                            grant = parsed_nauth['values'].get('grant')
+
+                ) 
+
+                nprofile = {'nauth': new_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
+                print(f"send {client_nauth}") 
+                await websocket.send_json(nprofile)
+                nauth_old = client_nauth
+                break
+           
+        
+        except Exception as e:
+            print(f"Websocket message: {e}")
+            break
+        
+        await asyncio.sleep(5)
+        
+        
+    print("websocket connection closed")    
