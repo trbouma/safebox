@@ -607,12 +607,16 @@ async def post_send_credential(      request: Request,
         print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
         # Need to inspect scope to determine what to do
+        #TODO refactor this code
         if "prover" in scope:
             # this means the presentation has the corresponding record hash
-            record_hash = scope.replace("prover:","")
-            print(f"need to select credential with record hash {record_hash}")
-            record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
             transmittal_npub = hex_to_npub(transmittal_pubhex)
+            print(f"grant: {credential_parms.grant}")
+            # record_hash = scope.replace("prover:","")
+            # print(f"need to select credential with record hash {record_hash}")
+            # record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
+            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=34002)
+            
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
@@ -825,8 +829,9 @@ async def ws_credential_listen( websocket: WebSocket,
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
                 credential_json = parse_nembed_compressed(client_credential)
-                # Do the verification here...
+                #### Do the verification here... ####
                 verify_result = True
+                #### Finish verification ####
 
                 msg_out =   {   "status": "VERIFIED",
                                 "detail": credential_json, 
