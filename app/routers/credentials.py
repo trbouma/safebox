@@ -616,7 +616,8 @@ async def post_send_credential(      request: Request,
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
-            record_out = await acorn_obj.get_record(record_name="test credential", record_kind=34002)
+            print(f"grant: {credential_parms.grant}")
+            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=34002)
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}

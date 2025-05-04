@@ -104,4 +104,5 @@ class recoverIdentity(BaseModel):
 
 class sendCredentialParms(BaseModel):
     nauth: str
+    grant: str = None;
 
