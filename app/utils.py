@@ -607,6 +607,62 @@ def create_nauth(   npub,
     
     return nauth
 
+def mod_nauth(      nauth:str,
+                    npub: str = None , 
+                    nonce:str   =None,                                                       
+                    auth_kind: int=None, 
+                    auth_relays=None,
+                    transmittal_npub: str = None,
+                    transmittal_kind= None,  
+                    transmittal_relays = None,
+                    name: str = None,
+                    scope: str = None,
+                    grant: str = None 
+                ):
+    
+    
+    # parse existing nauth
+    orig_parsed_nauth = parse_nauth(nauth)
+    orig_pubhex = orig_parsed_nauth["values"].get("pubhex", None)
+    orig_nonce = orig_parsed_nauth["values"].get("nonce", None)
+    orig_auth_kind = orig_parsed_nauth["values"].get("auth_kind", None)
+    orig_auth_relays = orig_parsed_nauth["values"].get("auth_relays", None)
+    orig_trasmittal_kind = orig_parsed_nauth["values"].get("transmittal_kind", None)
+    orig_transmittal_relays = orig_parsed_nauth["values"].get("transmittal_relays", None)
+    orig_name = orig_parsed_nauth["values"].get("name", None)
+    orig_scope = orig_parsed_nauth["values"].get("scope", None)
+    orig_grant = orig_parsed_nauth["values"].get("grant", None)
+    
+    if npub:
+        new_npub = npub
+    elif orig_pubhex:
+        new_npub = hex_to_npub(orig_pubhex)
+    else:
+        new_npub = None
+   
+    new_npub = npub if npub is not None else (hex_to_npub(orig_pubhex) if orig_pubhex is not None else None)
+    new_nonce = nonce if nonce is not None else orig_nonce
+    new_auth_kind = auth_kind if auth_kind is not None else orig_auth_kind
+    new_auth_relays = auth_relays if auth_relays is not None else orig_auth_relays
+    new_transmittal_kind = transmittal_kind if transmittal_kind is not None else orig_trasmittal_kind
+    new_transmittal_relays = transmittal_relays if transmittal_kind is not None else orig_transmittal_relays
+    new_name = name if name is not None else orig_name
+    new_scope = scope if scope is not None else orig_scope
+    new_grant = grant if grant is not None else orig_grant
+
+    new_nauth = create_nauth(   new_npub,
+                                nonce= new_nonce,
+                                auth_kind = new_auth_kind,
+                                auth_relays= new_auth_relays,
+                                transmittal_kind= new_transmittal_kind,
+                                transmittal_relays=new_transmittal_relays,
+                                name=new_name,
+                                scope=new_scope,
+                                grant=new_grant
+                             )
+    
+    return new_nauth
+
 def parse_nauth(encoded_string):
     # Decode the Bech32 string
     hrp, data = bech32_decode(encoded_string)
