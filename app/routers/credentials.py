@@ -499,10 +499,12 @@ async def display_credential(     request: Request,
         label_hash = await acorn_obj.get_label_hash(label=card)
         content = record["payload"]
         # record_id = record["id"]
+        
     elif action_mode =='add':
         card = ""
         content =""
     
+    credential_record = {"card":card, "content": content}
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     return templates.TemplateResponse(  "credentials/credential.html", 
@@ -513,7 +515,8 @@ async def display_credential(     request: Request,
                                             "label_hash": label_hash,
                                             "referer": referer,
                                             "action_mode":action_mode,
-                                            "content": content
+                                            "content": content,
+                                            "credential_record": credential_record
                                             
                                         })
 

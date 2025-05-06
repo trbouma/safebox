@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     AUTH_KIND: int = 21061
     CREDENTIAL_TRANSMITTAL_KIND: int = 21062
     CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
+    CURRENCY_CSV: str = 'setup/currency.csv'
 
     class Config:
         env_file = '.env'
