@@ -119,7 +119,8 @@ async def get_safebox(access_token: str = Cookie(None)):
 
 async def get_acorn(access_token: str = Cookie(None)):
     if not access_token:
-        raise HTTPException(status_code=401, detail="Access token missing")
+        # raise HTTPException(status_code=401, detail="Access token missing")
+        return None
     
     safebox_found = await fetch_safebox(access_token=access_token)
     

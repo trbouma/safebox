@@ -148,6 +148,10 @@ async def protected_route(    request: Request,
                         acorn_obj = Depends(get_acorn)
                     ):
 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
+
+
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub ==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
@@ -156,6 +160,7 @@ async def protected_route(    request: Request,
             out_name = safebox_found.handle
         else:
             raise ValueError("Could not find safebox!")
+            
 
         
         try:

@@ -95,8 +95,9 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Define a root endpoint
 @app.get("/", tags=["public"])
-async def read_root(request: Request, access_token: str = Cookie(default=None)):
-    print(f"Access token: {access_token}")
+async def read_root(request: Request, access_token: str = Cookie(default=None)):    
+
+    
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         response = RedirectResponse(url="/safebox/access", status_code=302)
