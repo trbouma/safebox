@@ -14,7 +14,7 @@ from monstr.util import util_funcs
 import ipinfo
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms
@@ -376,13 +376,9 @@ async def my_records(       request: Request,
        pass
 
     # hardcode the selection list for now
-    select_kinds = [ 
-                        [32225,"Health Records"],
-                        [37375, "Personal Records"], 
-                        [34002, "Credentials"]
-                    ]
+    select_kinds = settings.SELECT_KINDS
   
-
+    record_label = get_label_by_id(select_kinds, record_kind)
     
     return templates.TemplateResponse(  "records/recordslist.html", 
                                         {   "request": request,
@@ -392,6 +388,7 @@ async def my_records(       request: Request,
                                             "nauth": nauth_response,
                                             "credential_select": credential_select,
                                             "record_kind": record_kind,
+                                            "record_label": record_label,
                                             "select_kinds": select_kinds
 
                                         })

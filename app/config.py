@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     CREDENTIAL_TRANSMITTAL_KIND: int = 21062
     CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
+    SELECT_KINDS: List = [[32225,"Health Records"],[37375, "Personal Notes"],[34002, "Credentials"]]
+    WALLET_SWAP_MODE: bool = False
 
     class Config:
         env_file = '.env'

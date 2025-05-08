@@ -207,13 +207,16 @@ async def protected_route(    request: Request,
 @router.post("/payaddress", tags=["protected"])
 async def ln_pay_address(   request: Request, 
                             ln_pay: lnPayAddress,
-                            acorn_obj = Depends(get_acorn)):
+                            acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
     try:
         
         # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         # await acorn_obj.load_data()
         msg_out, final_fees = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        if settings.WALLET_SWAP_MODE:
+            print("doing wallet swap")
+            await acorn_obj.swap_multi_consolidate()
         await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment, fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}

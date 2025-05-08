@@ -2605,7 +2605,7 @@ class Acorn:
                 tags.append(["e",each])
             tags.append(["k","7375"])
             self.logger.debug(f"tags for proof events to delete {tags}")
-            print(f"tags for proof events to delete {tags}")
+            # print(f"tags for proof events to delete {tags}")
             
             async with ClientPool([self.home_relay]) as c:
             

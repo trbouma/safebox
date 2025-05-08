@@ -36,6 +36,13 @@ engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
+
+def get_label_by_id(data, target_id):
+    for entry in data:
+        if entry[0] == target_id:
+            return entry[1]
+    return None
+
 def create_jwt_token(data: dict, expires_delta: timedelta = None):
     k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
 

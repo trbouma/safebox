@@ -163,7 +163,7 @@ async function selectRecordKind() {
   {% if credential_select %}
     <h1>Select a Credential to Present</h1>
   {% else %}
-  <h1>My Records</h1>
+  <h1>My {{ record_label}}</h1>
   {% endif %}
 
     <button onclick="gotoHome()">Home</button>
@@ -283,8 +283,8 @@ await fetch(`/credentials/sendcredential`, {
 {% else %}
   <div class="center-text">
     <hr>
-      <h2>Need More Credentials?</h2>
-      Click on image below to authenticate to your credential issuer.
+      <h2>Need More {{record_label}}?</h2>
+      Click on image below to authenticate.
       <br><br>
       <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
       <br><br>
