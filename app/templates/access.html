@@ -156,6 +156,11 @@ async function privateData() {
 window.location.href="/safebox/privatedata";
 }
 
+async function myRecords() {
+
+window.location.href="/records/present";
+}
+
 async function myEcash() {
 
 window.location.href="/safebox/ecash";
@@ -627,6 +632,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <hr>
   <h2>Personal</h2>
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
+  <br><br>
+  <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
   <br><br>
   <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
   <hr>
