@@ -145,8 +145,14 @@ async def get_nostr_name(request: Request, name: str, ):
                 key_obj = Keys(pub_k=safebox_found.owner)
                 npub_hex = key_obj.public_key_hex()
             else:
-
-                raise HTTPException(status_code=404, detail=f"{name} not found")
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.handle==name)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()
+                if safebox_found:
+                    key_obj = Keys(pub_k=safebox_found.owner)
+                    npub_hex = key_obj.public_key_hex()
+                else:
+                    raise HTTPException(status_code=404, detail=f"{name} not found")
 
     try: 
         # wallet_info = get_public_profile(wallet_name=name)
