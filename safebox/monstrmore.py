@@ -7,7 +7,7 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 from monstr.util import util_funcs
 
-
+# This was created to remove the jittered ticks
 
 class KindOtherGiftWrapException(Exception):
     pass

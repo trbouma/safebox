@@ -217,7 +217,7 @@ async function selectRecordKind() {
 
         {% else %}
 
-          window.location.href=`/credentials/displaycredential?card=${title}&action_mode=edit`;
+          window.location.href=`/records/displayrecord?card=${title}&kind={{record_kind}}&action_mode=edit`;
         {% endif %}
        
       });

@@ -26,7 +26,8 @@ from app.utils import ( create_jwt_token,
                         recover_nsec_from_seed, 
                         format_relay_url, 
                         generate_new_identity,
-                        generate_pnr)
+                        generate_pnr,
+                        get_acorn)
 from app.config import Settings
 
 settings = Settings()
@@ -261,9 +262,13 @@ def create_inviteqr(request: Request, friend_referral: str):
     return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.get("/friend/{friend_handle}", tags=["lnaddress", "public"])
-async def onboard_friend(request: Request, friend_handle:str ):
+async def onboard_friend(   request: Request, 
+                            friend_handle:str,
+                            acorn_obj: Acorn = Depends(get_acorn) ):
     
-
+    if acorn_obj:
+        response = RedirectResponse(url="/safebox/access", status_code=302)
+        return response
     
     
     private_key = Keys()

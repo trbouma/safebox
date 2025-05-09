@@ -13,6 +13,22 @@ Safebox takes its primary inspiration from [NIP-60 Cashu Wallet](https://github.
  * `kind:7377` is used for storing transaction history.
  * `kind:7378` is used to store backup proofs
 
+ ### Direct and GiftWrap Messages
+
+ The range of kinds used for DMs and Gift-wrapped DMs. 
+ `1059 - 1063, 21059-21063, 21400-21499`
+
+ These are specified so that the `get_user_records` function can create the filter, select and unwrap messages, accordingly. This function might need to be separate into its own `get_user_messages`. Until now, the handling is based on the message kinds
+
+
+ ## Safebox records
+
+ ### Handling of record formats
+
+ Once the `event.content` is decrypted, there are several possiblities of what might be store
+
+ * `str` format, used for 
+ 
  ### Storing safebox records
 
  * `kind:32225` private health data of wallet holder
@@ -24,6 +40,8 @@ Safebox takes its primary inspiration from [NIP-60 Cashu Wallet](https://github.
 Verifiable credentials are private credentials that are contained in `sleeve` addressable events
 * `kind:34001` is an offer sleeve containing unsigned credentials ready for offer. Once an offer is accepted, the credentials are signed and transmitted.
 * `kind:34002` is a presentation sleeve containing a signed credential that can be retrieved and presented.
+
+
 
 ### Other
 

@@ -6,6 +6,10 @@ from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 import asyncio,qrcode, io, urllib
 
+from qrcode.image.styledpil import StyledPilImage
+from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
+from qrcode.image.styles.colormasks import RadialGradiantColorMask
+
 from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
 from time import sleep
@@ -127,10 +131,30 @@ async def logout():
     response.delete_cookie(key="access_token")
     return response
 
+@router.get("/brandqr/{qr_text}", tags=["public"])
+async def create_brand_qr(qr_text: str):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_text)
+    qr.make(fit=True)
 
+    # Generate an image with blue fill and white background
+    img = qr.make_image(fill_color="blue", back_color="white")
+    img_2 = qr.make_image(image_factory=StyledPilImage, color_mask=RadialGradiantColorMask())
+    
+
+    buf = io.BytesIO()
+    img_2.save(buf)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/jpeg")
 
 @router.get("/qr/{qr_text}", tags=["public"])
 async def create_qr(qr_text: str):
+          
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()

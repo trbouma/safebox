@@ -51,7 +51,7 @@ from safebox.models import TxHistory
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex
 
-RECORD_LIMIT = 1024
+RECORD_LIMIT: int = 1024
 
 def powers_of_2_sum(amount):
     powers = []
@@ -499,7 +499,7 @@ class Acorn:
             
            if since:        
                 FILTER = [{
-                'limit': 100, 
+                'limit': RECORD_LIMIT, 
                 '#p'  :  [self.pubkey_hex],              
                 'kinds': [record_kind],
                 'since': since
@@ -507,7 +507,7 @@ class Acorn:
                 }]
            else:
                 FILTER = [{
-                'limit': 100, 
+                'limit': RECORD_LIMIT, 
                 '#p'  :  [self.pubkey_hex],              
                 'kinds': [record_kind]
                 
@@ -515,7 +515,7 @@ class Acorn:
                
         else:
                 FILTER = [{
-                'limit': 100,
+                'limit': RECORD_LIMIT,
                 'authors': [self.pubkey_hex],
                 'kinds': [record_kind]   
                 
@@ -710,7 +710,7 @@ class Acorn:
         
         FILTER = [{
             'authors': "78733951a0435da2644aa5dbe6230cc0624844132a6fe213e59170bcc7dd3870",
-            'limit': 10,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [1]
         }]
@@ -793,7 +793,7 @@ class Acorn:
         #TODO need to figure out why the kind is not 1059
         dm_filter = [{
             
-            'limit': 100, 
+            'limit': RECORD_LIMIT, 
             '#p'  :  [self.pubkey_hex],
             'since': int(last_dm +1)
             
@@ -1043,7 +1043,7 @@ class Acorn:
         decrypt_content = None
 
         filter = [{
-            'limit': 1024,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [7377] 
             
@@ -1188,7 +1188,7 @@ class Acorn:
         
         # DEFAULT_RELAY = self.relays[0]
         FILTER = [{
-            'limit': 100,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [record_kind],
             '#d': [label_hash]   
@@ -1226,7 +1226,7 @@ class Acorn:
         
         # DEFAULT_RELAY = self.relays[0]
         FILTER = [{
-            'limit': 100,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [record_kind],
             '#d': [label_hash]   
@@ -1321,7 +1321,7 @@ class Acorn:
         
         DEFAULT_RELAY = self.relays[0]
         FILTER = [{
-            'limit': 100,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [17375]
             
@@ -1757,7 +1757,7 @@ class Acorn:
     def _load_record_events(self):
         exists = False
         FILTER = [{
-            'limit': 100,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [37375]
         }]
@@ -1811,7 +1811,7 @@ class Acorn:
         
         
         FILTER = [{
-            'limit': 1024,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
@@ -2545,7 +2545,7 @@ class Acorn:
         # first, get all of the events for the kind
 
         FILTER = [{
-                'limit': 100, 
+                'limit': RECORD_LIMIT, 
                 '#p'  :  [self.pubkey_hex],              
                 'kinds': [record_kind]
                 
@@ -3211,7 +3211,7 @@ class Acorn:
         
         # self._load_proofs()
         FILTER = [{
-            'limit': 1024,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
@@ -4502,7 +4502,7 @@ class Acorn:
 
 
         FILTER = [{
-            'limit': 1024,
+            'limit': RECORD_LIMIT,
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]

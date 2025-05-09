@@ -489,7 +489,7 @@ async def accept_incoming_credential(       request: Request,
 
     return {"status": status, "detail": detail}  
 
-@router.get("/displaycredential", tags=["credentials", "protected"])
+@router.get("/displayrecord", tags=["credentials", "protected"])
 async def display_credential(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
@@ -503,8 +503,12 @@ async def display_credential(     request: Request,
 
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
         label_hash = await acorn_obj.get_label_hash(label=card)
-        content = record["payload"]
-        # record_id = record["id"]
+
+        try:
+            content = record["payload"]
+        except:
+            content = record
+        
         
     elif action_mode =='add':
         card = ""
@@ -513,7 +517,7 @@ async def display_credential(     request: Request,
     credential_record = {"card":card, "content": content}
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
-    return templates.TemplateResponse(  "credentials/credential.html", 
+    return templates.TemplateResponse(  "records/record.html", 
                                         {   "request": request,
                                             
                                             "card": card,
