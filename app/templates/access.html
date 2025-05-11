@@ -88,17 +88,20 @@ window.location.href="/scanner/scan/?wallet_name={{acorn.handle}}";
 
 function revealBalance() {
     var heading_balance = document.getElementById("heading_balance");
+    var heading_balance = document.getElementById("fiat_balance");
     //alert("reveal balance");
     if (reveal_balance == false) 
     {
         
         // don't worry about linting
         heading_balance.textContent = "{{"{:,}".format(acorn.balance)}} sats";
+        fiat_balance.textContent = "TBD";
         reveal_balance = true;
     }
     else
     {
         heading_balance.textContent = "*********";
+        fiat_balance.textContent = "*********";
         reveal_balance = false;
     }
   } 
@@ -529,7 +532,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
       if (status == "RECD" || status == "SENT") {
       document.getElementById("heading_balance").innerText = `${balance} sats`;
-      document.getElementById("fiat_balance").innerText = `(${fiat_balance})`;
+      document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
       document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
@@ -564,8 +567,9 @@ function getInvoiceStatus(ln_invoice_status) {
 <div class="center-text">
 
   
-  <h1 onclick="revealBalance()" id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
-  <h2 id="fiat_balance">({{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}})</h2>
+  <h1  id="fiat_balance">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
+  <h2  id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
+
   
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.

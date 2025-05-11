@@ -26,10 +26,13 @@ async def refresh_currency_rates():
         statement = select(CurrencyRate).where(CurrencyRate.currency_code.in_(settings.SUPPORTED_CURRENCIES))
         results = session.exec(statement).all()
         for record in results:
-            print(f"{record.currency_code} {currency_table[record.currency_code]['15m']}")
-            record.currency_rate = currency_table[record.currency_code]['15m']
-            record.refresh_time = datetime.now()
-            session.commit()
+            try:
+                print(f"{record.currency_code} {currency_table[record.currency_code]['15m']}")
+                record.currency_rate = currency_table[record.currency_code]['15m']
+                record.refresh_time = datetime.now()
+                session.commit()
+            except:
+                print(f"Cannot refresh: {record}")
 
 async def get_currency_rates():
     with Session(engine) as session:
