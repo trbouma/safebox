@@ -1603,6 +1603,8 @@ class Acorn:
         for each in proofs_arg:
             nip60_proofs.proofs.append(each)
    
+        #TODO Do some error checking on size of record
+
         record = nip60_proofs.model_dump_json()
         
         
@@ -1630,6 +1632,8 @@ class Acorn:
             nip60_proofs.proofs.append(each)
         
         record = nip60_proofs.model_dump_json()
+
+        #FIXME Check record size - if bigger than limit split
         
         
         self.logger.debug(f"nip60 proofs text: {record}")

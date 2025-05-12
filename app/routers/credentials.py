@@ -206,10 +206,12 @@ async def credential_verfication_request(      request: Request,
 
     
     credential_types = ["id_card","passport","drivers_license"]
+    select_kinds = settings.SELECT_KINDS
 
     return templates.TemplateResponse(  "credentials/verificationrequest.html", 
                                         {   "request": request,   
-                                            "credential_types": credential_types
+                                            "credential_types": credential_types,
+                                            "select_kinds": select_kinds
 
                                         })
 
