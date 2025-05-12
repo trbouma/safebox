@@ -242,12 +242,19 @@ async def ln_pay_address(   request: Request,
         local_currency = await get_currency_rate(ln_pay.currency.upper())
         print(local_currency.currency_rate)
         sat_amount = int(ln_pay.amount* 1e8 // local_currency.currency_rate)
-      
+
+    # check to see if address is local only  
+
+    if '@' not in ln_pay.address:
+        pass
+        final_address = f"{ln_pay.address}@{request.url.hostname}"
+    else:
+        final_address = ln_pay.address
 
     try:
         
 
-        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment)
         if settings.WALLET_SWAP_MODE:
             print("doing wallet swap")
             await acorn_obj.swap_multi_consolidate()
