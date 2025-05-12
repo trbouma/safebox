@@ -247,9 +247,9 @@ async def ln_pay_address(   request: Request,
 
     if '@' not in ln_pay.address:
         pass
-        final_address = f"{ln_pay.address}@{request.url.hostname}"
+        final_address = f"{ln_pay.address.strip().lower()}@{request.url.hostname}"
     else:
-        final_address = ln_pay.address
+        final_address = ln_pay.address.strip().lower()
 
     try:
         
