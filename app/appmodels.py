@@ -46,7 +46,8 @@ class CurrencyRate(SQLModel, table=True):
 
 class lnPayAddress(BaseModel):
     address: str 
-    amount: int 
+    amount: float 
+    currency: str = "SAT"
     comment: str
 
 class lnPayInvoice(BaseModel):
@@ -55,7 +56,8 @@ class lnPayInvoice(BaseModel):
 
 
 class lnInvoice(BaseModel):
-    amount: int 
+    amount: float
+    currency: str = "SAT"
     comment: str = "Please Pay!"
 
 class ecashRequest(BaseModel):

@@ -207,6 +207,7 @@ async def protected_route(    request: Request,
     else:
         lightning_address = f"{safebox_found.handle}@{request.url.hostname}"   
 
+    currencies = settings.SUPPORTED_CURRENCIES
     # Token is valid, proceed
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
@@ -217,6 +218,7 @@ async def protected_route(    request: Request,
                                             "currency_code": currency_code,
                                             "currency_rate": currency_rate,
                                             "currency_symbol": currency_symbol,
+                                            "currencies" : currencies,
                                             "lightning_address": lightning_address,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
@@ -233,15 +235,23 @@ async def ln_pay_address(   request: Request,
                             ln_pay: lnPayAddress,
                             acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
+
+    if ln_pay.currency == "SAT":
+        sat_amount = int(ln_pay.amount)
+    else:
+        local_currency = await get_currency_rate(ln_pay.currency.upper())
+        print(local_currency.currency_rate)
+        sat_amount = int(ln_pay.amount* 1e8 // local_currency.currency_rate)
+      
+
     try:
         
-        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        # await acorn_obj.load_data()
-        msg_out, final_fees = await acorn_obj.pay_multi(amount=ln_pay.amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
+
+        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=ln_pay.address,comment=ln_pay.comment)
         if settings.WALLET_SWAP_MODE:
             print("doing wallet swap")
             await acorn_obj.swap_multi_consolidate()
-        await acorn_obj.add_tx_history(tx_type='D',amount=ln_pay.amount,comment=ln_pay.comment, fees=final_fees)
+        await acorn_obj.add_tx_history(tx_type='D',amount=sat_amount,comment=ln_pay.comment, fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}
 
@@ -324,6 +334,13 @@ async def ln_invoice_payment(   request: Request,
                         ln_invoice: lnInvoice,
                         access_token: str = Cookie(None)):
     msg_out ="No payment"
+    if ln_invoice.currency == "SAT":
+        sat_amount = int(ln_invoice.amount)
+    else:
+        local_currency = await get_currency_rate(ln_invoice.currency.upper())
+        print(local_currency.currency_rate)
+        sat_amount = int(ln_invoice.amount* 1e8 // local_currency.currency_rate)
+    
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
 
@@ -334,10 +351,11 @@ async def ln_invoice_payment(   request: Request,
 
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
-    cli_quote = acorn_obj.deposit(amount=ln_invoice.amount )   
+    cli_quote = acorn_obj.deposit(amount=sat_amount )   
 
 
-    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj, safebox_found=safebox_found,quote=cli_quote.quote, amount=ln_invoice.amount, mint=HOME_MINT))
+    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj, safebox_found=safebox_found,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
+    
     return {"status": "ok", "invoice": cli_quote.invoice}
 
     # Do the update for the polling balance
@@ -780,7 +798,7 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
                 status = "OK"
 
             fiat_currency = await get_currency_rate(safebox_found.currency_code)
-            currency_code  = fiat_currency.currency_code
+            # currency_code  = fiat_currency.currency_code
             currency_rate = fiat_currency.currency_rate
             currency_symbol = fiat_currency.currency_symbol
             

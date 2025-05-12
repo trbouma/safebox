@@ -41,7 +41,7 @@ async def get_currency_rates():
 
     return results
 
-async def get_currency_rate(currency_code: str):
+async def get_currency_rate(currency_code: str)  :
     with Session(engine) as session:
         statement = select(CurrencyRate).where(CurrencyRate.currency_code==currency_code)
         result = session.exec(statement).one()
