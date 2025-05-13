@@ -258,7 +258,12 @@ async def ln_pay_address(   request: Request,
         if settings.WALLET_SWAP_MODE:
             print("doing wallet swap")
             await acorn_obj.swap_multi_consolidate()
-        await acorn_obj.add_tx_history(tx_type='D',amount=sat_amount,comment=ln_pay.comment, fees=final_fees)
+        await acorn_obj.add_tx_history( tx_type='D',
+                                        amount=sat_amount,
+                                        tendered_amount=ln_pay.amount,
+                                        tendered_currency=ln_pay.currency,
+                                        comment=ln_pay.comment, 
+                                        fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}
 

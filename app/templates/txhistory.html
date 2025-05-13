@@ -49,20 +49,22 @@ window.location.href="/";
   <br><br>
       <table width="90%">
         <tr>
-          <th align="center" >Date</th>
-          <th>Type</th>
-          <th>Amount</th>
-          <th>Fees</th>
-          <th>Unit</th>
-          <th align="left">Details</th>          
+          <th align="center" valign="top">Date</th>
+          <th valign="top">Type</th>
+          <th valign="top">Amount</th>
+          <th valign="top">Cur</th>
+          <th valign="top">Sats</th>
+          <th valign="top">Fees</th>          
+          <th align="left" valign="top"> Details</th>          
         </tr>
         {% for entry in tx_history %}
         <tr>
           <td align="right" valign="top">{{ entry['create_time']}}</td>
           <td align="center" valign="top">{{ entry['tx_type']}}</td>
-          <td align="right" valign="top">{{entry['tendered_amount']}}</td>
+          <td align="right" valign="top">{{ "%.2f"|format(entry['tendered_amount']) }}</td>         
+          <td align="right" valign="top">{{entry['tendered_currency']}}</td>
+          <td align="right" valign="top">{{entry['amount']}}</td>
           <td align="right" valign="top">{{entry.get('fees',0)}}</td>
-          <td align="center" valign="top">{{entry['tendered_currency']}}</td>
           <td align="left" valign="top">{{entry['comment']}}</td>
         </tr>
         {% endfor %}
