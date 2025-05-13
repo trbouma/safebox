@@ -160,8 +160,8 @@ async function selectRecordKind() {
 
 <div class="center-text">
 
-  {% if credential_select %}
-    <h1>Select a Credential to Present</h1>
+  {% if record_select %}
+    <h1>Select from {{ record_label }} to Present</h1>
   {% else %}
   <h1>My {{ record_label}}</h1>
   {% endif %}
@@ -209,10 +209,10 @@ async function selectRecordKind() {
 
       card.addEventListener('click', () => {
 
-        {% if credential_select%}
+        {% if record_select %}
           if (confirm(`Present this credential ${title}`)) {
             
-            sendCredential(title); 
+            sendRecord(title); 
           }
 
         {% else %}
@@ -246,18 +246,18 @@ async function selectRecordKind() {
 
   <script>
 
-async function sendCredential(title) {
+async function sendRecord(title) {
 
-console.log(`send credential ${title}`);
+console.log(`send record ${title}`);
 
-console.log(`Sending credential... ${global_vrequest_nauth}`);
+console.log(`Sending record... ${global_vrequest_nauth}`);
 // send credential to verfier
 submit_data = { "nauth": global_vrequest_nauth,
                 "grant": `${title}`
               };
 
 console.log(submit_data) ;            
-await fetch(`/credentials/sendcredential`, {
+await fetch(`/records/sendrecord`, {
         method: "POST",
         headers: {"Content-Type": "application/json"}, 
         body: JSON.stringify(submit_data)     
@@ -265,7 +265,7 @@ await fetch(`/credentials/sendcredential`, {
        })
     .then((response) => response.json())
     .then((data) => {
-    alert(`Verification Super Done! ${data.status} ${data.detail}`);
+    alert(`Verification Done! ${data.status} ${data.detail}`);
 });
 
 }
@@ -274,7 +274,7 @@ await fetch(`/credentials/sendcredential`, {
   </script>
 
 </div>
-{% if credential_select %}
+{% if record_select %}
   <div class="center-text">
     <hr>
   </div>
@@ -304,7 +304,7 @@ await fetch(`/credentials/sendcredential`, {
 <div class="center-text">
   <br><br>
  Info: {{request.url.hostname}}   
- <br><br>Credential Select: {{credential_select}}
+ <br><br>Record Select: {{record_select}}
 
     
 </div>

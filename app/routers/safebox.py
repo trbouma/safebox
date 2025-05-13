@@ -1036,18 +1036,13 @@ async def set_custom_handle(   request: Request,
 @router.post("/setownerdata", tags=["safebox", "protected"])
 async def set_owner_data(   request: Request, 
                             owner_data: ownerData,
-                            access_token: str = Cookie(None)
+                            acorn_obj: Acorn = Depends(get_acorn)
                     ):
     #TODO confirm this function 
     """Protected access to private data stored in home relay"""
     status = "OK"
-    msg_out =""
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
+    msg_out ="success!"
+
     
     if owner_data.local_currency:
         owner_data.local_currency = owner_data.local_currency.upper().strip()
@@ -1055,14 +1050,16 @@ async def set_owner_data(   request: Request,
             return {"status": "ERROR", "detail": "Not a supported currency!" }
     
         try:
-            acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-            await acorn_obj.load_data()   
+  
             await acorn_obj.set_owner_data(local_currency=owner_data.local_currency, npub=owner_data.npub)
-            with Session(engine) as session:                 
+            with Session(engine) as session:  
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()               
                 safebox_found.currency_code = owner_data.local_currency
                 session.add(safebox_found)
                 session.commit() 
-            msg_out = "successful"
+            msg_out = "success!"
         except:
             return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
    
@@ -1072,7 +1069,10 @@ async def set_owner_data(   request: Request,
         try:
 
             await acorn_obj.set_owner_data(npub=owner_data.npub)
-            with Session(engine) as session:                 
+            with Session(engine) as session:   
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()               
                 safebox_found.owner = owner_data.npub
                 session.add(safebox_found)
                 session.commit() 
@@ -1083,7 +1083,7 @@ async def set_owner_data(   request: Request,
             msg_out = f"Error: {e}"
             status = "ERROR"
          
-        msg_out = msg_out + " successfully added owner to safebox register!"
+        msg_out = msg_out 
 
 
     return {"status": status, "detail": msg_out }  

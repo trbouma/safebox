@@ -52,6 +52,7 @@ class Settings(BaseSettings):
                             [34010, "Transit Cards"],
                             [34011, "Immunization Records"],
                             [34012, "Educational Diplomas"],
+                            [34013, "Official Documentation"]
 
 
                         ]

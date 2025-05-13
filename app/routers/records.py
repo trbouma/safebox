@@ -320,13 +320,10 @@ async def my_records(       request: Request,
                     ):
     """Protected access to private data stored in home relay"""
     nauth_response = None
-    credential_select = False
+    record_select = False
     
 
-    try:
-        credential_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
-        credential_records = None
+
 
     if nauth:
         
@@ -345,7 +342,8 @@ async def my_records(       request: Request,
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
-            credential_select = True
+            record_select = True
+            record_kind = int(scope.split(":")[1])
             nauth_response = nauth
         
         else:
@@ -375,6 +373,11 @@ async def my_records(       request: Request,
     else:
        pass
 
+    try:
+        credential_records = await acorn_obj.get_user_records(record_kind=record_kind )
+    except:
+        credential_records = None
+    
     # hardcode the selection list for now
     select_kinds = settings.SELECT_KINDS
   
@@ -386,7 +389,7 @@ async def my_records(       request: Request,
                                             
                                             "credential_records": credential_records ,
                                             "nauth": nauth_response,
-                                            "credential_select": credential_select,
+                                            "record_select": record_select,
                                             "record_kind": record_kind,
                                             "record_label": record_label,
                                             "select_kinds": select_kinds
@@ -490,7 +493,7 @@ async def accept_incoming_credential(       request: Request,
     return {"status": status, "detail": detail}  
 
 @router.get("/displayrecord", tags=["credentials", "protected"])
-async def display_credential(     request: Request, 
+async def display_record(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
                             action_mode: str = None,
@@ -591,8 +594,8 @@ async def generate_nauth(    request: Request,
 
     return {"status": status, "detail": detail}
 
-@router.post("/sendcredential", tags=["credentials", "protected"])
-async def post_send_credential(      request: Request, 
+@router.post("/sendrecord", tags=["credentials", "protected"])
+async def post_send_record(      request: Request, 
                                 credential_parms: sendCredentialParms,                                
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
@@ -633,15 +636,18 @@ async def post_send_credential(      request: Request,
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
+            verifier_kind = int(scope.split(":")[1])
             print(f"grant: {credential_parms.grant}")
-            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=34002)
+            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=verifier_kind)
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
 
         print(record_out)
-        
-        nembed = create_nembed_compressed(record_out)
+        try:
+            nembed = create_nembed_compressed(record_out)
+        except:
+            nembed = create_nembed_compressed({"test": "test"})
         # print(nembed)
 
         #TODO Need to select the right credential and send over the to verifier
