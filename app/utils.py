@@ -1078,6 +1078,21 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
     
     return records_out[0]["payload"]
 
+def lnaddress_to_safebox_npub(lnaddress: str):
+    relays = []
+    try:
+        parts = lnaddress.lower().split('@')
+        nip05_url = f"https://{parts[1]}/.well-known/safebox.json?name={parts[0]}"
+        response = requests.get(nip05_url)
+        pubkey = response.json()['safebox']
+        
+    except:
+        pubkey = None   
 
+    try:
+        relays = response.json()['relays']
+    except:
+        relays = []    
+    return pubkey, relays  
 
 #################################

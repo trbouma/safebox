@@ -751,7 +751,7 @@ async def display_card(     request: Request,
                             card: str = None,
                             kind: int = 37375,
                             action_mode: str = None,
-                            acorn_obj = Depends(get_acorn)
+                            acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
 

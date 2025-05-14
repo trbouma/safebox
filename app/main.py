@@ -183,6 +183,67 @@ async def get_nostr_name(request: Request, name: str, ):
     return JSONResponse(content=nostr_names, headers=headers)
     # return nostr_names
 
+@app.get("/.well-known/safebox.json",tags=["public"])
+async def get_safebox_pubhex(request: Request, name: str, ):
+
+    #This returns the the pubkey of the safebox based on the lightning address
+    # Either the custom handle or default
+
+    # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
+    engine = create_engine(settings.DATABASE)
+    
+    if name == "_":
+        npub_hex = SERVICE_KEY.public_key_hex()
+        return {
+        "names": {
+            "_": npub_hex
+        },
+        "relays":
+                     { f"{npub_hex}": settings.RELAYS}  }
+    else:
+        pass
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==name)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            if safebox_found:
+                key_obj = Keys(pub_k=safebox_found.npub)
+                npub_hex = key_obj.public_key_hex()
+            else:
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.handle==name)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()
+                if safebox_found:
+                    key_obj = Keys(pub_k=safebox_found.npub)
+                    npub_hex = key_obj.public_key_hex()
+                else:
+                    raise HTTPException(status_code=404, detail=f"{name} not found")
+
+    try: 
+        # wallet_info = get_public_profile(wallet_name=name)
+        # print(wallet_info['wallet_info']['npub_hex'])
+        # return{"status": "OK", "reason": "not implemented yet"}
+        
+        pubkey = npub_hex
+        
+    except:
+        return{"status": "ERROR", "reason": "Name does not exist"}
+
+    account_metadata = {}    
+    # pubkey =  wallet_info['wallet_info']['npub_hex']
+
+    
+
+    safebox_json = {
+                    "safebox": pubkey,                       
+                     "relays": settings.RELAYS   
+                    
+                    }
+
+    headers = {"Access-Control-Allow-Origin" : "*"}
+    return JSONResponse(content=safebox_json, headers=headers)
+    # return nostr_names
+
 @app.get("/user/{user}/did.json",tags=["public"])
 def get_user_did_doc(user: str, request: Request):
     """did:web:asats.io:wallet:wallet_id"""
