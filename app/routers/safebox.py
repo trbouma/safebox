@@ -170,7 +170,7 @@ async def create_nwc_qr(request: Request,
     k = Keys(priv_k=settings.NWC_NSEC)
     safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
 
-    qr_text = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={safebox_found.access_key}&lud16={f"{acorn_obj.handle}@{request.url.hostname}"}"
+    qr_text = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={safebox_found.access_key}&lud16={acorn_obj.handle}@{request.url.hostname}"
 
          
           
