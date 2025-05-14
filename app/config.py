@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
     INVITE_CODES: List = ["alpha", "rektuser"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
+    NWC_SERVICE: bool = False
+    NWC_NSEC: str = 'nsec1wml8qhq2qkmemlceg2fehvg2cefqrsp7ak47rdmc3qxum65wsxaqcvj7d6'
+    NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
     TRANSMITTAL_KIND: int = 21060

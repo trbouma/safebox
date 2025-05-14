@@ -50,7 +50,8 @@ async def lifespan(app: FastAPI):
         pass
     
     asyncio.create_task(run_relay())
-    asyncio.create_task(listen_nwc())
+    if settings.NWC_SERVICE:
+        asyncio.create_task(listen_nwc())
     
     print("let's start up!")
     # Create Task

@@ -16,9 +16,10 @@ from time import sleep
 import json
 import bolt11
 from monstr.util import util_funcs
+from monstr.encrypt import Keys
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
@@ -162,6 +163,23 @@ async def create_qr(qr_text: str):
     buf.seek(0) # important here!
     return StreamingResponse(buf, media_type="image/jpeg")
 
+@router.get("/nwcqr", tags=["public"])
+async def create_nwc_qr(request: Request,
+                        acorn_obj: Acorn= Depends(get_acorn)):
+
+    k = Keys(priv_k=settings.NWC_NSEC)
+    safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
+
+    qr_text = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={safebox_found.access_key}&lud16={f"{acorn_obj.handle}@{request.url.hostname}"}"
+
+         
+          
+    img = qrcode.make(qr_text)
+    buf = io.BytesIO()
+    img.save(buf)
+    buf.seek(0) # important here!
+    return StreamingResponse(buf, media_type="image/jpeg")
+
 @router.get("/access", tags=["safebox", "protected"])
 async def protected_route(    request: Request, 
                         onboard: bool = False, 
@@ -270,6 +288,22 @@ async def ln_pay_address(   request: Request,
 
 
     return {"detail": msg_out}
+
+@router.post("/swap", tags=["protected"])
+async def ln_pay_address(   request: Request, 
+                            acorn_obj: Acorn = Depends(get_acorn)
+                        ):
+    msg_out ="No error"
+
+    try:
+       msg_out = await acorn_obj.swap_multi_each()
+       pass
+ 
+    except Exception as e:
+        return {"status": "ERROR", f"detail": f"error {e}"}
+
+
+    return {"status": "OK", "detail": f"{msg_out} {acorn_obj.balance} sats"}
 
 @router.post("/payinvoice", tags=["protected"])
 async def ln_pay_invoice(   request: Request, 
@@ -684,20 +718,29 @@ async def my_ecash(       request: Request,
 
 @router.get("/dangerzone", tags=["safebox", "protected"])
 async def my_danger_zone(       request: Request, 
-                        access_token: str = Cookie(None)
+                        acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to danger zone"""
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-    except:
-        response = RedirectResponse(url="/", status_code=302)
-        return response
+
     
     msg_out = "To be implemented!"
+    k = Keys(priv_k= settings.SERVICE_SECRET_KEY)
 
-    return templates.TemplateResponse(  "dangerzone.html", 
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub ==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+       
+    emergency_code = safebox_found.emergency_code
+
+    connection_uri = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={acorn_obj.access_key}&lud16={f"{acorn_obj.handle}@{request.url.hostname}"}"
+
+    # encoded_uri = urllib.parse.quote(connection_uri, safe='')
+    encoded_uri = connection_uri
+    return templates.TemplateResponse(      "dangerzone.html", 
                                         {   "request": request,
-                                            "safebox": safebox_found,
+                                            "connection_uri": encoded_uri,
+                                            "emergency_code": emergency_code,
                                             "currencies": settings.SUPPORTED_CURRENCIES 
 
                                         })

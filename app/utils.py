@@ -113,6 +113,19 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
         
     return safebox_found
 
+async def db_lookup_safebox(npub: str) -> RegisteredSafebox:
+
+   
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
+        safeboxes = session.exec(statement)
+        try:
+            safebox_found = safeboxes.first()
+        except:
+            raise HTTPException(status_code=404, detail=f"{npub} not found")
+        
+    return safebox_found
+
 async def get_safebox(access_token: str = Cookie(None)):
     if not access_token:
         raise HTTPException(status_code=401, detail="Access token missing")
@@ -1064,6 +1077,7 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
     
     
     return records_out[0]["payload"]
+
 
 
 #################################

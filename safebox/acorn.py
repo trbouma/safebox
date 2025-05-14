@@ -455,6 +455,7 @@ class Acorn:
 
             """
         except:
+            raise Exception("No profile on relay")
             out_string = f"No profile - seed phrase: {mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
         return out_string
 
@@ -2224,66 +2225,69 @@ class Acorn:
             sum_proofs =0
             spend_proofs = []
             keep_proofs = []
-            for each in proofs_remaining:
-                
-                sum_proofs += each.amount
-                if sum_proofs <= amount_needed:
-                    spend_proofs.append(each)
-                    self.logger.debug(f"pay with {each.amount}, {each.secret}")
-                else:
-                    keep_proofs.append(each)
-                    self.logger.debug(f"keep {each.amount}, {each.secret}")
-            
-            self.logger.debug(f"spend proofs: {spend_proofs}")
-            self.logger.debug(f"keep proofs: {keep_proofs}")
-            melt_proofs = []
-            for each_proof in spend_proofs:
-                    melt_proofs.append(each_proof.model_dump())
-
-            data_to_send = {"quote": post_melt_response.quote,
-                        "inputs": melt_proofs }
-            
-        
-            
-            self.logger.debug(f"lightning payment we are here!: {data_to_send}")
             try:
-                response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-            except Exception as e:
-                raise Exception(f"error: {e}")
-            
-            self.logger.debug(f"response json: {response.json()}")
-            payment_json = response.json()
-            #TODO Need to do some error checking
-           
-            self.logger.debug(f"need to do some error checking")
-            # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
-            # add keep proofs back into selected keyset proofs
-            if payment_json.get("paid",False):        
-                self.logger.info(f"lightning payment ok")
-            else:
-                self.logger.info(f"lighting payment did no go through")
-                # Add back in spend proofs
-                for each in spend_proofs:   
-                    proofs_from_keyset.append(each)
-            
+                for each in proofs_remaining:
+                    
+                    sum_proofs += each.amount
+                    if sum_proofs <= amount_needed:
+                        spend_proofs.append(each)
+                        self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                    else:
+                        keep_proofs.append(each)
+                        self.logger.debug(f"keep {each.amount}, {each.secret}")
+                
+                self.logger.debug(f"spend proofs: {spend_proofs}")
+                self.logger.debug(f"keep proofs: {keep_proofs}")
+                melt_proofs = []
+                for each_proof in spend_proofs:
+                        melt_proofs.append(each_proof.model_dump())
 
-            for each in keep_proofs:
-                proofs_from_keyset.append(each)
-            # print("self proofs", self.proofs)
-            # need to reassign back into 
-            keyset_proofs[chosen_keyset]= proofs_from_keyset
-            # OK - now need to put proofs back into a flat lish
-            post_payment_proofs = []
-            for key in keyset_proofs:
-                each_proofs = keyset_proofs[key]
-                for each_proof in each_proofs:
-                    post_payment_proofs.append(each_proof)
+                data_to_send = {"quote": post_melt_response.quote,
+                            "inputs": melt_proofs }
+                
             
+                
+                self.logger.debug(f"lightning payment we are here!: {data_to_send}")
+                try:
+                    response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+                except Exception as e:
+                    raise Exception(f"error: {e}")
+                
+                self.logger.debug(f"response json: {response.json()}")
+                payment_json = response.json()
+                #TODO Need to do some error checking
             
-            # asyncio.run(self._async_delete_proof_events())
-            # self.delete_proof_events()
-            
-            self.proofs = post_payment_proofs
+                self.logger.debug(f"need to do some error checking")
+                # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
+                # add keep proofs back into selected keyset proofs
+                if payment_json.get("paid",False):        
+                    self.logger.info(f"lightning payment ok")
+                else:
+                    self.logger.info(f"lighting payment did no go through")
+                    # Add back in spend proofs
+                    for each in spend_proofs:   
+                        proofs_from_keyset.append(each)
+                
+
+                for each in keep_proofs:
+                    proofs_from_keyset.append(each)
+                # print("self proofs", self.proofs)
+                # need to reassign back into 
+                keyset_proofs[chosen_keyset]= proofs_from_keyset
+                # OK - now need to put proofs back into a flat lish
+                post_payment_proofs = []
+                for key in keyset_proofs:
+                    each_proofs = keyset_proofs[key]
+                    for each_proof in each_proofs:
+                        post_payment_proofs.append(each_proof)
+                
+                
+                # asyncio.run(self._async_delete_proof_events())
+                # self.delete_proof_events()
+                
+                self.proofs = post_payment_proofs
+            except Exception as e:
+                raise Exception(f"Error in payment to address {e}")
             
             await self.write_proofs()
             final_fees = amount_needed - amount

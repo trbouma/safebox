@@ -71,7 +71,7 @@ async function setCustomHandle() {
 
 
       }
-      async function setOwnerCurrency() {
+    async function setOwnerCurrency() {
     
     var data;
    
@@ -91,6 +91,30 @@ async function setCustomHandle() {
        })
     .then((response) => response.json())
     .then((data) => getStatus(data));
+
+
+      }
+
+  async function swapProofs() {
+    
+    var data;
+   
+   
+
+    
+    user_confirm = confirm(`Are you sure you want to swap proofs?`);
+    if (user_confirm == false) {return;}
+    
+
+  
+
+   await fetch('/safebox/swap', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"}        
+               
+       })
+    .then((response) => response.json())
+    .then((data) => { alert(`${data.status} ${data.detail}`);});
 
 
       }
@@ -128,9 +152,22 @@ async function setCustomHandle() {
       <button onclick="setOwnerCurrency()">Set Owner Currency</button>
       <br><br>
       <hr>
-      Your emergency code: {{safebox.emergency_code}}
+      Your emergency code: {{emergency_code}}
       <br><br>
-      <img src="/imgeqr/{{safebox.emergency_code}}"
+      <img src="/imgeqr/{{emergency_code}}">
+      <br><br>
+      <hr>
+      Your Nostr Wallet Connect URI 
+
+      
+      <br><br>
+      <img src="/safebox/nwcqr">
+      <br><br>
+      <hr>
+
+      <br><br>
+      <button onclick="swapProofs()">Swap Proofs</button>
+      <br><br>    
 </div>
 
 
@@ -143,7 +180,7 @@ async function setCustomHandle() {
         
         
         
-
+    <br><br>
     <button onclick="backToProfile()">Home</button>
       
  
