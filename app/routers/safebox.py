@@ -733,7 +733,7 @@ async def my_danger_zone(       request: Request,
        
     emergency_code = safebox_found.emergency_code
 
-    connection_uri = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={acorn_obj.access_key}&lud16={f"{acorn_obj.handle}@{request.url.hostname}"}"
+    connection_uri = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={acorn_obj.access_key}&lud16={acorn_obj.handle}@{request.url.hostname}"
 
     # encoded_uri = urllib.parse.quote(connection_uri, safe='')
     encoded_uri = connection_uri
