@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import asyncio, os
 from contextlib import asynccontextmanager
+from filelock import FileLock, Timeout
 
 from monstr.encrypt import Keys
 
@@ -26,11 +27,15 @@ from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 from app.relay import run_relay
-from app.nwc import listen_nwc
+from app.nwc import listen_nwc, listen_notes
+
+lock_path = "/tmp/monstr_listener.lock"
+listener_task = None
 
 # Create Settings:
 settings = Settings()
 
+nwc_task_handle = None
 
 # Periodic task function
 async def periodic_task(interval: int, stop_event: asyncio.Event):
@@ -43,6 +48,7 @@ async def periodic_task(interval: int, stop_event: asyncio.Event):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # stop_event = asyncio.Event()  # Event to signal stopping
+    global nwc_task_handle
     try:
         engine = create_engine(settings.DATABASE)
         SQLModel.metadata.create_all(engine, checkfirst=True)
@@ -51,15 +57,32 @@ async def lifespan(app: FastAPI):
     
     asyncio.create_task(run_relay())
     if settings.NWC_SERVICE:
-        asyncio.create_task(listen_nwc())
+        pass
+        # nwc_task_handle = asyncio.create_task(listen_nwc())
     
     print("let's start up!")
     # Create Task
     # task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
-    
+    global listener_task
+    lock_path = "/tmp/monstr_listener.lock"
+    file_lock = FileLock(lock_path)
+
+    have_lock = False
+    try:
+        file_lock.acquire(timeout=0.1)  # <-- synchronous, blocks here
+        have_lock = True
+        print(f"[PID {os.getpid()}] Acquired lock. Starting listener.")
+        url = "wss://relay.getsafebox.app"
+        listener_task = asyncio.create_task(listen_notes(url))
+    except Timeout:
+        print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
     yield
-    # stop_event.set()  # Stop the task
-    # await task  # Ensure task finishes properly
+
+    if listener_task:
+        print("Shutting down listener...")
+        listener_task.cancel()
+       
+
    
 
 

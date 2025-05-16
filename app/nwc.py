@@ -4,9 +4,19 @@ from monstr.relay.relay import Relay
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from monstr.client.client import Client
 from typing import List
-from monstr.encrypt import NIP4Encrypt
+from monstr.encrypt import NIP4Encrypt, Keys
+from monstr.event.event import Event
+from app.utils import hex_to_npub
+from app.appmodels import RegisteredSafebox
+from filelock import FileLock, Timeout
 
 from safebox.acorn import Acorn
+import signal
+import json
+import bolt11
+
+from app.appmodels import RegisteredSafebox
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 import os
 from app.config import Settings
@@ -14,35 +24,90 @@ from app.config import Settings
 settings = Settings()
 
 RELAYS = settings.RELAYS
+k = Keys(settings.NWC_NSEC)
+decryptor = NIP4Encrypt(k)
 
-async def listen_for_nwc(acorn_obj: Acorn, kind: int = 23194,since_now:int=None, relays: List=None):
+engine = create_engine(settings.DATABASE)
+
+
+def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
    
-    def test():
-        print('test')    
-    
-    test()
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
+        safeboxes = session.exec(statement)
+        try:
+            safebox_found = safeboxes.first()
+        except:
+            safebox_found = None
+        
+    return safebox_found
 
-    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
-    
-    
-    return records_out
+
+async def nwc_pay_invoice(safebox_found: RegisteredSafebox, payinstruction_obj):
+    # print(f"nwc {safebox_found} pay instruction {payinstruction_obj}")
+
+    if payinstruction_obj['method'] == 'pay_invoice':
+        invoice = payinstruction_obj['params']['invoice']
+        invoice_decoded = bolt11.decode(invoice)
+        print(f"this is the invoice to pay: {invoice}")
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        test =  await acorn_obj.load_data()
+        print(f"balance {acorn_obj.balance}")
+        try:
+            test = await acorn_obj.pay_multi_invoice(invoice)
+            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment="nwc zap")
+            print(test)
+        except Exception as e:
+            print(f"Error: {e}")
+
+
+
+async def listen_notes(url):
+    c = Client(url)
+    asyncio.create_task(c.run())
+    await c.wait_connect()
+
+    def my_handler(the_client: Client, sub_id: str, evt: Event):
+        print(evt.created_at, evt.tags)
+        try:
+            
+            
+            print(f"we got the nwc request {evt.p_tags}")
+            safebox_npub = hex_to_npub(evt.p_tags[0])
+            
+            safebox_found = nwc_db_lookup_safebox(safebox_npub)
+            if safebox_found:
+                decryptor = NIP4Encrypt(key=Keys(safebox_found.nsec))
+                decrypt_event = decryptor.decrypt_event(evt=evt)
+                pay_instruction = json.loads(decrypt_event.content)
+                asyncio.create_task(nwc_pay_invoice(safebox_found, pay_instruction))
+            else:
+                print('no wallet on file')
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+    c.subscribe(
+        handlers=my_handler,
+        filters={
+            'limit': 1024,
+            'kinds': [23194]
+        }
+    )
+
+    try:
+        # keep alive until cancelled
+        while True:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        print(f"[PID {os.getpid()}] Listener cancelled. Shutting down client...")
+        await c.end()
+        raise
 
 async def listen_nwc():
-    print("this will be the nwc service")
-    def test():
-        print("test")
-    
-    test()
-    try:
-        acorn_obj = Acorn(nsec=settings.NWC_NSEC, home_relay=settings.NWC_RELAYS[0], relays=settings.NWC_RELAYS,mints=settings.MINTS )
-        await acorn_obj.load_data()
-        acorn_obj.get_profile()
-    except Exception as e:
-        print(f"error {e}, creating instance...")
-        await acorn_obj.create_instance(keepkey=True)
-    print("nwc listening...")
-
-    # print(acorn_obj.get_profile())
+    print(f"listening for nwc {os.getpid()}")
+    url = "wss://relay.getsafebox.app"
+    asyncio.create_task(listen_notes(url))
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.DEBUG)

@@ -9,6 +9,7 @@ import string
 import asyncio
 from datetime import timedelta
 import qrcode, io, urllib, json
+import hashlib
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select, update
 from argon2 import PasswordHasher
@@ -211,13 +212,16 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
     await acorn_obj.put_record("medical emergency card", "Please complete!")
     profile_info = acorn_obj.get_profile()
 
+    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
+
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
                                             access_key=acorn_obj.access_key,
-                                            emergency_code= generate_pnr()
+                                            emergency_code= generate_pnr(),
+                                            nwc_secret=hex_secret
                                             )
     
     with Session(engine) as session:
@@ -289,13 +293,16 @@ async def onboard_friend(   request: Request,
     print(f"nsec hash is: {nsec_hash} {nsec_verify}")
     await acorn_obj.put_record("medical emergency card", "Please complete!")
 
+    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
+    
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=friend_handle,
                                             access_key=acorn_obj.access_key,
-                                            emergency_code= generate_pnr()
+                                            emergency_code= generate_pnr(),
+                                            nwc_secret=hex_secret
                                            
                                             )
     

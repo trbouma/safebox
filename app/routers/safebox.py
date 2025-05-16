@@ -15,6 +15,7 @@ from safebox.acorn import Acorn
 from time import sleep
 import json
 import bolt11
+import hashlib
 from monstr.util import util_funcs
 from monstr.encrypt import Keys
 
@@ -170,9 +171,11 @@ async def create_nwc_qr(request: Request,
     k = Keys(priv_k=settings.NWC_NSEC)
     safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
 
-    qr_text = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={safebox_found.access_key}&lud16={acorn_obj.handle}@{request.url.hostname}"
+    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
 
-         
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}&lud16={acorn_obj.handle}@{request.url.hostname}"
+
+    print(qr_text)     
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()
