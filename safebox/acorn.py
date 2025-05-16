@@ -2473,71 +2473,73 @@ class Acorn:
                 raise ValueError(msg_out) 
             
         # Print now we should be all set to go
-        self.logger.debug("---we have a sufficient mint---")
-        self.logger.debug(f"{melt_quote_url}, {melt_url}, {post_melt_response}")
-        proofs_to_use = []
-        proof_amount = 0
-        proofs_from_keyset = keyset_proofs[chosen_keyset]
-        while proof_amount < amount_needed:
-            pay_proof = proofs_from_keyset.pop()
-            proofs_to_use.append(pay_proof)
-            proof_amount += pay_proof.amount
-            self.logger.debug(f"pop {pay_proof.amount}")
+        try:
+            self.logger.debug("---we have a sufficient mint---")
+            self.logger.debug(f"{melt_quote_url}, {melt_url}, {post_melt_response}")
+            proofs_to_use = []
+            proof_amount = 0
+            proofs_from_keyset = keyset_proofs[chosen_keyset]
+            while proof_amount < amount_needed:
+                pay_proof = proofs_from_keyset.pop()
+                proofs_to_use.append(pay_proof)
+                proof_amount += pay_proof.amount
+                self.logger.debug(f"pop {pay_proof.amount}")
+                
+            self.logger.debug(f"proofs to use:  {proofs_to_use}")
+            self.logger.debug(f"remaining: {proofs_from_keyset}")
+            # Continue implementing from line 818 swap_for_payment may need a parameter
+            # Now need to do the melt
+            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             
-        self.logger.debug(f"proofs to use:  {proofs_to_use}")
-        self.logger.debug(f"remaining: {proofs_from_keyset}")
-        # Continue implementing from line 818 swap_for_payment may need a parameter
-         # Now need to do the melt
-        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-        
 
-        self.logger.debug(f"proofs remaining: {proofs_remaining}")
-        self.logger.debug(f"amount needed: {amount_needed}")
-        # Implement from line 824
-        sum_proofs =0
-        spend_proofs = []
-        keep_proofs = []
-        for each in proofs_remaining:
+            self.logger.debug(f"proofs remaining: {proofs_remaining}")
+            self.logger.debug(f"amount needed: {amount_needed}")
+            # Implement from line 824
+            sum_proofs =0
+            spend_proofs = []
+            keep_proofs = []
+            for each in proofs_remaining:
+                
+                sum_proofs += each.amount
+                if sum_proofs <= amount_needed:
+                    spend_proofs.append(each)
+                    self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                else:
+                    keep_proofs.append(each)
+                    self.logger.debug(f"keep {each.amount}, {each.secret}")
+            self.logger.debug(f"spend proofs: {spend_proofs}") 
+            self.logger.debug(f"keep proofs:  {keep_proofs}")
+            melt_proofs = []
+            for each_proof in spend_proofs:
+                    melt_proofs.append(each_proof.model_dump())
+
+            data_to_send = {"quote": post_melt_response.quote,
+                        "inputs": melt_proofs }
             
-            sum_proofs += each.amount
-            if sum_proofs <= amount_needed:
-                spend_proofs.append(each)
-                self.logger.debug(f"pay with {each.amount}, {each.secret}")
-            else:
-                keep_proofs.append(each)
-                self.logger.debug(f"keep {each.amount}, {each.secret}")
-        self.logger.debug(f"spend proofs: {spend_proofs}") 
-        self.logger.debug(f"keep proofs:  {keep_proofs}")
-        melt_proofs = []
-        for each_proof in spend_proofs:
-                melt_proofs.append(each_proof.model_dump())
-
-        data_to_send = {"quote": post_melt_response.quote,
-                      "inputs": melt_proofs }
-        
-        self.logger.debug(data_to_send)
-        self.logger.debug("we are here!!!")
-        response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-        self.logger.debug(response.json())   
-        # add keep proofs back into selected keyset proofs
-        for each in keep_proofs:
-            proofs_from_keyset.append(each)
-        # print("self proofs", self.proofs)
-        # need to reassign back into 
-        keyset_proofs[chosen_keyset]= proofs_from_keyset
-        # OK - now need to put proofs back into a flat lish
-        post_payment_proofs = []
-        for key in keyset_proofs:
-            each_proofs = keyset_proofs[key]
-            for each_proof in each_proofs:
-                post_payment_proofs.append(each_proof)
-        
-        # Replace with new function
-        self.proofs = post_payment_proofs
-        # asyncio.run(self._async_delete_proof_events())
-        # self.add_proofs_obj(post_payment_proofs)
-        # self._load_proofs()
-
+            self.logger.debug(data_to_send)
+            self.logger.debug("we are here!!!")
+            response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+            self.logger.debug(response.json())   
+            # add keep proofs back into selected keyset proofs
+            for each in keep_proofs:
+                proofs_from_keyset.append(each)
+            # print("self proofs", self.proofs)
+            # need to reassign back into 
+            keyset_proofs[chosen_keyset]= proofs_from_keyset
+            # OK - now need to put proofs back into a flat lish
+            post_payment_proofs = []
+            for key in keyset_proofs:
+                each_proofs = keyset_proofs[key]
+                for each_proof in each_proofs:
+                    post_payment_proofs.append(each_proof)
+            
+            # Replace with new function
+            self.proofs = post_payment_proofs
+            # asyncio.run(self._async_delete_proof_events())
+            # self.add_proofs_obj(post_payment_proofs)
+            # self._load_proofs()
+        except Exception as e:
+            raise Exception("There is problem with the invoice payment {e}")
            
         
         await self.write_proofs()
