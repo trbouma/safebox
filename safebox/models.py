@@ -584,3 +584,4 @@ class TxHistory(BaseModel):
     tendered_amount: float 
     tendered_currency: str
     fees: int
+    current_balance: int|None = None

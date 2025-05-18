@@ -1015,13 +1015,24 @@ class Acorn:
         if tendered_amount == None:
             tendered_amount = amount
         created_at = int(datetime.now().timestamp())
+
+        # Calculate current balance
+        # If D it is already recorde and tallied in balance
+        # If C it has been recorded as proof but not yet tallied as balance so add amount
+        
+        if tx_type == 'D':
+            current_balance= self.balance
+        else:
+            current_balance=self.balance+amount
+
         tx_history = TxHistory( create_time=created_at,
                                 tx_type=tx_type,
                                 amount= amount,
                                 comment= comment,
                                 tendered_amount=tendered_amount,
                                 tendered_currency=tendered_currency,
-                                fees=fees  
+                                fees=fees,
+                                current_balance=current_balance 
                                 )
         tx_history_str = json.dumps(tx_history.model_dump())
         tx_history_encrypt = my_enc.encrypt(tx_history_str,to_pub_k=self.pubkey_hex)
@@ -1659,6 +1670,7 @@ class Acorn:
                 await self.add_proofs_obj(value) 
             await self._load_proofs()
         except Exception as e:
+            self.logger.error(f"error writhing proofs {e}")
             raise Exception(e)
 
         

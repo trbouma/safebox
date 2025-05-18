@@ -54,8 +54,10 @@ window.location.href="/";
           <th valign="top">Amount</th>
           <th valign="top">Cur</th>
           <th valign="top">Sats</th>
-          <th valign="top">Fees</th>          
-          <th align="left" valign="top"> Details</th>          
+          <th valign="top">Fees</th> 
+          <th valign="top">Balance</th>
+          <th align="left" valign="top">Details</th>    
+                 
         </tr>
         {% for entry in tx_history %}
         <tr>
@@ -65,7 +67,9 @@ window.location.href="/";
           <td align="right" valign="top">{{entry['tendered_currency']}}</td>
           <td align="right" valign="top">{{entry['amount']}}</td>
           <td align="right" valign="top">{{entry.get('fees',0)}}</td>
+          <td align="right" valign="top">{{entry['current_balance']}}</td>
           <td align="left" valign="top">{{entry['comment']}}</td>
+          
         </tr>
         {% endfor %}
       </table>
