@@ -101,7 +101,7 @@ class Acorn:
     replicate: bool
     RESERVED_RECORDS: List[str] = ["balance","privkey"]
     wallet_reserved_records: object
-    logger: object
+    logger: logging.Logger
     TZ: str = "America/New_York"
     
 
@@ -2145,19 +2145,19 @@ class Acorn:
             # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
 
         else: # Can pay with a single keyset
-
-            self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
-        
-            # Now do the pay routine
-            melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-            melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-
-            print(amount, lnaddress)
-            data_to_send = {    "request": pr,
-                                "unit": "sat"
-
-                            }
             try:
+                self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
+            
+                # Now do the pay routine
+                melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+                melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+
+                print(amount, lnaddress)
+                data_to_send = {    "request": pr,
+                                    "unit": "sat"
+
+                                }
+            
                 response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
                 response.raise_for_status()
             except requests.exceptions.Timeout as timeout_err:
@@ -2299,6 +2299,7 @@ class Acorn:
                 
                 self.proofs = post_payment_proofs
             except Exception as e:
+                self.logger.error(f"Error in pay_multi to address {e}")
                 raise Exception(f"Error in payment to address {e}")
             
             await self.write_proofs()
@@ -2423,69 +2424,69 @@ class Acorn:
             self.logger.error("insufficient balance in any one keyset, you need to swap!") 
             raise ValueError("insufficient balance in any one keyset")
                
-        
-        self.logger.debug(f"chosen keyset: {chosen_keyset}")
-        # Now do the pay routine
-        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-        self.logger.debug(f"{melt_quote_url}, {melt_url}")
-        headers = { "Content-Type": "application/json"}
-        # callback = lightning_address_pay(amount, lnaddress,comment=comment)
-        pr = lninvoice        
-        self.logger.debug(f"pr {pr}")
-        self.logger.debug(f"{ln_amount}, {lninvoice}")
-        data_to_send = {    "request": pr,
-                            "unit": "sat"
-
-                        }
-        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        self.logger.debug(f"post melt response: {response.json()}")
-        post_melt_response = PostMeltQuoteResponse(**response.json())
-        self.logger.debug(f"mint response: {post_melt_response}")
-        proofs_to_use = []
-        proof_amount = 0
-        amount_needed = ln_amount + post_melt_response.fee_reserve
-        self.logger.debug(f"amount needed: {amount_needed}")
-        #FIXME There is something wrong with the logic here for chosen keysets
-        # This is paying via invoice not lnadress so need to fix 1775
-        if amount_needed > keyset_amounts[chosen_keyset]:
-            self.logger.debug("insufficient balance in keyset. you need to swap, or use another keyset")
-            chosen_keyset = None
-            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                self.logger.debug(f"{key}, {keyset_amounts[key]}")
-                if keyset_amounts[key] >= amount_needed:
-                    chosen_keyset = key
-                    self.logger.debug(f"new chosen keyset: {key}")
-                    break
-            if not chosen_keyset:
-                msg_out="you don't have a sufficient balance in a keyset, you need to swap"
-                raise ValueError(msg_out)
-            
-            # Set to new mints and redo the calls
+        try:
+            self.logger.debug(f"chosen keyset: {chosen_keyset}")
+            # Now do the pay routine
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
             melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-            self.logger.debug(f"{melt_quote_url},{melt_url}")
-            # We already have the invoice in this function
-            # callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
-            # pr = callback['pr']   
-            pr = lninvoice     
+            self.logger.debug(f"{melt_quote_url}, {melt_url}")
+            headers = { "Content-Type": "application/json"}
+            # callback = lightning_address_pay(amount, lnaddress,comment=comment)
+            pr = lninvoice        
             self.logger.debug(f"pr {pr}")
             self.logger.debug(f"{ln_amount}, {lninvoice}")
             data_to_send = {    "request": pr,
-                            "unit": "sat"
+                                "unit": "sat"
 
-                        }
+                            }
             response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
             self.logger.debug(f"post melt response: {response.json()}")
             post_melt_response = PostMeltQuoteResponse(**response.json())
             self.logger.debug(f"mint response: {post_melt_response}")
+            proofs_to_use = []
+            proof_amount = 0
+            amount_needed = ln_amount + post_melt_response.fee_reserve
+            self.logger.debug(f"amount needed: {amount_needed}")
+            #FIXME There is something wrong with the logic here for chosen keysets
+            # This is paying via invoice not lnadress so need to fix 1775
+            if amount_needed > keyset_amounts[chosen_keyset]:
+                self.logger.debug("insufficient balance in keyset. you need to swap, or use another keyset")
+                chosen_keyset = None
+                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                    self.logger.debug(f"{key}, {keyset_amounts[key]}")
+                    if keyset_amounts[key] >= amount_needed:
+                        chosen_keyset = key
+                        self.logger.debug(f"new chosen keyset: {key}")
+                        break
+                if not chosen_keyset:
+                    msg_out="you don't have a sufficient balance in a keyset, you need to swap"
+                    raise ValueError(msg_out)
+                
+                # Set to new mints and redo the calls
+                melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+                melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+                self.logger.debug(f"{melt_quote_url},{melt_url}")
+                # We already have the invoice in this function
+                # callback = lightning_address_pay(ln_amount, lninvoice,comment=comment)
+                # pr = callback['pr']   
+                pr = lninvoice     
+                self.logger.debug(f"pr {pr}")
+                self.logger.debug(f"{ln_amount}, {lninvoice}")
+                data_to_send = {    "request": pr,
+                                "unit": "sat"
 
-            if not chosen_keyset:
-                msg_out ="insufficient balance in any one keyset, you need to swap!"
-                raise ValueError(msg_out) 
-            
-        # Print now we should be all set to go
-        try:
+                            }
+                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                self.logger.debug(f"post melt response: {response.json()}")
+                post_melt_response = PostMeltQuoteResponse(**response.json())
+                self.logger.debug(f"mint response: {post_melt_response}")
+
+                if not chosen_keyset:
+                    msg_out ="insufficient balance in any one keyset, you need to swap!"
+                    raise ValueError(msg_out) 
+                
+            # Print now we should be all set to go
+        
             self.logger.debug("---we have a sufficient mint---")
             self.logger.debug(f"{melt_quote_url}, {melt_url}, {post_melt_response}")
             proofs_to_use = []
@@ -2551,6 +2552,7 @@ class Acorn:
             # self.add_proofs_obj(post_payment_proofs)
             # self._load_proofs()
         except Exception as e:
+            self.logger.error(f"Error in pay_multi_invoice to address {e}")
             raise Exception("There is problem with the invoice payment {e}")
            
         
