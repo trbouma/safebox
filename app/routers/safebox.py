@@ -173,7 +173,9 @@ async def create_nwc_qr(request: Request,
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
 
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}&lud16={acorn_obj.handle}@{request.url.hostname}"
+    handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
+
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}&lud16={handle}@{request.url.hostname}"
 
     print(qr_text)     
           
@@ -311,12 +313,10 @@ async def ln_pay_address(   request: Request,
 @router.post("/payinvoice", tags=["protected"])
 async def ln_pay_invoice(   request: Request, 
                         ln_invoice: lnPayInvoice,
-                        acorn_obj = Depends(get_acorn)):
+                        acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
     try:
-        # safebox_found = await fetch_safebox(access_token=access_token)
-        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        # await acorn_obj.load_data()
+
 
         msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         decoded_invoice = bolt11.decode(ln_invoice.invoice)
@@ -325,7 +325,10 @@ async def ln_pay_invoice(   request: Request,
         amount = decoded_invoice.amount_msat//1000
         description = decoded_invoice.description
 
-        await acorn_obj.add_tx_history(tx_type='D',amount=amount,comment=description)
+        await acorn_obj.add_tx_history( tx_type='D',
+                                        amount=amount,
+                                        comment=description,
+                                        fees=final_fees)
        
 
     except Exception as e:

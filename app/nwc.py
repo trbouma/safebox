@@ -51,14 +51,15 @@ async def nwc_pay_invoice(safebox_found: RegisteredSafebox, payinstruction_obj):
         invoice_decoded = bolt11.decode(invoice)
         print(f"this is the invoice to pay: {invoice}")
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        test =  await acorn_obj.load_data()
+        await acorn_obj.load_data()
         print(f"balance {acorn_obj.balance}")
         try:
-            test = await acorn_obj.pay_multi_invoice(invoice)
-            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment="nwc zap")
-            print(test)
+            msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
+            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment="nwc zap", fees=final_fees)
+            
         except Exception as e:
-            print(f"Error: {e}")
+            raise Exception(f"Error {e}")
+           
 
 
 
