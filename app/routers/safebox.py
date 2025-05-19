@@ -258,6 +258,7 @@ async def ln_pay_address(   request: Request,
                             ln_pay: lnPayAddress,
                             acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
+    tendered = ""
 
     if ln_pay.currency == "SAT":
         sat_amount = int(ln_pay.amount)
@@ -265,6 +266,7 @@ async def ln_pay_address(   request: Request,
         local_currency = await get_currency_rate(ln_pay.currency.upper())
         print(local_currency.currency_rate)
         sat_amount = int(ln_pay.amount* 1e8 // local_currency.currency_rate)
+        tendered = f" {ln_pay.amount} {ln_pay.currency.upper()}"
 
     # check to see if address is local only  
 
@@ -277,7 +279,7 @@ async def ln_pay_address(   request: Request,
     try:
         
 
-        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment)
+        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered)
         if settings.WALLET_SWAP_MODE:
             print("doing wallet swap")
             await acorn_obj.swap_multi_consolidate()
@@ -285,7 +287,7 @@ async def ln_pay_address(   request: Request,
                                         amount=sat_amount,
                                         tendered_amount=ln_pay.amount,
                                         tendered_currency=ln_pay.currency,
-                                        comment=ln_pay.comment, 
+                                        comment=ln_pay.comment + tendered, 
                                         fees=final_fees)
     except Exception as e:
         return {f"detail": f"error {e}"}
@@ -295,7 +297,7 @@ async def ln_pay_address(   request: Request,
     return {"detail": msg_out}
 
 @router.post("/swap", tags=["protected"])
-async def ln_pay_address(   request: Request, 
+async def ln_swap(   request: Request, 
                             acorn_obj: Acorn = Depends(get_acorn)
                         ):
     msg_out ="No error"
