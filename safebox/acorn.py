@@ -1456,102 +1456,108 @@ class Acorn:
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
-        headers = { "Content-Type": "application/json"}
-        if mint:
-            keyset_url = f"https://{mint}/v1/keysets"
-        else:
-            keyset_url = f"{self.home_mint}/v1/keysets"
-
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
-
-        keysets_obj = KeysetsResponse(**response.json())
-
-        if mint:
-            self.known_mints[keysets_obj.keysets[0].id]= f"https://{mint}"
-        else:
-            self.known_mints[keysets_obj.keysets[0].id]= self.home_mint
-
-        # print("id:", keysets_obj.keysets[0].id)
-
-        blinded_messages=[]
-        blinded_values =[]
-        powers_of_2 = powers_of_2_sum(int(amount))
-        
-        
-        for each in powers_of_2:
-            secret = secrets.token_hex(32)
-            B_, r, Y = step1_alice(secret)
-            blinded_values.append((B_,r, secret))
-            
-            blinded_messages.append(    BlindedMessage( amount=each,
-                                                        id=keyset,
-                                                        B_=B_.serialize().hex(),
-                                                        Y = Y.serialize().hex(),
-                                                        ).model_dump()
-                                                        
-                                    )
-        # print("blinded values, blinded messages:", blinded_values, blinded_messages)
-        if mint:
-            mint_url = f"https://{mint}/v1/mint/bolt11"
-        else:
-             mint_url = f"{self.home_mint}/v1/mint/bolt11"
-
-
-        # blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
-        # print(blinded_message)
-        request_body = {
-                            "quote"     : quote,
-                            "outputs"   : blinded_messages
-                        }
-        # print(request_body)
         try:
+            await self.acquire_lock()
+            headers = { "Content-Type": "application/json"}
+            if mint:
+                keyset_url = f"https://{mint}/v1/keysets"
+            else:
+                keyset_url = f"{self.home_mint}/v1/keysets"
+
+            response = requests.get(keyset_url, headers=headers)
+            keyset = response.json()['keysets'][0]['id']
+
+            keysets_obj = KeysetsResponse(**response.json())
+
+            if mint:
+                self.known_mints[keysets_obj.keysets[0].id]= f"https://{mint}"
+            else:
+                self.known_mints[keysets_obj.keysets[0].id]= self.home_mint
+
+            # print("id:", keysets_obj.keysets[0].id)
+
+            blinded_messages=[]
+            blinded_values =[]
+            powers_of_2 = powers_of_2_sum(int(amount))
+            
+            
+            for each in powers_of_2:
+                secret = secrets.token_hex(32)
+                B_, r, Y = step1_alice(secret)
+                blinded_values.append((B_,r, secret))
+                
+                blinded_messages.append(    BlindedMessage( amount=each,
+                                                            id=keyset,
+                                                            B_=B_.serialize().hex(),
+                                                            Y = Y.serialize().hex(),
+                                                            ).model_dump()
+                                                            
+                                        )
+            # print("blinded values, blinded messages:", blinded_values, blinded_messages)
+            if mint:
+                mint_url = f"https://{mint}/v1/mint/bolt11"
+            else:
+                mint_url = f"{self.home_mint}/v1/mint/bolt11"
+
+
+            # blinded_message = BlindedMessage(amount=amount,id=keyset,B_=B_.serialize().hex())
+            # print(blinded_message)
+            request_body = {
+                                "quote"     : quote,
+                                "outputs"   : blinded_messages
+                            }
+            # print(request_body)
+            
             response = requests.post(mint_url, json=request_body, headers=headers)
             promises = response.json()['signatures']
-            # print("promises:", promises)
-        except:
-            return False
+                # print("promises:", promises)
+           
 
-        
-        if mint:
-            mint_key_url = f"https://{mint}/v1/keys/{keyset}"
-        else:
-            mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
-
-        response = requests.get(mint_key_url, headers=headers)
-        keys = response.json()["keysets"][0]["keys"]
-
-        proof_objs = []
-        i = 0
-        
-        for each in promises:
-            pub_key_c = PublicKey()
-            # print("each:", each['C_'])
-            pub_key_c.deserialize(unhexlify(each['C_']))
-            promise_amount = each['amount']
-            A = keys[str(int(promise_amount))]
-            # A = keys[str(j)]
-            pub_key_a = PublicKey()
-            pub_key_a.deserialize(unhexlify(A))
-            r = blinded_values[i][1]
-            # print(pub_key_c, promise_amount,A, r)
-            C = step3_alice(pub_key_c,r,pub_key_a)
             
-            proof = Proof ( amount= promise_amount,
-                           id = keyset,
-                           secret=blinded_values[i][2],
-                           C=C.serialize().hex(),
-                           Y=Y.serialize().hex()
-            )
+            if mint:
+                mint_key_url = f"https://{mint}/v1/keys/{keyset}"
+            else:
+                mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
 
-            proof_objs.append(proof)
+            response = requests.get(mint_key_url, headers=headers)
+            keys = response.json()["keysets"][0]["keys"]
+
+            proof_objs = []
+            i = 0
             
-            i+=1
-        
-        self.logger.debug(f"Adding proofs from mint: {proof_objs}")
+            for each in promises:
+                pub_key_c = PublicKey()
+                # print("each:", each['C_'])
+                pub_key_c.deserialize(unhexlify(each['C_']))
+                promise_amount = each['amount']
+                A = keys[str(int(promise_amount))]
+                # A = keys[str(j)]
+                pub_key_a = PublicKey()
+                pub_key_a.deserialize(unhexlify(A))
+                r = blinded_values[i][1]
+                # print(pub_key_c, promise_amount,A, r)
+                C = step3_alice(pub_key_c,r,pub_key_a)
+                
+                proof = Proof ( amount= promise_amount,
+                            id = keyset,
+                            secret=blinded_values[i][2],
+                            C=C.serialize().hex(),
+                            Y=Y.serialize().hex()
+                )
 
+                proof_objs.append(proof)
+                
+                i+=1
+            
+            self.logger.debug(f"Adding proofs from mint: {proof_objs}")
+
+            
+            await self.add_proofs_obj(proof_objs)
+        except Exception as e:
+          raise Exception("Error in mint_proofs {e}")  
         
-        await self.add_proofs_obj(proof_objs)
+        finally:
+            await self.release_lock()
         
         return True
 
