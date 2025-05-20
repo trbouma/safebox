@@ -2593,7 +2593,7 @@ class Acorn:
             # self._load_proofs()
         except Exception as e:
             self.logger.error(f"Error in pay_multi_invoice to address {e}")
-            raise Exception("There is problem with the invoice payment {e}")
+            raise Exception(f"Error There is problem with the invoice payment {e}")
         finally:
             await self.release_lock()
             print("all done!")
