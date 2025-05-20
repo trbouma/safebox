@@ -1323,7 +1323,7 @@ class Acorn:
         pass
 
     async def release_lock(self):
-
+        print("we can release the lock!")
         await self.set_wallet_info(label="lock",label_info="FALSE")
         
         pass  
@@ -2064,75 +2064,72 @@ class Acorn:
         headers = { "Content-Type": "application/json"}
 
         try:
+            await self.acquire_lock()
             callback = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr']  
-        except Exception as e:
-            msg_out = f"Could not resolve {lnaddress}. {e} Check if correct address"
-            self.logger.error(msg_out)
-            raise Exception(msg_out)
-            # return msg_out, 0
 
-        for each in keyset_amounts:
-            available_amount += keyset_amounts[each]
-        
-        
-        # print("available amount:", available_amount)
-        if available_amount < amount:
-            msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
-            raise Exception(msg_out)
-          
-        
-        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            # print(key, keyset_amounts[key])
-            if keyset_amounts[key] >= amount:
-                chosen_keyset = key
-                break
-        if not chosen_keyset:
-            # print("insufficient balance in any one keyset, you need to swap or do mpp!") 
-            multi_path = True
-               
-        
-        if multi_path:
-            raise Exception("Multipath payments are not implemented yet!")
-            #TODO the remaining code is for multipath
-            amount_multi =0
-            keysets_to_use_for_multi = []
-            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
-                
-                # print(key, keyset_amounts[key])
-                amount_multi += keyset_amounts[key]
-                chosen_keysets.append(key)
-                # just do all the keysets for now
-                # if amount_multi >= amount:
-                #     print(f"got enough!")
-                #     break
+
+            for each in keyset_amounts:
+                available_amount += keyset_amounts[each]
             
-            print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
-            amount_remaining = amount
-            total_fees = 0
-            total_melt_amount = 0
-            for each_keyset in chosen_keysets:
-                print(f"amount remaining: {amount_remaining}")
-                # There are three possible use cases
-                if amount_remaining <= 0:
-                    print("we are done!")
+            
+            # print("available amount:", available_amount)
+            if available_amount < amount:
+                msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
+                raise Exception(msg_out)
+            
+            
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                # print(key, keyset_amounts[key])
+                if keyset_amounts[key] >= amount:
+                    chosen_keyset = key
                     break
-                elif amount_remaining > keyset_amounts[each_keyset]:
-                    print("use whole keyset amount")
-                    amount_to_use = keyset_amounts[each_keyset]
-                else:
-                    amount_to_use = amount_remaining
+            if not chosen_keyset:
+                # print("insufficient balance in any one keyset, you need to swap or do mpp!") 
+                multi_path = True
                 
+            
+            if multi_path:
+                raise Exception("Multipath payments are not implemented yet!")
+                #TODO the remaining code is for multipath
+                amount_multi =0
+                keysets_to_use_for_multi = []
+                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
+                    
+                    # print(key, keyset_amounts[key])
+                    amount_multi += keyset_amounts[key]
+                    chosen_keysets.append(key)
+                    # just do all the keysets for now
+                    # if amount_multi >= amount:
+                    #     print(f"got enough!")
+                    #     break
                 
-                melt_quote_url = f"{self.known_mints[each_keyset]}/v1/melt/quote/bolt11"
-                melt_url = f"{self.known_mints[each_keyset]}/v1/melt/bolt11"
-                
-                data_to_send = {    "request": pr,
-                                    "unit": "sat",
-                                    "options": {"mpp": {"amount": amount_to_use}}
-                            }
-                # print(f"{melt_quote_url, melt_url} {data_to_send}")
-                try:
+                print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
+                amount_remaining = amount
+                total_fees = 0
+                total_melt_amount = 0
+                for each_keyset in chosen_keysets:
+                    print(f"amount remaining: {amount_remaining}")
+                    # There are three possible use cases
+                    if amount_remaining <= 0:
+                        print("we are done!")
+                        break
+                    elif amount_remaining > keyset_amounts[each_keyset]:
+                        print("use whole keyset amount")
+                        amount_to_use = keyset_amounts[each_keyset]
+                    else:
+                        amount_to_use = amount_remaining
+                    
+                    
+                    melt_quote_url = f"{self.known_mints[each_keyset]}/v1/melt/quote/bolt11"
+                    melt_url = f"{self.known_mints[each_keyset]}/v1/melt/bolt11"
+                    
+                    data_to_send = {    "request": pr,
+                                        "unit": "sat",
+                                        "options": {"mpp": {"amount": amount_to_use}}
+                                }
+                    # print(f"{melt_quote_url, melt_url} {data_to_send}")
+                    
                     response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
                     post_melt_response = PostMeltQuoteResponse(**response.json())
                     print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
@@ -2167,28 +2164,24 @@ class Acorn:
                     amount_remaining = amount_remaining - amount_to_pay   
                     print(f"amount remaining after adjusted {amount_remaining}")                                   
                     keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
-                except requests.exceptions.RequestException as err:
-                    # raise Exception("Could not access mint")
-                    print(f"An mint error occurred: {err}")
-                    # pass
-                    # print(f"{self.known_mints[each_keyset]} does not support")
-            if amount_remaining > 0:
-                 raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
 
-            # Now we have the meltquotes
-            print(f"keysets to use for multi {keysets_to_use_for_multi}")
-            print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
-            
-            self._multi_melt(keysets_to_use_for_multi) 
-            
-            # self.write_proofs()
+                if amount_remaining > 0:
+                    raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
 
-            msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
-            return msg_out, total_fees
-            # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
+                # Now we have the meltquotes
+                print(f"keysets to use for multi {keysets_to_use_for_multi}")
+                print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
+                
+                self._multi_melt(keysets_to_use_for_multi) 
+                
+                # self.write_proofs()
 
-        else: # Can pay with a single keyset
-            try:
+                msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
+                return msg_out, total_fees
+                # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
+
+            else: # Can pay with a single keyset
+                
                 self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
             
                 # Now do the pay routine
@@ -2203,32 +2196,30 @@ class Acorn:
             
                 response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
                 response.raise_for_status()
-            except requests.exceptions.Timeout as timeout_err:
-                print(f"Mint Timeout error: {timeout_err}")  # Request timed out
-                raise Exception(f"Mint {self.known_mints[chosen_keyset]} not available")
+                
 
-            # print("post melt response:", response.json())
-            post_melt_response = PostMeltQuoteResponse(**response.json())
-            # print("mint response:", post_melt_response)
-            proofs_to_use = []
-            proof_amount = 0
-            amount_needed = amount + post_melt_response.fee_reserve
-            self.logger.debug(f"amount needed: {amount_needed}")
-            if amount_needed > keyset_amounts[chosen_keyset]:
-                print("Insufficient balance in keyset. you need to swap, or use another keyset")
-                chosen_keyset = None
-                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                    # print(key, keyset_amounts[key])
-                    if keyset_amounts[key] >= amount_needed:
-                        chosen_keyset = key
-                        self.logger.debug(f"new chosen keyset: {key}")
-                        break
-                if not chosen_keyset:
-                    msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
-                    raise ValueError(msg_out)
+                # print("post melt response:", response.json())
+                post_melt_response = PostMeltQuoteResponse(**response.json())
+                # print("mint response:", post_melt_response)
+                proofs_to_use = []
+                proof_amount = 0
+                amount_needed = amount + post_melt_response.fee_reserve
+                self.logger.debug(f"amount needed: {amount_needed}")
+                if amount_needed > keyset_amounts[chosen_keyset]:
+                    print("Insufficient balance in keyset. you need to swap, or use another keyset")
+                    chosen_keyset = None
+                    for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                        # print(key, keyset_amounts[key])
+                        if keyset_amounts[key] >= amount_needed:
+                            chosen_keyset = key
+                            self.logger.debug(f"new chosen keyset: {key}")
+                            break
+                    if not chosen_keyset:
+                        msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
+                        raise ValueError(msg_out)
 
-                # Adding in some additional error handling to head off a random fatal error    
-                try:
+                    # Adding in some additional error handling to head off a random fatal error    
+                    
                     # Set to new mints and redo the calls
                     melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
                     melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
@@ -2245,42 +2236,40 @@ class Acorn:
                     # print("post melt response:", response.json())
                     post_melt_response = PostMeltQuoteResponse(**response.json())
                     # print("mint response:", post_melt_response)
+                    
+                    
+                    
+                    if not chosen_keyset:
+                        msg_out ="insufficient balance in any one keyset, you need to swap!"
+                        raise ValueError(msg_out) 
+                    
+                # Print now we should be all set to go
                 
-                except Exception as e:
-                    raise Exception(f"Problem with mints {e}")
+                self.logger.debug("---we have a sufficient mint balance---")
                 
-                if not chosen_keyset:
-                    msg_out ="insufficient balance in any one keyset, you need to swap!"
-                    raise ValueError(msg_out) 
-                
-            # Print now we should be all set to go
-            
-            self.logger.debug("---we have a sufficient mint balance---")
-            
-            # This is the part that needs to be added in multi
-            proofs_to_use = []
-            proof_amount = 0
-            proofs_from_keyset = keyset_proofs[chosen_keyset]
-            while proof_amount < amount_needed:
-                pay_proof = proofs_from_keyset.pop()
-                proofs_to_use.append(pay_proof)
-                proof_amount += pay_proof.amount
-                # print("pop", pay_proof.amount)
-                
+                # This is the part that needs to be added in multi
+                proofs_to_use = []
+                proof_amount = 0
+                proofs_from_keyset = keyset_proofs[chosen_keyset]
+                while proof_amount < amount_needed:
+                    pay_proof = proofs_from_keyset.pop()
+                    proofs_to_use.append(pay_proof)
+                    proof_amount += pay_proof.amount
+                    # print("pop", pay_proof.amount)
+                    
 
-            try:
+                
                 proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-            except Exception as e:
-                raise Exception(f"Error: {e}")
-                
+               
+                    
 
-            # print("proofs remaining:", proofs_remaining)
-            # print(f"amount needed: {amount_needed}")
-            # Implement from line 824
-            sum_proofs =0
-            spend_proofs = []
-            keep_proofs = []
-            try:
+                # print("proofs remaining:", proofs_remaining)
+                # print(f"amount needed: {amount_needed}")
+                # Implement from line 824
+                sum_proofs =0
+                spend_proofs = []
+                keep_proofs = []
+                
                 for each in proofs_remaining:
                     
                     sum_proofs += each.amount
@@ -2341,16 +2330,19 @@ class Acorn:
                 # self.delete_proof_events()
                 
                 self.proofs = post_payment_proofs
-            except Exception as e:
-                self.logger.error(f"Error in pay_multi to address {e}")
-                raise Exception(f"Error in payment to address {e}")
+            
             
             await self.write_proofs()
             final_fees = amount_needed - amount
             msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
             self.logger.info(msg_out)
+        except Exception as e:
+            raise Exception(f"Error in pay_multi {e}")
+        finally:
+            await self.release_lock()
+            print("all is good!")
             
-            return msg_out, final_fees
+        return msg_out, final_fees
 
     def _multi_melt(self, keysets_to_use):
 
@@ -2439,35 +2431,34 @@ class Acorn:
                     
         # decode amount from invoice
         try:
+            await self.acquire_lock()
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
-        except Exception as e:
-            raise ValueError(f"{e}")
-            # return f"error {e}",0
+        
 
-        self.logger.debug("pay from multiple mints")
-        available_amount = 0
-        chosen_keyset = None
-        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
-        for each in keyset_amounts:
-            available_amount += keyset_amounts[each]
-        
-        
-        self.logger.debug(f"available amount: {available_amount}")
-        if available_amount < ln_amount:
-            msg_out ="insufficient balance. you need more funds!"
-            raise ValueError(msg_out)
+            self.logger.debug("pay from multiple mints")
+            available_amount = 0
+            chosen_keyset = None
+            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+            for each in keyset_amounts:
+                available_amount += keyset_amounts[each]
             
-        
-        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            self.logger.debug(f"{key}, {keyset_amounts[key]}")
-            if keyset_amounts[key] >= ln_amount:
-                chosen_keyset = key
-                break
-        if not chosen_keyset:
-            self.logger.error("insufficient balance in any one keyset, you need to swap!") 
-            raise ValueError("insufficient balance in any one keyset")
+            
+            self.logger.debug(f"available amount: {available_amount}")
+            if available_amount < ln_amount:
+                msg_out ="insufficient balance. you need more funds!"
+                raise ValueError(msg_out)
+                
+            
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                self.logger.debug(f"{key}, {keyset_amounts[key]}")
+                if keyset_amounts[key] >= ln_amount:
+                    chosen_keyset = key
+                    break
+            if not chosen_keyset:
+                self.logger.error("insufficient balance in any one keyset, you need to swap!") 
+                raise ValueError("insufficient balance in any one keyset")
                
-        try:
+        
             self.logger.debug(f"chosen keyset: {chosen_keyset}")
             # Now do the pay routine
             melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
@@ -2597,6 +2588,9 @@ class Acorn:
         except Exception as e:
             self.logger.error(f"Error in pay_multi_invoice to address {e}")
             raise Exception("There is problem with the invoice payment {e}")
+        finally:
+            await self.release_lock()
+            print("all done!")
            
         
         await self.write_proofs()
@@ -2901,70 +2895,71 @@ class Acorn:
         proof_objs = []
         
         # Let's check all the proofs before we do anything
+        try:
+            await self.acquire_lock()
 
-        for each_keyset in keyset_proofs:
-            check = []
-            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
-            for each_proof in keyset_proofs[each_keyset]:
-                check.append(each_proof.Y)
+            for each_keyset in keyset_proofs:
+                check = []
+                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
+                for each_proof in keyset_proofs[each_keyset]:
+                    check.append(each_proof.Y)
 
-            # print(mint_verify_url, check)
-            Ys = {"Ys": check}
-            try:
+                # print(mint_verify_url, check)
+                Ys = {"Ys": check}
+                
                 response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
                 check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
-            except:
-                return f"there is a problem with {self.known_mints[each_keyset]}"
                 
-        # return
-        # All the proofs are verified, we are good to go for the swap    
+                    
+            # return
+            # All the proofs are verified, we are good to go for the swap    
 
  
-        for each_keyset in keyset_proofs:
-            
-            each_keyset_url = self.known_mints[each_keyset]
-            # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
-            # print(swap_url)
-            swap_proofs = []
-            blinded_swap_proofs = []
-            blinded_values =[]
-            blinded_messages = []
-            swap_amount =0
-            count = 0
-            for each_proof in keyset_proofs[each_keyset]:
-                # print(each_proof.amount)
-                swap_amount+=each_proof.amount
-                swap_proofs.append(each_proof.model_dump())                    
-                count +=1
-                # print("swap proofs:", swap_proofs)
-            r = PrivateKey()
-
-            # print("create blinded swap proofs")
-            powers_of_2 = self.powers_of_2_sum(swap_amount)
-            # print("total:", swap_amount,count, powers_of_2)
-            for each in powers_of_2:
-                secret = secrets.token_hex(32)
-                B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret,Y))
+            for each_keyset in keyset_proofs:
                 
-                blinded_messages.append(    BlindedMessage( amount=each,
-                                                            id=each_keyset,
-                                                            B_=B_.serialize().hex(),
-                                                            Y = Y.serialize().hex(),
-                                                            ).model_dump()
-                                        )
-            data_to_send = {
-                            "inputs":   swap_proofs,
-                            "outputs": blinded_messages
-                            
-            }
-        
-            # print(data_to_send)
+                each_keyset_url = self.known_mints[each_keyset]
+                # print(each_keyset,each_keyset_url)
+                swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
+                # print(swap_url)
+                swap_proofs = []
+                blinded_swap_proofs = []
+                blinded_values =[]
+                blinded_messages = []
+                swap_amount =0
+                count = 0
+                for each_proof in keyset_proofs[each_keyset]:
+                    # print(each_proof.amount)
+                    swap_amount+=each_proof.amount
+                    swap_proofs.append(each_proof.model_dump())                    
+                    count +=1
+                    # print("swap proofs:", swap_proofs)
+                r = PrivateKey()
+
+                # print("create blinded swap proofs")
+                powers_of_2 = self.powers_of_2_sum(swap_amount)
+                # print("total:", swap_amount,count, powers_of_2)
+                for each in powers_of_2:
+                    secret = secrets.token_hex(32)
+                    B_, r, Y = step1_alice(secret)
+                    blinded_values.append((B_,r, secret,Y))
+                    
+                    blinded_messages.append(    BlindedMessage( amount=each,
+                                                                id=each_keyset,
+                                                                B_=B_.serialize().hex(),
+                                                                Y = Y.serialize().hex(),
+                                                                ).model_dump()
+                                            )
+                data_to_send = {
+                                "inputs":   swap_proofs,
+                                "outputs": blinded_messages
+                                
+                }
+            
+                # print(data_to_send)
             try:
                 response = requests.post(url=swap_url, json=data_to_send, headers=headers)
                 # print(response.json())
@@ -3001,23 +2996,20 @@ class Acorn:
                             }
                     proofs.append(proof)
                     proof_obj = Proof(amount=promise_amount,
-                                      id=each_keyset,
-                                      secret=blinded_values[i][2],
-                                      C=C.serialize().hex(),
-                                      Y = Y.serialize().hex()
-                                      )
+                                        id=each_keyset,
+                                        secret=blinded_values[i][2],
+                                        C=C.serialize().hex(),
+                                        Y = Y.serialize().hex()
+                                        )
                     proof_objs.append(proof_obj)
 
                     # print(proofs)
                     i+=1
-            
-                
-
-                
             except:
-                ValueError('duplicate proofs')
-                # return "duplicate proofs"
-                proofs = []
+                    # don't error the whole swap routine here
+                    # duplicate proofs just ignore
+                    proofs = []   
+
             
             combined_proofs = combined_proofs + proofs
             combined_proof_objs = combined_proof_objs + proof_objs
@@ -3037,6 +3029,12 @@ class Acorn:
 
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
+        except Exception as e:
+            raise Exception("Error in swap multi {e}")
+        
+        finally:
+            await self.release_lock()
+    
         
         return "multi swap ok"
 
@@ -3048,115 +3046,121 @@ class Acorn:
         combined_proof_objs =[]
         
         # Let's check all the proofs before we do anything
+        try:
+            await self.acquire_lock()
+            for each_keyset in keyset_proofs:
+                check = []
+                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
+                for each_proof in keyset_proofs[each_keyset]:
+                    check.append(each_proof.Y)
 
-        for each_keyset in keyset_proofs:
-            check = []
-            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
-            for each_proof in keyset_proofs[each_keyset]:
-                check.append(each_proof.Y)
-
-            # print(mint_verify_url, check)
-            Ys = {"Ys": check}
-            try:
+                # print(mint_verify_url, check)
+                Ys = {"Ys": check}
+                
                 response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
                 check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
-            except:
-                return f"there is a problem with the mint {self.known_mints[each_keyset]}"
                 
-        # return
-        # All the proofs are verified, we are good to go for the swap   
-        # In multi_each we are going to swap for each proof 
-        
- 
-        for each_keyset in keyset_proofs:
+            # return
+            # All the proofs are verified, we are good to go for the swap   
+            # In multi_each we are going to swap for each proof 
             
-            each_keyset_url = self.known_mints[each_keyset]
 
-            mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
-            # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
-            
-            for each_proof in keyset_proofs[each_keyset]:
-                # print(each_proof.amount)
-                blinded_values =[]
-                blinded_messages = []
-                secret = secrets.token_hex(32)
-                B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret,Y))
+            for each_keyset in keyset_proofs:
                 
-                blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
-                                                            id=each_keyset,
-                                                            B_=B_.serialize().hex(),
-                                                            Y = Y.serialize().hex(),
-                                                            ).model_dump()
-                                        )
-                data_to_send = {
-                            "inputs":   [each_proof.model_dump()],
-                            "outputs": blinded_messages
-                            
-                }
-                proofs = []
-                proof_objs = []
-                try:
-                    response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                    # print(response.json())
-                    promises = response.json()['signatures']
-                    # print("promises:", promises)
+                each_keyset_url = self.known_mints[each_keyset]
+
+                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                response = requests.get(mint_key_url, headers=headers)
+                keys = response.json()["keysets"][0]["keys"]
+                # print(each_keyset,each_keyset_url)
+                swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
+                
+                for each_proof in keyset_proofs[each_keyset]:
+                    # print(each_proof.amount)
+                    blinded_values =[]
+                    blinded_messages = []
+                    secret = secrets.token_hex(32)
+                    B_, r, Y = step1_alice(secret)
+                    blinded_values.append((B_,r, secret,Y))
                     
-                    i = 0
-            
-                    for each in promises:
-                        pub_key_c = PublicKey()
-                        # print("each:", each['C_'])
-                        pub_key_c.deserialize(unhexlify(each['C_']))
-                        promise_amount = each['amount']
-                        A = keys[str(int(promise_amount))]
-                        # A = keys[str(j)]
-                        pub_key_a = PublicKey()
-                        pub_key_a.deserialize(unhexlify(A))
-                        r = blinded_values[i][1]
-                        Y = blinded_values[i][3]
-                        # print(pub_key_c, promise_amount,A, r)
-                        C = step3_alice(pub_key_c,r,pub_key_a)
-                        proof = {   "amount": promise_amount,
-                            "id": each_keyset,
-                            "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex(),
-                            "Y":    Y.serialize().hex()
-                            }
-                        proofs.append(proof)
-                        # print(proofs)
-                        proof_obj = Proof(amount=promise_amount,
-                                      id=each_keyset,
-                                      secret=blinded_values[i][2],
-                                      C=C.serialize().hex(),
-                                      Y = Y.serialize().hex()
-                                      )
-                        proof_objs.append(proof_obj)
-                        i+=1
+                    blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
+                                                                id=each_keyset,
+                                                                B_=B_.serialize().hex(),
+                                                                Y = Y.serialize().hex(),
+                                                                ).model_dump()
+                                            )
+                    data_to_send = {
+                                "inputs":   [each_proof.model_dump()],
+                                "outputs": blinded_messages
+                                
+                    }
+                    proofs = []
+                    proof_objs = []
+                    
+                    try:
+                        response = requests.post(url=swap_url, json=data_to_send, headers=headers)
+                        # print(response.json())
+                        promises = response.json()['signatures']
+                        # print("promises:", promises)
                         
+                        i = 0
+                
+                        for each in promises:
+                            pub_key_c = PublicKey()
+                            # print("each:", each['C_'])
+                            pub_key_c.deserialize(unhexlify(each['C_']))
+                            promise_amount = each['amount']
+                            A = keys[str(int(promise_amount))]
+                            # A = keys[str(j)]
+                            pub_key_a = PublicKey()
+                            pub_key_a.deserialize(unhexlify(A))
+                            r = blinded_values[i][1]
+                            Y = blinded_values[i][3]
+                            # print(pub_key_c, promise_amount,A, r)
+                            C = step3_alice(pub_key_c,r,pub_key_a)
+                            proof = {   "amount": promise_amount,
+                                "id": each_keyset,
+                                "secret": blinded_values[i][2],
+                                "C":    C.serialize().hex(),
+                                "Y":    Y.serialize().hex()
+                                }
+                            proofs.append(proof)
+                            # print(proofs)
+                            proof_obj = Proof(amount=promise_amount,
+                                            id=each_keyset,
+                                            secret=blinded_values[i][2],
+                                            C=C.serialize().hex(),
+                                            Y = Y.serialize().hex()
+                                            )
+                            proof_objs.append(proof_obj)
+                            i+=1
+                    except:
+                        # Don't error the whole swap routine
+                        # Just igore the duplicate proofs
+                        proofs = []    
+                        
+                        
+
                     
-                    
 
-                except:
-                    ValueError("duplicate proofs")
-                    self.logger.debug("duplicate proof, ignore")
+                    combined_proofs = combined_proofs + proofs
+                    combined_proof_objs = combined_proof_objs + proof_objs
 
-                combined_proofs = combined_proofs + proofs
-                combined_proof_objs = combined_proof_objs + proof_objs
+            await self.delete_proof_events()
+            self.logger.debug("XXXXX swap multi each")
+            await self.add_proofs_obj(combined_proof_objs)
+            
+            await self._load_proofs()
 
-        await self.delete_proof_events()
-        self.logger.debug("XXXXX swap multi each")
-        await self.add_proofs_obj(combined_proof_objs)
+        except Exception as e:
+            raise Exception("Error in swap {e}")
         
-        await self._load_proofs()
-        
+        finally:
+            await self.release_lock()
                    
         
         return "multi swap ok"
