@@ -446,6 +446,8 @@ def get_records(kind, since, relays):
     
 
 
+
+
 @click.command("balance", help="show balance")
 def balance():
     
@@ -568,10 +570,28 @@ def recover(seedphrase, homerelay):
         write_config()
         wallet_obj = Acorn(nsec=nsec, relays=RELAYS, home_relay=homerelay, logging_level=LOGGING_LEVEL)
 
+@click.command("acquirelock", help='acquire lock')
+def acquire_lock():
+    click.echo("get lock")
+    acorn_obj = Acorn(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    asyncio.run(acorn_obj.load_data()) 
+    asyncio.run(acorn_obj.acquire_lock()) 
+    click.echo("lock is acquired via cli")
+
+@click.command("releaselock", help='release lock')
+def release_lock():
+    click.echo("get lock")
+    acorn_obj = Acorn(nsec=NSEC,relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY)
+    asyncio.run(acorn_obj.load_data()) 
+    asyncio.run(acorn_obj.release_lock()) 
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
 cli.add_command(get_balance)
+cli.add_command(acquire_lock)
+cli.add_command(release_lock)
+
 cli.add_command(get_profile)
 cli.add_command(tx_history)
 cli.add_command(deposit)

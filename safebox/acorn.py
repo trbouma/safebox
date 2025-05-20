@@ -1285,6 +1285,49 @@ class Acorn:
             return events[0]
 
 
+    async def set_lock(self, lock: bool):
+        pass
+
+    async def get_lock(self):
+        try:
+            lock_value = await self.get_wallet_info("lock")
+            print(lock_value)
+        except:
+            return False
+
+    async def acquire_lock(self, timeout=30):
+        loop_count = 0
+        lock_value = await self.get_wallet_info(label="lock")
+
+        
+        if lock_value.upper().strip() == "TRUE":
+            
+            print("already locked, now waiting...")
+            
+            
+            
+            while True:                
+                await asyncio.sleep(1)
+                loop_count +=1
+                if loop_count > timeout:
+                    raise Exception(f"Could not acquire lock after {timeout} attempts")
+                lock_value = await self.get_wallet_info(label="lock")
+                print(f"{lock_value} attempt {loop_count}")
+                if lock_value.upper().strip() != 'TRUE':
+                    await self.set_wallet_info(label="lock",label_info="TRUE")
+                    print("we can acquire the lock!")
+                    break
+        else:
+            print("we can acquire the lock!")
+            await self.set_wallet_info(label="lock",label_info="TRUE")
+        pass
+
+    async def release_lock(self):
+
+        await self.set_wallet_info(label="lock",label_info="FALSE")
+        
+        pass  
+
         
     async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None):
         #FIXME - not sure if this function is used

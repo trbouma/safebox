@@ -276,6 +276,10 @@ async def ln_pay_address(   request: Request,
     else:
         final_address = ln_pay.address.strip().lower()
 
+    # check to see if address is another safebox address
+
+    # then do regular lightning
+    
     try:
         
 
