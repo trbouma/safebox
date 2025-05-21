@@ -737,8 +737,7 @@ async def my_danger_zone(       request: Request,
     """Protected access to danger zone"""
 
     
-    msg_out = "To be implemented!"
-    k = Keys(priv_k= settings.SERVICE_SECRET_KEY)
+
 
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub ==acorn_obj.pubkey_bech32)
@@ -747,13 +746,9 @@ async def my_danger_zone(       request: Request,
        
     emergency_code = safebox_found.emergency_code
 
-    connection_uri = f"nostr+walletconnect://{k.public_key_hex()}?relay={settings.RELAYS[0]}&secret={acorn_obj.access_key}&lud16={acorn_obj.handle}@{request.url.hostname}"
 
-    # encoded_uri = urllib.parse.quote(connection_uri, safe='')
-    encoded_uri = connection_uri
     return templates.TemplateResponse(      "dangerzone.html", 
                                         {   "request": request,
-                                            "connection_uri": encoded_uri,
                                             "emergency_code": emergency_code,
                                             "currencies": settings.SUPPORTED_CURRENCIES 
 

@@ -1551,7 +1551,7 @@ class Acorn:
             
             self.logger.debug(f"Adding proofs from mint: {proof_objs}")
 
-            
+            #TODO change this to write_proofs
             await self.add_proofs_obj(proof_objs)
         except Exception as e:
           raise Exception("Error in mint_proofs {e}")  
@@ -1910,7 +1910,7 @@ class Acorn:
                         
                     # proof = Proof(**each_content)
                     nip60_proofs = NIP60Proofs(**content_json)
-                    self.logger.debug(f"load nip60 proofs {nip60_proofs}")
+                    self.logger.debug(f"load nip60 proofs")
                     self.known_mints[nip60_proofs.proofs[0]['id']]= nip60_proofs.mint
                     for each in nip60_proofs.proofs:
                         self.proofs.append(each)
@@ -2311,12 +2311,14 @@ class Acorn:
                 # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
                 # add keep proofs back into selected keyset proofs
                 if payment_json.get("paid",False):        
-                    self.logger.info(f"lightning payment ok")
+                    self.logger.info(f"Lightning payment ok")
                 else:
                     self.logger.info(f"lighting payment did no go through")
+                    raise Exception(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
+                    # The following code is not necessary
                     # Add back in spend proofs
-                    for each in spend_proofs:   
-                        proofs_from_keyset.append(each)
+                    # for each in spend_proofs:   
+                    #    proofs_from_keyset.append(each)
                 
 
                 for each in keep_proofs:
@@ -2346,7 +2348,7 @@ class Acorn:
             raise Exception(f"Error in pay_multi {e}")
         finally:
             await self.release_lock()
-            print("all is good!")
+            # print("all is good!")
             
         return msg_out, final_fees
 
@@ -3783,7 +3785,7 @@ class Acorn:
 
         try:
             await self.acquire_lock()
-            print("issue token")
+            # print("issue token")
             available_amount = 0
             chosen_keyset = None
             keyset_proofs,keyset_amounts = self._proofs_by_keyset()
@@ -3791,18 +3793,21 @@ class Acorn:
                 available_amount += keyset_amounts[each]
             
             
-            print("available amount:", available_amount)
+            
+            self.logger.debug(f"available amount {available_amount} ")
             if available_amount < amount:
                 msg_out = "insufficient balance. you need more funds!"
                 return msg_out
             
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                print(key, keyset_amounts[key])
+                
+                self.logger.debug(f"{key} {keyset_amounts[key]}")
                 if keyset_amounts[key] >= amount:
                     chosen_keyset = key
                     break
             if not chosen_keyset:
-                print("insufficient balance in any one keyset, you need to swap!") 
+               
+                self.logger.error("insufficient balance in any one keyset, you need to swap!")
                 return   
             
             proofs_to_use = []
@@ -3853,7 +3858,7 @@ class Acorn:
             self.proofs = post_payment_proofs
             await self._async_delete_proof_events()
             
-            
+            #TODO change this to write_proogs
             await self.add_proofs_obj(post_payment_proofs)
             
             await self._load_proofs()
