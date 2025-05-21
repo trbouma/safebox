@@ -65,6 +65,48 @@ class Settings(BaseSettings):
         env_file = '.env'
         env_file_encoding ='utf-8'
         case_sensitive = True
+    EMERGENCY_INFO: str =  """
+Medical Emergency Card
+
+Full Name:  
+    _________________________________
+
+Date of Birth:  
+    _________________________________
+
+Emergency Contact(s):  
+    - Name: _________________________  
+      Phone: ________________________
+    - Name: _________________________  
+      Phone: ________________________
+
+Medical Conditions:  
+    _________________________________  
+    _________________________________
+
+Allergies (medications, food, etc.):  
+    _________________________________  
+    _________________________________
+
+Medications (include dosage if known):  
+    _________________________________  
+    _________________________________
+
+Primary Physician:  
+    Name: ___________________________  
+    Phone: __________________________
+
+Blood Type:  
+    _________________________________
+
+Health Insurance Info (optional):  
+    Provider: _______________________  
+    Policy #: _______________________
+
+Other Notes (e.g., pacemaker, mobility needs):  
+    _________________________________  
+    _________________________________
+"""
 
 class modeEventKind(BaseModel):
     mode: str

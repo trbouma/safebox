@@ -208,8 +208,10 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=LOGGING_LEVEL)
     nsec_new = await acorn_obj.create_instance()
     await acorn_obj.load_data()
+
+    medical_emergency_info = settings.EMERGENCY_INFO
     
-    await acorn_obj.put_record("medical emergency card", "Please complete!")
+    await acorn_obj.put_record("medical emergency card", medical_emergency_info)
     profile_info = acorn_obj.get_profile()
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
@@ -291,7 +293,10 @@ async def onboard_friend(   request: Request,
     nsec_hash = password_hasher.hash(nsec_new)
     nsec_verify = password_hasher.verify(nsec_hash,nsec_new)
     print(f"nsec hash is: {nsec_hash} {nsec_verify}")
-    await acorn_obj.put_record("medical emergency card", "Please complete!")
+
+    medical_emergency_info = settings.EMERGENCY_INFO
+
+    await acorn_obj.put_record("medical emergency card", medical_emergency_info)
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
     

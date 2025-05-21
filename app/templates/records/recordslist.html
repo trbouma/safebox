@@ -168,7 +168,7 @@ async function selectRecordKind() {
 
     <button onclick="gotoHome()">Home</button>
     <br><br>
-    Click on the records you wish to view.
+    Click on the record you wish to {{"present" if record_select else "view"}}.
    
     <br><br>
     <select id="select_record_kind" onchange="selectRecordKind()"">
