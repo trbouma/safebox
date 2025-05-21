@@ -282,7 +282,9 @@ def deposit(amount: int, mint:str):
         click.echo("Loop completed.")
 
     click.echo(f"Done! {lninvoice}")
-    asyncio.run(acorn_obj.add_tx_history(tx_type='C',amount=amount))
+    print(f"{amount} {type(amount)}")
+    # No idea why amount has become str - investigate
+    asyncio.run(acorn_obj.add_tx_history(tx_type='C',amount=int(amount), comment="safebox deposit"))
     # asyncio.run(acorn_obj.get_tx_history())
  
 @click.command("proofs", help="list proofs") 

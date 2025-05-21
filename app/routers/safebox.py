@@ -259,6 +259,7 @@ async def ln_pay_address(   request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
     tendered = ""
+    status = "OK"
 
     if ln_pay.currency == "SAT":
         sat_amount = int(ln_pay.amount)
@@ -294,11 +295,11 @@ async def ln_pay_address(   request: Request,
                                         comment=ln_pay.comment + tendered, 
                                         fees=final_fees)
     except Exception as e:
-        return {f"detail": f"error {e}"}
+        return {"status": "ERROR", f"detail": f"error {e}"}
 
 
 
-    return {"detail": msg_out}
+    return {"status": "OK", "detail": msg_out}
 
 @router.post("/swap", tags=["protected"])
 async def ln_swap(   request: Request, 
@@ -307,7 +308,8 @@ async def ln_swap(   request: Request,
     msg_out ="No error"
 
     try:
-       msg_out = await acorn_obj.swap_multi_each()
+       # msg_out = await acorn_obj.swap_multi_each()
+       msg_out = await acorn_obj.swap_multi_consolidate()
        pass
  
     except Exception as e:

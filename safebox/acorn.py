@@ -207,11 +207,12 @@ class Acorn:
                 if each[0] == "user_record":
                     self.user_records.append(each[1])   
         except Exception as e:
-            await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
-            # raise Exception(f"No wallet data on {self.home_relay}")
+            # await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
+            raise Exception(f"No wallet data on {self.home_relay}")
 
 
         await self._load_proofs()
+        
         return
     
     async def set_owner_data(self, npub:str = None, local_currency=None):
@@ -1621,16 +1622,23 @@ class Acorn:
         lninvoice = None
         #FIXME figure out the prefit
         mint = mint.replace("https://","")
-        while time() < end_time:
+        try:
+            while time() < end_time:
+                
+                self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
+                success, lninvoice = await self.check_quote(quote=quote, amount=amount,mint=mint)
+                if success:
+                    self.logger.debug("quote is paid!")
+                    break
+                sleep(3)  # Sleep for 3 seconds
             
-            self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
-            success, lninvoice = await self.check_quote(quote=quote, amount=amount,mint=mint)
-            if success:
-                self.logger.debug("quote is paid!")
-                break
-            sleep(3)  # Sleep for 3 seconds
-        
-        self.logger.debug("polling done!")
+            self.logger.debug("polling done!")
+
+            if time() > end_time:
+                raise Exception(f"Polling has timed out!"
+                                )
+        except Exception as e:
+            raise Exception(f"Error in poll_for_payment {e}")
         return success, lninvoice
         
     
@@ -1881,6 +1889,7 @@ class Acorn:
             'authors': [self.pubkey_hex],
             'kinds': [7375]
         }]
+       
         content = await self._async_load_proofs(FILTER)
         
         return content
@@ -1910,7 +1919,7 @@ class Acorn:
                         
                     # proof = Proof(**each_content)
                     nip60_proofs = NIP60Proofs(**content_json)
-                    self.logger.debug(f"load nip60 proofs")
+                    # self.logger.debug(f"load nip60 proofs")
                     self.known_mints[nip60_proofs.proofs[0]['id']]= nip60_proofs.mint
                     for each in nip60_proofs.proofs:
                         self.proofs.append(each)
@@ -3044,7 +3053,7 @@ class Acorn:
             await self.release_lock()
     
         
-        return "multi swap ok"
+        return f"multi swap ok  {len(self.proofs)} proofs in {self.events} proof events"
 
     async def swap_multi_each(self):
         #TODO this is used before consolidate to throw out any dups or doublespend. Fix events
