@@ -3772,96 +3772,104 @@ class Acorn:
     async def accept_token(self,cashu_token: str):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
-        msg_out = await self.nip17_accept(cashu_token)
+        msg_out, token_accepted_amount = await self.nip17_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-        return msg_out
+        return msg_out, token_accepted_amount
 
         
 
 
     async def issue_token(self, amount:int):
-        print("issue token")
-        available_amount = 0
-        chosen_keyset = None
-        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
-        for each in keyset_amounts:
-            available_amount += keyset_amounts[each]
-        
-        
-        print("available amount:", available_amount)
-        if available_amount < amount:
-            msg_out = "insufficient balance. you need more funds!"
-            return msg_out
-        
-        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            print(key, keyset_amounts[key])
-            if keyset_amounts[key] >= amount:
-                chosen_keyset = key
-                break
-        if not chosen_keyset:
-            print("insufficient balance in any one keyset, you need to swap!") 
-            return   
-        
-        proofs_to_use = []
-        proof_amount = 0
-        proofs_from_keyset = keyset_proofs[chosen_keyset]
-        while proof_amount < amount:
-            pay_proof = proofs_from_keyset.pop()
-            proofs_to_use.append(pay_proof)
-            proof_amount += pay_proof.amount
-            print(f"pop proof amount of {pay_proof.amount} from {chosen_keyset}")
+
+        try:
+            await self.acquire_lock()
+            print("issue token")
+            available_amount = 0
+            chosen_keyset = None
+            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+            for each in keyset_amounts:
+                available_amount += keyset_amounts[each]
             
-        print("proofs to use:", proofs_to_use)
-        print("remaining", proofs_from_keyset)
-        print("chosen keyset for payment", chosen_keyset)
-        
-        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
-        
-
-        print("proofs remaining:", proofs_remaining)
-        print(f"amount needed: {amount}")
-        # Implement from line 824
-        sum_proofs =0
-        spend_proofs = []
-        keep_proofs = []
-        for each in proofs_remaining:
             
-            sum_proofs += each.amount
-            if sum_proofs <= amount:
-                spend_proofs.append(each)
-                self.logger.debug(f"pay with {each.amount}, {each.secret}")
-            else:
-                keep_proofs.append(each)
-                self.logger.debug(f"keep {each.amount}, {each.secret}")
-        self.logger.debug(f"spend proofs: {spend_proofs}") 
-        self.logger.debug(f"keep proofs: {keep_proofs}")
+            print("available amount:", available_amount)
+            if available_amount < amount:
+                msg_out = "insufficient balance. you need more funds!"
+                return msg_out
+            
+            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                print(key, keyset_amounts[key])
+                if keyset_amounts[key] >= amount:
+                    chosen_keyset = key
+                    break
+            if not chosen_keyset:
+                print("insufficient balance in any one keyset, you need to swap!") 
+                return   
+            
+            proofs_to_use = []
+            proof_amount = 0
+            proofs_from_keyset = keyset_proofs[chosen_keyset]
+            while proof_amount < amount:
+                pay_proof = proofs_from_keyset.pop()
+                proofs_to_use.append(pay_proof)
+                proof_amount += pay_proof.amount
+                print(f"pop proof amount of {pay_proof.amount} from {chosen_keyset}")
+                
+            print("proofs to use:", proofs_to_use)
+            print("remaining", proofs_from_keyset)
+            print("chosen keyset for payment", chosen_keyset)
+            
+            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+            
 
-        for each in keep_proofs:
-            proofs_from_keyset.append(each)
-        # print("self proofs", self.proofs)
-        # need to reassign back into 
-        keyset_proofs[chosen_keyset]= proofs_from_keyset
-        # OK - now need to put proofs back into a flat lish
-        post_payment_proofs = []
-        for key in keyset_proofs:
-            each_proofs = keyset_proofs[key]
-            for each_proof in each_proofs:
-                post_payment_proofs.append(each_proof)
-        self.proofs = post_payment_proofs
-        await self._async_delete_proof_events()
-        
-        
-        await self.add_proofs_obj(post_payment_proofs)
-        
-        await self._load_proofs()
+            print("proofs remaining:", proofs_remaining)
+            print(f"amount needed: {amount}")
+            # Implement from line 824
+            sum_proofs =0
+            spend_proofs = []
+            keep_proofs = []
+            for each in proofs_remaining:
+                
+                sum_proofs += each.amount
+                if sum_proofs <= amount:
+                    spend_proofs.append(each)
+                    self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                else:
+                    keep_proofs.append(each)
+                    self.logger.debug(f"keep {each.amount}, {each.secret}")
+            self.logger.debug(f"spend proofs: {spend_proofs}") 
+            self.logger.debug(f"keep proofs: {keep_proofs}")
+
+            for each in keep_proofs:
+                proofs_from_keyset.append(each)
+            # print("self proofs", self.proofs)
+            # need to reassign back into 
+            keyset_proofs[chosen_keyset]= proofs_from_keyset
+            # OK - now need to put proofs back into a flat lish
+            post_payment_proofs = []
+            for key in keyset_proofs:
+                each_proofs = keyset_proofs[key]
+                for each_proof in each_proofs:
+                    post_payment_proofs.append(each_proof)
+            self.proofs = post_payment_proofs
+            await self._async_delete_proof_events()
+            
+            
+            await self.add_proofs_obj(post_payment_proofs)
+            
+            await self._load_proofs()
 
 
-        
-        tokens = TokenV3Token(mint=self.known_mints[chosen_keyset],
-                                        proofs=spend_proofs)
-        
-        v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
-        # print("proofs remaining:", proofs_remaining)
+            
+            tokens = TokenV3Token(mint=self.known_mints[chosen_keyset],
+                                            proofs=spend_proofs)
+            
+            v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
+            # print("proofs remaining:", proofs_remaining)
+        except Exception as e:
+            self.logger(f"issue token error {e}")
+            raise Exception(f"issue token error {e}")
+        finally:
+            await self.release_lock()
         
         return v3_token.serialize()   
 
@@ -4525,73 +4533,79 @@ class Acorn:
         return payment_request
 
     async def nip17_accept(self, token:str):
-        # self.accept_token(token)
-        # print("accept token")
-        headers = { "Content-Type": "application/json"}
-        token_amount =0
-        receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
+        try:
+            # self.accept_token(token)
+            # print("accept token")
+            await self.acquire_lock()
+            headers = { "Content-Type": "application/json"}
+            token_amount =0
+            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
+            old_balance = self.balance
 
-        if token[:6] == "cashuA":
+            if token[:6] == "cashuA":
 
-            try:
+                
                 token_obj = TokenV3.deserialize(token)
-            except:
-                raise ValueError("bad token")
-            
-                    # need to inspect if a new mint
+                
+                
+                        # need to inspect if a new mint
 
-            proofs=[]
-            proof_obj_list: List[Proof] = []
-            for each in token_obj.token: 
-                # print(each.mint)
-                for each_proof in each.proofs:
-                    
-                    proofs.append(each_proof.model_dump())
-                    proof_obj_list.append(each_proof)
-                    id = each_proof.id
-                    self.known_mints[id]=each.mint
-                    # print(id, each.mint)
-
-        
-
-
-        elif token[:6] == "cashuB":
-                token_obj = TokenV4.deserialize(token)
-                # print(token_obj)
                 proofs=[]
                 proof_obj_list: List[Proof] = []
-                for each_proof in token_obj.proofs:
-                    proofs.append(each_proof.model_dump())
-                    proof_obj_list.append(each_proof)
-                    id = each_proof.id
-                self.known_mints[id]=token_obj.mint
+                for each in token_obj.token: 
+                    # print(each.mint)
+                    for each_proof in each.proofs:
+                        
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                        self.known_mints[id]=each.mint
+                        # print(id, each.mint)
 
-        
-        swap_proofs = self.swap_proofs(proof_obj_list)
+            
 
-        try:
+
+            elif token[:6] == "cashuB":
+                    token_obj = TokenV4.deserialize(token)
+                    # print(token_obj)
+                    proofs=[]
+                    proof_obj_list: List[Proof] = []
+                    for each_proof in token_obj.proofs:
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                    self.known_mints[id]=token_obj.mint
+
+            
+            swap_proofs = self.swap_proofs(proof_obj_list)
+
+            
             await self.add_proofs_obj(swap_proofs)
+           
+
+
+            FILTER = [{
+                'limit': RECORD_LIMIT,
+                'authors': [self.pubkey_hex],
+                'kinds': [7375]
+            }]
+            
+            await self._async_load_proofs(FILTER)
+
+            #TODO don't do this every time - only when a new mint shows up
+            # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
+            # await self._async_swap()
+            token_accepted_amount = self.balance - old_balance
+            
+            self.logger.debug(f"Proofs are added! New balance is: {self.balance}")
         except Exception as e:
-            self.logger.debug(f"Proof not accepted {e}")
-            return f"Proof not accepted. Doublespent?"
-
-        # await self._async_add_proofs_obj(swap_proofs)
-
-
-        FILTER = [{
-            'limit': RECORD_LIMIT,
-            'authors': [self.pubkey_hex],
-            'kinds': [7375]
-        }]
+            self.logger.error(f"ecash accept error {e}")  
+            raise Exception(f"ecash accept error {e}")
         
-        await self._async_load_proofs(FILTER)
+        finally:
+            await self.release_lock()  
 
-        #TODO don't do this every time - only when a new mint shows up
-        # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-        # await self._async_swap()
-        self.logger.debug(f"Proofs are added! New balance is: {self.balance}")
-        
-        return f'Successfully accepted! New balance is {self.balance}'
+        return f'Successfully accepted {token_accepted_amount} sats! New balance is {self.balance} sats', token_accepted_amount
 
         
 
