@@ -1017,14 +1017,11 @@ class Acorn:
             tendered_amount = amount
         created_at = int(datetime.now().timestamp())
 
-        # Calculate current balance
-        # If D it is already recorde and tallied in balance
-        # If C it has been recorded as proof but not yet tallied as balance so add amount
+        # Calculate current balance - need to refresh data
+
+        await self.load_data()
         
-        if tx_type == 'D':
-            current_balance= self.balance
-        else:
-            current_balance=self.balance+amount
+
 
         tx_history = TxHistory( create_time=created_at,
                                 tx_type=tx_type,
@@ -1033,7 +1030,7 @@ class Acorn:
                                 tendered_amount=tendered_amount,
                                 tendered_currency=tendered_currency,
                                 fees=fees,
-                                current_balance=current_balance 
+                                current_balance=self.balance 
                                 )
         tx_history_str = json.dumps(tx_history.model_dump())
         tx_history_encrypt = my_enc.encrypt(tx_history_str,to_pub_k=self.pubkey_hex)
