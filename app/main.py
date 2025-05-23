@@ -66,16 +66,22 @@ async def lifespan(app: FastAPI):
     global listener_task
     lock_path = "/tmp/monstr_listener.lock"
     file_lock = FileLock(lock_path)
-
-    have_lock = False
-    try:
-        file_lock.acquire(timeout=0.1)  # <-- synchronous, blocks here
-        have_lock = True
-        print(f"[PID {os.getpid()}] Acquired lock. Starting listener.")
-        url = "wss://relay.getsafebox.app"
-        listener_task = asyncio.create_task(listen_notes(url))
-    except Timeout:
-        print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
+    
+    # have_lock = False
+    # try:
+    #    file_lock.acquire(timeout=0.1)  # <-- synchronous, blocks here
+    #    have_lock = True
+    #    print(f"[PID {os.getpid()}] Acquired lock. Starting listener.")
+    #    url = "wss://relay.getsafebox.app"
+    #     listener_task = asyncio.create_task(listen_notes(url))
+    # except Timeout:
+    #    print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
+    
+    # The single event handling is now done in nwc.py, so all listeners can be running
+    print(f"[PID {os.getpid()}] Starting listener.")
+    url = "wss://relay.getsafebox.app"
+    listener_task = asyncio.create_task(listen_notes(url))
+    
     yield
 
     if listener_task:

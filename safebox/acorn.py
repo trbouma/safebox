@@ -2387,10 +2387,11 @@ class Acorn:
             await self.release_lock()
             final_fees = 0
             msg_out = f"There is an error in the payment. Did it go through? {e}"
+            print(msg_out)
             # raise Exception(f"Error in pay_multi {e}")
         finally:
             await self.release_lock()
-            # print("all is good!")
+            print("all done pay_multi")
             
         return msg_out, final_fees
 
@@ -2525,6 +2526,11 @@ class Acorn:
                             }
             response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
             self.logger.debug(f"post melt response: {response.json()}")
+            # check reponse for error
+            # print(f"mint response: {response.json()}")
+            response_json = response.json()
+            if response_json.get('code', None) == 11000:
+                raise Exception("mint quote already paid!")
             post_melt_response = PostMeltQuoteResponse(**response.json())
             self.logger.debug(f"mint response: {post_melt_response}")
             proofs_to_use = []
@@ -2645,10 +2651,10 @@ class Acorn:
             self.logger.error(f"Error in pay_multi_invoice to address {e}")
             # raise Exception(f"Error There is problem with the invoice payment {e}")
             final_fees = 0
-            msg_out = f"There is a problem paying the invoice. Already paid? {e}"
+            msg_out = f"There is a problem paying the invoice. {e}"
         finally:
             await self.release_lock()
-            print("all done!")
+            print("all done pay_multi_invoice!")
            
         
 

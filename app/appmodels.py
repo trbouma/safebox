@@ -43,7 +43,11 @@ class CurrencyRate(SQLModel, table=True):
     refresh_time: Optional[datetime] = None
     fractional_unit: Optional[str] = None
     number_to_base: Optional[int] = None
-    
+
+class NWCEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    event_id: str = Field(unique=True, nullable=False)
+    # Add more fields below as needed for your use case    
 
 class lnPayAddress(BaseModel):
     address: str 

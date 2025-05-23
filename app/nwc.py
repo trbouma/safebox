@@ -14,9 +14,11 @@ from safebox.acorn import Acorn
 import signal
 import json
 import bolt11
+from typing import Optional
 
-from app.appmodels import RegisteredSafebox
+from app.appmodels import RegisteredSafebox, NWCEvent
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlalchemy.exc import IntegrityError
 
 import os
 from app.config import Settings
@@ -29,6 +31,25 @@ decryptor = NIP4Encrypt(k)
 
 engine = create_engine(settings.DATABASE)
 
+def add_nwc_event_if_not_exists(event_id: str) -> bool:
+    with Session(engine) as session:
+        # Check if the event_id already exists
+        statement = select(NWCEvent).where(NWCEvent.event_id == event_id)
+        existing_event: Optional[NWCEvent] = session.exec(statement).first()
+        
+        if existing_event:
+            return False  # Event already exists
+
+        # If not found, add the new event
+        new_event = NWCEvent(event_id=event_id)
+        session.add(new_event)
+
+        try:
+            session.commit()
+            return True
+        except IntegrityError:
+            session.rollback()
+            return False
 
 def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
    
@@ -55,7 +76,7 @@ async def nwc_pay_invoice(safebox_found: RegisteredSafebox, payinstruction_obj):
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
-            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment="nwc zap", fees=final_fees)
+            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment=msg_out, fees=final_fees)
             
         except Exception as e:
             # raise Exception(f"Error {e}")
@@ -70,13 +91,18 @@ async def listen_notes(url):
     await c.wait_connect()
 
     def my_handler(the_client: Client, sub_id: str, evt: Event):
-        print(evt.created_at, evt.tags)
+        
         try:
             
             
-            print(f"we got the nwc request {evt.p_tags}")
-            # check to see if already handled
+           
             
+            if add_nwc_event_if_not_exists(event_id=evt.id):
+                
+                print(f"we have a new event! {evt.created_at}, {evt.tags}")
+            else:
+                print("this event has been handled")
+                return
             
             safebox_npub = hex_to_npub(evt.p_tags[0])
             
