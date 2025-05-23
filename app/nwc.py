@@ -58,7 +58,8 @@ async def nwc_pay_invoice(safebox_found: RegisteredSafebox, payinstruction_obj):
             await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment="nwc zap", fees=final_fees)
             
         except Exception as e:
-            raise Exception(f"Error {e}")
+            # raise Exception(f"Error {e}")
+            print(f"Error {e}")
            
 
 
@@ -74,6 +75,9 @@ async def listen_notes(url):
             
             
             print(f"we got the nwc request {evt.p_tags}")
+            # check to see if already handled
+            
+            
             safebox_npub = hex_to_npub(evt.p_tags[0])
             
             safebox_found = nwc_db_lookup_safebox(safebox_npub)

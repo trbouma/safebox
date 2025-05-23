@@ -523,7 +523,8 @@ class Acorn:
                 
             }]
 
-        print(f"kind: {record_kind} relays to use: {relays_to_use}")
+        # print(f"kind: {record_kind} relays to use: {relays_to_use}")
+        self.logger.debug(f"kind: {record_kind} relays to use: {relays_to_use}")
         async with ClientPool(relays_to_use) as c:  
             events = await c.query(FILTER)           
         
@@ -1567,6 +1568,37 @@ class Acorn:
        
         return await self._check_quote(quote, amount,mint)
     
+    async def async_deposit(self, amount:int, mint:str = None)->cliQuote:
+        
+        #FIXME parameter passing with scheme
+        if mint:
+            mint = mint.replace("https://","")
+            url = f"https://{mint}/v1/mint/quote/bolt11"
+        else:
+            url = f"{self.home_mint}/v1/mint/quote/bolt11"
+       
+        headers = { "Content-Type": "application/json"}
+        mint_request = mintRequest(amount=amount)
+        mint_request_dump = mint_request.model_dump()
+        payload_json = mint_request.model_dump_json()
+        response = requests.post(url, data=payload_json, headers=headers)
+        # print(response.json())
+        mint_quote = mintQuote(**response.json())
+        # print(mint_quote)
+        invoice = response.json()['request']
+        quote = response.json()['quote']
+        print(f"invoice: {invoice}") 
+        # print(self.powers_of_2_sum(int(amount)))
+        # add quote as a replaceable event
+
+        wallet_quote_list =[]
+        
+        success, lninvoice = await self.poll_for_payment(quote=quote, amount=amount, mint=url)
+
+        return success, lninvoice 
+        
+       
+    
     def deposit(self, amount:int, mint:str = None)->cliQuote:
         
         #FIXME parameter passing with scheme
@@ -2346,12 +2378,16 @@ class Acorn:
                 self.proofs = post_payment_proofs
             
             
-            await self.write_proofs()
+            
             final_fees = amount_needed - amount
             msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
             self.logger.info(msg_out)
+            await self.write_proofs()
         except Exception as e:
-            raise Exception(f"Error in pay_multi {e}")
+            await self.release_lock()
+            final_fees = 0
+            msg_out = f"There is an error in the payment. Did it go through? {e}"
+            # raise Exception(f"Error in pay_multi {e}")
         finally:
             await self.release_lock()
             # print("all is good!")
@@ -2599,18 +2635,23 @@ class Acorn:
             # asyncio.run(self._async_delete_proof_events())
             # self.add_proofs_obj(post_payment_proofs)
             # self._load_proofs()
+            
+            final_fees = amount_needed-ln_amount
+            msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful! \nYou have {self.balance} sats remaining."
+            self.logger.info(msg_out)
+            await self.write_proofs()
         except Exception as e:
+            await self.release_lock()
             self.logger.error(f"Error in pay_multi_invoice to address {e}")
-            raise Exception(f"Error There is problem with the invoice payment {e}")
+            # raise Exception(f"Error There is problem with the invoice payment {e}")
+            final_fees = 0
+            msg_out = f"There is a problem paying the invoice. Already paid? {e}"
         finally:
             await self.release_lock()
             print("all done!")
            
         
-        await self.write_proofs()
-        final_fees = amount_needed-ln_amount
-        msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful! \nYou have {self.balance} sats remaining."
-        self.logger.info(msg_out)
+
         return msg_out, final_fees
 
     async def delete_kind_events(self, record_kind:int):

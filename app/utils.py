@@ -956,7 +956,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
         receipt_tags.append(["description",json.dumps(nostr_obj)])
         receipt_tags.append(["bolt11", lninvoice])
 
-        # print(f"resulting: {receipt_tags} {zap_relays}")
+        print(f"resulting: {receipt_tags} {zap_relays}")
         # create zap receipt
         zap_receipt = Event(    kind=9735,
                                 pub_key= service_k.public_key_hex(),
@@ -970,7 +970,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
         async with ClientPool(zap_relays) as c:
             zap_receipt.sign(priv_key=service_k.private_key_hex())
             # print(f"zap receipt: {zap_receipt.is_valid()}")
-            # print(f"zap relays: {zap_relays}")
+            print(f"zap relays: {zap_relays}")
 
             c.publish(zap_receipt)
             # print("zap published!")

@@ -394,7 +394,7 @@ async def accept_ecash(   request: Request,
 @router.post("/invoice", tags=["protected"])
 async def ln_invoice_payment(   request: Request, 
                         ln_invoice: lnInvoice,
-                        access_token: str = Cookie(None)):
+                        acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
     if ln_invoice.currency == "SAT":
         sat_amount = int(ln_invoice.amount)
@@ -403,20 +403,12 @@ async def ln_invoice_payment(   request: Request,
         print(local_currency.currency_rate)
         sat_amount = int(ln_invoice.amount* 1e8 // local_currency.currency_rate)
     
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-
-        
-    except Exception as e:
-        return {f"status": "error {e}"}
     
 
-    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    await acorn_obj.load_data()
     cli_quote = acorn_obj.deposit(amount=sat_amount )   
 
 
-    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj, safebox_found=safebox_found,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
+    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
     
     return {"status": "ok", "invoice": cli_quote.invoice}
 

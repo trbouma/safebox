@@ -77,7 +77,7 @@ async def service_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amou
         session.commit()
     return
 
-async def invoice_poll_for_payment(acorn_obj: Acorn, safebox_found: RegisteredSafebox, quote: str, mint: str, amount: int ):
+async def invoice_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amount: int ):
     
     # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     
@@ -88,13 +88,10 @@ async def invoice_poll_for_payment(acorn_obj: Acorn, safebox_found: RegisteredSa
 
     await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment="lightning invoice")
     
-    
-    
-   
 
     # Update the cache amountt   
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.id ==safebox_found.id)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_update = safeboxes.first()
         safebox_update.balance = safebox_update.balance + amount
