@@ -2380,7 +2380,7 @@ class Acorn:
             
             
             final_fees = amount_needed - amount
-            msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful! \nYou have {self.balance} sats remaining."
+            msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful!"
             self.logger.info(msg_out)
             await self.write_proofs()
         except Exception as e:
@@ -2622,7 +2622,13 @@ class Acorn:
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
             response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
-            self.logger.debug(response.json())   
+            self.logger.debug(response.json())  
+            payment_json = response.json() 
+            if payment_json.get("paid",False):        
+                    self.logger.info(f"Lightning payment ok")
+            else:
+                self.logger.info(f"lighting payment did no go through")
+                raise Exception(f"Lightning payment not go through! Please try again.")
             # add keep proofs back into selected keyset proofs
             for each in keep_proofs:
                 proofs_from_keyset.append(each)
@@ -2643,7 +2649,7 @@ class Acorn:
             # self._load_proofs()
             
             final_fees = amount_needed-ln_amount
-            msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful! \nYou have {self.balance} sats remaining."
+            msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful!"
             self.logger.info(msg_out)
             await self.write_proofs()
         except Exception as e:
