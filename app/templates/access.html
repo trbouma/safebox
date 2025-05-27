@@ -632,10 +632,10 @@ function getInvoiceStatus(ln_invoice_status) {
     <br>
    
     <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
-    <select id="ln_select_currency" name="ln_select_currency">            
-      {% for entry in currencies %}
-      <option selected>SAT</option>   
-      <option >{{entry}}</option>         
+    <select id="ln_select_currency" name="ln_select_currency"> 
+      <option selected>SAT</option>            
+      {% for each in currencies %}     
+      <option >{{each}}</option>         
       {% endfor %}
     </select>
     <br><br>
