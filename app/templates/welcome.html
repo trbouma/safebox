@@ -27,11 +27,19 @@
                 <button type="submit">Login</button>
             </form>
         </p>
+        <hr>
             <form action="/onboard/website" method="POST">
                 <label for="invite_code">Invite Code:</label><br>
                 <input type="text" id="invite_code" name="invite_code" style="width: auto;" placeholder="Enter invite code" >
                 <br><br>    
+                <label>
+                    <input type="checkbox" id="non_custodial" name="non_custodial" value="true">
+                    I want a non-custodial private key (Danger!!!)
+                </label>
+                <br><br>
                 <button >Get SafeBox</button>
+                
+
             </form>
             <p>
             <a href="/recover">Recover</a>

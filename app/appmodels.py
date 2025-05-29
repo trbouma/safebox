@@ -15,16 +15,16 @@ class RegisteredSafebox(SQLModel, table=True):
     handle: str
     custom_handle: Optional[str] = Field(default=None,unique=True, nullable=True)
     npub: str
-    nsec: str
+    nsec: Optional[str] = Field(default=None, nullable=True)  # Made nullable
     home_relay: str 
     onboard_code: str 
-    access_key: str 
+    access_key: Optional[str] = Field(default=None, nullable=True)  # Made nullable 
     balance: int = 0
     owner: Optional[str] = None
     session_nonce: Optional[str] = None
     emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
     currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
-    nwc_secret: Optional[str] = None
+    
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

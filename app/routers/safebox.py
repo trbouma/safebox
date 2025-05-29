@@ -24,7 +24,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -407,8 +407,9 @@ async def ln_invoice_payment(   request: Request,
 
     cli_quote = acorn_obj.deposit(amount=sat_amount )   
 
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT))
 
-    task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
+    # task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
     
     return {"status": "ok", "invoice": cli_quote.invoice}
 

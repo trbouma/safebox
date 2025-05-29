@@ -28,6 +28,7 @@ from app.rates import refresh_currency_rates, init_currency_rates, get_online_cu
 
 from app.relay import run_relay
 from app.nwc import listen_nwc, listen_notes
+from safebox.acorn import Acorn
 
 lock_path = "/tmp/monstr_listener.lock"
 listener_task = None
@@ -55,6 +56,10 @@ async def lifespan(app: FastAPI):
     except:
         pass
     
+ 
+
+   
+
     asyncio.create_task(run_relay())
     if settings.NWC_SERVICE:
         pass
@@ -78,7 +83,7 @@ async def lifespan(app: FastAPI):
     #    print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
     
     # The single event handling is now done in nwc.py, so all listeners can be running
-    print(f"[PID {os.getpid()}] Starting listener.")
+    print(f"[PID {os.getpid()}] Starting nwc listener.")
     url = "wss://relay.getsafebox.app"
     listener_task = asyncio.create_task(listen_notes(url))
     

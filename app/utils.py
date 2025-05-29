@@ -84,7 +84,7 @@ def authenticate_user(username: str, password: str):
 async def fetch_safebox(access_token) -> RegisteredSafebox:
     k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
     my_enc = NIP44Encrypt(k.private_key_bech32())
-    
+    non_custodial = False
 
     if not access_token:
         raise HTTPException(status_code=401, detail="Missing access token")
@@ -92,6 +92,10 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
         decrypt_access_token = my_enc.decrypt(access_token, k.public_key_hex())
         payload = jwt.decode(decrypt_access_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
         access_key = payload.get("sub")
+        
+
+
+
         if not access_key:
             raise HTTPException(status_code=401, detail="Invalid token")
     except jwt.ExpiredSignatureError:
@@ -99,14 +103,31 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    print(access_key)
+    print(f"from access_token {access_key}")
+    try:
+        k_from_token = Keys(priv_k=access_key)
+        print(f"we have a private key in the access token! The public key is: {k_from_token.public_key_bech32()}")
+        non_custodial = True
+    except:
+        print("just an ordinary access key")
+
     # Token is valid, now get the safebox
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        if non_custodial:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub== k_from_token.public_key_bech32())
+        else:    
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
+       
         if safebox_found:
             handle = safebox_found.handle
+            if non_custodial:
+                print("non custodial set service nsec and home relay")
+                safebox_found.nsec = k_from_token.private_key_bech32()
+                safebox_found.home_relay = settings.HOME_RELAY
+
         else:
 
             raise HTTPException(status_code=404, detail=f"{access_key} not found")

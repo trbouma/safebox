@@ -224,10 +224,11 @@ def get_balance():
 
 @click.command("profile", help="get profile")
 @click.option('--name', '-n', default="wallet", help=HOME_RELAY_HELP)
-def get_profile(name):
+@click.option("--force","-f", is_flag=True, show_default=True, default=False, help="Force creation of profile.")
+def get_profile(name, force):
     
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
-    asyncio.run(acorn_obj.load_data())
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data(force_profile_creation=force))
     click.echo(acorn_obj.get_profile(name))
 
 @click.command("setowner", help="get profile")
@@ -511,7 +512,7 @@ def send(amount,nrecipient: str, relays:str, comment:str):
     
     click.echo(f"Send to: {amount} to {nrecipient} via {ecash_relays}")
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
-    out_msg = acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment)
+    out_msg = asyncio.run(acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment))
     click.echo(out_msg)
 
 @click.command("dm", help="Send message to nip05 address or npub")
@@ -531,6 +532,25 @@ def dm_recipient(nrecipient: str, message: str, relays:str):
     asyncio.run(acorn_obj.load_data())
     msg_out = asyncio.run(acorn_obj.secure_dm(nrecipient=nrecipient,message=message,dm_relays=dm_relays))
     click.echo(msg_out)
+
+@click.command("stx", help="Send secure transmitta to nip05 address or npub")
+@click.argument('nrecipient', default=None)
+@click.argument('message', default="hello")
+@click.option('--relays','-r', default=HOME_RELAY)
+@click.option('--kind','-k', default=1059)
+def stx_recipient(nrecipient: str, message: str, relays:str, kind:int):
+    dm_relays = []
+
+   
+    for each in relays.split(","):
+        each = "wss://" + each if not each.startswith("wss://") else each
+        dm_relays.append(each)
+    
+    click.echo(f"Send: {message} to {nrecipient} via {dm_relays}")
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    asyncio.run(acorn_obj.load_data())
+    msg_out = asyncio.run(acorn_obj.secure_transmittal(nrecipient=nrecipient,message=message,dm_relays=dm_relays,kind=kind))
+    click.echo(msg_out)    
 
 @click.command("run", help='run as a service')
 @click.option('--relays','-r', default=HOME_RELAY)
@@ -613,6 +633,7 @@ cli.add_command(send)
 cli.add_command(recover)
 cli.add_command(set_owner)
 cli.add_command(dm_recipient)
+cli.add_command(stx_recipient)
 cli.add_command(run)
 
 

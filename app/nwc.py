@@ -90,6 +90,8 @@ async def listen_notes(url):
     asyncio.create_task(c.run())
     await c.wait_connect()
 
+    print(f"listening for nwc at: {url}")
+
     def my_handler(the_client: Client, sub_id: str, evt: Event):
         
         try:

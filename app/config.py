@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30
+    LOGGING_LEVEL: int = 10
     SUPPORTED_CURRENCIES: List =['CAD','USD','EUR','GBP','JPY','INR','CHF','AUD']
     BRANDING: str = "Get SafeBox"
     BRANDING_MESSAGE: str = "Control your personal funds and data."
@@ -56,7 +57,8 @@ class Settings(BaseSettings):
                             [34011, "Immunization Records"],
                             [34012, "Educational Diplomas"],
                             [34013, "Official Documentation"],
-                            [34014, "Insurance"]
+                            [34014, "Insurance"],
+                            [34015, "Recipes"]
 
 
                         ]

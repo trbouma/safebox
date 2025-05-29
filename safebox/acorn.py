@@ -164,8 +164,8 @@ class Acorn:
         
         return None
    
-    async def load_data(self):
-        self.logger.debug("load data")
+    async def load_data(self, force_profile_creation: bool=False):
+        self.logger.debug(f"load data. Force profile creation {force_profile_creation}")
 
         try:
 
@@ -208,7 +208,12 @@ class Acorn:
                     self.user_records.append(each[1])   
         except Exception as e:
             # await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
-            raise Exception(f"No wallet data on {self.home_relay}")
+            if force_profile_creation:
+                print("we are going to create a profile!")
+                await self.create_instance(keepkey=True)
+                
+            else:
+                raise Exception(f"No wallet data on {self.home_relay}!!!")
 
 
         await self._load_proofs()
@@ -410,7 +415,36 @@ class Acorn:
             # await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
             await self.set_wallet_config()
         else:
-            #keepkey = true
+            #keepkey = true # we already have a private key
+            # need to check if a profile exists, if not create one
+            try:
+            
+                wallet_config= await self.get_wallet_config()
+                if  wallet_config:
+                    return self.privkey_bech32
+                else:
+                    seed_phrase = mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))
+                    nut_key = Keys()
+                    self.acorn_tags = [ [ "balance", "0", "sat" ],
+                                [ "privkey", nut_key.private_key_hex() ], 
+                                [ "mint", self.mints[0]],
+                                [ "name", name ],
+                                ["seedphrase",seed_phrase],
+                                ["owner",self.pubkey_bech32],
+                                ["local_currency", self.local_currency]
+                            ]
+                    self.handle = generate_name_from_hex(self.pubkey_hex)
+                    access_key_digest.update(self.privkey_hex.encode())
+                    access_key_hash = access_key_digest.hexdigest()
+                    self.access_key = generate_access_key_from_hex(access_key_hash)
+                    self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
+                    pass
+                    await self.set_wallet_config()
+                    
+
+
+            except Exception as e:   
+                print(f"There is no profile! Error {e}")  
 
             pass
         return self.privkey_bech32
@@ -734,7 +768,7 @@ class Acorn:
            
             return posts
 
-    def send_ecash_dm(self,amount: int, nrecipient: str, ecash_relays:List[str], comment: str ="Sent!"):
+    async def send_ecash_dm(self,amount: int, nrecipient: str, ecash_relays:List[str], comment: str ="Sent!"):
         relays = []
         try:
             if '@' in nrecipient:
@@ -746,13 +780,13 @@ class Acorn:
         except:
             return "error"
         try:
-            token_amount = self.issue_token(amount=amount)
+            token_amount = await self.issue_token(amount=amount)
             token_msg = comment +"\n\n" + token_amount
         except:
             return "insufficient funds"
         
         print(f"sending via {ecash_relays}")
-        out_msg = self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays)
+        out_msg = await self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays)
         # out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
     
@@ -1294,7 +1328,7 @@ class Acorn:
         except:
             return False
 
-    async def acquire_lock(self, timeout=30):
+    async def acquire_lock(self, timeout=10):
         loop_count = 0
         lock_value = await self.get_wallet_info(label="lock")
 
@@ -1309,7 +1343,9 @@ class Acorn:
                 await asyncio.sleep(1)
                 loop_count +=1
                 if loop_count > timeout:
-                    raise Exception(f"Could not acquire lock after {timeout} attempts")
+                    print("we are going to seize the lock!")
+                    break
+                    # raise Exception(f"Could not acquire lock after {timeout} attempts")
                 lock_value = await self.get_wallet_info(label="lock")
                 print(f"{lock_value} attempt {loop_count}")
                 if lock_value.upper().strip() != 'TRUE':
@@ -1561,12 +1597,40 @@ class Acorn:
         return True
 
     async def check_quote(self, quote:str, amount:int, mint:str = None):
-        print(f"check quote {quote}")
+        print(f"check quote: {quote}")
         
-        # return "check_quote"
+        
+
+        success_mint = True  
+        lninvoice = None  
+          
+        if mint:
+            url = f"https://{mint}/v1/mint/quote/bolt11/{quote}"
+        else:
+             url = f"{self.home_mint}/v1/mint/quote/bolt11/{quote}" 
+
+        self.logger.debug(f"mint quote: {url}")
+
+        headers = { "Content-Type": "application/json"}
+        response = requests.get(url, headers=headers)
+           
+        mint_quote = mintQuote(**response.json())
+        if mint_quote.paid == True:
+                print("let's to do the mint!")
+                success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
+                lninvoice = mint_quote.request
+
+                    
+                    
+                # return mint_quote.paid
+        else:
+                success_mint = False
+      
+
+        return success_mint, lninvoice
         
        
-        return await self._check_quote(quote, amount,mint)
+        # return await self._check_quote(quote, amount,mint)
     
     async def async_deposit(self, amount:int, mint:str = None)->cliQuote:
         
@@ -1602,51 +1666,39 @@ class Acorn:
     def deposit(self, amount:int, mint:str = None)->cliQuote:
         
         #FIXME parameter passing with scheme
-        if mint:
-            mint = mint.replace("https://","")
-            url = f"https://{mint}/v1/mint/quote/bolt11"
-        else:
-            url = f"{self.home_mint}/v1/mint/quote/bolt11"
-       
-        headers = { "Content-Type": "application/json"}
-        mint_request = mintRequest(amount=amount)
-        mint_request_dump = mint_request.model_dump()
-        payload_json = mint_request.model_dump_json()
-        response = requests.post(url, data=payload_json, headers=headers)
-        # print(response.json())
-        mint_quote = mintQuote(**response.json())
-        # print(mint_quote)
-        invoice = response.json()['request']
-        quote = response.json()['quote']
-        print(f"invoice: {invoice}") 
-        # print(self.powers_of_2_sum(int(amount)))
-        # add quote as a replaceable event
+        try:
+            if mint:
+                mint = mint.replace("https://","")
+                url = f"https://{mint}/v1/mint/quote/bolt11"
+            else:
+                url = f"{self.home_mint}/v1/mint/quote/bolt11"
+            
+            headers = { "Content-Type": "application/json"}
+            mint_request = mintRequest(amount=amount)
+            mint_request_dump = mint_request.model_dump()
+            payload_json = mint_request.model_dump_json()
+            response = requests.post(url, data=payload_json, headers=headers)
+            # print(response.json())
+            mint_quote = mintQuote(**response.json())
+            # print(mint_quote)
+            invoice = response.json()['request']
+            quote = response.json()['quote']
+            print(f"invoice: {invoice}") 
+            # print(self.powers_of_2_sum(int(amount)))
+            # add quote as a replaceable event
 
-        wallet_quote_list =[]
-        
-        # wallet_quote_list_str = self.get_wallet_info("quote")
-        # wallet_quote_list_json = json.loads(wallet_quote_list_str)
-        # for each in wallet_quote_list_json:
-        #    wallet_quote_list.append(each)
-        
-        # wallet_quote = walletQuote(quote=quote,amount=amount, invoice=invoice)
-        # wallet_quote_list.append(wallet_quote.model_dump())
-        
-        # label_info = json.dumps(wallet_quote_list)
-        # print(label_info)
-        # self.set_wallet_info(label="quote", label_info=label_info)
+            wallet_quote_list =[]
+            
 
-
-        # TODO this is after quote has been paid - refactor into function
-        # self._mint_proofs(quote,amount)
-
+        except Exception as e:
+            raise Exception(f"The is a error with the deposit {e}")
          
         return cliQuote(invoice=invoice, quote=quote, mint_url=url)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
     async def poll_for_payment(self, quote:str, amount: int, mint:str=None):
         start_time = time()  # Record the start time
-        end_time = start_time + 60  # Set the loop to run for 60 seconds
+        end_time = start_time + 120  # Set the loop to run for 60 seconds
         success = False
         lninvoice = None
         #FIXME figure out the prefit
@@ -1967,7 +2019,7 @@ class Acorn:
                 # print(each.amount, each.secret)
                 balance += each.amount
             self.balance = balance
-            self.logger.debug(f"balance from loaded proofs: {balance}")
+            # self.logger.debug(f"balance from loaded proofs: {balance}")
             # print("proofs:", len(self.proofs))
 
                 
@@ -2015,81 +2067,6 @@ class Acorn:
             keyset_amounts[key]=amount
         # print(keyset_amounts)
         return all_proofs, keyset_amounts
-
-
-    async def _check_quote(self,quote, amount:int, mint:str = None):
-        # print("check quote", quote)
-        #TODO error handling
-        success_mint = True  
-        lninvoice = None  
-          
-        if mint:
-            url = f"https://{mint}/v1/mint/quote/bolt11/{quote}"
-        else:
-             url = f"{self.home_mint}/v1/mint/quote/bolt11/{quote}" 
-
-        self.logger.debug(f"mint quote: {url}")
-
-        headers = { "Content-Type": "application/json"}
-        response = requests.get(url, headers=headers)
-           
-        mint_quote = mintQuote(**response.json())
-        if mint_quote.paid == True:
-                success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
-                lninvoice = mint_quote.request
-
-                    
-                    
-                # return mint_quote.paid
-        else:
-                success_mint = False
-      
-
-        return success_mint, lninvoice
-
-        event_quotes = [] 
-        # event_quote_info_list = self.get_wallet_info("quote")
-        event_quote_info_list = self.wallet_reserved_records["quote"]
-        event_quote_info_list_json = json.loads(event_quote_info_list)
-       
-        self.logger.debug(f"event quote list: {event_quote_info_list_json}")
-        event_quote_info_list_json = self.quote
-        for each in event_quote_info_list_json:
-            event_quotes.append(walletQuote(**each))
-
-        # event_quote_info_obj = walletQuote(**event_quote_info_json)
-
-        for each_quote in event_quotes:
-            
-            
-
-            url = f"{self.mints[0]}/v1/mint/quote/bolt11/{each_quote.quote}"
-            self.logger.debug(f"mint quote: {url}")
-            
-            
-            # print("event quote info:", each_quote)
-            headers = { "Content-Type": "application/json"}
-            response = requests.get(url, headers=headers)
-            # print("response", response.json())
-            mint_quote = mintQuote(**response.json())
-            # print("mint_quote:", mint_quote.paid)
-            if mint_quote.paid == True:
-                success_mint = self._mint_proofs(each_quote.quote,each_quote.amount)
-
-                # Remove quote from array. Just reset the record for now.
-                if success_mint:
-                    my_list = [x.model_dump() for x in event_quotes if x != each_quote]                    
-                    self.set_wallet_info(label="quote", label_info=json.dumps(my_list))
-                    
-                    
-                    
-                    
-                # return mint_quote.paid
-            else:
-                success_for_all = False
-        self._load_proofs()    
-        return success_for_all
-    
 
 
 
@@ -2337,7 +2314,8 @@ class Acorn:
                 
                 self.logger.debug(f"lightning payment we are here!: {data_to_send}")
                 try:
-                    response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+                    response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=5) 
+                    response.raise_for_status()
                 except Exception as e:
                     raise Exception(f"error: {e}")
                 
@@ -2524,7 +2502,8 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
+            response.raise_for_status()
             self.logger.debug(f"post melt response: {response.json()}")
             # check reponse for error
             # print(f"mint response: {response.json()}")
@@ -2621,7 +2600,8 @@ class Acorn:
             
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers) 
+            response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=5) 
+            response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 
             if payment_json.get("paid",False):        

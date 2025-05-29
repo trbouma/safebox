@@ -150,25 +150,30 @@ async def ln_pay( amount: float,
         safebox_update.balance = safebox_update.balance + sat_amount
         session.add(safebox_update)
         session.commit()
-            
 
-
-    acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
-    await acorn_obj.load_data()
-   
-    print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
-    cli_quote = acorn_obj.deposit(sat_amount)
-
-
-    # task = asyncio.create_task(acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=sat_amount,mint=HOME_MINT))
+    # Check to see if this a non-custodial safebox
+    # If this is the case then accept the payment using service acorn and send the funds
+    # via a NIP 17 message to the destination       
+    if safebox_found.nsec == None:
+        # This is a non-custodial safebox
+       
+        acorn_obj = Acorn(nsec=settings.SERVICE_SECRET_KEY, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=settings.LOGGING_LEVEL)
+        await acorn_obj.load_data(force_profile_creation=True)
+        message = "Payment being sent as a non-custodial payment..."
     
+    else:
+        acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
+        await acorn_obj.load_data()
+        message = "Payment being sent..."
+    
+    
+
+    
+    cli_quote = acorn_obj.deposit(sat_amount)  
     task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
+    print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
 
- 
-
-    # message = f"Payment sent to {name} for {int(amount//1000)} sats. The quote is: {cli_quote.quote} with {cli_quote.mint_url}"
-    message = "Payment being sent..."
-
+   
 
     success_obj = {     "tag": "message",
                             "message" : message  }
@@ -186,7 +191,9 @@ async def ln_pay( amount: float,
 
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
-async def onboard_safebox(request: Request, invite_code:str = Form() ):
+async def onboard_safebox(  request: Request, 
+                            invite_code:str = Form(), 
+                            non_custodial:bool = Form(False) ):
     
     if invite_code.lower().strip() not in settings.INVITE_CODES:
         message = "Looks like you need an invite code!"
@@ -197,7 +204,7 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
                                             "branding_message": message})
     
     
-    
+    print(f"non-custodial {non_custodial}")
     private_key = Keys()
     
     print(invite_code)
@@ -216,12 +223,19 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
 
+    if non_custodial:
+        nsec = None
+        access_key = None
+    else:
+        nsec = acorn_obj.privkey_bech32
+        access_key = acorn_obj.access_key
+
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
-                                            nsec=acorn_obj.privkey_bech32,
+                                            nsec=nsec,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
-                                            access_key=acorn_obj.access_key,
+                                            access_key=access_key,
                                             emergency_code= generate_pnr(),
                                             nwc_secret=hex_secret
                                             )
@@ -233,7 +247,13 @@ async def onboard_safebox(request: Request, invite_code:str = Form() ):
 
 
         # Create JWT token
-    access_token = create_jwt_token({"sub": acorn_obj.access_key}, expires_delta=timedelta(weeks=settings.TOKEN_EXPIRES_WEEKS, hours=settings.TOKEN_EXPIRES_HOURS))
+
+    if non_custodial:
+        access_token_value = acorn_obj.privkey_bech32
+    else:   
+        access_token_value = acorn_obj.access_key
+
+    access_token = create_jwt_token({"sub": access_token_value}, expires_delta=timedelta(weeks=settings.TOKEN_EXPIRES_WEEKS, hours=settings.TOKEN_EXPIRES_HOURS))
 
     # Create response with JWT as HttpOnly cookie
     # response = RedirectResponse(url="/safebox/access", status_code=302)

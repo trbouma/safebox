@@ -88,13 +88,14 @@ async def invoice_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amou
 
     await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment="lightning invoice")
     
+    await acorn_obj.load_data()
 
     # Update the cache amountt   
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_update = safeboxes.first()
-        safebox_update.balance = safebox_update.balance + amount
+        safebox_update.balance = acorn_obj.balance 
         session.add(safebox_update)
         session.commit()
     return
@@ -250,13 +251,25 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
     lninvoice = None
     success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
     pass
+    
+    
 
 
+    #FIXME Implement zaps here
     if nostr :
         comment= "⚡️ " + json.loads(nostr)['content']
         # print(f"do the zap receipt here with {lninvoice}")
         task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
 
+    await acorn_obj.load_data()
 
-    #FIXME Implement zaps here
+    # Update the cache amountt   
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = acorn_obj.balance
+        session.add(safebox_update)
+        session.commit()
+  
     await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment=comment)
