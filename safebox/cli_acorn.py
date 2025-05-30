@@ -512,7 +512,9 @@ def send(amount,nrecipient: str, relays:str, comment:str):
     
     click.echo(f"Send to: {amount} to {nrecipient} via {ecash_relays}")
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
-    out_msg = asyncio.run(acorn_obj.send_ecash_dm(amount=amount,nrecipient=nrecipient,ecash_relays=ecash_relays, comment=comment))
+    asyncio.run(acorn_obj.load_data())
+    token = asyncio.run(acorn_obj.issue_token(amount))
+    out_msg = asyncio.run(acorn_obj.secure_transmittal(nrecipient=nrecipient, dm_relays=ecash_relays,message=token, kind=1059))
     click.echo(out_msg)
 
 @click.command("dm", help="Send message to nip05 address or npub")

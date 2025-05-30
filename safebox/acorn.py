@@ -2178,7 +2178,7 @@ class Acorn:
                                     "unit": "sat",
                                     "options": {"mpp": {"amount": amount_to_pay}}
                             }
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=5)
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
                     response.raise_for_status()
                     post_melt_response = PostMeltQuoteResponse(**response.json())
                     print(f"adjusted post melt response {post_melt_response}")
@@ -2215,7 +2215,7 @@ class Acorn:
 
                                 }
             
-                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
+                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
                 response.raise_for_status()
                 
 
@@ -2314,7 +2314,7 @@ class Acorn:
                 
                 self.logger.debug(f"lightning payment we are here!: {data_to_send}")
                 try:
-                    response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=5) 
+                    response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
                     response.raise_for_status()
                 except Exception as e:
                     raise Exception(f"error: {e}")
@@ -2502,7 +2502,7 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=5)
+            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
             response.raise_for_status()
             self.logger.debug(f"post melt response: {response.json()}")
             # check reponse for error
@@ -2600,7 +2600,7 @@ class Acorn:
             
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=5) 
+            response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
             response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 

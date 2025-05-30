@@ -175,8 +175,8 @@ async def create_nwc_qr(request: Request,
 
     handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
 
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}&lud16={handle}@{request.url.hostname}"
-
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    # &lud16={handle}@{request.url.hostname}
     print(qr_text)     
           
     img = qrcode.make(qr_text)
