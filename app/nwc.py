@@ -9,6 +9,7 @@ from monstr.event.event import Event
 from app.utils import hex_to_npub
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
+from datetime import datetime
 
 from safebox.acorn import Acorn
 import signal
@@ -64,26 +65,89 @@ def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
     return safebox_found
 
 
-async def nwc_pay_invoice(safebox_found: RegisteredSafebox, payinstruction_obj):
+async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstruction_obj, evt: Event):
     # print(f"nwc {safebox_found} pay instruction {payinstruction_obj}")
+    k = Keys(priv_k=safebox_found.nsec)
+    my_enc = NIP4Encrypt(key=k)
 
     if payinstruction_obj['method'] == 'pay_invoice':
         invoice = payinstruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
+        invoice_amount = invoice_decoded.amount_msat//1000
         print(f"this is the invoice to pay: {invoice}")
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
         await acorn_obj.load_data()
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
-            await acorn_obj.add_tx_history("D",invoice_decoded.amount_msat//1000, comment=msg_out, fees=final_fees)
+            zap_msg = f"Zap using {acorn_obj.handle} {invoice_amount} sats with {final_fees} fees"
+            await acorn_obj.add_tx_history("D",invoice_amount, comment=zap_msg, fees=final_fees)
             
         except Exception as e:
             # raise Exception(f"Error {e}")
             print(f"Error {e}")
-           
+    elif payinstruction_obj['method'] == 'list_transactions':
+        print("we have a list_transactions!") 
+
+        result_transactions = {
+                                "result_type": "list_transactions",
+                                "result": {
+                                "transactions": 
+                                [
+                                    {
+               "type": "incoming", 
+               "invoice": "123", 
+               "description": "456",
+               "description_hash": "789", 
+               "preimage": "123", 
+               "payment_hash": "123", 
+               "amount": 21000, 
+               "fees_paid": 21000,
+               "created_at": int(datetime.now().timestamp()), 
+               "expires_at": int(datetime.now().timestamp()), 
+               "settled_at": int(datetime.now().timestamp()), 
+               "metadata": {} 
+           }
+
+                                ] }
+
+                                }  
+
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(result_transactions), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]])
 
 
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+            print(f"we published the transactin to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
+
+        
+    
+    elif payinstruction_obj['method'] == 'get_balance':     
+        response_balance = {
+                            "result_type": "get_balance",
+                            "result": {
+                            "balance": int(safebox_found.balance * 1000), 
+                                }
+                            }
+        print(response_balance)
+
+
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(response_balance), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]])
+
+          
+
+
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+            print(f"we published the balance to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
 
 async def listen_notes(url):
     c = Client(url)
@@ -113,7 +177,7 @@ async def listen_notes(url):
                 decryptor = NIP4Encrypt(key=Keys(safebox_found.nsec))
                 decrypt_event = decryptor.decrypt_event(evt=evt)
                 pay_instruction = json.loads(decrypt_event.content)
-                asyncio.create_task(nwc_pay_invoice(safebox_found, pay_instruction))
+                asyncio.create_task(nwc_handle_pay_instruction(safebox_found, pay_instruction,evt))
             else:
                 print('no wallet on file')
 
