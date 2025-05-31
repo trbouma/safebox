@@ -70,13 +70,15 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
     k = Keys(priv_k=safebox_found.nsec)
     my_enc = NIP4Encrypt(key=k)
 
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+    await acorn_obj.load_data()
+
     if payinstruction_obj['method'] == 'pay_invoice':
         invoice = payinstruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
         invoice_amount = invoice_decoded.amount_msat//1000
         print(f"this is the invoice to pay: {invoice}")
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
+        
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
@@ -88,28 +90,32 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             print(f"Error {e}")
     elif payinstruction_obj['method'] == 'list_transactions':
         print("we have a list_transactions!") 
-
-        result_transactions = {
-                                "result_type": "list_transactions",
-                                "result": {
-                                "transactions": 
-                                [
-                                    {
-               "type": "incoming", 
+        tx_history = await acorn_obj.get_tx_history()
+        print(tx_history)
+        tx_nwc_history = []
+        for each in tx_history[:10]:
+            print(each)
+            each_transaction = {
+               "type": "incoming" if each['tx_type'] == 'C' else "outgoing", 
                "invoice": "123", 
                "description": "456",
                "description_hash": "789", 
                "preimage": "123", 
                "payment_hash": "123", 
-               "amount": 21000, 
-               "fees_paid": 21000,
+               "amount": each['amount'] * 1000, 
+               "fees_paid": each['fees'] * 1000,
                "created_at": int(datetime.now().timestamp()), 
                "expires_at": int(datetime.now().timestamp()), 
                "settled_at": int(datetime.now().timestamp()), 
                "metadata": {} 
-           }
+            }
+            tx_nwc_history.append(each_transaction)
 
-                                ] }
+        result_transactions = {
+                                "result_type": "list_transactions",
+                                "result": {
+                                "transactions": tx_nwc_history
+                                 }
 
                                 }  
 
@@ -130,7 +136,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         response_balance = {
                             "result_type": "get_balance",
                             "result": {
-                            "balance": int(safebox_found.balance * 1000), 
+                            "balance": int(acorn_obj.balance * 1000), 
                                 }
                             }
         print(response_balance)

@@ -17,7 +17,13 @@ import json
 import bolt11
 import hashlib
 from monstr.util import util_funcs
-from monstr.encrypt import Keys
+
+from monstr.relay.relay import Relay
+
+from monstr.client.client import Client
+from typing import List
+from monstr.encrypt import NIP4Encrypt, Keys
+from monstr.event.event import Event
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox
@@ -177,7 +183,24 @@ async def create_nwc_qr(request: Request,
 
     qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
     # &lud16={handle}@{request.url.hostname}
-    print(qr_text)     
+    print(qr_text)  
+
+    # Publish the info event
+    # 
+   
+    # 
+    async with Client(settings.NWC_RELAYS[0]) as c:
+        capabilities = "pay_invoice pay_keysend get_balance get_info make_invoice lookup_invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications"
+        n_msg = Event(kind=13194,
+                content= capabilities,
+                pub_key=acorn_obj.pubkey_hex,
+                tags= [["notifications","payment_received payment_sent"]]
+                )
+
+
+        n_msg.sign(acorn_obj.privkey_hex)
+        c.publish(n_msg)
+        print(f"we published info event ") 
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()
