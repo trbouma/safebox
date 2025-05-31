@@ -104,7 +104,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
                "payment_hash": "123", 
                "amount": each['amount'] * 1000, 
                "fees_paid": each['fees'] * 1000,
-               "created_at": int(datetime.now().timestamp()), 
+               "created_at": int(datetime.strptime(each['create_time'], '%Y-%m-%d %H:%M:%S').timestamp()), 
                "expires_at": int(datetime.now().timestamp()), 
                "settled_at": int(datetime.now().timestamp()), 
                "metadata": {} 
