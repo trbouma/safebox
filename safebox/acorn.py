@@ -34,7 +34,8 @@ from monstr.util import util_funcs
 from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
-from safebox.monstrmore import KindOtherGiftWrap
+from safebox.monstrmore import KindOtherGiftWrap, ExtendedNIP44Encrypt
+
 
 tail = util_funcs.str_tails
 
@@ -49,7 +50,7 @@ from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
 from safebox.models import TxHistory
 
-from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex
+from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
 RECORD_LIMIT: int = 1024
 
@@ -92,6 +93,7 @@ class Acorn:
     user_records = []
     relays: List[str]
     mints: List[str]
+    max_proof_event_size: int
     safe_box_items: List[SafeboxItem]
     proofs: List[Proof]
     profile_found_on_home_relay = False
@@ -103,6 +105,7 @@ class Acorn:
     wallet_reserved_records: object
     logger: logging.Logger
     TZ: str = "America/New_York"
+
     
 
 
@@ -112,9 +115,11 @@ class Acorn:
                     relays: List[str]|None=None, 
                     mints: List[str]|None=None,
                     home_relay:str|None=None, 
+                    max_proof_event_size: int = 16348,
                     replicate = False, 
                     logging_level=logging.INFO) -> None:
         
+        self.max_proof_event_size = max_proof_event_size
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging_level)  
         # Configure the logger's handler and format
@@ -1737,8 +1742,16 @@ class Acorn:
 
     async def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
         
-  
-        my_enc = NIP44Encrypt(self.k)
+        records_to_write = []
+        # my_enc = NIP44Encrypt(self.k)
+        my_enc = ExtendedNIP44Encrypt(self.k)
+
+        if replicate_relays:
+            write_relays = replicate_relays
+            
+        else:
+            write_relays = [self.home_relay]
+
         # Create the format for NIP 60 proofs
         nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
         for each in proofs_arg:
@@ -1749,29 +1762,30 @@ class Acorn:
         record = nip60_proofs.model_dump_json()
         print(f"Length of proof record: {len(record)} with {len(nip60_proofs.proofs)}")
 
-        if len(record) > my_enc.NIP44_PAD_MAX:
-            raise Exception(f"Record length {len(record)}has exceeded PAD MAX")
+        if len(record) > self.max_proof_event_size:
+            print(f"WARNING: Record length {len(record)} is greater than max, splitting proofs")
+            self.logger.warning(f"Record length {len(record)} is greater than max, splitting proofs")
+            split_proofs = split_proofs_instance(nip60_proofs)
+            
+            for each in split_proofs:
+                records_to_write.append(each.model_dump_json())
+        else:
+            records_to_write =[record]
         
 
-        payload_encrypt = my_enc.encrypt(record,to_pub_k=self.pubkey_hex)
-       
-        if replicate_relays:
-            write_relays = replicate_relays
-            
-        else:
-            write_relays = [self.home_relay]
-
-
-        async with ClientPool(write_relays) as c:
-            
-            #FIXME kind
-            n_msg = Event(kind=7375,
-                        content=payload_encrypt,
-                        pub_key=self.pubkey_hex)
-            n_msg.sign(self.privkey_hex)
-            self.logger.debug(f"proof event content {n_msg.kind} {record}")
-            c.publish(n_msg)
-            await asyncio.sleep(0.2)
+        for each in records_to_write:
+            payload_encrypt = my_enc.encrypt(each,to_pub_k=self.pubkey_hex)
+        
+            async with ClientPool(write_relays) as c:
+                
+                #FIXME kind
+                n_msg = Event(kind=7375,
+                            content=payload_encrypt,
+                            pub_key=self.pubkey_hex)
+                n_msg.sign(self.privkey_hex)
+                self.logger.debug(f"proof event content {n_msg.kind} {record}")
+                c.publish(n_msg)
+                await asyncio.sleep(0.2)
         
         return
 
