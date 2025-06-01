@@ -6,6 +6,7 @@ from monstr.signing.signing import SignerInterface, BasicKeySigner
 from monstr.encrypt import Keys
 from monstr.event.event import Event
 from monstr.util import util_funcs
+from monstr.encrypt import NIP44Encrypt
 
 # This was created to remove the jittered ticks
 
@@ -113,3 +114,7 @@ class KindOtherGiftWrap:
         # unseal (unwrap again)
         rumour_evt = await self._unwrap(seal_evt)
         return rumour_evt
+    
+
+class ExtendedNIP44Encrypt(NIP44Encrypt):
+    NIP44_PAD_MAX = 262143  # New upper bound for padding length (e.g., 128 KB

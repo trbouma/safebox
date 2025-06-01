@@ -5,9 +5,11 @@ import datetime, hashlib, urllib, uuid
 import binascii
 import os
 from bech32 import bech32_encode, convertbits
+from typing import List
 from mnemonic import Mnemonic
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
 
+from safebox.models import NIP60Proofs
 
 def generate_name_from_hex(hex_string):
     # Ensure the input is a valid 32-byte hex string
@@ -112,3 +114,10 @@ def recover_nsec_from_seed(seed_phrase: str):
     bech32_address = bech32_encode("nsec", data_5bit)
 
     return bech32_address
+
+def split_proofs_instance(original: NIP60Proofs) -> List[NIP60Proofs]:
+    midpoint = len(original.proofs) // 2
+    return [
+        NIP60Proofs(mint=original.mint, proofs=original.proofs[:midpoint]),
+        NIP60Proofs(mint=original.mint, proofs=original.proofs[midpoint:])
+    ]
