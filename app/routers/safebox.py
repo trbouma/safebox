@@ -308,6 +308,8 @@ async def ln_pay_address(   request: Request,
         local_part = ln_parts[0]
         safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
         print(f"safebox to call {safebox_to_call}")
+        response = request.get(safebox_to_call)
+        print(response)
     except:
         pass
 

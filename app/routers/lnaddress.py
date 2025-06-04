@@ -96,6 +96,7 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
                         "metadata": f"[[\"text/plain\", \"Send Payment to: {name}\"]]",
                         "commentAllowed": 60,                        
                         "allowsNostr" :True,
+                        "safebox": True,
                         "nostrPubkey" :     service_key_obj.public_key_hex(),
                         "tag": "payRequest"
 
