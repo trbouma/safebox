@@ -217,7 +217,7 @@ async def get_nostr_name(request: Request, name: str, ):
     return JSONResponse(content=nostr_names, headers=headers)
     # return nostr_names
 
-@app.get("/.well-known/safebox.json",tags=["public"])
+@app.get("/.well-known/safebox.json/{name}",tags=["public"])
 async def get_safebox_pubhex(request: Request, name: str, ):
 
     #This returns the the pubkey of the safebox based on the lightning address
@@ -249,24 +249,13 @@ async def get_safebox_pubhex(request: Request, name: str, ):
                 safebox_found = safeboxes.first()
                 if safebox_found:
                     key_obj = Keys(pub_k=safebox_found.npub)
-                    npub_hex = key_obj.public_key_hex()
+                    pubkey = key_obj.public_key_hex()
                 else:
-                    raise HTTPException(status_code=404, detail=f"{name} not found")
+                    pubkey = None
+                    # 
+                    # raise HTTPException(status_code=404, detail=f"{name} not found")
 
-    try: 
-        # wallet_info = get_public_profile(wallet_name=name)
-        # print(wallet_info['wallet_info']['npub_hex'])
-        # return{"status": "OK", "reason": "not implemented yet"}
-        
-        pubkey = npub_hex
-        
-    except:
-        return{"status": "ERROR", "reason": "Name does not exist"}
 
-    account_metadata = {}    
-    # pubkey =  wallet_info['wallet_info']['npub_hex']
-
-    
 
     safebox_json = {
                     "safebox": pubkey,                       

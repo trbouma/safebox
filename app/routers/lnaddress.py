@@ -13,13 +13,13 @@ import hashlib
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select, update
 from argon2 import PasswordHasher
+import requests
 
-
-from monstr.encrypt import Keys
+from monstr.encrypt import Keys, NIP44Encrypt
 from monstr.event.event import Event
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment
 from app.utils import ( create_jwt_token, 
@@ -188,6 +188,19 @@ async def ln_pay( amount: float,
 
     
 
+@router.post("/.well-known/nwcvault", tags=["public"])
+async def nwc_vault(request: Request, nwc_vault: nwcVault):
+    status = "OK"
+    detail = None
+    k  = Keys(settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k)
+    token_secret = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
+    print(f"token secret {token_secret}")
+    k_nwc = Keys(token_secret)
+    print(f"send {nwc_vault.ln_invoice}invoice to: {k_nwc.public_key_hex()}")
+
+
+    return {"status": status, "detail": detail}
 
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])

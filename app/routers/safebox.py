@@ -17,18 +17,20 @@ import json
 import bolt11
 import hashlib
 from monstr.util import util_funcs
+import requests
 
 from monstr.relay.relay import Relay
 
 from monstr.client.client import Client
 from typing import List
-from monstr.encrypt import NIP4Encrypt, Keys
+from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt
 from monstr.event.event import Event
+from safebox.models import cliQuote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment
 from app.rates import get_currency_rate
@@ -301,6 +303,13 @@ async def ln_pay_address(   request: Request,
         final_address = ln_pay.address.strip().lower()
 
     # check to see if address is another safebox address
+    try:
+        ln_parts = final_address.split('@')
+        local_part = ln_parts[0]
+        safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
+        print(f"safebox to call {safebox_to_call}")
+    except:
+        pass
 
     # then do regular lightning
     
@@ -763,12 +772,24 @@ async def my_danger_zone(       request: Request,
         safebox_found = safeboxes.first()
        
     emergency_code = safebox_found.emergency_code
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
+    
+    k = Keys(settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k)
+  
+    encrypt_token = my_enc.encrypt(acorn_obj.privkey_hex, to_pub_k=k.public_key_hex())
+   
+    token_obj = {"h": request.url.hostname, "k": encrypt_token}
+    nembed = create_nembed_compressed(token_obj)
+    print(f"nembed length {len(nembed)} {nembed}")
+    payment_token=nembed
 
     return templates.TemplateResponse(      "dangerzone.html", 
                                         {   "request": request,
                                             "emergency_code": emergency_code,
-                                            "currencies": settings.SUPPORTED_CURRENCIES 
+                                            "currencies": settings.SUPPORTED_CURRENCIES,
+                                            "payment_token" : payment_token
 
                                         })
 
@@ -1368,3 +1389,40 @@ async def accept_incoming_record(       request: Request,
     return {"status": status, "detail": detail}  
 
 
+@router.post("/acceptpaymenttoken", tags=["safebox", "protected"])
+async def accept_payment_token( request: Request, 
+                                payment_token: paymentByToken,
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+   
+
+
+    status = "OK"
+    detail = "done"
+    cli_quote: cliQuote
+    
+    token_to_use = payment_token.payment_token
+    token_amount = payment_token.amount
+    token_split = token_to_use.split(':')
+    parsed_nembed = parse_nembed_compressed(token_to_use)
+    vault_url = f"https://{parsed_nembed["h"]}/.well-known/ncwvault"
+    vault_token = parsed_nembed["k"]
+    
+ 
+
+
+    cli_quote = acorn_obj.deposit(token_amount)
+    print(f"accept token:  {vault_url} {vault_token} {token_amount}")
+    
+    # need to send off to the vault for processing
+    data = {"token": vault_token, "ln_invoice": cli_quote.invoice}
+    print(f"data: {data}")
+    headers = { "Content-Type": "application/json"}
+    print(f"{vault_url}")
+    response = requests.post(url=vault_url, data=data, headers=headers)
+    
+    print(response.json())
+
+    # add in the polling task here
+
+    return {"status": status, "detail": detail}  

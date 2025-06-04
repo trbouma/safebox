@@ -111,5 +111,14 @@ class recoverIdentity(BaseModel):
 
 class sendCredentialParms(BaseModel):
     nauth: str
-    grant: str = None;
+    grant: str = None
+
+class paymentByToken(BaseModel):
+    payment_token: str
+    amount: int
+
+class nwcVault(BaseModel):
+    ln_invoice: str
+    token: str   
+
 

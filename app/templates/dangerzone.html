@@ -120,6 +120,110 @@ async function setCustomHandle() {
       }
 </script>
 
+
+<script>
+  var ecash_write = "{{nfc_write}}";
+  
+  async function readTag() {
+    var nfc_text_area = document.getElementById("nfc_text");
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+            consoleLog("Record type:  " + record.recordType);
+            consoleLog("MIME type:    " + record.mediaType);
+            consoleLog("=== data ===\n" + decoder.decode(record.data));
+            nfc_text_area.value = decoder.decode(record.data);
+          }
+          alert("Done!");
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+  }
+  
+  async function writeTag() {
+    var nfc_text_area = document.getElementById("nfc_text");
+    var nfc_text = nfc_text_area.value
+    
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.write(nfc_text);
+        alert("NDEF message written!");
+        consoleLog("NDEF message written: " + nfc_text);
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      alert("Web NFC is not supported.");
+    }
+  }
+  
+  async function paybyNFC() {
+    var nfc_amount = document.getElementById("input_nfc_amount").value;
+    var nfc_token;
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+          }
+          consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
+          submitToken(nfc_amount, nfc_token)
+          
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+
+
+  }
+
+  function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+  
+  if (localStorage) {
+  
+      //alert("Local Storage!");
+      // localStorage.setItem("name", "Tim");
+  }
+  async function submitToken(nfc_amount,nfc_token) {
+
+    consoleLog(`submitToken ${nfc_amount} ${nfc_token}`);
+    const submit_data = {"payment_token": nfc_token, "amount": parseInt(nfc_amount)};
+
+  await fetch('/safebox/acceptpaymenttoken', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},        
+    body: JSON.stringify(submit_data)         
+  })   
+    .then((data) => {consoleLog(`done ${data}`)});
+
+
+
+   }
+
+    
+  
+  
+  </script>
+
 {% endblock %}
 
 {% block page_content %}
@@ -169,6 +273,31 @@ async function setCustomHandle() {
       <button onclick="swapProofs()">Swap Proofs</button>
       <br><br>    
 </div>
+<div class="center-text">
+  <hr>
+  Web NFC: Android/Chrome only
+  <br><br>
+ 
+  <button onclick="readTag()">Test NFC Read</button>
+  <br><br>
+  <textarea id="nfc_text" name="nfc_text" rows="8" style="width:90%;">{{payment_token}}</textarea>
+  <br><br>
+  <button onclick="writeTag()">Test NFC Write</button>
+  <br><br>
+  <button onclick="backToWallet()">Back to Wallet</button> 
+  <br><br>
+  <pre id="log"></pre>
+</div>
+<div class="center-text">
+  <hr>
+  Payment by NFC Card
+  <br><br>
+  <input type="number" placeholder="0" id="input_nfc_amount"   value="21" width="10"> sats
+  <br><br>
+  <button onclick="paybyNFC()">Pay by NFC Card</button>
+
+</div>
+
 
 
    
