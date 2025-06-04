@@ -1405,7 +1405,8 @@ async def accept_payment_token( request: Request,
     token_amount = payment_token.amount
     token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
-    vault_url = f"https://{parsed_nembed["h"]}/.well-known/ncwvault"
+    host = parsed_nembed["h"]
+    vault_url = f"https://{host}/.well-known/ncwvault"
     vault_token = parsed_nembed["k"]
     
  
