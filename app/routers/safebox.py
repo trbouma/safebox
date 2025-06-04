@@ -1423,5 +1423,6 @@ async def accept_payment_token( request: Request,
     print(response.json())
 
     # add in the polling task here
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=payment_token.amount, mint=HOME_MINT, comment="nwc"))
 
     return {"status": status, "detail": detail}  
