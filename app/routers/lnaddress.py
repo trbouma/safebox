@@ -197,7 +197,7 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
     token_secret = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
     print(f"token secret {token_secret}")
     k_nwc = Keys(token_secret)
-    print(f"send {nwc_vault.ln_invoice}invoice to: {k_nwc.public_key_hex()}")
+    print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
 
     return {"status": status, "detail": detail}

@@ -1406,21 +1406,19 @@ async def accept_payment_token( request: Request,
     token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
     host = parsed_nembed["h"]
-    vault_url = f"https://{host}/.well-known/ncwvault"
+    vault_url = f"https://{host}/.well-known/nwcvault"
     vault_token = parsed_nembed["k"]
     
- 
-
 
     cli_quote = acorn_obj.deposit(token_amount)
     print(f"accept token:  {vault_url} {vault_token} {token_amount}")
     
     # need to send off to the vault for processing
-    data = {"token": vault_token, "ln_invoice": cli_quote.invoice}
-    print(f"data: {data}")
+    submit_data = {"ln_invoice": cli_quote.invoice, "token": vault_token }
+    print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
     print(f"{vault_url}")
-    response = requests.post(url=vault_url, data=data, headers=headers)
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)
     
     print(response.json())
 
