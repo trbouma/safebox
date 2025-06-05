@@ -257,10 +257,13 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
 
     #FIXME Implement zaps here
     if nostr :
-        comment= "⚡️ " + json.loads(nostr)['content']
-        # print(f"do the zap receipt here with {lninvoice}")
-        task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
-
+        if amount > 1:
+            comment= "⚡️ " + json.loads(nostr)['content']
+            # print(f"do the zap receipt here with {lninvoice}")
+            task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
+        else:
+            comment = "spam zap"
+            
     await acorn_obj.load_data()
 
     # Update the cache amountt   

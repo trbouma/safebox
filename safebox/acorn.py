@@ -3039,7 +3039,7 @@ class Acorn:
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
         except Exception as e:
-            raise Exception("Error in swap multi {e}")
+            raise Exception(f"Error in swap multi {e}")
         
         finally:
             await self.release_lock()
