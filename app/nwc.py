@@ -82,7 +82,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
-            zap_msg = f"Zap using {acorn_obj.handle} {invoice_amount} sats with {final_fees} fees"
+            zap_msg = f"💳 nwc pay "
             await acorn_obj.add_tx_history("D",invoice_amount, comment=zap_msg, fees=final_fees)
             
         except Exception as e:

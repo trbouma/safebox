@@ -262,8 +262,8 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
             # print(f"do the zap receipt here with {lninvoice}")
             task = asyncio.create_task(send_zap_receipt(nostr=nostr,lninvoice=lninvoice))
         else:
-            comment = "spam zap"
-            
+            comment = "⚡️ spam zap"
+
     await acorn_obj.load_data()
 
     # Update the cache amountt   

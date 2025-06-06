@@ -7,9 +7,6 @@
 
 
 
-
-
-
 <script>
 
   var ux_mode = "init";
@@ -272,23 +269,81 @@ function getCreateInvoiceStatus(ln_invoice_status) {
 
 }
 
-async function createInvoice() {
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+
+async function paybyNFC(nfc_amount) {
+    // var nfc_amount = document.getElementById("input_nfc_amount").value;
+    var nfc_token;
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+          }
+          // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
+          submitToken(nfc_amount, nfc_token)
+          
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+
+
+  }
+
+async function submitToken(nfc_amount,nfc_token) {
+
+consoleLog(`submitToken ${nfc_amount} ${nfc_token}`);
+const submit_data = {"payment_token": nfc_token, "amount": parseInt(nfc_amount)};
+
+await fetch('/safebox/acceptpaymenttoken', {
+method: "POST",
+headers: {"Content-Type": "application/json"},        
+body: JSON.stringify(submit_data)         
+})   
+.then((data) => {consoleLog(`done ${data}`)});
+
+window.location.href="/safebox/access" ;
+
+
+
+}
+
+async function requestPayment() {
 
   const create_invoice_amount = document.getElementById("ln_create_invoice_amount");
   const create_invoice_button = document.getElementById("ln_create_invoice_button");
   const ln_select_invoice_currency = document.getElementById("ln_select_invoice_currency");
+  const nfc_payment = document.getElementById("nfc_payment_checkbox");
+  
+  
   
   
   var ln_create_invoice_amount = create_invoice_amount.value;
   var ln_currency =  ln_select_invoice_currency.value;
   // alert(ln_create_invoice_amount)
   
+  if (nfc_payment.checked == true) {  alert("nfc");
+      await paybyNFC(ln_create_invoice_amount);
+                      return;
+  }
   
   create_invoice_button.textContent = "Creating invoice... ";
  
   if (ln_create_invoice_amount <=0 || isNaN(ln_create_invoice_amount)){
     // create_invoice_button.textContent = "Need Amount ";
     alert("Please enter invoice amount.");
+    return;
 
   }
   else
@@ -544,7 +599,7 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
       document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
       document.getElementById("img_qr_display").addEventListener("click", copyAddress);
-      document.getElementById("ln_create_invoice_button").textContent = "Create Invoice";
+      document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
       
       }
 
@@ -619,10 +674,18 @@ function getInvoiceStatus(ln_invoice_status) {
         <option>{{each}}</option> 
         {% endfor %}
 
-      </select>
+      </select>      
       <br><br>
-      <button id="ln_create_invoice_button" onclick="createInvoice()">Create Invoice</button>
+      <!-- New checkbox for NFC payment -->
+      <label>
+      <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
+      Pay by NFC
+      </label>
+      <pre id="log"></pre>
+      <br><br>
 
+      <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
+    
     {% endif %} 
     <br><br>
     <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
