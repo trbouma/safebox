@@ -306,6 +306,10 @@ async function submitToken(nfc_amount,nfc_token) {
 consoleLog(`submitToken ${nfc_amount} ${nfc_token}`);
 const submit_data = {"payment_token": nfc_token, "amount": parseInt(nfc_amount)};
 
+if (nfc_amount == 0) {
+  consoleLog(`Advisory: Since 0 was provided for NFC, your minimun amount will be used`);
+
+}
 await fetch('/safebox/acceptpaymenttoken', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
