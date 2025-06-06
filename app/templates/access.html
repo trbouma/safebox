@@ -333,6 +333,7 @@ async function requestPayment() {
   var ln_currency =  ln_select_invoice_currency.value;
   // alert(ln_create_invoice_amount)
   
+  
   if (nfc_payment.checked == true) {  alert("nfc");
       await paybyNFC(ln_create_invoice_amount);
                       return;
@@ -667,7 +668,7 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
-      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="" size="24" style="width:30%">
+      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="0" size="24" style="width:30%">
       <select id="ln_select_invoice_currency" name="select_invoice_currency"> 
         <option selected>SAT</option> 
         {% for each in currencies%}

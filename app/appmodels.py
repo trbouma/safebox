@@ -115,7 +115,7 @@ class sendCredentialParms(BaseModel):
 
 class paymentByToken(BaseModel):
     payment_token: str
-    amount: int
+    amount: int = 0
 
 class nwcVault(BaseModel):
     ln_invoice: str

@@ -782,7 +782,7 @@ async def my_danger_zone(       request: Request,
   
     encrypt_token = my_enc.encrypt(acorn_obj.privkey_hex, to_pub_k=k.public_key_hex())
    
-    token_obj = {"h": request.url.hostname, "k": encrypt_token}
+    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21}
     nembed = create_nembed_compressed(token_obj)
     print(f"nembed length {len(nembed)} {nembed}")
     payment_token=nembed
@@ -1404,12 +1404,17 @@ async def accept_payment_token( request: Request,
     cli_quote: cliQuote
     
     token_to_use = payment_token.payment_token
-    token_amount = payment_token.amount
+    
     token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
     host = parsed_nembed["h"]
     vault_url = f"https://{host}/.well-known/nwcvault"
     vault_token = parsed_nembed["k"]
+    
+    if payment_token.amount > 0:
+        token_amount = payment_token.amount
+    else:
+        token_amount = parsed_nembed.get("a", 21)
     
 
     cli_quote = acorn_obj.deposit(token_amount)
@@ -1425,6 +1430,6 @@ async def accept_payment_token( request: Request,
     print(response.json())
 
     # add in the polling task here
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=payment_token.amount, mint=HOME_MINT, comment="nwc"))
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=token_amount, mint=HOME_MINT, comment="nwc"))
 
     return {"status": status, "detail": detail}  
