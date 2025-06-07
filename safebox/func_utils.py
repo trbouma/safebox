@@ -115,9 +115,22 @@ def recover_nsec_from_seed(seed_phrase: str):
 
     return bech32_address
 
-def split_proofs_instance(original: NIP60Proofs) -> List[NIP60Proofs]:
-    midpoint = len(original.proofs) // 2
-    return [
-        NIP60Proofs(mint=original.mint, proofs=original.proofs[:midpoint]),
-        NIP60Proofs(mint=original.mint, proofs=original.proofs[midpoint:])
-    ]
+
+
+def split_proofs_instance(original: NIP60Proofs, num_splits: int = 2) -> List[NIP60Proofs]:
+    if num_splits <= 0:
+        raise ValueError("num_splits must be greater than zero")
+
+    
+    total = len(original.proofs)
+    k, r = divmod(total, num_splits)
+
+    result = []
+    start = 0
+    for i in range(num_splits):
+        end = start + k + (1 if i < r else 0)
+        split = original.proofs[start:end]
+        result.append(NIP60Proofs(mint=original.mint, proofs=split))
+        start = end
+
+    return result

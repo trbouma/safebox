@@ -10,6 +10,7 @@ import bolt11
 import aioconsole
 import logging
 import httpx
+import math
 from zoneinfo import ZoneInfo
 from datetime import timezone
 
@@ -115,7 +116,7 @@ class Acorn:
                     relays: List[str]|None=None, 
                     mints: List[str]|None=None,
                     home_relay:str|None=None, 
-                    max_proof_event_size: int = 16348,
+                    max_proof_event_size: int = 16384,
                     replicate = False, 
                     logging_level=logging.INFO) -> None:
         
@@ -1765,7 +1766,7 @@ class Acorn:
         if len(record) > self.max_proof_event_size:
             print(f"WARNING: Record length {len(record)} is greater than max, splitting proofs")
             self.logger.warning(f"Record length {len(record)} is greater than max, splitting proofs")
-            split_proofs = split_proofs_instance(nip60_proofs)
+            split_proofs = split_proofs_instance(original=nip60_proofs, num_splits=math.ceil(len(record)/self.max_proof_event_size))
             
             for each in split_proofs:
                 records_to_write.append(each.model_dump_json())
