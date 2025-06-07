@@ -30,7 +30,7 @@ from safebox.models import cliQuote
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment
 from app.rates import get_currency_rate
@@ -120,6 +120,55 @@ async def login(request: Request, access_key: str = Form()):
     access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
     
 
+    
+
+    # Create response with JWT as HttpOnly cookie
+    response = RedirectResponse(url="/safebox/access", status_code=302)
+    # response = JSONResponse({"message": "Login successful"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevent JavaScript access
+        max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
+        secure=False,  # Set to True in production to enforce HTTPS
+        samesite="Lax",  # Protect against CSRF
+    )
+    return response
+
+@router.post("/loginwithnfc", tags=["safebox"])
+async def login(request: Request, nfc_card: nfcCard):
+
+    k = Keys(settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k)
+    nembed_acquired = nfc_card.nembed
+    try:
+        parsed_data = parse_nembed_compressed(nembed_acquired)
+        print(parsed_data)
+        host = parsed_data["h"]
+        encrypted_key = parsed_data["k"]
+        decrypted_key = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
+        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key}")
+        k_wallet = Keys(priv_k=decrypted_key)
+        npub = k_wallet.public_key_bech32()
+        print(f"safebox {npub}")
+
+    except:
+        print("could not parse")
+        return
+    pass
+
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
+        print(statement)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle  
+    print(f"found: {out_name}")
+
+        # Create JWT token
+    settings.TOKEN_EXPIRES_HOURS
+    access_token = create_jwt_token({"sub": safebox_found.access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
     
 
     # Create response with JWT as HttpOnly cookie

@@ -121,4 +121,7 @@ class nwcVault(BaseModel):
     ln_invoice: str
     token: str   
 
+class nfcCard(BaseModel):
+    nembed: str
+      
 
