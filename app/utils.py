@@ -11,6 +11,10 @@ from urllib.parse import urlparse
 import secrets
 from fastapi import Depends, Cookie, HTTPException
 
+from hashlib import sha256
+import base64
+import secp256k1
+
 
 from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
@@ -1153,3 +1157,19 @@ def lnaddress_to_safebox_npub(lnaddress: str):
     return pubkey, relays  
 
 #################################
+
+def sign_payload(payload: str, private_key_hex: str):
+    
+    digest = sha256(payload.encode('utf-8')).digest()
+    pk = secp256k1.PrivateKey()
+    pk.deserialize(private_key_hex)
+    sig = pk.schnorr_sign(digest, bip340tag='', raw=True)
+    return sig.hex()
+
+def verify_payload(payload: str, signature_hex: str, public_key_hex: str) -> bool:
+    
+    digest = sha256(payload.encode('utf-8')).digest()
+    pubkey = secp256k1.PublicKey()
+    pubkey.deserialize(bytes.fromhex('02'+public_key_hex))
+    signature = bytes.fromhex(signature_hex)
+    return pubkey.schnorr_verify(digest, signature, bip340tag='', raw=True)

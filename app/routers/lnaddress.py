@@ -30,7 +30,9 @@ from app.utils import ( create_jwt_token,
                         generate_new_identity,
                         generate_pnr,
                         get_acorn,
-                        get_acorn_by_npub)
+                        get_acorn_by_npub,
+                        sign_payload,
+                        verify_payload)
 
 from app.config import Settings
 
@@ -196,6 +198,12 @@ async def ln_pay( amount: float,
 async def nwc_vault(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
+
+   # First, check to see if signature checks out
+    if verify_payload(nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey):
+        print("Payload is verified!")
+ 
+
     k  = Keys(settings.SERVICE_SECRET_KEY)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
@@ -235,6 +243,11 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
 async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     status = "OK"
     detail = "This from lnaddress nfcpayout"
+
+    # First, check to see if signature checks out
+    if verify_payload(nfc_pay_out.token, nfc_pay_out.sig, nfc_pay_out.pubkey):
+        print("NFC Pay Out Payload is verified!")
+
     
     k  = Keys(settings.SERVICE_SECRET_KEY)
     my_enc = NIP44Encrypt(k)
@@ -255,11 +268,14 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
      
     cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
 
+    comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
+    
     # create task to monitor payment
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, mint=HOME_MINT))
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, comment=comment_to_log, mint=HOME_MINT))
 
+   
 
-    return {"status": status, "detail": detail, "comment": nfc_pay_out.comment,"invoice": cli_quote.invoice }
+    return {"status": status, "detail": detail, "comment": comment_to_log,"invoice": cli_quote.invoice }
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
 async def onboard_safebox(  request: Request, 

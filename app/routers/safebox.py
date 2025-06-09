@@ -28,7 +28,7 @@ from monstr.event.event import Event
 from safebox.models import cliQuote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
@@ -1447,6 +1447,7 @@ async def accept_payment_token( request: Request,
                     ):
    
 
+    k = Keys(settings.SERVICE_SECRET_KEY)
 
     status = "OK"
     detail = "done"
@@ -1469,8 +1470,11 @@ async def accept_payment_token( request: Request,
     cli_quote = acorn_obj.deposit(token_amount)
     print(f"accept token:  {vault_url} {vault_token} {token_amount}")
     
+    sig = sign_payload(vault_token, k.private_key_hex())
+    pubkey = k.public_key_hex()
+
     # need to send off to the vault for processing
-    submit_data = {"ln_invoice": cli_quote.invoice, "token": vault_token }
+    submit_data = {"ln_invoice": cli_quote.invoice, "token": vault_token, "pubkey": pubkey, "sig": sig  }
     print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
     print(f"{vault_url}")
@@ -1490,6 +1494,7 @@ async def pay_to_nfc_tag( request: Request,
                     ):
     status = "OK"
     detail = "this is from safebox /paytonfctag"
+    k = Keys(settings.SERVICE_SECRET_KEY)
     # Forward request with amount to get invoice
     print(f"nembed: {nfc_pay_out_request.nembed}, amount: {nfc_pay_out_request.amount} comment: {nfc_pay_out_request.comment}")
 
@@ -1506,14 +1511,18 @@ async def pay_to_nfc_tag( request: Request,
 
     vault_url = f"https://{host}/.well-known/nfcpayout"
     headers = { "Content-Type": "application/json"}
-    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_pay_out_request.comment }
+
+    sig = sign_payload(vault_token, k.private_key_hex())
+    pubkey = k.public_key_hex()
+    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_pay_out_request.comment, "sig":sig, "pubkey":pubkey }
 
     print(f"vault: {vault_url} submit data: {submit_data}" )
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
     print(f"safebox: {response.json()}")
+    final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
     invoice = response.json()["invoice"]
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
-    await acorn_obj.add_tx_history(amount = final_amount,comment="nfc payout", tendered_amount=final_amount,tx_type='D')
+    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=final_amount,tx_type='D')
 
 
     return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 

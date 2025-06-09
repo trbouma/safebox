@@ -119,7 +119,9 @@ class paymentByToken(BaseModel):
 
 class nwcVault(BaseModel):
     ln_invoice: str
-    token: str   
+    token: str 
+    pubkey:str|None= None
+    sig: str|None = None  
 
 class nfcCard(BaseModel):
     nembed: str
@@ -140,4 +142,6 @@ class nfcPayOutVault(BaseModel):
     token: str
     amount: int
     comment: str = "nwc pay request"
+    pubkey: str|None = None
+    sig: str|None=None
     
