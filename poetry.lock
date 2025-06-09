@@ -2870,40 +2870,6 @@ files = [
 ]
 
 [[package]]
-name = "pyscard"
-version = "2.2.2"
-description = "Smartcard module for Python."
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "pyscard-2.2.2-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:e658f240276c12f836c28159120da499b0593cf6178469095e09a4ada869b9c6"},
-    {file = "pyscard-2.2.2-cp310-cp310-win32.whl", hash = "sha256:81e3d3ae40cf47725b5835970433197c4a6a9030af9f08ca74b4ddaf08c339c4"},
-    {file = "pyscard-2.2.2-cp310-cp310-win_amd64.whl", hash = "sha256:8f545e55918f6e44eb3dbc6abb6c290efa3f992872e94a4af1ee43f6ecbd160d"},
-    {file = "pyscard-2.2.2-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:44eaafcec0b0bab0344be5209b1456bc2f34a15303e0ae584e2fe6abbe67f777"},
-    {file = "pyscard-2.2.2-cp311-cp311-win32.whl", hash = "sha256:77577e6c847c253c642b880087616b08223b74e3942f07d3a6019f7067fe2369"},
-    {file = "pyscard-2.2.2-cp311-cp311-win_amd64.whl", hash = "sha256:4e3642fc5b800b4e7ff88742eef01cbb8bd3b3d0f951f56f3fa4fca51ab41bf2"},
-    {file = "pyscard-2.2.2-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:88e277d809fce5fc29e737ecd135f3871a0813f7d8b27fad5537ed9fa4442a20"},
-    {file = "pyscard-2.2.2-cp312-cp312-macosx_14_0_x86_64.whl", hash = "sha256:535d03d04477ef0cb9812ca0fad4b71fee6984b30ad72f05f644b6e4e743ccd5"},
-    {file = "pyscard-2.2.2-cp312-cp312-win32.whl", hash = "sha256:427164199171d26c565db0d2a577c491253dfdf160408dcd605bd0e8f4f01060"},
-    {file = "pyscard-2.2.2-cp312-cp312-win_amd64.whl", hash = "sha256:9ca0f5f3e38b753539f3c65335536dea8a20ca4c660b320f87368070e7febdbc"},
-    {file = "pyscard-2.2.2-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:1480fc9e760487e4fe18b668647cd88bb4d0fd94e075bba6a00a582a93b6def7"},
-    {file = "pyscard-2.2.2-cp313-cp313-macosx_14_0_x86_64.whl", hash = "sha256:ab1a875666330880ddecacbadc8193dc5c6eb799329e3d6e99281a1de113a4cd"},
-    {file = "pyscard-2.2.2-cp313-cp313-win32.whl", hash = "sha256:48e8e2e004ef105b488422c9943eca5f6f38648a8e377a94017fa07203d05b4a"},
-    {file = "pyscard-2.2.2-cp313-cp313-win_amd64.whl", hash = "sha256:b634d762de8058a039cf013dff3946e5eed6ee5d06fd18fe100ecd6af3eb6c35"},
-    {file = "pyscard-2.2.2-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:ac9eaf1988c9c563a5bf5d54b8c6058ef267a1ad5755d353b9d5a68ec5b2210b"},
-    {file = "pyscard-2.2.2-cp39-cp39-win32.whl", hash = "sha256:17b50d6aba530e9ef9a1a87d2761d52f378453bbb1735fc0bbdcaadc9597fef1"},
-    {file = "pyscard-2.2.2-cp39-cp39-win_amd64.whl", hash = "sha256:3975dc4527996552d9317cc8b3e6a9e7e98c85616c9dc4a34152f622c3c0ffd3"},
-    {file = "pyscard-2.2.2.tar.gz", hash = "sha256:c77481fb86f4a17bc441d7b36551c1d36a9d3a48c4bb30ab8118886e6f275081"},
-]
-
-[package.dependencies]
-typing_extensions = {version = "*", markers = "python_version == \"3.9\""}
-
-[package.extras]
-gui = ["wxPython"]
-
-[[package]]
 name = "pyserial"
 version = "3.5"
 description = "Python Serial Port Extension"
@@ -3944,4 +3910,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<3.14"
-content-hash = "0955530b8b59631eba56d540fb81028351a03d6bacef815cf2f20f711e4a02fd"
+content-hash = "2d3e73be6db628d9497269ba7214b0dd61722cb61015171a1fbe7f8e3f28890d"
