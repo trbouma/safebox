@@ -1334,7 +1334,7 @@ class Acorn:
         except:
             return False
 
-    async def acquire_lock(self, timeout=10):
+    async def acquire_lock(self, attempts=10):
         loop_count = 0
         lock_value = await self.get_wallet_info(label="lock")
 
@@ -1348,12 +1348,12 @@ class Acorn:
             while True:                
                 await asyncio.sleep(1)
                 loop_count +=1
-                if loop_count > timeout:
+                if loop_count > attempts:
                     print("we are going to seize the lock!")
                     break
                     # raise Exception(f"Could not acquire lock after {timeout} attempts")
                 lock_value = await self.get_wallet_info(label="lock")
-                print(f"{lock_value} attempt {loop_count}")
+                print(f"{lock_value} attempt {loop_count} of {attempts} attempts")
                 if lock_value.upper().strip() != 'TRUE':
                     await self.set_wallet_info(label="lock",label_info="TRUE")
                     print("we can acquire the lock!")

@@ -221,7 +221,28 @@ async function setCustomHandle() {
 
    }
 
+  async function readfromUSB() {
+    consoleLog(`read from USB`);
+    var usb_output;
+    try {
+        const device = await navigator.usb.requestDevice({ filters: [] }); // you can specify vendorId/productId
+        await device.open();
+        await device.selectConfiguration(1);         // Choose the correct config
+        await device.claimInterface(0);              // Interface number may vary
+
+        usb_output += `Connected to: ${device.productName}\n`;
+
+        // Send a command (example: APDU or reader-specific command)
+        // This part depends on your device
+        const response = await device.transferIn(1, 64); // Endpoint #1, 64 bytes
+        const decoder = new TextDecoder();
+        usb_output += `Data: ${decoder.decode(response.data)}\n`;
+      } catch (err) {
+        usb_output += `Error: ${err.message}\n`;
+      }
     
+      consoleLog(usb_output)
+  }
   
   
   </script>
@@ -288,7 +309,7 @@ async function setCustomHandle() {
   <br><br>
   <button onclick="backToWallet()">Back to Wallet</button> 
   <br><br>
-  <pre id="log"></pre>
+ 
 </div>
 <div class="center-text">
   <hr>
@@ -297,7 +318,13 @@ async function setCustomHandle() {
   <input type="number" placeholder="0" id="input_nfc_amount"   value="21" width="10"> sats
   <br><br>
   <button onclick="paybyNFC()">Pay by NFC Card</button>
+  <hr>
+  Read from USB NFC Reader
+  <br><br>
 
+  <button onclick="readfromUSB()">Read from USB</button>
+  <hr>
+  <pre id="log"></pre>
 </div>
 
 

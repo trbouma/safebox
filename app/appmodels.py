@@ -123,5 +123,21 @@ class nwcVault(BaseModel):
 
 class nfcCard(BaseModel):
     nembed: str
-      
 
+class nfcPayRequest(BaseModel):
+    nembed: str
+    amount: int
+    comment: str = "nwc pay request"
+    
+      
+class nfcPayOutRequest(BaseModel):
+    nembed: str
+    amount: int
+    comment: str = "nwc pay request"
+    sig: str|None = None
+
+class nfcPayOut(BaseModel):
+    token: str
+    invoice: str
+    comment: str = "nwc pay request"
+    sig: str|None = None

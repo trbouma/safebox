@@ -44,6 +44,8 @@ validators = "^0.34.0"
 argon2-cffi = "^23.1.0"
 ipinfo = "^5.1.1"
 filelock = "^3.18.0"
+pyserial = "^3.5"
+pyscard = "^2.2.2"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"

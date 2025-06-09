@@ -91,7 +91,7 @@ function revealBalance() {
     {
         
         // don't worry about linting
-        heading_balance.textContent = "{{"{:,}".format(acorn.balance)}} sats";
+        heading_balance.textContent = "\u20BF{{"{:,}".format(acorn.balance)}}";
         fiat_balance.textContent = "TBD";
         reveal_balance = true;
     }
@@ -274,8 +274,19 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
-async function paybyNFC(nfc_amount) {
+  function userMessage(data) {
+    var logElement = document.getElementById('payment_notification');
+    logElement.innerHTML = data ;
+  };
+
+  function paytoMessage(data) {
+    var logElement = document.getElementById('pay_to_message');
+    logElement.innerHTML = data ;
+  };
+
+async function requestbyNFC(nfc_amount) {
     // var nfc_amount = document.getElementById("input_nfc_amount").value;
+    userMessage(`Requesting ${nfc_amount}, please wait...`);
     var nfc_token;
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
@@ -323,6 +334,56 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function submitNFCPayment(nfc_amount,nfc_token, nfc_comment) {
+
+paytoMessage(`Pay to Token ${nfc_amount} ${nfc_comment} ${nfc_token} `);
+const submit_data = {"nembed": nfc_token, "amount": nfc_amount, "comment": nfc_comment};
+
+await fetch('/safebox/paytonfctag', {
+method: "POST",
+headers: {"Content-Type": "application/json"},        
+body: JSON.stringify(submit_data)         
+})   
+.then((data) => {paytoMessage(`done ${data}`)});
+
+
+}
+
+async function paytoNFC() {
+
+  var nfc_amount = parseInt(document.getElementById("ln_recipient_amount").value);
+  var nfc_comment = document.getElementById("ln_recipient_memo").value
+  alert(`Pay to NFC`);
+      // var nfc_amount = document.getElementById("input_nfc_amount").value;
+      userMessage(`Pay to NFC`);
+    var nfc_token;
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+          }
+          
+          
+          submitNFCPayment(nfc_amount,nfc_token, nfc_comment)
+
+
+         
+          
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+
+}
+
 async function requestPayment() {
 
   const create_invoice_amount = document.getElementById("ln_create_invoice_amount");
@@ -338,8 +399,9 @@ async function requestPayment() {
   // alert(ln_create_invoice_amount)
   
   
-  if (nfc_payment.checked == true) {  alert("nfc");
-      await paybyNFC(ln_create_invoice_amount);
+  if (nfc_payment.checked == true) {  
+      alert("Please tap NFC card!");
+      await requestbyNFC(ln_create_invoice_amount);
                       return;
   }
   
@@ -421,7 +483,7 @@ function checkBalance(balance) {
               
       } 
   
-  heading_balance.textContent = JSON.stringify(new_balance) +" sats";
+  heading_balance.textContent = "\u20BF" + JSON.stringify(new_balance);
   starting_balance = new_balance;
 
   //alert(JSON.stringify(balance));
@@ -598,7 +660,7 @@ function getInvoiceStatus(ln_invoice_status) {
       const status = response.status
 
       if (status == "RECD" || status == "SENT") {
-      document.getElementById("heading_balance").innerText = `${balance} sats`;
+      document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
@@ -634,9 +696,18 @@ function getInvoiceStatus(ln_invoice_status) {
 <div class="center-text">
 
   
-  <h1  id="fiat_balance">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
-  <h2  id="heading_balance">{{"{:,}".format(acorn.balance)}} sats</h1>  
-
+  <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
+  <h2  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</h2>  
+  <span id="payment_notification">
+      {% if action_mode == 'lnaddress' %}
+        Enter amount and memo
+      {% elif action_mode == 'ecash' %}
+        Receiving ecash, please wait...
+      {% else %}
+        Ready!  
+      {% endif %}  
+  </span>  
+  <br><br>
   
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
@@ -645,15 +716,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   <br><br>
-  <span id="payment_notification">
-    {% if action_mode == 'lnaddress' %}
-      Enter amount and memo
-    {% elif action_mode == 'ecash' %}
-      Receiving ecash, please wait...
-    {% else %}
-      Ready!  
-    {% endif %}  
-  </span>
+
   {% if action_mode == "lninvoice" %}
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
     <br><br>
@@ -666,7 +729,7 @@ function getInvoiceStatus(ln_invoice_status) {
     {% if action_mode == "lnaddress" %}
 
     {% else %}
-    <h2>Receive a Payment</h2>
+    <h2 style="margin: 0;">Receive a Payment</h2>
       <br>
       <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
       <br>
@@ -684,10 +747,10 @@ function getInvoiceStatus(ln_invoice_status) {
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
-      Pay by NFC
+      Request by NFC
       </label>
       <pre id="log"></pre>
-      <br><br>
+      <br>
 
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
     
@@ -695,7 +758,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <br><br>
     <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
     <hr>
-    <h2>Make a Payment</h2>
+    <h2 style="margin: 0;">Make a Payment</h2>
     <input style="width:80%;" type="text" placeholder="enter lightning address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
     <br>
    
@@ -712,10 +775,13 @@ function getInvoiceStatus(ln_invoice_status) {
     <br><br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Lightning Address</button> 
     <br><br>
+    <button id="nfc_payto_button" onclick="paytoNFC()">Pay to NFC Tag</button> 
+    <br><br>
   
   {% endif %}
 
   <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
+  <pre id="pay_to_message">Ready.</pre>
   
   <hr>
   <h2>Official</h2>
