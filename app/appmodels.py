@@ -134,10 +134,10 @@ class nfcPayOutRequest(BaseModel):
     nembed: str
     amount: int
     comment: str = "nwc pay request"
-    sig: str|None = None
+    
 
-class nfcPayOut(BaseModel):
+class nfcPayOutVault(BaseModel):
     token: str
-    invoice: str
+    amount: int
     comment: str = "nwc pay request"
-    sig: str|None = None
+    

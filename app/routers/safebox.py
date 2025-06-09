@@ -1489,7 +1489,7 @@ async def pay_to_nfc_tag( request: Request,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     status = "OK"
-    detail = "done"
+    detail = "this is from safebox /paytonfctag"
     # Forward request with amount to get invoice
     print(f"nembed: {nfc_pay_out_request.nembed}, amount: {nfc_pay_out_request.amount} comment: {nfc_pay_out_request.comment}")
 
@@ -1498,19 +1498,22 @@ async def pay_to_nfc_tag( request: Request,
     vault_token = parsed_nembed["k"]
     amount_tag = parsed_nembed["a"]
 
+    final_amount = nfc_pay_out_request.amount
+    if final_amount == 0:
+        final_amount = amount_tag
 
-    
-    
 
-    print(f"host: {host} vault token: {vault_token} amount tag: {amount_tag}")
-    cli_quote =  acorn_obj.deposit(nfc_pay_out_request.amount)
-
-    
 
     vault_url = f"https://{host}/.well-known/nfcpayout"
     headers = { "Content-Type": "application/json"}
-    submit_data = {"invoice": cli_quote.invoice, "token": vault_token, "comment": nfc_pay_out_request.comment }
+    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_pay_out_request.comment }
 
     print(f"vault: {vault_url} submit data: {submit_data}" )
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)
+    print(f"safebox: {response.json()}")
+    invoice = response.json()["invoice"]
+    await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
+    await acorn_obj.add_tx_history(amount = final_amount,comment="nfc payout", tendered_amount=final_amount,tx_type='D')
 
-    return {"status": status, "detail": detail} 
+
+    return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 

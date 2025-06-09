@@ -20,7 +20,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment
 from app.utils import ( create_jwt_token, 
@@ -29,7 +29,9 @@ from app.utils import ( create_jwt_token,
                         format_relay_url, 
                         generate_new_identity,
                         generate_pnr,
-                        get_acorn)
+                        get_acorn,
+                        get_acorn_by_npub)
+
 from app.config import Settings
 
 settings = Settings()
@@ -229,6 +231,35 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
 
     return {"status": status, "detail": detail}
 
+@router.post("/.well-known/nfcpayout", tags=["public"])
+async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
+    status = "OK"
+    detail = "This from lnaddress nfcpayout"
+    
+    k  = Keys(settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k)
+    my_enc_NIP4 = NIP4Encrypt(k)
+    token_secret = my_enc.decrypt(nfc_pay_out.token, for_pub_k=k.public_key_hex())
+    print(f"token secret {token_secret}")
+    k_payout = Keys(token_secret)
+    
+    print(f"vault nfcpayout: {nfc_pay_out.token} amount: {nfc_pay_out.amount} comment: {nfc_pay_out.comment} to npub: {k_payout.public_key_bech32()}")
+
+
+    # Need to instantiate right safebox to create invoice here and then spawn task to monitor payment
+    print("instatiate right safebox")
+
+    acorn_obj = await get_acorn_by_npub(k_payout.public_key_bech32())
+
+    print(f"Balance of payout acorn {acorn_obj.handle} is {acorn_obj.balance}")
+     
+    cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
+
+    # create task to monitor payment
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, mint=HOME_MINT))
+
+
+    return {"status": status, "detail": detail, "comment": nfc_pay_out.comment,"invoice": cli_quote.invoice }
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
 async def onboard_safebox(  request: Request, 

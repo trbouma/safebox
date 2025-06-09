@@ -134,6 +134,26 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
         
     return safebox_found
 
+async def fetch_safebox_by_npub(npub: str) -> RegisteredSafebox:
+
+
+    with Session(engine) as session:
+        
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub== npub)
+        
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+       
+        if safebox_found:
+            print("found safebox!")
+
+        else:
+
+            raise Exception("Could not find safebox!")
+        
+    return safebox_found
+
+
 async def db_lookup_safebox(npub: str) -> RegisteredSafebox:
 
    
@@ -171,6 +191,22 @@ async def get_acorn(access_token: str = Cookie(None)):
     acorn_found = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
     await acorn_found.load_data()
     return acorn_found
+
+async def get_acorn_by_npub(npub: str ):
+    if not npub:
+        # raise HTTPException(status_code=401, detail="Access token missing")
+        return None
+    
+    safebox_found = await fetch_safebox_by_npub(npub)
+    
+    if not safebox_found:
+        raise HTTPException(status_code=404, detail="Safebox not found")
+    
+    acorn_found = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+    await acorn_found.load_data()
+    return acorn_found
+
+
 
 def format_relay_url(relay: str) -> str:
     """
