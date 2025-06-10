@@ -328,7 +328,7 @@ body: JSON.stringify(submit_data)
 })   
 .then((data) => {consoleLog(`done ${data}`)});
 
-window.location.href="/safebox/access" ;
+window.location.href="/safebox/access?action_comment=Payment+requested.+Please+wait..." ;
 
 
 
@@ -346,7 +346,7 @@ body: JSON.stringify(submit_data)
 })   
 .then((data) => {paytoMessage(`done ${data}`)});
 
-window.location.href="/safebox/access" 
+window.location.href=`/safebox/access?action_comment=Payment+sent.` 
 
 
 }
@@ -701,13 +701,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
   <h2  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</h2>  
   <span id="payment_notification">
-      {% if action_mode == 'lnaddress' %}
-        Enter amount and memo
-      {% elif action_mode == 'ecash' %}
-        Receiving ecash, please wait...
-      {% else %}
-        Ready!  
-      {% endif %}  
+    {{ action_comment if action_comment else "Ready!"}}
   </span>  
   <br><br>
   
