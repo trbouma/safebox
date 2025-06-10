@@ -136,7 +136,7 @@ async def login(request: Request, access_key: str = Form()):
     return response
 
 @router.post("/loginwithnfc", tags=["safebox"])
-async def login(request: Request, nfc_card: nfcCard):
+async def nfc_login(request: Request, nfc_card: nfcCard):
 
     k = Keys(settings.SERVICE_SECRET_KEY)
     my_enc = NIP44Encrypt(k)
@@ -148,6 +148,11 @@ async def login(request: Request, nfc_card: nfcCard):
         encrypted_key = parsed_data["k"]
         decrypted_key = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
         print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key}")
+        if host != request.url.hostname:
+            print(f"This is the wrong host - need to go to https://{host}")
+            return RedirectResponse(url=f"https://{host}",status_code=301)
+           
+
         k_wallet = Keys(priv_k=decrypted_key)
         npub = k_wallet.public_key_bech32()
         print(f"safebox {npub}")

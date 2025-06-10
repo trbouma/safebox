@@ -1327,12 +1327,14 @@ class Acorn:
     async def set_lock(self, lock: bool):
         pass
 
-    async def get_lock(self):
+    async def check_lock(self):
         try:
             lock_value = await self.get_wallet_info("lock")
-            print(lock_value)
-        except:
-            return False
+            # print(lock_value)
+        except Exception as e:
+            self.logger.error(f"Check lock error {e}")
+        
+        return True if lock_value == "TRUE" else False
 
     async def acquire_lock(self, attempts=10):
         loop_count = 0
@@ -1350,6 +1352,7 @@ class Acorn:
                 loop_count +=1
                 if loop_count > attempts:
                     print("we are going to seize the lock!")
+                    await self.set_wallet_info(label="lock",label_info="FALSE")
                     break
                     # raise Exception(f"Could not acquire lock after {timeout} attempts")
                 lock_value = await self.get_wallet_info(label="lock")
@@ -1361,7 +1364,7 @@ class Acorn:
         else:
             print("we can acquire the lock!")
             await self.set_wallet_info(label="lock",label_info="TRUE")
-        pass
+       
 
     async def release_lock(self):
         print("we can release the lock!")

@@ -177,6 +177,7 @@ async def ln_pay( amount: float,
     
     cli_quote = acorn_obj.deposit(sat_amount)  
     task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
+   
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
 
    
