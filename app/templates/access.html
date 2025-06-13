@@ -284,10 +284,13 @@ function consoleLog(data) {
     logElement.innerHTML = data ;
   };
 
-async function requestbyNFC(nfc_amount) {
-    // var nfc_amount = document.getElementById("input_nfc_amount").value;
-    userMessage(`Requesting ${nfc_amount}, please wait...`);
+async function requestbyNFC(nfc_amount, nfc_currency) {
+   
+    userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
+    consoleLog(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     var nfc_token;
+    var nfc_comment = document.getElementById("ln_recipient_memo").value;
+   
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
       try {
@@ -299,7 +302,10 @@ async function requestbyNFC(nfc_amount) {
             nfc_token = decoder.decode(record.data);
           }
           // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
-          submitToken(nfc_amount, nfc_token)
+        
+          
+          
+          submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
           
         }
       } catch(error) {
@@ -312,10 +318,14 @@ async function requestbyNFC(nfc_amount) {
 
   }
 
-async function submitToken(nfc_amount,nfc_token) {
+async function submitToken(nfc_amount,nfc_token, nfc_currency,nfc_comment) {
 
 consoleLog(`submitToken ${nfc_amount} ${nfc_token}`);
-const submit_data = {"payment_token": nfc_token, "amount": parseInt(nfc_amount)};
+const submit_data = { "payment_token": nfc_token, 
+                      "amount": nfc_amount,
+                      "currency": nfc_currency,
+                      "comment": nfc_comment                    
+                    };
 
 if (nfc_amount == 0) {
   consoleLog(`Advisory: Since 0 was provided for NFC, your minimun amount will be used`);
@@ -334,10 +344,14 @@ window.location.href="/safebox/access?action_comment=Payment+requested.+Please+w
 
 }
 
-async function submitNFCPayment(nfc_amount,nfc_token, nfc_comment) {
+async function submitNFCPayment(nfc_amount,nfc_currency, nfc_token, nfc_comment) {
 
-paytoMessage(`Pay to Token ${nfc_amount} ${nfc_comment} ${nfc_token} `);
-const submit_data = {"nembed": nfc_token, "amount": nfc_amount, "comment": nfc_comment};
+paytoMessage(`Pay to Token ${nfc_amount} ${nfc_currency}${nfc_comment} ${nfc_token} `);
+
+const submit_data =   { "nembed": nfc_token, 
+                        "currency": nfc_currency,
+                        "amount": nfc_amount, 
+                        "comment": nfc_comment};
 
 await fetch('/safebox/paytonfctag', {
 method: "POST",
@@ -353,8 +367,11 @@ window.location.href=`/safebox/access?action_comment=Payment+sent.`
 
 async function paytoNFC() {
 
-  var nfc_amount = parseInt(document.getElementById("ln_recipient_amount").value);
-  var nfc_comment = document.getElementById("ln_recipient_memo").value
+  var nfc_amount = parseFloat(document.getElementById("ln_recipient_amount").value);
+  var nfc_comment = document.getElementById("ln_recipient_memo").value;
+  var nfc_currency = document.getElementById("ln_select_currency").value;
+
+  
   alert(`Pay to NFC`);
       // var nfc_amount = document.getElementById("input_nfc_amount").value;
       userMessage(`Pay to NFC`);
@@ -371,7 +388,7 @@ async function paytoNFC() {
           }
           
           
-          submitNFCPayment(nfc_amount,nfc_token, nfc_comment)
+          submitNFCPayment(nfc_amount,nfc_currency,nfc_token, nfc_comment)
 
 
          
@@ -396,14 +413,14 @@ async function requestPayment() {
   
   
   
-  var ln_create_invoice_amount = create_invoice_amount.value;
+  var ln_create_invoice_amount = parseFloat(create_invoice_amount.value);
   var ln_currency =  ln_select_invoice_currency.value;
-  // alert(ln_create_invoice_amount)
+ 
   
   
   if (nfc_payment.checked == true) {  
       alert("Please tap NFC card!");
-      await requestbyNFC(ln_create_invoice_amount);
+      await requestbyNFC(ln_create_invoice_amount, ln_currency);
                       return;
   }
   

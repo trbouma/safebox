@@ -239,7 +239,7 @@ async def create_nwc_qr(request: Request,
 
     qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
     # &lud16={handle}@{request.url.hostname}
-    print(qr_text)  
+    print(f"nwc secret link: {qr_text}")  
 
     # Publish the info event
     # 
@@ -1465,15 +1465,24 @@ async def accept_payment_token( request: Request,
     host = parsed_nembed["h"]
     vault_url = f"https://{host}/.well-known/nwcvault"
     vault_token = parsed_nembed["k"]
-    
-    if payment_token.amount > 0:
-        token_amount = payment_token.amount
+
+    print(f"payment token: {payment_token}")
+
+    if payment_token.currency == "SAT":
+        sat_amount = int(payment_token.amount)
     else:
-        token_amount = parsed_nembed.get("a", 21)
+        local_currency = await get_currency_rate(payment_token.currency.upper())
+        print(local_currency.currency_rate)
+        sat_amount = int(payment_token.amount* 1e8 // local_currency.currency_rate)
+    
+    if sat_amount > 0:        
+        final_amount = sat_amount
+    else:
+        final_amount = int(parsed_nembed.get("a", 21))
     
 
-    cli_quote = acorn_obj.deposit(token_amount)
-    print(f"accept token:  {vault_url} {vault_token} {token_amount}")
+    cli_quote = acorn_obj.deposit(final_amount)
+    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
     
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
@@ -1488,7 +1497,8 @@ async def accept_payment_token( request: Request,
     print(response.json())
 
     # add in the polling task here
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=token_amount, mint=HOME_MINT, comment="nwc"))
+    nfc_comment = payment_token.comment
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, mint=HOME_MINT, comment=nfc_comment))
 
     return {"status": status, "detail": detail}  
 
@@ -1508,7 +1518,24 @@ async def pay_to_nfc_tag( request: Request,
     vault_token = parsed_nembed["k"]
     amount_tag = parsed_nembed["a"]
 
-    final_amount = nfc_pay_out_request.amount
+    # Need to do currency conversion here
+
+    
+
+    if nfc_pay_out_request.currency == "SAT":
+        sat_amount = int(nfc_pay_out_request.amount)
+    else:
+        local_currency = await get_currency_rate(nfc_pay_out_request.currency.upper())
+        print(local_currency.currency_rate)
+        sat_amount = int(nfc_pay_out_request.amount* 1e8 // local_currency.currency_rate)
+    
+    if sat_amount > 0:        
+        final_amount = sat_amount
+    else:
+        final_amount = int(parsed_nembed.get("a", 21))
+    
+
+    final_amount = sat_amount
     if final_amount == 0:
         final_amount = amount_tag
 
@@ -1519,7 +1546,8 @@ async def pay_to_nfc_tag( request: Request,
 
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
-    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_pay_out_request.comment, "sig":sig, "pubkey":pubkey }
+    nfc_comment = nfc_pay_out_request.comment
+    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_comment, "sig":sig, "pubkey":pubkey }
 
     print(f"vault: {vault_url} submit data: {submit_data}" )
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
