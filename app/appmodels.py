@@ -119,14 +119,7 @@ class paymentByToken(BaseModel):
     currency: str = "SAT"
     comment: str = "Please Pay!"
 
-class nwcVault(BaseModel):
-    ln_invoice: str
-    token: str 
-    tendered_amount: float|None = None
-    tendered_currency: str = "SAT"
-    comment: str|None=None
-    pubkey:str|None= None
-    sig: str|None = None  
+
 
 class nfcCard(BaseModel):
     nembed: str
@@ -143,6 +136,14 @@ class nfcPayOutRequest(BaseModel):
     currency: str = "SAT"
     comment: str = "nwc pay request"
     
+class nwcVault(BaseModel):
+    ln_invoice: str
+    token: str 
+    tendered_amount: float|None = None
+    tendered_currency: str = "SAT"
+    comment: str|None=None
+    pubkey:str|None= None
+    sig: str|None = None  
 
 class nfcPayOutVault(BaseModel):
     token: str

@@ -275,7 +275,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
     
     # create task to monitor payment
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, comment=comment_to_log, mint=HOME_MINT))
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency, comment=comment_to_log, mint=HOME_MINT))
 
    
 
