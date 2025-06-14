@@ -284,12 +284,12 @@ function consoleLog(data) {
     logElement.innerHTML = data ;
   };
 
-async function requestbyNFC(nfc_amount, nfc_currency) {
+async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
    
     userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     consoleLog(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     var nfc_token;
-    var nfc_comment = document.getElementById("ln_recipient_memo").value;
+    // var nfc_comment = document.getElementById("ln_recipient_memo").value;
    
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
@@ -357,8 +357,15 @@ await fetch('/safebox/paytonfctag', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
 body: JSON.stringify(submit_data)         
-})   
-.then((data) => {paytoMessage(`done ${data}`)});
+}) 
+.then((response) => response.json())
+.then((data) => { paytoMessage(`done ${data}`);
+                  alert(`${data.detail}`);
+
+
+});
+
+
 
 window.location.href=`/safebox/access?action_comment=Payment+sent.` 
 
@@ -374,7 +381,7 @@ async function paytoNFC() {
   
   alert(`Pay to NFC`);
       // var nfc_amount = document.getElementById("input_nfc_amount").value;
-      userMessage(`Pay to NFC`);
+      userMessage(`Pay to NFC tag`);
     var nfc_token;
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
@@ -408,6 +415,7 @@ async function requestPayment() {
   const create_invoice_amount = document.getElementById("ln_create_invoice_amount");
   const create_invoice_button = document.getElementById("ln_create_invoice_button");
   const ln_select_invoice_currency = document.getElementById("ln_select_invoice_currency");
+  const ln_request_textarea = document.getElementById("ln_request_memo");
   const nfc_payment = document.getElementById("nfc_payment_checkbox");
   
   
@@ -415,12 +423,13 @@ async function requestPayment() {
   
   var ln_create_invoice_amount = parseFloat(create_invoice_amount.value);
   var ln_currency =  ln_select_invoice_currency.value;
+  var ln_comment = ln_request_textarea.value
  
   
   
   if (nfc_payment.checked == true) {  
       alert("Please tap NFC card!");
-      await requestbyNFC(ln_create_invoice_amount, ln_currency);
+      await requestbyNFC(ln_create_invoice_amount, ln_currency, ln_comment);
                       return;
   }
   
@@ -757,6 +766,8 @@ function getInvoiceStatus(ln_invoice_status) {
 
       </select>      
       <br><br>
+      <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <br><br>
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
@@ -784,7 +795,7 @@ function getInvoiceStatus(ln_invoice_status) {
     </select>
     <br><br>
     
-    <textarea id="ln_recipient_memo" style="width:60%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
+    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
     <br><br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Lightning Address</button> 
     <br><br>

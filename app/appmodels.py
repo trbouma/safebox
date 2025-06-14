@@ -122,6 +122,7 @@ class paymentByToken(BaseModel):
 class nwcVault(BaseModel):
     ln_invoice: str
     token: str 
+    comment: str|None=None
     pubkey:str|None= None
     sig: str|None = None  
 

@@ -216,7 +216,8 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
     pay_instruction = {
     "method": "pay_invoice",
     "params": { 
-        "invoice": nwc_vault.ln_invoice 
+        "invoice": nwc_vault.ln_invoice,
+        "comment": nwc_vault.comment 
             }
         }
     
