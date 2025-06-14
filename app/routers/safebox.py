@@ -1554,7 +1554,12 @@ async def pay_to_nfc_tag( request: Request,
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
     nfc_comment = nfc_pay_out_request.comment
-    submit_data = {"token": vault_token, "amount": final_amount, "comment": nfc_comment, "sig":sig, "pubkey":pubkey }
+    submit_data = { "token": vault_token, 
+                    "amount": final_amount, 
+                    "tendered_amount": nfc_pay_out_request.amount,
+                    "tendered_currency": nfc_pay_out_request.currency,
+                    "comment": nfc_comment, 
+                    "sig":sig, "pubkey":pubkey }
 
     print(f"vault: {vault_url} submit data: {submit_data}" )
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
