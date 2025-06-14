@@ -1488,7 +1488,7 @@ async def accept_payment_token( request: Request,
     pubkey = k.public_key_hex()
 
     # need to send off to the vault for processing
-    submit_data = {"ln_invoice": cli_quote.invoice, "token": vault_token, "pubkey": pubkey, "sig": sig  }
+    submit_data = {"ln_invoice": cli_quote.invoice, "token": vault_token, "pubkey": pubkey, "sig": sig, "comment": payment_token.comment  }
     print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
     print(f"{vault_url}")
@@ -1497,8 +1497,8 @@ async def accept_payment_token( request: Request,
     print(response.json())
 
     # add in the polling task here
-    nfc_comment = payment_token.comment
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, mint=HOME_MINT, comment=nfc_comment))
+   
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, mint=HOME_MINT, comment=payment_token.comment))
 
     return {"status": status, "detail": detail}  
 
