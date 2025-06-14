@@ -1567,7 +1567,7 @@ async def pay_to_nfc_tag( request: Request,
     final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
     invoice = response.json()["invoice"]
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
-    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=final_amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
+    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
 
     detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
 
