@@ -115,13 +115,15 @@ class sendCredentialParms(BaseModel):
 
 class paymentByToken(BaseModel):
     payment_token: str
-    amount: float = 0
+    amount: float = 0    
     currency: str = "SAT"
     comment: str = "Please Pay!"
 
 class nwcVault(BaseModel):
     ln_invoice: str
     token: str 
+    tendered_amount: float|None = None
+    tendered_currency: str = "SAT"
     comment: str|None=None
     pubkey:str|None= None
     sig: str|None = None  
@@ -145,6 +147,8 @@ class nfcPayOutRequest(BaseModel):
 class nfcPayOutVault(BaseModel):
     token: str
     amount: int
+    tendered_amount: float|None = None
+    tendered_currency: str = "SAT"
     comment: str = "nwc pay request"
     pubkey: str|None = None
     sig: str|None=None

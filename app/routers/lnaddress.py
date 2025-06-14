@@ -217,7 +217,9 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
     "method": "pay_invoice",
     "params": { 
         "invoice": nwc_vault.ln_invoice,
-        "comment": nwc_vault.comment 
+        "comment": nwc_vault.comment,
+        "tendered_amount": nwc_vault.tendered_amount,
+        "tendered_currency": nwc_vault.tendered_currency 
             }
         }
     
@@ -262,7 +264,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
 
 
     # Need to instantiate right safebox to create invoice here and then spawn task to monitor payment
-    print("instatiate right safebox")
+    print("instantiate right safebox")
 
     acorn_obj = await get_acorn_by_npub(k_payout.public_key_bech32())
 

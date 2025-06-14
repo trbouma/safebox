@@ -79,13 +79,20 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         invoice_amount = invoice_decoded.amount_msat//1000
 
         comment = payinstruction_obj['params'].get("comment", "nwc pay")
+        tendered_amount = payinstruction_obj['params'].get("tendered_amount", None)
+        tendered_currency = payinstruction_obj['params'].get("tendered_currency", "SAT")
         print(f"this is the invoice to pay: {invoice}")
         
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
             nfc_msg = f"💳 {comment} "
-            await acorn_obj.add_tx_history("D",invoice_amount, comment=nfc_msg, fees=final_fees)
+            await acorn_obj.add_tx_history(     tx_type="D", 
+                                                amount=invoice_amount, 
+                                                tendered_amount=tendered_amount,
+                                                tendered_currency=tendered_currency,
+                                                comment=nfc_msg, 
+                                                fees=final_fees)
             
         except Exception as e:
             # raise Exception(f"Error {e}")

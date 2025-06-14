@@ -245,15 +245,20 @@ async def listen_nip17(self, url):
         c.end()
 
        
-async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint:str, nostr: str = None, comment: str ="" ):
+async def handle_payment(   acorn_obj: Acorn,
+                            cli_quote: cliQuote, 
+                            amount: int, 
+                            mint:str, 
+                            tendered_amount: float|None = None,
+                            tendered_currency: str = "SAT",                            
+                            nostr: str = None, 
+                            comment: str ="" ):
 
     success = False
     lninvoice = None
     success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
     pass
     
-    
-
 
     #FIXME Implement zaps here
     if nostr :
@@ -275,4 +280,4 @@ async def handle_payment(acorn_obj: Acorn,cli_quote: cliQuote, amount: int, mint
         session.add(safebox_update)
         session.commit()
   
-    await acorn_obj.add_tx_history(tx_type='C',amount=amount, comment=comment)
+    await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
