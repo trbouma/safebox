@@ -29,7 +29,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-mints   = ["https://mint.nimo.cash"]
+mints   = ["https://mint.getsafebox.app"]
 wallet  = "default" 
 home_relay = "wss://relay.getsafebox.app"
 replicate_relays = ["wss://nostr-pub.wellorder.net"]

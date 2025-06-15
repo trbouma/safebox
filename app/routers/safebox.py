@@ -37,9 +37,11 @@ from app.rates import get_currency_rate
 
 import logging, jwt
 
-HOME_MINT = "https://mint.nimo.cash"
-MINTS = ['https://mint.nimo.cash']
+
 settings = Settings()
+
+HOME_MINT = settings.HOME_MINT
+MINTS = settings.MINTS
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -495,7 +497,7 @@ async def ln_invoice_payment(   request: Request,
 
     cli_quote = acorn_obj.deposit(amount=sat_amount )   
 
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT))
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, tendered_amount= ln_invoice.amount, tendered_currency= ln_invoice.currency, comment=ln_invoice.comment, mint=HOME_MINT))
 
     # task2 = asyncio.create_task(invoice_poll_for_payment(acorn_obj=acorn_obj,quote=cli_quote.quote, amount=sat_amount, mint=HOME_MINT))
     
@@ -1566,9 +1568,10 @@ async def pay_to_nfc_tag( request: Request,
     print(f"safebox: {response.json()}")
     final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
     invoice = response.json()["invoice"]
+    payee = response.json()["payee"]
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
 
-    detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
+    detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} to {payee}@{request.url.hostname} sent."
 
     return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 

@@ -28,8 +28,8 @@ from app.utils import send_zap_receipt
 settings = Settings()
 
 # HOME_RELAY = 'wss://relay.getsafebox.app'
-RELAYS = ['wss://relay.getsafebox.app']
-MINTS = ['https://mint.nimo.cash']
+RELAYS = settings.RELAYS
+MINTS = settings.MINTS
 LOGGING_LEVEL=20
 
 engine = create_engine(settings.DATABASE)

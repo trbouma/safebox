@@ -273,13 +273,15 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
 
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
+
+    detail = f"Paid to {acorn_obj.handle}"
     
     # create task to monitor payment
     task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency, comment=comment_to_log, mint=HOME_MINT))
 
    
 
-    return {"status": status, "detail": detail, "comment": comment_to_log,"invoice": cli_quote.invoice }
+    return {"status": status, "detail": detail, "comment": comment_to_log,"invoice": cli_quote.invoice, "payee": acorn_obj.handle }
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
 async def onboard_safebox(  request: Request, 
