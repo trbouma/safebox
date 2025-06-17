@@ -186,6 +186,18 @@ window.location.href="/credentials/offer";
 
 }
 
+async function doOfferRecord() {
+
+window.location.href="/records/offer";
+
+}
+
+async function payOrPass() {
+
+    window.location.href="/public/paypass";
+  
+}
+
 async function doVerifyCredential() {
 // alert('Coming soon!');
 window.location.href="/credentials/verificationrequest";
@@ -818,10 +830,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <pre id="pay_to_message">Ready.</pre>
   
   <hr>
-  <h2>Official</h2>
-  <button id="my_credentials_button" onclick="myCredentials()" >Credentials</button> 
 
-  <hr>
   <h2>Personal</h2>
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
   <br><br>
@@ -829,11 +838,18 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>
   <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
   <hr>
+  <h2>Official</h2>
+  <button id="my_credentials_button" onclick="myCredentials()" >Present Credentials</button> 
+  <br><br>
+  <button id="pay_or_pass_button" onclick="payOrPass()" >Pay or Pass</button>
+
+  <hr>
   <h2>Professional</h2>   
   <button id="do_consult_button" onclick="doHealthConsult()" >Health Consultation</button>  
+
   <br>
   <br>
-  <button id="do_issue_credential" onclick="doOfferCredential()" >Credential Offer</button>  
+  <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Records</button>  
   <br>
   <br>
   <button id="do_verify_credential" onclick="doVerifyCredential()" >Verification Request</button> 
@@ -874,6 +890,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <a href="/public/rates">Exchange Rates</a>
   <br><br>
   <a href="/safebox/dangerzone">Danger Zone!</a>
+  <br><br>
+  
   
   
   <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>

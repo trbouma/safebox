@@ -42,7 +42,7 @@ password_hasher = PasswordHasher()
 
 # RELAYS = ['wss://relay.getsafebox.app']
 RELAYS = settings.RELAYS
-# MINTS = ['https://mint.nimo.cash']
+
 MINTS = settings.MINTS
 # HOME_RELAY = 'wss://relay.getsafebox.app'
 LOGGING_LEVEL = 10

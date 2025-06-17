@@ -47,5 +47,14 @@ async def public_rates (    request: Request,
     
     return templates.TemplateResponse("public/rates.html", {"request": request, "rates": rates})
 
-
+@router.get("/paypass", tags=["public"]) 
+async def pay_pass(    request: Request, 
+                    
+                    
+                       
+                    ):
+    
+    pass
+    
+    return templates.TemplateResponse("paypass.html", {"request": request})
 

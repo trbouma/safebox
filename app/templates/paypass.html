@@ -1,0 +1,55 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Safebox{% endblock %}
+{% block head %}
+{{ super() }}
+
+<script>
+async function goHome() {
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function doPay() {
+
+    alert("Pay!")
+}
+
+async function doPass() {
+
+    alert("Pass!")
+}
+
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+<div class="center-text"> 
+    <h1>Pay Or Pass</h1>
+    This is a prototype of an interface that would be applied at a high-volume admission gate or port of entry
+    <br><br>
+    <button id="pay_button" onclick="doPay()">Pay</button>
+    <br><br>
+    <button id="pass_button" onclick="doPass()" >Pass</button>
+    <br><br>
+    <label>
+    <input type="checkbox" id="nfc_checkbox"  checked name="nfc_checkbox"> Use NFC
+    </label>
+    <hr>
+    <br><br>
+    <button id="logout_button"onclick="goHome()" >Home</button>
+</div>      
+
+<script>
+setDarkMode();
+</script>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

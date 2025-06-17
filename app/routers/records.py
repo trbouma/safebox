@@ -36,7 +36,7 @@ engine = create_engine(settings.DATABASE)
 
 
 
-@router.get("/issue", tags=["credentials"]) 
+@router.get("/issue", tags=["records"]) 
 async def issue_credentials (   request: Request, 
                                 acorn_obj = Depends(get_acorn)                  
                     
@@ -52,10 +52,10 @@ async def issue_credentials (   request: Request,
     
     return templates.TemplateResponse("credentials/issuecredentials.html", {"request": request, "profile": profile})
 
-@router.get("/offer", tags=["credentials", "protected"])
-async def do_credential_offer(      request: Request,
+@router.get("/offer", tags=["records", "protected"])
+async def do_record_offer(      request: Request,
                                     private_mode:str = "offer", 
-                                    kind:int = 34001,   
+                                    kind:int = 34002,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
                                     acorn_obj: Acorn = Depends(get_acorn)
@@ -111,20 +111,24 @@ async def do_credential_offer(      request: Request,
     else:
        pass
     
+    select_kinds = settings.SELECT_KINDS
+    select_kind = get_label_by_id(select_kinds, kind)
 
-    return templates.TemplateResponse(  "credentials/credentialoffer.html", 
+    return templates.TemplateResponse(  "records/recordoffer.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
                                             "record_kind": kind,
+                                            "select_kind": select_kind,
                                             "private_mode": private_mode,
                                             "client_nprofile": nprofile,
                                             "client_nprofile_parse": nprofile_parse,
-                                            "client_nauth": auth_msg
+                                            "client_nauth": auth_msg,
+                                            "select_kinds": select_kinds
 
                                         })
 
-@router.get("/presentationrequest", tags=["credentials", "protected"])
+@router.get("/presentationrequest", tags=["records", "protected"])
 async def credential_presentation_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34003,   
@@ -196,7 +200,7 @@ async def credential_presentation_request(      request: Request,
                                             "nauth": nauth
 
                                         })
-@router.get("/verificationrequest", tags=["credentials", "protected"])
+@router.get("/verificationrequest", tags=["records", "protected"])
 async def credential_verfication_request(      request: Request,
                           
                                     acorn_obj: Acorn = Depends(get_acorn)
@@ -214,7 +218,7 @@ async def credential_verfication_request(      request: Request,
                                         })
 
 
-@router.get("/display", tags=["credentials", "protected"])
+@router.get("/display", tags=["records", "protected"])
 async def display_card(     request: Request, 
                             card: str = None,
                             kind: int = 34001,
@@ -246,7 +250,7 @@ async def display_card(     request: Request,
                                             
                                         })
 
-@router.post("/transmit", tags=["credentials", "protected"])
+@router.post("/transmit", tags=["records", "protected"])
 async def transmit_records(        request: Request, 
                                         transmit_consultation: transmitConsultation,
                                         acorn_obj = Depends(get_acorn)
@@ -311,7 +315,7 @@ async def transmit_records(        request: Request,
 
     return {"status": status, "detail": detail} 
 
-@router.get("/present", tags=["credentials", "protected"])
+@router.get("/present", tags=["records", "protected"])
 async def my_records(       request: Request, 
                                 nauth: str = None,
                                 nonce: str = None,
@@ -399,7 +403,7 @@ async def my_records(       request: Request,
 
 
 
-@router.get("/accept", tags=["credentials", "protected"])
+@router.get("/accept", tags=["records", "protected"])
 async def get_inbox(      request: Request,
 
                                 nauth: str = None,                         
@@ -492,7 +496,7 @@ async def accept_incoming_credential(       request: Request,
 
     return {"status": status, "detail": detail}  
 
-@router.get("/displayrecord", tags=["credentials", "protected"])
+@router.get("/displayrecord", tags=["records", "protected"])
 async def display_record(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
@@ -594,7 +598,7 @@ async def generate_nauth(    request: Request,
 
     return {"status": status, "detail": detail}
 
-@router.post("/sendrecord", tags=["credentials", "protected"])
+@router.post("/sendrecord", tags=["records", "protected"])
 async def post_send_record(      request: Request, 
                                 credential_parms: sendCredentialParms,                                
                                 acorn_obj: Acorn = Depends(get_acorn)
