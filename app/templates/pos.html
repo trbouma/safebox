@@ -1,65 +1,268 @@
-{% extends "uxbase.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>POS Keypad - Sale</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
 
-{% block title %}POS{% endblock %}
-{% block head %}
-{{ super() }}
+    .pos-container {
+      background: white;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 360px;
+      box-sizing: border-box;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+    }
 
+    .pos-heading {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
 
-{% endblock %}
+    .total-display {
+      font-size: 20px;
+      font-weight: normal;
+      margin-bottom: 10px;
+      text-align: right;
+    }
 
-{% block page_content %}
+    .display {
+      font-size: 32px;
+      padding: 10px;
+      border: 2px solid #ccc;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      text-align: right;
+      background: #f8f8f8;
+      min-height: 50px;
+      overflow-x: auto;
+    }
 
-<link rel="stylesheet" href="/static/mobile.css">
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
 
-<h1 class="calculator-title">Point of Sale </h1>
+    .keypad button {
+      padding: 18px 0;
+      font-size: 20px;
+      border: none;
+      border-radius: 10px;
+      background: #e0e0e0;
+      cursor: pointer;
+      transition: background 0.2s;
+      touch-action: manipulation;
+    }
 
+    .keypad button:hover {
+      background: #ccc;
+    }
 
-    
-    <div class="calculator">
-        <form id="calc-form" hx-post="/pos/calculate" hx-target="#display" hx-swap="innerHTML">
-            <input type="hidden" name="expression" id="expression">
-            <div id="display" class="display">{{ expression }}</div>
-        </form>
-        <div class="buttons">
-            {% for row in [["7", "8", "9", "/"], ["4", "5", "6", "*"], ["1", "2", "3", "-"], ["0", ".", "=", "+"]] %}
-                {% for char in row %}
-                    {% if char == "=" %}
-                        <button onclick="submitCalc()">=</button>
-                    {% else %}
-                        <button onclick="appendChar('{{ char }}')">{{ char }}</button>
-                    {% endif %}
-                {% endfor %}
-               
-            {% endfor %}
-            <button onclick="clearCalc()" class="clear">C</button>
-        </div>
-    </div>
+    .action {
+      background-color: #4caf50;
+      color: white;
+    }
 
-    <script>
-        function appendChar(char) {
-            const input = document.getElementById("expression");
-            input.value += char;
-            document.getElementById("display").innerText = input.value;
-        }
+    .ok {
+      background-color: #2196f3;
+      color: white;
+    }
 
-        function clearCalc() {
-            const input = document.getElementById("expression");
-            input.value = "";
-            document.getElementById("display").innerText = "";
-        }
+    .reset {
+      background-color: #f44336;
+      color: white;
+      font-size: 18px;
+      margin-top: 20px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: none;
+      width: 100%;
+    }
 
-        function submitCalc() {
-            htmx.trigger("#calc-form", "submit");
-        }
-    
-    setDarkMode();
-    </script>
+    .pay {
+      background-color: #4caf50;
+      color: white;
+      font-size: 20px;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      margin-top: 15px;
+      width: 100%;
+    }
 
+    .empty {
+      visibility: hidden;
+    }
 
-{% endblock %}
+    /* 🌙 Dark Mode Styles */
+    .dark-mode {
+      background-color: #121212;
+      color: #ffffff;
+    }
 
-{% block scripts %}
-{{ super() }}
+    .dark-mode body {
+      background-color: #121212;
+    }
 
+    .dark-mode .pos-container {
+      background-color: #1e1e1e;
+      color: #f1f1f1;
+      box-shadow: 0 0 15px rgba(255,255,255,0.05);
+    }
 
-{% endblock %}
+    .dark-mode .display {
+      background-color: #2c2c2c;
+      border-color: #444;
+      color: #fff;
+    }
+
+    .dark-mode .keypad button {
+      background-color: #333;
+      color: #fff;
+    }
+
+    .dark-mode .keypad button:hover {
+      background-color: #444;
+    }
+
+    .dark-mode .action {
+      background-color: #388e3c;
+    }
+
+    .dark-mode .ok {
+      background-color: #1976d2;
+    }
+
+    .dark-mode .reset {
+      background-color: #c62828;
+    }
+
+    .dark-mode .pay {
+      background-color: #2e7d32;
+    }
+
+    .dark-mode .pos-heading,
+    .dark-mode .total-display {
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+
+<div class="pos-container">
+  <div class="pos-heading">Point of Sale</div>
+  <div class="total-display" id="totalDisplay">Total: $0.00</div>
+  <div id="display" class="display">$0.00</div>
+  <div class="keypad">
+    <button onclick="press('7')">7</button>
+    <button onclick="press('8')">8</button>
+    <button onclick="press('9')">9</button>
+    <button onclick="clearDisplay()">C</button>
+
+    <button onclick="press('4')">4</button>
+    <button onclick="press('5')">5</button>
+    <button onclick="press('6')">6</button>
+    <button onclick="addItem()">+</button>
+
+    <button onclick="press('1')">1</button>
+    <button onclick="press('2')">2</button>
+    <button onclick="press('3')">3</button>
+    <button onclick="removeLast()">←</button>
+
+    <button onclick="press('0')">0</button>
+    <button class="ok" onclick="showAlert()">OK</button>
+    <button class="action" onclick="calculateTotal()">Total</button>
+    <div class="empty"></div>
+  </div>
+
+  <button class="reset" onclick="resetTotal()">Reset Total</button>
+  <button class="pay" onclick="payNow()">Pay</button>
+</div>
+
+<script>
+  let rawInput = '';
+  let total = 0;
+
+  function press(digit) {
+    if (rawInput.length >= 9) return;
+    rawInput += digit;
+    updateDisplay(formatAsCurrency(rawInput));
+  }
+
+  function updateDisplay(val) {
+    document.getElementById('display').innerText = val || '$0.00';
+  }
+
+  function clearDisplay() {
+    rawInput = '';
+    updateDisplay('$0.00');
+  }
+
+  function removeLast() {
+    rawInput = rawInput.slice(0, -1);
+    updateDisplay(formatAsCurrency(rawInput));
+  }
+
+  function formatAsCurrency(str) {
+    let num = parseInt(str || '0', 10);
+    return `$${(num / 100).toFixed(2)}`;
+  }
+
+  function addItem() {
+    const value = parseInt(rawInput || '0', 10);
+    total += value;
+    rawInput = '';
+    updateDisplay('$0.00');
+    updateTotalDisplay();
+  }
+
+  function calculateTotal() {
+    addItem();
+  }
+
+  function updateTotalDisplay() {
+    document.getElementById('totalDisplay').innerText = `Total: $${(total / 100).toFixed(2)}`;
+  }
+
+  function resetTotal() {
+    total = 0;
+    updateTotalDisplay();
+  }
+
+  function showAlert() {
+    const amount = formatAsCurrency(rawInput);
+    alert(`Current input amount: ${amount}`);
+  }
+
+  function payNow() {
+    alert(`Proceeding to pay $${(total / 100).toFixed(2)}`);
+  }
+
+  function setDarkMode() {
+    document.documentElement.classList.add('dark-mode');
+    document.documentElement.classList.remove('light-mode');
+    localStorage.setItem('theme', 'dark');
+  }
+
+  setDarkMode(); // Apply dark mode on load
+</script>
+
+</body>
+</html>

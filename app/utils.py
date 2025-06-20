@@ -47,6 +47,12 @@ def get_label_by_id(data, target_id):
             return entry[1]
     return None
 
+def get_id_by_label(data, target_label):
+    for entry in data:
+        if entry[1].replace(' ','').lower() == target_label.replace(' ','').lower():
+            return entry[0]
+    return None
+
 def create_jwt_token(data: dict, expires_delta: timedelta = None):
     k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
 

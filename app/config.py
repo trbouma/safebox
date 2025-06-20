@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     AUTH_KIND: int = 21061
     CREDENTIAL_TRANSMITTAL_KIND: int = 21062
     CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
+    RECORD_TRANSMITTAL_KIND: int = 21062
+    RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
     SELECT_KINDS: List = [  [34016,"Boarding Passes"],
                             [32225,"Health Records"],
@@ -63,6 +65,47 @@ class Settings(BaseSettings):
 
 
                         ]
+    # Offer and Grant Kinds
+    # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
+    # Can be calculated but flexible with defining both offer and grant kinds
+    OFFER_KINDS: List =     [  
+                            [34001, "Badges"],
+                            [34029,"Passes"],
+                            [32225,"Health Records"], 
+                            [32229, "Prescriptions"],  
+                            [32231, "Immunization Records"],    
+                            [34003, "Payment Cards"],
+                            [34005, "Travel Documents"],
+                            [34007, "Memberships"],
+                            [34009, "Gift Cards"],
+                            [34011, "Coupons"],
+                            [34013, "Event Tickets"],                            
+                            [34017, "Transit Cards"],                            
+                            [34019, "Educational Diplomas"],
+                            [34021, "Official Documentation"],
+                            [34023, "Insurance"],
+                            [34025, "Recipes"]
+                        ]  
+ 
+    GRANT_KINDS: List =     [  
+                            [34002, "Badges"],
+                            [34030,"Passes"],
+                            [32226,"Health Records"], 
+                            [32230, "Prescriptions"],  
+                            [32232, "Immunization Records"],    
+                            [34004, "Payment Cards"],
+                            [34006, "Travel Documents"],
+                            [34008, "Memberships"],
+                            [34010, "Gift Cards"],
+                            [34012, "Coupons"],
+                            [34014, "Event Tickets"],                            
+                            [34018, "Transit Cards"],                            
+                            [34020, "Educational Diplomas"],
+                            [34022, "Official Documentation"],
+                            [34024, "Insurance"],
+                            [34026, "Recipes"]
+                        ] 
+
     WALLET_SWAP_MODE: bool = False
 
     class Config:

@@ -172,7 +172,11 @@ window.location.href="/credentials/present";
 
 }
 
+async function myRecords() {
 
+window.location.href="/records/present";
+
+}
 
 async function doHealthConsult() {
 
@@ -841,11 +845,16 @@ function getInvoiceStatus(ln_invoice_status) {
   <h2>Official</h2>
   <button id="my_credentials_button" onclick="myCredentials()" >Present Credentials</button> 
   <br><br>
+  <button id="my_credentials_button" onclick="myRecords()" >Present My Records</button> 
+  <br><br>
   <button id="pay_or_pass_button" onclick="payOrPass()" >Pay or Pass</button>
 
   <hr>
   <h2>Professional</h2>   
   <button id="do_consult_button" onclick="doHealthConsult()" >Health Consultation</button>  
+  <br>
+  <br>
+  <button id="do_issue_credential" onclick="doOfferCredential()" >Offer Credentials</button>  
 
   <br>
   <br>

@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}Update Card{% endblock %}
+{% block title %}Update Record{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -48,7 +48,7 @@ async function shareCard() {
   
 }
 
-async function updateCard() {
+async function updateOffer() {
     
     var data;
    
@@ -56,7 +56,7 @@ async function updateCard() {
     var input_card_content = document.getElementById("input_card_content");
 
    
-    user_confirm = confirm(`Are you sure you want to proceed with updating ${input_card_title.value}?`) ;
+    user_confirm = confirm(`Are you sure you want to proceed with updating ${input_card_title.value} ${record_kind}?`) ;
     if (user_confirm == false) {return;}
     
 
@@ -67,19 +67,19 @@ async function updateCard() {
 
     
 
-   await fetch('/safebox/updatecard', {
+   await fetch('/records/updaterecord', {
         method: "POST",
         headers: {"Content-Type": "application/json"},        
         body: JSON.stringify(submit_data)         
        })
     .then((response) => response.json())
-    .then((data) => getStatus(data));
+    .then((data) => data);
 
     
     window.location.href=referer;
       }
 
-async function deleteCard() {
+async function deleteOffer() {
   var input_card_title = document.getElementById("input_card_title");
 
   user_confirm = confirm(`Are you sure you want to proceed with deleting ${input_card_title.value}?`) ;
@@ -88,13 +88,13 @@ async function deleteCard() {
 
     
 
-   await fetch('/safebox/deletecard', {
+   await fetch('/records/deleterecord', {
         method: "POST",
         headers: {"Content-Type": "application/json"},        
         body: JSON.stringify(submit_data)         
        })
     .then((response) => response.json())
-    .then((data) => getStatus(data));
+    .then((data) => data);
 
     window.location.href=referer ;
 
@@ -111,17 +111,18 @@ async function deleteCard() {
 
 
 <div class="center-text">
-    <h4>Update Card {{card}}</h4>
-    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
+    <h1>Update {{offer_label}} Offer </h1>
+    {{card}} {{referer}} {{record_kind}}
+   
     <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
     <br><br>
     <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
     <br><br>
-    <button onclick="updateCard()">Save Card</button>
+    <button onclick="updateOffer()">Save Offer</button>
     <br><br>
-    <button onclick="shareCard()">Share Card</button>
+    <button onclick="shareCard()">Grant Offer</button>
     <br><br>
-    <button onclick="deleteCard()">Delete Card</button>
+    <button onclick="deleteOffer()">Delete Offer</button>
     <br><br>
     <button onclick="goBack()">Back</button>
     <br><br>

@@ -74,6 +74,14 @@ class ecashAccept(BaseModel):
 class customHandle(BaseModel):
     custom_handle: str
 
+class nauthRequest(BaseModel):
+    npub: str|None = None
+    scope: str|None = None
+    grant: str|None = None
+    transmittal_kind: int|None = None
+
+    
+
 class ownerData(BaseModel):
     npub: str|None = None
     local_currency: str|None=None

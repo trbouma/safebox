@@ -122,8 +122,10 @@ async def get_scan_result(  request: Request,
             if "prover" in parsed_nauth['values']['scope']:
                 print(f"We have a credential presentation! {parsed_nauth['values']['scope']}")
                 return RedirectResponse(f"/credentials/presentationrequest?nauth={qr_code}")
-            elif "voffer" in parsed_nauth['values']['scope']:
+            elif "vcred" in parsed_nauth['values']['scope']:
                 return RedirectResponse(f"/credentials/present?nauth={qr_code}")
+            elif "offer" in parsed_nauth['values']['scope']:
+                return RedirectResponse(f"/records/accept?nauth={qr_code}")
                 
             elif "verifier" in parsed_nauth['values']['scope']:
                 return RedirectResponse(f"/records/present?nauth={qr_code}")
