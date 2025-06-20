@@ -1,0 +1,313 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Present Records{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+<script>
+
+var global_nauth = "";
+  
+var global_client_nauth = "{{nauth}}";  
+var global_client_transmittal_kind = null;
+var global_vrequest_nauth = "{{nauth}}"; 
+
+
+async function scanCode() {
+// alert("scan!");
+
+window.location.href="/scanner/scan/?wallet_name=authenticate&referer=my-credentials";
+
+}
+
+async function backToProfile() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function gotoHome() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function goBack() {
+    window.history.back();
+}
+
+async function myInbox() {
+  
+if (global_client_nauth == "None"){
+  alert("Please authenticate with your credential issuer!");
+  return;
+}
+else {
+  // alert(`authenticated ${global_client_nauth}`);  
+  window.location.href=`/credentials/accept?nauth=${global_client_nauth}`;
+
+}
+
+
+
+
+}
+</script>
+
+
+
+<script>
+
+
+
+
+async function copytoClipboard() {
+
+
+await navigator.clipboard.writeText(global_nprofile);
+alert(`Copied health QR code to clipboard!`);
+
+}
+
+async function getStatus(return_result) {
+
+var qr_img_func = document.getElementById("img_qr_display");
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+
+global_nauth = parsedResult.detail;
+
+qr_img_func.src = "/safebox/qr/"+ global_nauth;
+// qr_img_func.addEventListener("click", copytoClipboard);
+
+
+
+}
+
+async function selectRecordKind() {
+
+  var select_record_kind = document.getElementById("select_record_kind");
+
+ // alert(`record kind ${select_record_kind.value}`);
+  window.location.href=`/records/present?record_kind=${select_record_kind.value}`;
+
+}
+
+  async function createQRCode() {
+    
+  var data;
+  var qr_img_func = document.getElementById("img_qr_display");
+
+  qr_img_func.src="/img/circle-256.gif";
+   await fetch('/credentials/nauth?scope=vissue', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}        
+              
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+  const ws = new WebSocket(`wss://{{request.url.hostname}}/credentials/ws/offer/${global_nauth}`);
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+  console.log("Message received:", event.data);
+  const response = JSON.parse(event.data);  
+  global_client_nauth = response.nauth;
+  client_name = response.name;
+  global_client_transmittal_kind = response.transmittal_kind;
+  // client_name = response.name;
+  if (global_client_nauth) {
+    // alert(`Client is authenticated! Ready to transmit files.`); 
+    qr_img_func.src="/img/check.png";
+  } else {
+    // alert(`Authentication has timed out! Please regenerate QR code`);  
+    qr_img_func.src="/img/safebox.png";
+  }
+ 
+  ws.close()
+  };
+  ws.onclose = () => console.log("WebSocket closed");
+
+
+
+
+  
+
+}
+</script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+
+  {% if record_select %}
+    <h1>Select from {{ record_label }} to Present</h1>
+  {% else %}
+  <h1>Present My {{ record_label}}</h1>
+  {% endif %}
+
+    <button onclick="gotoHome()">Home</button>
+    <br><br>
+    Click on the record you wish to {{"present" if record_select else "view"}}.
+   
+    <br><br>
+    <select id="select_record_kind" onchange="selectRecordKind()"">
+      {% for entry in select_kinds %}
+      <option value="{{entry[0]}}" {{ 'selected' if entry[0] == record_kind else '' }}  >{{entry[1]}}</option>         
+      {% endfor %}
+    </select>
+      
+    <br><br>
+    
+     
+
+</div>
+<div id="card-container"></div>
+
+  <script>
+    const jsonUserData = {{ credential_records | tojson }}; 
+
+    // Function to create and add a card
+    function addCard(title, content) {
+      // Create a card element
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      // Create and add the title element
+      const cardTitle = document.createElement('div');
+      cardTitle.className = 'card-title';
+      cardTitle.textContent = title;
+
+      // Create and add the content element
+      const cardContent = document.createElement('div');
+      cardContent.className = 'card-content';
+      cardContent.textContent = content;
+
+      // Append title and content to the card
+      card.appendChild(cardTitle);
+      card.appendChild(cardContent);
+
+      card.addEventListener('click', () => {
+
+        {% if record_select %}
+          if (confirm(`Present this credential ${title}`)) {
+            
+            sendRecord(title); 
+          }
+
+        {% else %}
+
+          window.location.href=`/records/displayrecord?card=${title}&kind={{record_kind}}&action_mode=edit`;
+        {% endif %}
+       
+      });
+
+      // Append the card to the container
+      const container = document.getElementById('card-container');
+      container.appendChild(card);
+    }
+
+    // Example usage
+    // addCard('Health Data Record 1', 'This is the content of the first health record.');
+    //addCard('Healt Data Record 2', 'This is the content of the second health record.');
+
+    for (let record of jsonUserData)
+    {
+      if (record.hasOwnProperty("tag")) {
+          // console.log(`Name: ${record.name}`);
+          addCard(record.tag, record.payload);
+      } else {
+          console.log("This record does not have a 'name' property.");
+      }
+      // addCard('Private Data 1', JSON.stringify(record));
+
+    } 
+  </script>
+
+  <script>
+
+async function sendRecord(title) {
+
+console.log(`send record ${title}`);
+
+console.log(`Sending record... ${global_vrequest_nauth}`);
+// send credential to verfier
+submit_data = { "nauth": global_vrequest_nauth,
+                "grant": `${title}`
+              };
+
+console.log(submit_data) ;            
+await fetch(`/records/sendrecord`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"}, 
+        body: JSON.stringify(submit_data)     
+              
+       })
+    .then((response) => response.json())
+    .then((data) => {
+    alert(`Verification Done! ${data.status} ${data.detail}`);
+});
+
+}
+
+
+  </script>
+
+</div>
+{% if record_select %}
+  <div class="center-text">
+    <hr>
+  </div>
+
+
+{% else %}
+  <div class="center-text">
+    <hr>
+      <h2>Need More {{record_label}}?</h2>
+      Click on image below to authenticate.
+      <br><br>
+      <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
+      <br><br>
+      If your credential issuer can't scan your QR code, you can scan their QR code instead by clicking on the button below.
+      <br><br>
+      <button id="ln_scan_button" onclick="scanCode()">Authenticate Credential Issuer</button> 
+      <br><br>
+      Once you've authenticated, you can accept your credential offers.  
+      <br><br>
+      <button id="my_inbox_button" onclick="myInbox()" >Accept Credential Offers</button>
+      <br><br>
+      <button onclick="gotoHome()">Home</button>
+      
+  </div>
+  <hr>
+{% endif %}
+<div class="center-text">
+  <br><br>
+ Info: {{request.url.hostname}}   
+ <br><br>Record Select: {{record_select}}
+
+    
+</div>
+     
+
+<script>
+  setDarkMode();
+  
+</script>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

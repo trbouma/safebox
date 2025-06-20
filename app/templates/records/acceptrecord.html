@@ -1,0 +1,141 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Accept{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h1>Accept Records</h1>  
+   
+    <br><br>
+
+  
+    Click on the record offer that you wish to accept.
+   
+    
+</div>
+
+<div id="card-container"></div>
+
+<script>
+  const jsonUserData = {{ user_records | tojson }};
+  const transmittal_kind = parseInt("{{ transmittal_kind }}");
+  const nauth = "{{nauth}}";
+
+  // Function to create and add a card
+  function addCard(title, tag, label, created_at, content,id) {
+    // Create a card element
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    // Create and add the title element
+    const cardTitle = document.createElement('div');
+    cardTitle.className = 'card-title';
+    cardTitle.textContent = `${label}: ${title}`;
+    cardTitle.id = id;
+
+      // Create and add the content element
+    const cardCreatedAt = document.createElement('div');
+    cardCreatedAt.className = 'card-content';
+    cardCreatedAt.textContent = created_at;
+
+    // Create and add the content element
+    const cardContent = document.createElement('div');
+    cardContent.className = 'card-content';
+    cardContent.textContent = content;
+
+    // Append title and content to the card
+    card.appendChild(cardTitle);
+    card.appendChild(cardCreatedAt);
+    card.appendChild(cardContent);
+
+    card.addEventListener('click', () => {
+        acceptRecord(title, created_at, content, id);
+        //alert(`You clicked on: ${title} with: ${content}`);
+        // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
+      });
+
+    // Append the card to the container
+    const container = document.getElementById('card-container');
+    container.appendChild(card);
+  }
+
+  // Example usage
+  // alert("hello"+ JSON.stringify(jsonUserData)); 
+  for (let record of jsonUserData)
+  {
+    if (record.hasOwnProperty("tag")) {
+        // console.log(`Name: ${record.name}`);
+        addCard(record.tag, record.type, record.label, record.created_at, record.payload, record.id);
+    } else {
+        console.log("This record does not have a 'name' property.");
+    }
+    // addCard('Private Data 1', JSON.stringify(record));
+
+  }
+
+async function addCardtoSafebox() {
+// alert(`add card ${record_kind}`);
+window.location.href=`/safebox/displaycard?action_mode=add&kind=${transmittal_kind}`;
+
+
+}
+
+
+async function backToProfile() {
+
+
+window.location.href="/safebox/access" ;
+
+}
+
+
+
+
+setDarkMode();
+
+</script>
+   
+
+<div class="center-text">
+      
+ 
+
+  <br><br>
+  <button onclick="backToProfile()">Home</button>
+  <hr>
+  <br><br>
+  Record Kind: {{transmittal_kind}}
+  <br>
+  {% if nauth %}
+    nauth: {{nauth[:10] }}...{{ nauth[-10:]}} 
+  {% endif %}   
+ 
+    
+ 
+
+        
+     
+        
+</div>
+     
+
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}
