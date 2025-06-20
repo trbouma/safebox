@@ -545,7 +545,7 @@ async def display_record(     request: Request,
 
     offer_kinds = settings.OFFER_KINDS
     offer_label = get_label_by_id(offer_kinds, kind)
-    referer = f"{urllib.parse.urlparse(request.headers.get("referer")).path}?kind={kind}"
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?kind={kind}"
    
 
     return templates.TemplateResponse(  "records/record.html", 
