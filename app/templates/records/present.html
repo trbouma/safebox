@@ -48,7 +48,7 @@ if (global_client_nauth == "None"){
 }
 else {
   // alert(`authenticated ${global_client_nauth}`);  
-  window.location.href=`/credentials/accept?nauth=${global_client_nauth}`;
+  window.location.href=`/records/accept?nauth=${global_client_nauth}`;
 
 }
 
@@ -103,7 +103,7 @@ async function selectRecordKind() {
   var qr_img_func = document.getElementById("img_qr_display");
 
   qr_img_func.src="/img/circle-256.gif";
-   await fetch('/credentials/nauth?scope=vissue', {
+   await fetch('/records/nauth?scope=vissue', {
         method: "GET",
         headers: {"Content-Type": "application/json"}        
               
@@ -111,7 +111,7 @@ async function selectRecordKind() {
     .then((response) => response.json())
     .then((data) => getStatus(data));
 
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/credentials/ws/offer/${global_nauth}`);
+  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}`);
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {

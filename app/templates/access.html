@@ -208,6 +208,12 @@ window.location.href="/credentials/verificationrequest";
 
 }
 
+async function doRequestRecord() {
+// alert('Coming soon!');
+window.location.href="/records/recordrequest";
+
+}
+
 async function myHealthData() {
 
 window.location.href="/safebox/health";
@@ -862,6 +868,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <br>
   <br>
   <button id="do_verify_credential" onclick="doVerifyCredential()" >Verification Request</button> 
+  <br>
+  <br>
+  <button id="do_verify_credential" onclick="doRequestRecord()" >Request Record</button> 
   <br>
   <hr>
   <h2>Community</h2>

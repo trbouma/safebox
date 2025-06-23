@@ -741,15 +741,34 @@ async def post_send_record(      request: Request,
 
     return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
 
-@router.websocket("/ws/credentialdata")
-async def ws_credential_data( websocket: WebSocket,                                          
+@router.get("/recordrequest", tags=["records", "protected"])
+async def record_request(      request: Request,
+                          
+                                    acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """This function display the verification page"""
+    """The page sets up a websocket to listen for the incoming credential"""
+
+    
+    
+    grant_kinds = settings.GRANT_KINDS
+
+    return templates.TemplateResponse(  "records/recordrequest.html", 
+                                        {   "request": request,  
+                                            "grant_kinds": grant_kinds
+
+                                        })
+
+
+@router.websocket("/ws/recorddata")
+async def ws_record_data( websocket: WebSocket,                                          
                                         acorn_obj = Depends(get_acorn)
                                         ):
     await websocket.accept()
     return
 
 @router.websocket("/ws/offer/{nauth}")
-async def ws_credential_offer( websocket: WebSocket, 
+async def ws_record_offer( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
@@ -817,8 +836,8 @@ async def ws_credential_offer( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/listenforverifier/{nauth}")
-async def ws_listen_for_verifier( websocket: WebSocket, 
+@router.websocket("/ws/listenforrequestor/{nauth}")
+async def ws_listen_for_requestor( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
@@ -885,8 +904,8 @@ async def ws_listen_for_verifier( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/listenforcredential/{nauth}")
-async def ws_credential_listen( websocket: WebSocket, 
+@router.websocket("/ws/listenforrecord/{nauth}")
+async def ws_record_listen( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj: Acorn = Depends(get_acorn)
                                         ):
