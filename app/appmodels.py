@@ -109,8 +109,8 @@ class transmitConsultation(BaseModel):
 
 class incomingRecord(BaseModel):
     id: str
-    kind: int
-    nauth: str
+    kind: int = 34002
+    nauth: str|None = None
 
 class recoverIdentity(BaseModel):
     seed_phrase: str

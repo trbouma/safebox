@@ -61,7 +61,7 @@
 
     card.addEventListener('click', () => {
         acceptRecord(title, created_at, content, id);
-        //alert(`You clicked on: ${title} with: ${content}`);
+        // alert(`You clicked on: ${title} with: ${content}`);
         // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
       });
 
@@ -90,6 +90,33 @@ window.location.href=`/safebox/displaycard?action_mode=add&kind=${transmittal_ki
 
 
 }
+
+async function acceptRecord(title,created_at, content,id) {
+
+  var data;
+
+if (confirm(`Are you sure you want to accept incoming record: ${title} into your own records?`)) {
+      // alert(`Accepting ${id}, please wait...`);
+    } else {return;}
+  
+    // alert(global_nauth);
+  const submit_data = {"id": id, "nauth": "{{nauth}}" };
+
+  await fetch('/records/acceptincomingrecord', {
+       method: "POST",
+       headers: {"Content-Type": "application/json"},        
+       body: JSON.stringify(submit_data)         
+      })
+   .then((response) => response.json())
+   .then((data) =>  {  alert(`Done! ${data.detail}`);
+                    });
+   
+   
+   //goBack();
+   // window.location.href=`/credentials/present`
+
+   // window.location.href=referer;
+     }
 
 
 async function backToProfile() {

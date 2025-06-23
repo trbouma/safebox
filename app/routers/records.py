@@ -387,7 +387,7 @@ async def my_records(       request: Request,
 @router.get("/accept", tags=["records", "protected"])
 async def accept_records(            request: Request,
                                 nauth: str = None,                         
-                                acorn_obj = Depends(get_acorn)
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to inbox in home relay"""
     nprofile_parse = None
@@ -460,8 +460,10 @@ async def accept_records(            request: Request,
 
                                         })
 
-@router.post("/acceptincomingcredential", tags=["safebox", "protected"])
-async def accept_incoming_credential(       request: Request, 
+
+
+@router.post("/acceptincomingrecord", tags=["records", "protected"])
+async def accept_incoming_record(       request: Request, 
                                         incoming_record: incomingRecord,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
@@ -483,6 +485,11 @@ async def accept_incoming_credential(       request: Request,
 
         # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         # await acorn_obj.load_data()
+        scope = parsed_result['values'].get("scope", None)
+        grant = parsed_result['values'].get("grant", None)
+        grant_kind = int(grant.replace("record:",""))
+
+        print(f"incoming record scope: {scope} grant: {grant}")
         
         records_to_accept = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
         
@@ -499,7 +506,7 @@ async def accept_incoming_credential(       request: Request,
                 # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
                 record_name = f"{each_record['tag'][0][0]}" 
                 record_value = each_record['payload']
-                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=34002)
+                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
                 
                 detail = f"Matched record {incoming_record.id} accepted!"
 
