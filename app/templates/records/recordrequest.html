@@ -19,7 +19,7 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
-async function requestbyNFC(grant_kind, nauth) {
+async function requestbyNFC(grant_kind, record_label, nauth) {
    
     var qr_img_func = document.getElementById("img_qr_display");
     // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
@@ -27,7 +27,7 @@ async function requestbyNFC(grant_kind, nauth) {
     consoleLog(`Requesting by NFC. ${grant_kind} ${maskedNauth}. \n Please wait...`);
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
-   
+    
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
       try {
@@ -44,7 +44,7 @@ async function requestbyNFC(grant_kind, nauth) {
 
          
 
-         submitProof(nfc_token, nauth);
+         submitProof(nfc_token, record_label, nauth);
           
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
@@ -60,10 +60,10 @@ async function requestbyNFC(grant_kind, nauth) {
 
   }
 
-  async function submitProof(nfc_token, nauth) {
+  async function submitProof(nfc_token, record_label, nauth) {
 
-    alert(`submit proof`);
-    const submit_data = {"proof_token": nfc_token, "nauth": nauth };
+    // alert(`submit proof ${record_label}`);
+    const submit_data = {"proof_token": nfc_token, "nauth": nauth, "label":record_label };
     await fetch('/records/acceptprooftoken', {
     method: "POST",
     headers: {"Content-Type": "application/json"},        
@@ -80,7 +80,10 @@ async function requestbyNFC(grant_kind, nauth) {
   var data;
   var qr_img_func = document.getElementById("img_qr_display");
   var grant_kind = document.getElementById("grant_kind").value;
+  var record_label = document.getElementById("record_label").value;
   const nfc_request = document.getElementById("nfc_request_checkbox");
+
+
 
     var scope = `verifier:${grant_kind}`;
     const submit_data = {"scope": scope  };
@@ -106,7 +109,7 @@ async function requestbyNFC(grant_kind, nauth) {
       qr_img_func.src = "/img/nfc.png";
       // alert("Please tap NFC card!");
       
-      await requestbyNFC(grant_kind, global_nauth);
+      await requestbyNFC(grant_kind, record_label, global_nauth);
                      
   } else {
 
@@ -155,16 +158,29 @@ ws.onclose = () => console.log("WebSocket closed");
 </script>
 
 <div class="center-text">
-  <h1>Record Request</h1>
+  <h1>Request Record</h1>
   <span id="span_msg_status">Select Record Type:</span>   
 
+ 
   <br><br>
-  <select id="grant_kind" name="grant_kind" onchange="createQRCode()">
+  <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
    {% for entry in grant_kinds %}
    <option value="{{entry[0]}}">{{entry[1]}}</option>         
    {% endfor %}
    </select>
    <br><br>
+   Label: 
+   <br><br>
+   
+    <input style="width:60%;" type="text" list= "labels"   id="record_label" name="record_label" value="default" >
+    <datalist id="labels" >
+              <option value="default"></option>
+              <option value="home"></option>
+              <option value="business"></option>
+              <option value="school"></option>
+    </datalist>
+  
+  <br><br>  
   <label>
   <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
   Request by NFC

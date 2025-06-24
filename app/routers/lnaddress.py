@@ -264,7 +264,8 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     wallet_instruction = {
     "method": "present_proof",
     "params": { 
-        "nauth": proof_vault.nauth
+        "nauth": proof_vault.nauth,
+        "label": proof_vault.label
 
             }
         }

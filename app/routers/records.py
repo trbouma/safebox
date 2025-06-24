@@ -1087,6 +1087,7 @@ async def accept_proof_token( request: Request,
     # need to send off to the vault for processing
     submit_data = { "nauth": proof_token.nauth, 
                     "token": proof_token_to_use,
+                    "label": proof_token.label,
                     "pubkey": pubkey,
                     "sig": sig
 

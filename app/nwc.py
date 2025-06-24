@@ -165,6 +165,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             print(f"we published the balance to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
     elif payinstruction_obj['method'] == 'present_proof':
         nauth = payinstruction_obj['params']['nauth']
+        label = payinstruction_obj['params']['label']
         print(f"we are going to present a proof! {nauth}")
 
         parsed_result = parse_nauth(nauth)
@@ -176,7 +177,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
         scope = parsed_result['values'].get("scope")
-        print(f"scope: {scope}")
+        print(f"present_proof scope: {scope} label: {label}")
         record_kind = int(scope.split(":")[1])
         
         
@@ -195,7 +196,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
                 # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
-        record_out = await acorn_obj.get_record(record_name="default", record_kind=record_kind)
+        record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
         print(f"record out: {record_out}")
         nembed = create_nembed_compressed(record_out)
         print(f"nembed: {nembed}")

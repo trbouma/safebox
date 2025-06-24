@@ -134,6 +134,7 @@ class paymentByToken(BaseModel):
 class proofByToken(BaseModel):
     proof_token: str|None = None
     nauth: str
+    label: str|None=None
 
 
 class nfcCard(BaseModel):
@@ -163,6 +164,7 @@ class nwcVault(BaseModel):
 class proofVault(BaseModel):    
     token: str 
     nauth: str
+    label: str|None = None
     pubkey:str|None= None
     sig: str|None = None  
 
