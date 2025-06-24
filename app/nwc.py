@@ -6,7 +6,7 @@ from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
-from app.utils import hex_to_npub
+from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
 from datetime import datetime
@@ -163,6 +163,46 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
             print(f"we published the balance to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
+    elif payinstruction_obj['method'] == 'present_proof':
+        nauth = payinstruction_obj['params']['nauth']
+        print(f"we are going to present a proof! {nauth}")
+
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_npub = parsed_result['values'].get("transmittal_npub")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        scope = parsed_result['values'].get("scope")
+        print(f"scope: {scope}")
+        record_kind = int(scope.split(":")[1])
+        
+        
+        nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                        nonce=nonce,
+                                        auth_kind= auth_kind,
+                                        auth_relays=auth_relays,
+                                        transmittal_npub=transmittal_npub,
+                                        transmittal_kind=transmittal_kind,
+                                        transmittal_relays=transmittal_relays,
+                                        name=acorn_obj.handle,
+                                        scope=scope,
+                                        grant=scope
+            )
+        
+                # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+
+        record_out = await acorn_obj.get_record(record_name="default", record_kind=record_kind)
+        print(f"record out: {record_out}")
+        nembed = create_nembed_compressed(record_out)
+        print(f"nembed: {nembed}")
+        print("sleep for 5 seconds")
+        await asyncio.sleep(5)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
+        print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
 
 async def listen_notes(url):
     c = Client(url)

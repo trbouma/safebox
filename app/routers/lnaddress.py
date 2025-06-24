@@ -20,7 +20,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment
 from app.utils import ( create_jwt_token, 
@@ -224,6 +224,52 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
         }
     
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(pay_instruction),to_pub_k=k_nwc.public_key_hex())
+        
+    async with ClientPool(settings.NWC_RELAYS) as c:
+                
+        #FIXME kind
+        n_msg = Event(kind=23194,
+                    content=payload_encrypt,
+                    pub_key=k.public_key_hex(),
+                    tags = [["p",k_nwc.public_key_hex()]]
+                    )
+
+        n_msg.sign(k.private_key_hex())
+        
+        c.publish(n_msg)
+        print(f"published to nwc")
+        await asyncio.sleep(0.2)
+
+
+    return {"status": status, "detail": detail}
+
+@router.post("/.well-known/proof", tags=["public"])
+async def proof_vault(request: Request, proof_vault: proofVault):
+    status = "OK"
+    detail = None
+
+   # First, check to see if signature checks out
+    if verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey):
+        print("Payload is verified!")
+ 
+
+    k  = Keys(settings.SERVICE_SECRET_KEY)
+    my_enc = NIP44Encrypt(k)
+    my_enc_NIP4 = NIP4Encrypt(k)
+    token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
+    print(f"token secret {token_secret}")
+    k_nwc = Keys(token_secret)
+    # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
+
+    wallet_instruction = {
+    "method": "present_proof",
+    "params": { 
+        "nauth": proof_vault.nauth
+
+            }
+        }
+    
+    payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(wallet_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:
                 

@@ -11,13 +11,15 @@ from safebox.acorn import Acorn
 from time import sleep
 import json
 from monstr.util import util_funcs
+from monstr.encrypt import Keys
 import ipinfo
+import requests
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
@@ -918,8 +920,8 @@ async def ws_record_listen( websocket: WebSocket,
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
         transmittal_kind = parsed_nauth['values'] ['transmittal_kind']   
-        transmittal_relays = parsed_nauth['values']['auth_relays']
-        print(f"ws auth relays: {auth_relays}")
+        transmittal_relays = parsed_nauth['values']['transmittal_relays']
+        print(f"ws transmittal relays: {transmittal_relays}")
 
 
 
@@ -1053,3 +1055,51 @@ async def websocket_requesttransmittal( websocket: WebSocket,
         
         
     print("websocket connection closed")    
+
+@router.post("/acceptprooftoken", tags=["records", "protected"])
+async def accept_proof_token( request: Request, 
+                                proof_token: proofByToken,
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+   
+
+    k = Keys(settings.SERVICE_SECRET_KEY)
+
+    status = "OK"
+    detail = "done"
+  
+    
+    token_to_use = proof_token.proof_token
+    
+    token_split = token_to_use.split(':')
+    parsed_nembed = parse_nembed_compressed(token_to_use)
+    host = parsed_nembed["h"]
+    proof_url = f"https://{host}/.well-known/proof"
+    proof_token_to_use = parsed_nembed["k"]
+
+    print(f"proof token: {token_to_use}")
+
+
+    
+    sig = sign_payload(proof_token_to_use, k.private_key_hex())
+    pubkey = k.public_key_hex()
+
+    # need to send off to the vault for processing
+    submit_data = { "nauth": proof_token.nauth, 
+                    "token": proof_token_to_use,
+                    "pubkey": pubkey,
+                    "sig": sig
+
+                    }
+    print(f"data: {submit_data}")
+    headers = { "Content-Type": "application/json"}
+    print(f"{proof_url}")
+    response = requests.post(url=proof_url, json=submit_data, headers=headers)
+    
+    print(response.json())
+
+    # add in the polling task here
+   
+    # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
+
+    return {"status": status, "detail": detail}  

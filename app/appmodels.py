@@ -121,12 +121,19 @@ class sendCredentialParms(BaseModel):
     nauth: str
     grant: str = None
 
+class sendRecordParms(BaseModel):
+    nauth: str
+    grant: str = None
+
 class paymentByToken(BaseModel):
     payment_token: str
     amount: float = 0    
     currency: str = "SAT"
     comment: str = "Please Pay!"
 
+class proofByToken(BaseModel):
+    proof_token: str|None = None
+    nauth: str
 
 
 class nfcCard(BaseModel):
@@ -150,6 +157,12 @@ class nwcVault(BaseModel):
     tendered_amount: float|None = None
     tendered_currency: str = "SAT"
     comment: str|None=None
+    pubkey:str|None= None
+    sig: str|None = None  
+
+class proofVault(BaseModel):    
+    token: str 
+    nauth: str
     pubkey:str|None= None
     sig: str|None = None  
 
