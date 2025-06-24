@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
+                            [340027, "ID"],
                             [34001, "Badges"],
                             [34029,"Passes"],
                             [32225,"Health Records"], 
@@ -88,6 +89,7 @@ class Settings(BaseSettings):
                         ]  
  
     GRANT_KINDS: List =     [  
+                            [34028, "ID"],
                             [34002, "Badges"],
                             [34030,"Passes"],
                             [32226,"Health Records"], 
