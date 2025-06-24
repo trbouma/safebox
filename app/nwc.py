@@ -197,8 +197,15 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
         record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
+
         print(f"record out: {record_out}")
-        nembed = create_nembed_compressed(record_out)
+        #TODO This error handling can be improved
+        try:
+            nembed = create_nembed_compressed(record_out)
+        except:
+            record_out = {'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}
+            nembed = create_nembed_compressed(record_out)
+
         print(f"nembed: {nembed}")
         print("sleep for 5 seconds")
         await asyncio.sleep(5)

@@ -954,7 +954,7 @@ async def ws_record_listen( websocket: WebSocket,
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
                 credential_json = parse_nembed_compressed(client_credential)
                 #### Do the verification here... ####
-                verify_result = True
+                verify_result = "Pending"
                 #### Finish verification ####
 
                 msg_out =   {   "status": "VERIFIED",
