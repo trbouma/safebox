@@ -136,6 +136,10 @@ class proofByToken(BaseModel):
     nauth: str
     label: str|None=None
 
+class OfferToken(BaseModel):
+    offer_token: str|None = None
+    nauth: str
+    
 
 class nfcCard(BaseModel):
     nembed: str
@@ -165,6 +169,11 @@ class proofVault(BaseModel):
     token: str 
     nauth: str
     label: str|None = None
+    pubkey:str|None= None
+    sig: str|None = None  
+class offerVault(BaseModel):    
+    token: str 
+    nauth: str    
     pubkey:str|None= None
     sig: str|None = None  
 

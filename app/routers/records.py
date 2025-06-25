@@ -19,7 +19,7 @@ import requests
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
@@ -1096,6 +1096,55 @@ async def accept_proof_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"{proof_url}")
     response = requests.post(url=proof_url, json=submit_data, headers=headers)
+    
+    print(response.json())
+
+    # add in the polling task here
+   
+    # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
+
+    return {"status": status, "detail": detail}  
+
+@router.post("/acceptoffertoken", tags=["records", "protected"])
+async def accept_offer_token( request: Request, 
+                                offer_token: OfferToken,
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+   
+
+    k = Keys(settings.SERVICE_SECRET_KEY)
+
+    status = "OK"
+    detail = "done"
+  
+    
+    token_to_use = offer_token.offer_token
+    
+    token_split = token_to_use.split(':')
+    parsed_nembed = parse_nembed_compressed(token_to_use)
+    host = parsed_nembed["h"]
+    offer_url = f"https://{host}/.well-known/offer"
+    offer_token_to_use = parsed_nembed["k"]
+
+    print(f"proof token: {token_to_use}")
+
+
+    
+    sig = sign_payload(offer_token_to_use, k.private_key_hex())
+    pubkey = k.public_key_hex()
+
+    # need to send off to the vault for processing
+    submit_data = { "nauth": offer_token.nauth, 
+                    "token": offer_token_to_use,                    
+                    "pubkey": pubkey,
+                    "sig": sig
+
+                    }
+    print(f"data: {submit_data}")
+    headers = { "Content-Type": "application/json"}
+    print(f"offer url: {offer_url} submit data: {submit_data}")
+
+    response = requests.post(url=offer_url, json=submit_data, headers=headers)
     
     print(response.json())
 

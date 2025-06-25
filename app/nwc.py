@@ -6,10 +6,10 @@ from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
-from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed
+from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
-from datetime import datetime
+from datetime import datetime, timezone
 
 from safebox.acorn import Acorn
 import signal
@@ -211,6 +211,58 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         await asyncio.sleep(5)
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
         print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+    elif payinstruction_obj['method'] == 'offer_record':
+        print("we have an offer record!")
+        nauth = payinstruction_obj['params']['nauth']
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_npub = parsed_result['values'].get("transmittal_npub")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        scope = parsed_result['values'].get("scope", None)
+        grant = parsed_result['values'].get("grant", None)
+
+        print(f"present_proof scope: {scope} grant: {grant}")
+        # record_kind = int(scope.split(":")[1])
+
+        response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                    nonce=nonce,
+                                    auth_kind= auth_kind,
+                                    auth_relays=auth_relays,
+                                    transmittal_npub=acorn_obj.pubkey_bech32,
+                                    transmittal_kind=transmittal_kind,
+                                    transmittal_relays=transmittal_relays,
+                                    name=acorn_obj.handle,
+                                    scope=scope,
+                                    grant=grant
+        )
+        print(f"response nauth: {response_nauth}")
+
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+        since_now = int(datetime.now(timezone.utc).timestamp())
+        await asyncio.sleep(5)
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays )
+        # print(f"user records: {user_records}")
+        offer_kind = int(scope.replace("offer:",""))
+        grant_kind = int(grant.replace("record:",""))
+        offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
+        grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
+        user_records_with_label = []
+        for each in user_records:
+            each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
+            user_records_with_label.append(each)
+
+        for each_record in user_records_with_label:
+            record_name = f"{each_record['tag'][0][0]}" 
+            record_type = int(each_record['type'])
+            record_value = each_record['payload']
+            print(f'record name {record_name} record value {record_value} record type {record_type}' )
+            if record_type == grant_kind:
+                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
 
 async def listen_notes(url):
     c = Client(url)
