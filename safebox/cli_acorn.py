@@ -329,13 +329,21 @@ def swap(consolidate):
 def pay(amount,lnaddress: str, comment:str):
     click.echo(f"Pay to: {lnaddress}")
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS, logging_level=LOGGING_LEVEL)
-    asyncio.run(acorn_obj.load_data())
-    try:
-        msg_out, final_fees = asyncio.run(acorn_obj.pay_multi(amount,lnaddress,comment))
-        click.echo(msg_out)
-        asyncio.run(acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=f"to {lnaddress} {comment}", fees=final_fees))
-    except Exception as e:
-        click.echo(f"Error: {e}")
+    
+    async def async_pay():
+        await acorn_obj.load_data()
+        try:
+            msg_out, final_fees = await acorn_obj.pay_multi(amount,lnaddress,comment)
+            click.echo(msg_out)
+            click.echo(f"MSG OUT: {msg_out}")
+            if "ERROR" in msg_out:
+                raise Exception(f"ERROR {msg_out}")
+            
+            await acorn_obj.add_tx_history(tx_type='D',amount=amount, comment=f"to {lnaddress} {comment}", fees=final_fees)
+        except Exception as e:
+            click.echo(f"CLI Error: {e}")
+    
+    asyncio.run(async_pay())
 
 @click.command("put", help='write a private record')
 @click.argument('label', default='default')

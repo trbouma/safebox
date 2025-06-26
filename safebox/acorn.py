@@ -54,6 +54,7 @@ from safebox.models import TxHistory
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
 RECORD_LIMIT: int = 1024
+PROOF_LIMIT: int = 32
 
 def powers_of_2_sum(amount):
     powers = []
@@ -224,6 +225,11 @@ class Acorn:
 
         await self._load_proofs()
         
+        
+        if len(self.proofs) > PROOF_LIMIT:
+            print("need to reduce proofs")
+            await self.swap_multi_each()
+            await self.swap_multi_consolidate()
         return
     
     async def set_owner_data(self, npub:str = None, local_currency=None):
@@ -1952,6 +1958,8 @@ class Acorn:
         }]
        
         content = await self._async_load_proofs(FILTER)
+
+        
         
         return content
     
@@ -2246,8 +2254,11 @@ class Acorn:
                     
 
                 
-                proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-               
+                #FIXME this is the critical error!!!
+                try: 
+                    proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+                except Exception as e:
+                    raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
                     
 
                 # print("proofs remaining:", proofs_remaining)
@@ -3427,12 +3438,24 @@ class Acorn:
         keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.known_mints[keyset_to_use]}/v1/swap"
+        checkstate_url = f"{self.known_mints[keyset_to_use]}/v1/checkstate"
 
         swap_proofs = []
         blinded_values =[]
         blinded_messages = []
         proofs = []
-        
+        checkstate_ys = []
+
+        print("do a check state first")
+        for each in proofs_to_use:
+            print(each.Y)
+            checkstate_ys.append(each.Y)
+
+        data_to_send = {"Ys": checkstate_ys}  
+        print(f"check state: {data_to_send}")
+        response = requests.post(url=checkstate_url, json=data_to_send, headers=headers)
+        print(response.json())
+
         # Figure out proofs_to_use_amount
         proofs_to_use_amount = 0
         for each in proofs_to_use:
@@ -3526,6 +3549,7 @@ class Acorn:
                 i+=1
         except Exception as e:
             print(e)
+            raise Exception(f"ERROR {e}")
         
         for each in proofs:
             pass
