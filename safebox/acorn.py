@@ -3181,7 +3181,7 @@ class Acorn:
             await self._load_proofs()
 
         except Exception as e:
-            raise Exception("Error in swap {e}")
+            raise Exception(f"Error in swap {e}")
         
         finally:
             await self.release_lock()

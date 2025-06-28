@@ -268,6 +268,30 @@ alert("Lightning invoice copied to clipboard!");
 
 }
 
+ async function setOwnerCurrency() {
+    
+    var data;
+   
+   
+
+    owner_currency = select_currency.value;
+
+    
+
+    const submit_data = {"npub": null, "local_currency": owner_currency};
+
+   await fetch('/safebox/setownerdata', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => {data});
+
+    window.location.reload();
+
+      }
+
 function getCreateInvoiceStatus(ln_invoice_status) {
     const create_invoice_button = document.getElementById("ln_create_invoice_button");
     const img_qr_display_pic = document.getElementById("img_qr_display");
@@ -754,7 +778,15 @@ function getInvoiceStatus(ln_invoice_status) {
 
   
   <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
-  <h2  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</h2>  
+    <select id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
+      {% for entry in currencies %}
+      <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
+      {% endfor %}
+  </select>
+  <br><br>
+  <p  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</p>  
+  <br>
+
   <span id="payment_notification">
     {{ action_comment if action_comment else "Ready!"}}
   </span>  
@@ -788,9 +820,9 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="0" size="24" style="width:30%">
       <select id="ln_select_invoice_currency" name="select_invoice_currency"> 
-        <option selected>SAT</option> 
+         <option value="SAT">SAT</option>
         {% for each in currencies%}
-        <option>{{each}}</option> 
+        <option value="{{each}}" {% if each == currency_code %}selected{% endif %}>{{each}}</option> 
         {% endfor %}
 
       </select>      
@@ -821,9 +853,9 @@ function getInvoiceStatus(ln_invoice_status) {
    
     <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
     <select id="ln_select_currency" name="ln_select_currency"> 
-      <option selected>SAT</option>            
+      <option value="SAT">SAT</option>            
       {% for each in currencies %}     
-      <option >{{each}}</option>         
+       <option value="{{each}}" {% if each == currency_code %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>
     <br><br>
