@@ -262,7 +262,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
     wallet_instruction = {
-    "method": "present_proof",
+    "method": "present_record",
     "params": { 
         "nauth": proof_vault.nauth,
         "label": proof_vault.label

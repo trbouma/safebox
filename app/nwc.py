@@ -163,7 +163,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
             print(f"we published the balance to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
-    elif payinstruction_obj['method'] == 'present_proof':
+    elif payinstruction_obj['method'] == 'present_record':
         nauth = payinstruction_obj['params']['nauth']
         label = payinstruction_obj['params']['label']
         print(f"we are going to present a proof! {nauth}")
@@ -177,7 +177,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         transmittal_kind = parsed_result['values'].get("transmittal_kind")
         transmittal_relays = parsed_result['values'].get("transmittal_relays")
         scope = parsed_result['values'].get("scope")
-        print(f"present_proof scope: {scope} label: {label}")
+        print(f"present_record scope: {scope} label: {label}")
         record_kind = int(scope.split(":")[1])
         
         
@@ -225,7 +225,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
-        print(f"present_proof scope: {scope} grant: {grant}")
+        print(f"present_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
 
         response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
