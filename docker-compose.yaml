@@ -12,6 +12,7 @@ services:
     volumes:
       - ./app/templates:/app/app/templates
       - ./data:/app/data
+      - ./setup:/app/setup
 
     # command: ["poetry", "run", "uvicorn", "app.main:app", "--host","0.0.0.0","--port","7375"]
     command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]

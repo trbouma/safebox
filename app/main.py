@@ -56,8 +56,8 @@ async def lifespan(app: FastAPI):
     except:
         pass
     
- 
-
+    #TODO add in current rates    
+    await init_currency_rates();
    
 
     asyncio.create_task(run_relay())

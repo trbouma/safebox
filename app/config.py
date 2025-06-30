@@ -27,11 +27,11 @@ class Settings(BaseSettings):
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30
     LOGGING_LEVEL: int = 10
-    SUPPORTED_CURRENCIES: List =['CAD','USD','EUR','GBP','JPY','INR','CHF','AUD']
+    SUPPORTED_CURRENCIES: List =['CAD','USD','EUR','GBP','JPY','INR']
     BRANDING: str = "Get SafeBox"
     BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
-    INVITE_CODES: List = ["alpha", "rektuser"]
+    INVITE_CODES: List = ["alpha", "rektuser", "earlyaccess"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_SERVICE: bool = False
     NWC_NSEC: str = 'nsec1wml8qhq2qkmemlceg2fehvg2cefqrsp7ak47rdmc3qxum65wsxaqcvj7d6'
