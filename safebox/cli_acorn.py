@@ -231,6 +231,8 @@ def get_profile(name, force):
     asyncio.run(acorn_obj.load_data(force_profile_creation=force))
     click.echo(acorn_obj.get_profile(name))
 
+    asyncio.run(acorn_obj.get_ecash_latest())
+
 @click.command("setowner", help="get profile")
 @click.option('--owner', '-o', default=None, help="set owner npub")
 @click.option('--currency', '-c', default=None, help="set local currency")

@@ -32,7 +32,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -362,14 +362,25 @@ async def ln_pay_address(   request: Request,
     try:
         ln_parts = final_address.split('@')
         local_part = ln_parts[0]
-        safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
-        print(f"safebox to call {safebox_to_call}")
-        response = request.get(safebox_to_call)
-        print(response)
+        # safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
+        # print(f"safebox to call {safebox_to_call}")
+        # response = requests.get(safebox_to_call)
+        # print(response)
     except:
+        
         pass
 
     # then do regular lightning
+    # if response.status_code==200:
+    #   
+    #    pubkey =response.json()["pubkey"]
+    #    safebox_relays = response.json()["relays"]
+    #    print(f"this is a safebox: {pubkey} {safebox_relays}")
+    #   
+    #    msg_out = f"Payment to another safebox for {sat_amount} sats"
+    #    text_out = await acorn_obj.send_ecash(amount=sat_amount, nrecipient=hex_to_npub(pubkey), ecash_relays=safebox_relays, comment=ln_pay.comment)
+    #    print(f"ecash sent {text_out}")
+    #    return {"detail": f"{msg_out} {text_out}"}
     
     try:
         
@@ -463,14 +474,14 @@ async def issue_ecash(   request: Request,
 async def accept_ecash(   request: Request, 
                         ecash_accept: ecashAccept,
                         acorn_obj: Acorn = Depends(get_acorn)):
-    msg_out ="No payment"
+    msg_out ="No message"
+    acorn_obj.load_data()
     try:
-        # safebox_found = await fetch_safebox(access_token=access_token)
-        # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        # await acorn_obj.load_data()       
+     
         
-        msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token)
+        msg_out, token_accepted_amount = await acorn_obj.accept_ecash(ecash_accept.ecash_token)
         await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
+        pass
     except Exception as e:
         return {    "status": "ERROR",
                     "detail": f"error {e}"}
@@ -552,6 +563,31 @@ async def my_private_data(      request: Request,
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
     return templates.TemplateResponse(  "privatedata.html", 
+                                        {   "request": request,                                            
+                                            "user_records": user_records,                                          
+                                            "referer": referer
+                                            })
+
+@router.get("/personalmessages", tags=["safebox", "protected"])
+async def my_personal_messages(      request: Request,
+                                private_mode:str = "card", 
+                                kind:int = 1059,
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to private data stored in home relay"""
+
+
+    dm_relays = ['wss://relay.getsafebox.app']
+    print(acorn_obj.pubkey_bech32)
+
+    user_records = await acorn_obj.get_user_records(record_kind=kind,relays=dm_relays)
+   
+   
+    
+    
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+
+    return templates.TemplateResponse(  "messages/personalmessages.html", 
                                         {   "request": request,                                            
                                             "user_records": user_records,                                          
                                             "referer": referer
@@ -884,7 +920,38 @@ async def display_card(     request: Request,
                                             
                                         })
 
+@router.get("/displaymessage", tags=["safebox", "protected"])
+async def display_message(     request: Request, 
+                            card: str = None,
+                            kind: int = 1059,
+                            action_mode: str = None,
+                            acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
 
+    
+    if action_mode == 'edit':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        
+        # content = record["payload"]
+        content = record
+    elif action_mode =='add':
+        card = ""
+        content =""
+    
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+
+    return templates.TemplateResponse(  "messages/message.html", 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "referer": referer,
+                                            "action_mode":action_mode,
+                                            "content": content
+                                            
+                                        })
 
 
 @router.get("/profile/{handle}", response_class=HTMLResponse)
@@ -914,7 +981,7 @@ async def root_get_user_profile(    request: Request,
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
+async def websocket_endpoint(websocket: WebSocket, access_token=Cookie(), acorn_obj: Acorn = Depends(get_acorn)):
 
     await websocket.accept()
 
@@ -932,17 +999,31 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
     message = "All payments up to date!"
     status = "SAME"
 
-
+    test_balance = acorn_obj.balance
+    since_now = int(datetime.now(timezone.utc).timestamp())
+    
+    # task1 = asyncio.create_task(handle_ecash(acorn_obj) )
+    
     while True:
         try:
             await db_state_change()
+             
+            # ecash_records = await acorn_obj.get_user_records(record_kind=1401, relays=settings.RELAYS, since=since_now-60)
+            # ecash_out = await acorn_obj.get_ecash_latest(relays=settings.RELAYS)
+           
+              
             
+
             # data = await websocket.receive_text()
             # print(f"message received: {data}")
             # await websocket.send_text(f"message received {safebox_found.handle} from safebox: {data}")
             
             
             new_balance = await fetch_balance(safebox_found.id)
+            await acorn_obj.load_data()
+            if acorn_obj.balance != test_balance:
+                print(f"we have a new balance of {acorn_obj.balance}")
+                test_balance = acorn_obj.balance
                 
 
 
@@ -968,9 +1049,6 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie()):
             await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
             starting_balance = new_balance
           
-            
-           
-            
         
         except Exception as e:
             print(f"Websocket message: {e}")

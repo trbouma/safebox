@@ -8,7 +8,7 @@ from app.config import Settings
 settings = Settings()
 
 async def run_relay():
-    relay_store = RelaySQLiteEventStore(db_file=settings.SERVICE_RELAY_DB_FILE)
+    relay_store = RelaySQLiteEventStore(db_file=settings.SERVICE_RELAY_DB)
     try:
         relay_store.create()
     except:

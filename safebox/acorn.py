@@ -89,6 +89,7 @@ class Acorn:
     home_mint: str
     known_mints: dict = {}
     local_currency: str = "SAT"
+    latest_ecash: int = 0
     emergency_contacts: List[str] = None
     authorities: List[str] = None
     providers: List[str] = None
@@ -212,7 +213,10 @@ class Acorn:
                 if each[0] == "local_currency":
                     self.local_currency = each[1]
                 if each[0] == "user_record":
-                    self.user_records.append(each[1])   
+                    self.user_records.append(each[1])  
+                if each[0] == "latest_ecash":
+                    self.latest_ecash = each[1] 
+
         except Exception as e:
             # await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
             if force_profile_creation:
@@ -603,7 +607,8 @@ class Acorn:
                                             "type": "dm",
                                             "created_at": unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                                             "payload":unwrapped_event.content,
-                                            "id": unwrapped_event.id
+                                            "id": unwrapped_event.id,
+                                            "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
 
 
@@ -781,6 +786,7 @@ class Acorn:
             return posts
 
     async def send_ecash_dm(self,amount: int, nrecipient: str, ecash_relays:List[str], comment: str ="Sent!"):
+        #FIXME Deprecate this function
         relays = []
         try:
             if '@' in nrecipient:
@@ -801,7 +807,29 @@ class Acorn:
         out_msg = await self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays)
         # out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
-    
+
+    async def send_ecash(self,amount: int, nrecipient: str, ecash_relays:List[str], comment: str ="Sent!"):
+        #FIXME Deprecate this function
+        relays = []
+        try:
+            if '@' in nrecipient:
+                npub_hex, relays = nip05_to_npub(nrecipient)
+                npub = hex_to_bech32(npub_hex)
+                print("npub", npub)
+            else:
+                npub = nrecipient
+        except:
+            return "error"
+        try:
+            token_msg = await self.issue_token(amount=amount)
+            # token_msg = comment +"\n\n" + token_amount
+        except:
+            return "insufficient funds"
+        
+        print(f"sending via {ecash_relays}")
+        out_msg = await self.secure_transmittal(nrecipient=npub,message=token_msg,dm_relays=ecash_relays,kind=1401)
+        
+        return f" {amount} {out_msg}"    
 
     async def _async_send_ecash_dm(self,token_message: str, npub: str, ecash_relays:List[str]):
         print("npub:", npub)
@@ -830,12 +858,16 @@ class Acorn:
         return f"{token_message} {ecash_msg} to {npub} {ecash_relays}"    
     
     
-    def get_ecash_dm(self):
+    async def get_ecash_dm(self):
         
         
         tags = ["#p", self.pubkey_hex]
         # last_dm = float(self.get_wallet_info("last_dm"))
-        last_dm = float(self.wallet_reserved_records['last_dm'])
+        try:
+            last_dm = float(self.wallet_reserved_records['last_dm'])
+        except:
+            last_dm = 0
+
         # last_dm = 0
         print("last dm in wallet:", last_dm)
         print(datetime.fromtimestamp(float(last_dm)))
@@ -847,7 +879,7 @@ class Acorn:
             'since': int(last_dm +1)
             
         }]
-        final_dm, tokens =asyncio.run(self._async_query_ecash_dm(dm_filter))
+        final_dm, tokens =await self._async_query_ecash_dm(dm_filter)
         # final_dm, tokens =asyncio.run(self._async_query_secure_ecash_dm(dm_filter))
         print(tokens)
         for each in  tokens:
@@ -865,11 +897,14 @@ class Acorn:
         posts = ""
         tags = []
         tokens =[]
+        try:
+            last_dm = self.wallet_reserved_records['last_dm']
+        except:
+            last_dm = 0
         
-        last_dm = self.wallet_reserved_records['last_dm']
         final_dm = int(last_dm)
         print("filterxx:", filter)
-        relay_pool = [self.home_relay]+self.relays
+        relay_pool = [self.home_relay] + self.relays
         print(relay_pool)
         async with ClientPool(relay_pool) as c:
         # async with Client(relay) as c:
@@ -954,22 +989,27 @@ class Acorn:
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
-                npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                
+               
                 dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
         except:
-            return "error"
-        self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
+            raise Exception(f"Could not resove {nrecipient}")
+        
+        npub = hex_to_bech32(npub_hex)
+        print("npub", npub)
+
+        print(f"send to: {nrecipient} {npub_hex}, {npub} {message} using {dm_relays}")
 
         await self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays) 
         return "message sent" 
     
     async def _async_secure_dm(self, npub_hex, message:str, dm_relays: List[str]):
        
-        my_gift = GiftWrap(BasicKeySigner(self.k))
+        # my_gift = GiftWrap(BasicKeySigner(self.k))
         
+        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k), kind_gift_wrap=1059)
         # relays = [self.home_relay]
         relays = dm_relays
 
@@ -1393,9 +1433,57 @@ class Acorn:
    
     def get_proofs(self):
         #TODO add in a group by keyset
+
         
         return self.proofs
     
+    async def get_ecash_latest(self,since: int|None = None, relays: List[str]|None=None):
+        ecash_out = []
+        ecash_record = {}
+        latest_dm = 0
+        since_now = int(datetime.now(timezone.utc).timestamp())
+      
+        if not relays:
+                relays = self.relays
+        try:
+            ecash_latest = int(await self.get_wallet_info("ecash_latest"))
+            print(f"ecash latest: {ecash_latest}")
+           
+            
+            user_records = await self.get_user_records(record_kind=1401, relays=relays, since=ecash_latest+1, reverse=True)
+            
+           
+
+            for each in user_records:
+                ecash_record["ecash"] = each["payload"]
+                ecash_record["timestamp"] = each["timestamp"]
+               
+                ecash_out.append(ecash_record)
+                latest_dm = each["timestamp"] 
+                print(f"accept with timestamp {since_now - latest_dm}s old {latest_dm}")
+                try:
+                    msg_out, token_amount = await  self.accept_token(each["payload"])
+                    
+                    
+                    
+                    
+                except:
+                    pass
+                
+                   
+        except:
+            print("error")
+            pass
+
+        if latest_dm > 0:
+            await self.set_wallet_info("ecash_latest", str(latest_dm))
+        # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
+        print(f"total messages: {len(ecash_out)} received for {self.handle}")
+        
+        return ecash_out
+
+        
+        
     def set_index_info(self,index_info: str):
         asyncio.run(self._async_set_index_info(index_info))  
     
@@ -1498,7 +1586,10 @@ class Acorn:
                 for index, each in enumerate(self.acorn_tags):
                     if each[0]=="local_currency":
                         self.acorn_tags[index]=tag_value
-
+            elif tag_value[0] == "ecash_latest":
+                for index, each in enumerate(self.acorn_tags):
+                    if each[0]=="ecash_latest":
+                        self.acorn_tags[index]=tag_value
             
         
         print(self.acorn_tags)
@@ -2705,7 +2796,7 @@ class Acorn:
         except:
             raise Exception("error deleting proof events")    
 
-    def swap_proofs(self, incoming_swap_proofs: List[Proof]):
+    async def swap_proofs(self, incoming_swap_proofs: List[Proof]):
         '''This function swaps proofs'''
         self.logger.debug("Swap proofs")
         swap_amount =0
@@ -2786,8 +2877,8 @@ class Acorn:
                     new_proofs.append(proof)
                     # print(proofs)
                     i+=1
-        except:
-                ValueError('test')
+        except Exception as e:
+                raise Exception(f"Problem with swap {e}")
 
         # need to convert new_proofs into objects
         new_proof_obj_list = []
@@ -3800,12 +3891,164 @@ class Acorn:
 
         return "test"
     
+    async def accept_ecash(self,cashu_token: str):
+        print("accept ecash")
+        try:
+
+            
+            headers = { "Content-Type": "application/json"}
+            token_amount =0
+            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
+            old_balance = self.balance
+
+            if cashu_token[:6] == "cashuA":
+
+                
+                token_obj = TokenV3.deserialize(cashu_token)
+                
+                
+                        # need to inspect if a new mint
+
+                proofs=[]
+                proof_obj_list: List[Proof] = []
+                for each in token_obj.token: 
+                    # print(each.mint)
+                    for each_proof in each.proofs:
+                        
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                        self.known_mints[id]=each.mint
+                        token_amount += each_proof.amount
+                        # print(id, each.mint)
+
+            
+
+
+            elif cashu_token[:6] == "cashuB":
+                    token_obj = TokenV4.deserialize(cashu_token)
+                    # print(token_obj)
+                    proofs=[]
+                    proof_obj_list: List[Proof] = []
+                    for each_proof in token_obj.proofs:
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                        token_amount += each_proof.amount
+                    self.known_mints[id]=token_obj.mint
+            else:
+                return "not a valid token", 0
+              
+            swap_proofs = await self.swap_proofs(proof_obj_list)
+
+            print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
+            
+            # await self.acquire_lock()
+           
+
+        
+            
+            self.logger.debug(f"Proofs of {token_amount} are added! ")
+        except Exception as e:
+            self.logger.error(f"ecash accept error {e}")  
+            # await self.release_lock()
+            raise Exception(f"Is token already spent? {e}")
+            
+        
+        finally:
+            pass
+            
+        await self.add_proofs_obj(swap_proofs)
+            
+
+        return f'Successfully accepted {token_amount} sats!', token_amount
+       
+
+        
+        
+        return f'Not implemented', 0
+
     async def accept_token(self,cashu_token: str):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
-        msg_out, token_accepted_amount = await self.nip17_accept(cashu_token)
+        # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-        return msg_out, token_accepted_amount
+
+        
+        
+        # return f'Not implemented', 0
+        
+        try:
+
+            
+            headers = { "Content-Type": "application/json"}
+            token_amount =0
+            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
+            old_balance = self.balance
+
+            if cashu_token[:6] == "cashuA":
+
+                
+                token_obj = TokenV3.deserialize(cashu_token)
+                
+                
+                        # need to inspect if a new mint
+
+                proofs=[]
+                proof_obj_list: List[Proof] = []
+                for each in token_obj.token: 
+                    # print(each.mint)
+                    for each_proof in each.proofs:
+                        
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                        self.known_mints[id]=each.mint
+                        token_amount += each_proof.amount
+                        # print(id, each.mint)
+
+            
+
+
+            elif cashu_token[:6] == "cashuB":
+                    token_obj = TokenV4.deserialize(cashu_token)
+                    # print(token_obj)
+                    proofs=[]
+                    proof_obj_list: List[Proof] = []
+                    for each_proof in token_obj.proofs:
+                        proofs.append(each_proof.model_dump())
+                        proof_obj_list.append(each_proof)
+                        id = each_proof.id
+                        token_amount += each_proof.amount
+                    self.known_mints[id]=token_obj.mint
+            else:
+                return "not a valid token", 0
+              
+            swap_proofs = await self.swap_proofs(proof_obj_list)
+
+            print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
+            
+            await self.acquire_lock()
+            # await self.add_proofs_obj(swap_proofs)
+
+        
+            
+            self.logger.debug(f"Proofs of {token_amount} are added! ")
+        except Exception as e:
+            self.logger.error(f"ecash accept error {e}")  
+            await self.release_lock()
+            raise Exception(f"Is token already spent? {e}")
+            
+        
+        finally:
+            pass
+            
+            await self.release_lock()  
+
+        return f'Successfully accepted {token_amount} sats!', token_amount
+
+
+       
 
         
 
@@ -4317,7 +4560,7 @@ class Acorn:
                                 
                                 
                                 # print(f"found token! {each}")
-                                msg_out = await self.nip17_accept(each)
+                                msg_out = await self._async_token_accept(each)
                                 print(msg_out)
                                     
                                 
@@ -4566,80 +4809,8 @@ class Acorn:
         payment_request = "creqA" + base64_string
         return payment_request
 
-    async def nip17_accept(self, token:str):
-        try:
-            # self.accept_token(token)
-            # print("accept token")
-            await self.acquire_lock()
-            headers = { "Content-Type": "application/json"}
-            token_amount =0
-            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
-            old_balance = self.balance
-
-            if token[:6] == "cashuA":
-
-                
-                token_obj = TokenV3.deserialize(token)
-                
-                
-                        # need to inspect if a new mint
-
-                proofs=[]
-                proof_obj_list: List[Proof] = []
-                for each in token_obj.token: 
-                    # print(each.mint)
-                    for each_proof in each.proofs:
-                        
-                        proofs.append(each_proof.model_dump())
-                        proof_obj_list.append(each_proof)
-                        id = each_proof.id
-                        self.known_mints[id]=each.mint
-                        # print(id, each.mint)
-
-            
-
-
-            elif token[:6] == "cashuB":
-                    token_obj = TokenV4.deserialize(token)
-                    # print(token_obj)
-                    proofs=[]
-                    proof_obj_list: List[Proof] = []
-                    for each_proof in token_obj.proofs:
-                        proofs.append(each_proof.model_dump())
-                        proof_obj_list.append(each_proof)
-                        id = each_proof.id
-                    self.known_mints[id]=token_obj.mint
-
-            
-            swap_proofs = self.swap_proofs(proof_obj_list)
-
-            
-            await self.add_proofs_obj(swap_proofs)
-           
-
-
-            FILTER = [{
-                'limit': RECORD_LIMIT,
-                'authors': [self.pubkey_hex],
-                'kinds': [7375]
-            }]
-            
-            await self._async_load_proofs(FILTER)
-
-            #TODO don't do this every time - only when a new mint shows up
-            # await self._async_set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
-            # await self._async_swap()
-            token_accepted_amount = self.balance - old_balance
-            
-            self.logger.debug(f"Proofs are added! New balance is: {self.balance}")
-        except Exception as e:
-            self.logger.error(f"ecash accept error {e}")  
-            raise Exception(f"ecash accept error {e}")
-        
-        finally:
-            await self.release_lock()  
-
-        return f'Successfully accepted {token_accepted_amount} sats! New balance is {self.balance} sats', token_accepted_amount
+    async def _async_token_accept(self, token:str):
+        return
 
         
 

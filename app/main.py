@@ -177,15 +177,24 @@ async def get_nostr_name(request: Request, name: str, ):
             safeboxes = session.exec(statement)
             safebox_found = safeboxes.first()
             if safebox_found:
-                key_obj = Keys(pub_k=safebox_found.owner)
+                if safebox_found.owner:
+                    key_obj = Keys(pub_k=safebox_found.owner)
+                else:
+                    key_obj = Keys(pub_k=safebox_found.npub)  
+                
                 npub_hex = key_obj.public_key_hex()
             else:
                 statement = select(RegisteredSafebox).where(RegisteredSafebox.handle==name)
                 safeboxes = session.exec(statement)
                 safebox_found = safeboxes.first()
                 if safebox_found:
-                    key_obj = Keys(pub_k=safebox_found.owner)
+                    if safebox_found.owner:
+                        key_obj = Keys(pub_k=safebox_found.owner)
+                    else:
+                        key_obj = Keys(pub_k=safebox_found.npub)  
+                
                     npub_hex = key_obj.public_key_hex()
+                   
                 else:
                     raise HTTPException(status_code=404, detail=f"{name} not found")
 
@@ -258,7 +267,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
 
 
     safebox_json = {
-                    "safebox": npub_hex,                       
+                    "pubkey": npub_hex,                       
                      "relays": settings.RELAYS   
                     
                     }
