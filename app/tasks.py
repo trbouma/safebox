@@ -287,18 +287,11 @@ async def handle_ecash(  acorn_obj: Acorn ):
 
     
     
-    print(f"handle ecash for {acorn_obj.handle}")
-    await acorn_obj.get_ecash_latest(relays=settings.RELAYS)
-    await acorn_obj.load_data()
-    
-    # Update the cache amountt   
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-        safeboxes = session.exec(statement)
-        safebox_update = safeboxes.first()
-        safebox_update.balance = acorn_obj.balance
-        session.add(safebox_update)
-        session.commit()
+    while True:
+        # print(f"listen for ecash payment for {acorn_obj.handle}") 
+        await acorn_obj.get_ecash_latest() 
+        await asyncio.sleep(5)  
+        # print("done getting ecash")
 
    
     

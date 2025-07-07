@@ -43,7 +43,7 @@ tail = util_funcs.str_tails
 from safebox.b_dhke import step1_alice, step3_alice, hash_to_curve
 from safebox.secp import PrivateKey, PublicKey
 from safebox.lightning import lightning_address_pay, lnaddress_to_lnurl, zap_address_pay
-from safebox.nostr import bech32_to_hex, hex_to_bech32, nip05_to_npub
+from safebox.nostr import bech32_to_hex, hex_to_bech32, nip05_to_npub, create_nembed_compressed,parse_nembed_compressed
 
 from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, BlindedMessage, Proof, Proofs, proofEvent, proofEvents, KeysetsResponse, PostMeltQuoteResponse, walletQuote, NIP60Proofs
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
@@ -1402,7 +1402,7 @@ class Acorn:
                     break
                     # raise Exception(f"Could not acquire lock after {timeout} attempts")
                 lock_value = await self.get_wallet_info(label="lock")
-                print(f"{lock_value} attempt {loop_count} of {attempts} attempts")
+                print(f"{lock_value} attempt {loop_count} of {attempts} attempts for {self.handle}")
                 if lock_value.upper().strip() != 'TRUE':
                     await self.set_wallet_info(label="lock",label_info="TRUE")
                     print("we can acquire the lock!")
@@ -1447,7 +1447,7 @@ class Acorn:
                 relays = self.relays
         try:
             ecash_latest = int(await self.get_wallet_info("ecash_latest"))
-            print(f"ecash latest: {ecash_latest}")
+            # print(f"ecash latest: {ecash_latest}")
            
             
             user_records = await self.get_user_records(record_kind=1401, relays=relays, since=ecash_latest+1, reverse=True)
@@ -1462,7 +1462,12 @@ class Acorn:
                 latest_dm = each["timestamp"] 
                 print(f"accept with timestamp {since_now - latest_dm}s old {latest_dm}")
                 try:
-                    msg_out, token_amount = await  self.accept_token(each["payload"])
+                    ecash_nembed = parse_nembed_compressed(each["payload"])
+
+                    print(f"need to parss")
+                    msg_out, token_amount = await  self.accept_token(ecash_nembed["token"])
+                    print("add to tx history")
+                    await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"] )
                     
                     
                     
@@ -1472,13 +1477,14 @@ class Acorn:
                 
                    
         except:
-            print("error")
-            pass
+            print("need to create ecash latest record")
+            await self.set_wallet_info("ecash_latest", "0")
+            
 
         if latest_dm > 0:
             await self.set_wallet_info("ecash_latest", str(latest_dm))
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
-        print(f"total messages: {len(ecash_out)} received for {self.handle}")
+        # print(f"total messages: {len(ecash_out)} received for {self.handle}")
         
         return ecash_out
 
@@ -1694,6 +1700,7 @@ class Acorn:
 
             #TODO change this to write_proofs
             await self.add_proofs_obj(proof_objs)
+            await self.release_lock()
         except Exception as e:
           raise Exception("Error in mint_proofs {e}")  
         
@@ -2150,9 +2157,31 @@ class Acorn:
         headers = { "Content-Type": "application/json"}
 
         try:
-            await self.acquire_lock()
-            callback = lightning_address_pay(amount, lnaddress,comment=comment)         
-            pr = callback['pr']  
+            # await self.acquire_lock()
+            callback, safebox = lightning_address_pay(amount, lnaddress,comment=comment)         
+            pr = callback['pr'] 
+            print(f"safebox: {safebox}") 
+
+            if safebox:
+                
+                ln_parts = lnaddress.split('@')
+                local_part = ln_parts[0]
+                safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
+                print(f"safebox to call {safebox_to_call}")
+                response = requests.get(safebox_to_call).json()
+                pubkey = response.get("pubkey",None)
+                nrecipient = hex_to_bech32(pubkey)
+                relays = response.get("relays", None)
+                cashu_token = await self.issue_token(amount)
+                pay_obj = {"token": cashu_token,"amount": amount, "comment": comment}
+                nembed_to_send = create_nembed_compressed(pay_obj)
+                print(f"nembed to send: {nembed_to_send}")
+                
+                
+
+                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=1401)
+                await self.release_lock()
+                return f"Payment in ecash of {amount} sats", 0
 
 
             for each in keyset_amounts:
@@ -2429,6 +2458,7 @@ class Acorn:
             msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful!"
             self.logger.info(msg_out)
             await self.write_proofs()
+            await self.release_lock()
         except Exception as e:
             await self.release_lock()
             final_fees = 0
@@ -2700,6 +2730,7 @@ class Acorn:
             msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful!"
             self.logger.info(msg_out)
             await self.write_proofs()
+            await self.release_lock()
         except Exception as e:
             # await self.release_lock()
             self.logger.error(f"Error in pay_multi_invoice to address {e}")
@@ -3141,6 +3172,7 @@ class Acorn:
 
             self.proofs = combined_proof_objs
             await self.write_proofs()
+            await self.release_lock()
 
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
@@ -3270,8 +3302,10 @@ class Acorn:
             await self.add_proofs_obj(combined_proof_objs)
             
             await self._load_proofs()
+            await self.release_lock()
 
         except Exception as e:
+            await self.release_lock()
             raise Exception(f"Error in swap {e}")
         
         finally:
@@ -4029,7 +4063,8 @@ class Acorn:
             print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
             
             await self.acquire_lock()
-            # await self.add_proofs_obj(swap_proofs)
+            await self.add_proofs_obj(swap_proofs)
+            await self.release_lock()
 
         
             
@@ -4142,8 +4177,10 @@ class Acorn:
             
             v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
             # print("proofs remaining:", proofs_remaining)
+            await self.release_lock()
         except Exception as e:
             self.logger(f"issue token error {e}")
+            await self.release_lock()
             raise Exception(f"issue token error {e}")
         finally:
             await self.release_lock()

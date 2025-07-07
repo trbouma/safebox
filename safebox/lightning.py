@@ -16,9 +16,11 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
     try:    
            
         ln_parms = requests.get(url_to_call)
-        lnparms_obj = ln_parms.json()
-        allows_nostr = lnparms_obj.get("allowsNostr", False)
-        nostr_pubkey = lnparms_obj.get("nostrPubkey", None)
+        lnparms_obj     = ln_parms.json()
+        allows_nostr    = lnparms_obj.get("allowsNostr", False)
+        nostr_pubkey    = lnparms_obj.get("nostrPubkey", None)
+        safebox         = lnparms_obj.get("safebox", False)
+           
         
         # print("ln_parms", ln_parms.json())
 
@@ -32,12 +34,13 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
 
     data_to_send = {    "wallet_name": ln_parts[0],
                         "amount": amount*1000,
-                        "comment": comment
+                        "comment": comment,
+                        "safebox": safebox
                         
                         }
 
     ln_return = requests.get(ln_parms.json()['callback'],params=data_to_send)
-    return ln_return.json()
+    return ln_return.json(), safebox
 
 def lnaddress_to_lnurl(lnaddress):
     domain = lnaddress.split('@')[1]

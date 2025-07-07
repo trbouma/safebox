@@ -28,7 +28,7 @@ from monstr.event.event import Event
 from safebox.models import cliQuote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
@@ -358,17 +358,7 @@ async def ln_pay_address(   request: Request,
     else:
         final_address = ln_pay.address.strip().lower()
 
-    # check to see if address is another safebox address
-    try:
-        ln_parts = final_address.split('@')
-        local_part = ln_parts[0]
-        # safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
-        # print(f"safebox to call {safebox_to_call}")
-        # response = requests.get(safebox_to_call)
-        # print(response)
-    except:
-        
-        pass
+
 
     # then do regular lightning
     # if response.status_code==200:
@@ -981,50 +971,38 @@ async def root_get_user_profile(    request: Request,
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, access_token=Cookie(), acorn_obj: Acorn = Depends(get_acorn)):
+async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
 
     await websocket.accept()
 
     # access_token = websocket.cookies.get("access_token")
     try:
        
-       safebox_found = await fetch_safebox(access_token=access_token)
+       safebox_found = await fetch_safebox_by_npub(acorn_obj.pubkey_bech32)
     except:
         await websocket.close(code=1008)  # Policy violation
         return
 
 
     starting_balance = safebox_found.balance
-    new_balance = starting_balance
+    # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"
 
     test_balance = acorn_obj.balance
     since_now = int(datetime.now(timezone.utc).timestamp())
     
-    # task1 = asyncio.create_task(handle_ecash(acorn_obj) )
+    task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
     
     while True:
         try:
             await db_state_change()
              
-            # ecash_records = await acorn_obj.get_user_records(record_kind=1401, relays=settings.RELAYS, since=since_now-60)
-            # ecash_out = await acorn_obj.get_ecash_latest(relays=settings.RELAYS)
-           
-              
-            
-
-            # data = await websocket.receive_text()
-            # print(f"message received: {data}")
-            # await websocket.send_text(f"message received {safebox_found.handle} from safebox: {data}")
-            
-            
             new_balance = await fetch_balance(safebox_found.id)
             await acorn_obj.load_data()
-            if acorn_obj.balance != test_balance:
-                print(f"we have a new balance of {acorn_obj.balance}")
-                test_balance = acorn_obj.balance
-                
+            # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
+
+             
 
 
             if new_balance > starting_balance:
@@ -1055,8 +1033,8 @@ async def websocket_endpoint(websocket: WebSocket, access_token=Cookie(), acorn_
             break
         
         
-        
-    print("websocket connection closed")
+    task1.cancel()       
+    print("websocket connection closed and task canceled")
 
 @router.websocket("/wsrequesttransmittal/{nauth}")
 async def websocket_requesttransmittal( websocket: WebSocket, 
@@ -1117,7 +1095,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
         
         await asyncio.sleep(5)
         
-        
+     
     print("websocket connection closed")
 
 @router.get("/getrecords", tags=["safebox", "protected"])

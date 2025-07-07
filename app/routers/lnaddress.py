@@ -121,11 +121,14 @@ async def ln_pay( amount: float,
             nostr: str | None = None,
             currency: str | None = None, 
             __n: str | None = None,
-            lninvoice: bool = False
+            lninvoice: bool = False,
+            safebox: bool = False
 
             
             ):
     match = False
+    pr = None
+   
     sat_amount = int(amount//1000)
 
     with Session(engine) as session:
@@ -174,9 +177,14 @@ async def ln_pay( amount: float,
     
     
 
-    
-    cli_quote = acorn_obj.deposit(sat_amount)  
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
+    if safebox:
+        pass
+        print("don't bother creating an invoice because ecash")
+        pr = None
+    else:    
+        cli_quote = acorn_obj.deposit(sat_amount) 
+        pr = cli_quote.invoice 
+        task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
 
@@ -187,7 +195,7 @@ async def ln_pay( amount: float,
 
     
 
-    return  {   "pr": cli_quote.invoice,
+    return  {   "pr": pr,
                 "hash": None,
                 "routes": [],
                 "successAction": success_obj
