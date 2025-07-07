@@ -609,6 +609,8 @@ function getlnPayStatus(ln_pay_status) {
     var status = JSON.stringify(ln_pay_status["detail"]);
     const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
     alert("Payment " + parsedObject.detail);
+
+    location.reload();
   
 
 }

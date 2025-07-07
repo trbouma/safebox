@@ -374,21 +374,20 @@ async def ln_pay_address(   request: Request,
     
     try:
         
+        pass
+        # msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered)
+        task1 = asyncio.create_task(acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered, tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency))
 
-        msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered)
-        if settings.WALLET_SWAP_MODE:
-            print("doing wallet swap")
-            await acorn_obj.swap_multi_consolidate()
-        await acorn_obj.add_tx_history( tx_type='D',
-                                        amount=sat_amount,
-                                        tendered_amount=ln_pay.amount,
-                                        tendered_currency=ln_pay.currency,
-                                        comment=ln_pay.comment + tendered, 
-                                        fees=final_fees)
+        # await acorn_obj.add_tx_history( tx_type='D',
+        #                                amount=sat_amount,
+        #                                tendered_amount=ln_pay.amount,
+        #                                tendered_currency=ln_pay.currency,
+        #                                comment=ln_pay.comment + tendered, 
+        #                                fees=final_fees)
     except Exception as e:
         return {"status": "ERROR", f"detail": f"error {e}"}
 
-
+    msg_out = "Payment sent!"
 
     return {"status": "OK", "detail": msg_out}
 

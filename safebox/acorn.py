@@ -1106,7 +1106,7 @@ class Acorn:
 
         # Calculate current balance - need to refresh data
 
-        await self.load_data()
+        # await self.load_data()
         
 
 
@@ -1446,7 +1446,7 @@ class Acorn:
         if not relays:
                 relays = self.relays
         try:
-            ecash_latest = int(await self.get_wallet_info("ecash_latest"))
+            ecash_latest = int(await self.get_wallet_info("ecash_latest", record_kind=37376))
             # print(f"ecash latest: {ecash_latest}")
            
             
@@ -1466,8 +1466,11 @@ class Acorn:
 
                     print(f"need to parss")
                     msg_out, token_amount = await  self.accept_token(ecash_nembed["token"])
+                    tendered_amount = ecash_nembed.get("tendered_amount", None)
+                    tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
+
                     print("add to tx history")
-                    await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"] )
+                    await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
                     
                     
                     
@@ -1478,11 +1481,11 @@ class Acorn:
                    
         except:
             print("need to create ecash latest record")
-            await self.set_wallet_info("ecash_latest", "0")
+            await self.set_wallet_info("ecash_latest", "0", record_kind=37376)
             
 
         if latest_dm > 0:
-            await self.set_wallet_info("ecash_latest", str(latest_dm))
+            await self.set_wallet_info("ecash_latest", str(latest_dm), record_kind=37376)
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
         # print(f"total messages: {len(ecash_out)} received for {self.handle}")
         
@@ -2145,7 +2148,9 @@ class Acorn:
     async def pay_multi(  self, 
                     amount:int, 
                     lnaddress: str, 
-                    comment: str = "Paid!"): 
+                    comment: str = "Paid!",
+                    tendered_amount: float = None,
+                    tendered_currency: str = "SAT"): 
                     
         
         # print("pay from multiple mints")
@@ -2155,6 +2160,8 @@ class Acorn:
         multi_path = False
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         headers = { "Content-Type": "application/json"}
+        msg_out = "Paid"
+        final_fees = 0
 
         try:
             # await self.acquire_lock()
@@ -2173,7 +2180,11 @@ class Acorn:
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
                 cashu_token = await self.issue_token(amount)
-                pay_obj = {"token": cashu_token,"amount": amount, "comment": comment}
+                pay_obj =   {"token": cashu_token,
+                             "amount": amount, 
+                             "comment": comment,
+                             "tendered_amount": tendered_amount,
+                             "tendered_currency": tendered_currency}
                 nembed_to_send = create_nembed_compressed(pay_obj)
                 print(f"nembed to send: {nembed_to_send}")
                 
@@ -2181,284 +2192,284 @@ class Acorn:
 
                 await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=1401)
                 await self.release_lock()
-                return f"Payment in ecash of {amount} sats", 0
+            else: #     return f"Payment in ecash of {amount} sats", 0
 
 
-            for each in keyset_amounts:
-                available_amount += keyset_amounts[each]
-            
-            
-            # print("available amount:", available_amount)
-            if available_amount < amount:
-                msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
-                raise Exception(msg_out)
-            
-            
-            for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-                # print(key, keyset_amounts[key])
-                if keyset_amounts[key] >= amount:
-                    chosen_keyset = key
-                    break
-            if not chosen_keyset:
-                # print("insufficient balance in any one keyset, you need to swap or do mpp!") 
-                multi_path = True
+                for each in keyset_amounts:
+                    available_amount += keyset_amounts[each]
                 
-            
-            if multi_path:
-                raise Exception("Multipath payments are not implemented yet!")
-                #TODO the remaining code is for multipath
-                amount_multi =0
-                keysets_to_use_for_multi = []
-                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
-                    
+                
+                # print("available amount:", available_amount)
+                if available_amount < amount:
+                    msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
+                    raise Exception(msg_out)
+                
+                
+                for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
                     # print(key, keyset_amounts[key])
-                    amount_multi += keyset_amounts[key]
-                    chosen_keysets.append(key)
-                    # just do all the keysets for now
-                    # if amount_multi >= amount:
-                    #     print(f"got enough!")
-                    #     break
-                
-                print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
-                amount_remaining = amount
-                total_fees = 0
-                total_melt_amount = 0
-                for each_keyset in chosen_keysets:
-                    print(f"amount remaining: {amount_remaining}")
-                    # There are three possible use cases
-                    if amount_remaining <= 0:
-                        print("we are done!")
+                    if keyset_amounts[key] >= amount:
+                        chosen_keyset = key
                         break
-                    elif amount_remaining > keyset_amounts[each_keyset]:
-                        print("use whole keyset amount")
-                        amount_to_use = keyset_amounts[each_keyset]
-                    else:
-                        amount_to_use = amount_remaining
+                if not chosen_keyset:
+                    # print("insufficient balance in any one keyset, you need to swap or do mpp!") 
+                    multi_path = True
                     
-                    
-                    melt_quote_url = f"{self.known_mints[each_keyset]}/v1/melt/quote/bolt11"
-                    melt_url = f"{self.known_mints[each_keyset]}/v1/melt/bolt11"
-                    
-                    data_to_send = {    "request": pr,
-                                        "unit": "sat",
-                                        "options": {"mpp": {"amount": amount_to_use}}
-                                }
-                    # print(f"{melt_quote_url, melt_url} {data_to_send}")
-                    
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-                    post_melt_response = PostMeltQuoteResponse(**response.json())
-                    print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
-
-                    # Now need to figure out how much can be paid based on case
-                    if amount_remaining > keyset_amounts[each_keyset]:
-                        pass
-                        amount_to_pay = amount_to_use - post_melt_response.fee_reserve
-                        melt_amount = amount_to_use
-                    else:
-                        pass
-                        amount_to_pay = amount_to_use
-                        melt_amount = amount_to_use + post_melt_response.fee_reserve
-                        if melt_amount >= keyset_amounts[each_keyset]:
-                            print("WARNING")
-                        else:
-                            print(f"melt amount ok")
-
-                    total_melt_amount += melt_amount
-                    total_fees += post_melt_response.fee_reserve
-                    # amount_paid_by_keyset = amount_to_use - post_melt_response.fee_reserve
-                    print(f"can pay amount {amount_to_pay} from keyset total {keyset_amounts[each_keyset]} with: {post_melt_response.fee_reserve}  melt amount is {melt_amount}")
-                    # Redo the melt request
-                    data_to_send = {    "request": pr,
-                                    "unit": "sat",
-                                    "options": {"mpp": {"amount": amount_to_pay}}
-                            }
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
-                    response.raise_for_status()
-                    post_melt_response = PostMeltQuoteResponse(**response.json())
-                    print(f"adjusted post melt response {post_melt_response}")
-                    amount_remaining = amount_remaining - amount_to_pay   
-                    print(f"amount remaining after adjusted {amount_remaining}")                                   
-                    keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
-
-                if amount_remaining > 0:
-                    raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
-
-                # Now we have the meltquotes
-                print(f"keysets to use for multi {keysets_to_use_for_multi}")
-                print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
                 
-                self._multi_melt(keysets_to_use_for_multi) 
-                
-                # self.write_proofs()
-
-                msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
-                return msg_out, total_fees
-                # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
-
-            else: # Can pay with a single keyset
-                
-                self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
-            
-                # Now do the pay routine
-                melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-                melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-
-                print(amount, lnaddress)
-                data_to_send = {    "request": pr,
-                                    "unit": "sat"
-
-                                }
-            
-                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
-                response.raise_for_status()
-                
-
-                # print("post melt response:", response.json())
-                post_melt_response = PostMeltQuoteResponse(**response.json())
-                # print("mint response:", post_melt_response)
-                proofs_to_use = []
-                proof_amount = 0
-                amount_needed = amount + post_melt_response.fee_reserve
-                self.logger.debug(f"amount needed: {amount_needed}")
-                if amount_needed > keyset_amounts[chosen_keyset]:
-                    print("Insufficient balance in keyset. you need to swap, or use another keyset")
-                    chosen_keyset = None
-                    for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                if multi_path:
+                    raise Exception("Multipath payments are not implemented yet!")
+                    #TODO the remaining code is for multipath
+                    amount_multi =0
+                    keysets_to_use_for_multi = []
+                    for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k],reverse=True):
+                        
                         # print(key, keyset_amounts[key])
-                        if keyset_amounts[key] >= amount_needed:
-                            chosen_keyset = key
-                            self.logger.debug(f"new chosen keyset: {key}")
-                            break
-                    if not chosen_keyset:
-                        msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
-                        raise ValueError(msg_out)
-
-                    # Adding in some additional error handling to head off a random fatal error    
+                        amount_multi += keyset_amounts[key]
+                        chosen_keysets.append(key)
+                        # just do all the keysets for now
+                        # if amount_multi >= amount:
+                        #     print(f"got enough!")
+                        #     break
                     
-                    # Set to new mints and redo the calls
+                    print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
+                    amount_remaining = amount
+                    total_fees = 0
+                    total_melt_amount = 0
+                    for each_keyset in chosen_keysets:
+                        print(f"amount remaining: {amount_remaining}")
+                        # There are three possible use cases
+                        if amount_remaining <= 0:
+                            print("we are done!")
+                            break
+                        elif amount_remaining > keyset_amounts[each_keyset]:
+                            print("use whole keyset amount")
+                            amount_to_use = keyset_amounts[each_keyset]
+                        else:
+                            amount_to_use = amount_remaining
+                        
+                        
+                        melt_quote_url = f"{self.known_mints[each_keyset]}/v1/melt/quote/bolt11"
+                        melt_url = f"{self.known_mints[each_keyset]}/v1/melt/bolt11"
+                        
+                        data_to_send = {    "request": pr,
+                                            "unit": "sat",
+                                            "options": {"mpp": {"amount": amount_to_use}}
+                                    }
+                        # print(f"{melt_quote_url, melt_url} {data_to_send}")
+                        
+                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                        post_melt_response = PostMeltQuoteResponse(**response.json())
+                        print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
+
+                        # Now need to figure out how much can be paid based on case
+                        if amount_remaining > keyset_amounts[each_keyset]:
+                            pass
+                            amount_to_pay = amount_to_use - post_melt_response.fee_reserve
+                            melt_amount = amount_to_use
+                        else:
+                            pass
+                            amount_to_pay = amount_to_use
+                            melt_amount = amount_to_use + post_melt_response.fee_reserve
+                            if melt_amount >= keyset_amounts[each_keyset]:
+                                print("WARNING")
+                            else:
+                                print(f"melt amount ok")
+
+                        total_melt_amount += melt_amount
+                        total_fees += post_melt_response.fee_reserve
+                        # amount_paid_by_keyset = amount_to_use - post_melt_response.fee_reserve
+                        print(f"can pay amount {amount_to_pay} from keyset total {keyset_amounts[each_keyset]} with: {post_melt_response.fee_reserve}  melt amount is {melt_amount}")
+                        # Redo the melt request
+                        data_to_send = {    "request": pr,
+                                        "unit": "sat",
+                                        "options": {"mpp": {"amount": amount_to_pay}}
+                                }
+                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
+                        response.raise_for_status()
+                        post_melt_response = PostMeltQuoteResponse(**response.json())
+                        print(f"adjusted post melt response {post_melt_response}")
+                        amount_remaining = amount_remaining - amount_to_pay   
+                        print(f"amount remaining after adjusted {amount_remaining}")                                   
+                        keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
+
+                    if amount_remaining > 0:
+                        raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
+
+                    # Now we have the meltquotes
+                    print(f"keysets to use for multi {keysets_to_use_for_multi}")
+                    print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
+                    
+                    self._multi_melt(keysets_to_use_for_multi) 
+                    
+                    # self.write_proofs()
+
+                    msg_out = f"pay amount with mpp {amount} total fees: {total_fees}, total melt amount {total_melt_amount}"
+                    return msg_out, total_fees
+                    # raise ValueError(f"Need to implement multipath payment for {amount} with {available_amount} available")
+
+                else: # Can pay with a single keyset
+                    
+                    self.logger.debug(f"chosen keyset for payment {chosen_keyset}")
+                
+                    # Now do the pay routine
                     melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
                     melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-                    # print(melt_quote_url,melt_url)
-                    # callback = lightning_address_pay(amount, lnaddress,comment=comment)
-                    # pr = callback['pr']        
-                    # print(pr)
-                    self.logger.debug(f"{amount}, {lnaddress}")
-                    data_to_send = {    "request": pr,
-                                    "unit": "sat"
 
-                                }
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                    print(amount, lnaddress)
+                    data_to_send = {    "request": pr,
+                                        "unit": "sat"
+
+                                    }
+                
+                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
+                    response.raise_for_status()
+                    
+
                     # print("post melt response:", response.json())
                     post_melt_response = PostMeltQuoteResponse(**response.json())
                     # print("mint response:", post_melt_response)
-                    
-                    
-                    
-                    if not chosen_keyset:
-                        msg_out ="insufficient balance in any one keyset, you need to swap!"
-                        raise ValueError(msg_out) 
-                    
-                # Print now we should be all set to go
-                
-                self.logger.debug("---we have a sufficient mint balance---")
-                
-                # This is the part that needs to be added in multi
-                proofs_to_use = []
-                proof_amount = 0
-                proofs_from_keyset = keyset_proofs[chosen_keyset]
-                while proof_amount < amount_needed:
-                    pay_proof = proofs_from_keyset.pop()
-                    proofs_to_use.append(pay_proof)
-                    proof_amount += pay_proof.amount
-                    # print("pop", pay_proof.amount)
-                    
+                    proofs_to_use = []
+                    proof_amount = 0
+                    amount_needed = amount + post_melt_response.fee_reserve
+                    self.logger.debug(f"amount needed: {amount_needed}")
+                    if amount_needed > keyset_amounts[chosen_keyset]:
+                        print("Insufficient balance in keyset. you need to swap, or use another keyset")
+                        chosen_keyset = None
+                        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
+                            # print(key, keyset_amounts[key])
+                            if keyset_amounts[key] >= amount_needed:
+                                chosen_keyset = key
+                                self.logger.debug(f"new chosen keyset: {key}")
+                                break
+                        if not chosen_keyset:
+                            msg_out = "you don't have a sufficient balance in a keyset, you need to swap"
+                            raise ValueError(msg_out)
 
-                
-                #FIXME this is the critical error!!!
-                try: 
-                    proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-                except Exception as e:
-                    raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
-                    
+                        # Adding in some additional error handling to head off a random fatal error    
+                        
+                        # Set to new mints and redo the calls
+                        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
+                        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
+                        # print(melt_quote_url,melt_url)
+                        # callback = lightning_address_pay(amount, lnaddress,comment=comment)
+                        # pr = callback['pr']        
+                        # print(pr)
+                        self.logger.debug(f"{amount}, {lnaddress}")
+                        data_to_send = {    "request": pr,
+                                        "unit": "sat"
 
-                # print("proofs remaining:", proofs_remaining)
-                # print(f"amount needed: {amount_needed}")
-                # Implement from line 824
-                sum_proofs =0
-                spend_proofs = []
-                keep_proofs = []
-                
-                for each in proofs_remaining:
+                                    }
+                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                        # print("post melt response:", response.json())
+                        post_melt_response = PostMeltQuoteResponse(**response.json())
+                        # print("mint response:", post_melt_response)
+                        
+                        
+                        
+                        if not chosen_keyset:
+                            msg_out ="insufficient balance in any one keyset, you need to swap!"
+                            raise ValueError(msg_out) 
+                        
+                    # Print now we should be all set to go
                     
-                    sum_proofs += each.amount
-                    if sum_proofs <= amount_needed:
-                        spend_proofs.append(each)
-                        self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                    self.logger.debug("---we have a sufficient mint balance---")
+                    
+                    # This is the part that needs to be added in multi
+                    proofs_to_use = []
+                    proof_amount = 0
+                    proofs_from_keyset = keyset_proofs[chosen_keyset]
+                    while proof_amount < amount_needed:
+                        pay_proof = proofs_from_keyset.pop()
+                        proofs_to_use.append(pay_proof)
+                        proof_amount += pay_proof.amount
+                        # print("pop", pay_proof.amount)
+                        
+
+                    
+                    #FIXME this is the critical error!!!
+                    try: 
+                        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+                    except Exception as e:
+                        raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
+                        
+
+                    # print("proofs remaining:", proofs_remaining)
+                    # print(f"amount needed: {amount_needed}")
+                    # Implement from line 824
+                    sum_proofs =0
+                    spend_proofs = []
+                    keep_proofs = []
+                    
+                    for each in proofs_remaining:
+                        
+                        sum_proofs += each.amount
+                        if sum_proofs <= amount_needed:
+                            spend_proofs.append(each)
+                            self.logger.debug(f"pay with {each.amount}, {each.secret}")
+                        else:
+                            keep_proofs.append(each)
+                            self.logger.debug(f"keep {each.amount}, {each.secret}")
+                    
+                    self.logger.debug(f"spend proofs: {spend_proofs}")
+                    self.logger.debug(f"keep proofs: {keep_proofs}")
+                    melt_proofs = []
+                    for each_proof in spend_proofs:
+                            melt_proofs.append(each_proof.model_dump())
+
+                    data_to_send = {"quote": post_melt_response.quote,
+                                "inputs": melt_proofs }
+                    
+                
+                    
+                    self.logger.debug(f"lightning payment we are here!: {data_to_send}")
+                    try:
+                        response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
+                        response.raise_for_status()
+                    except Exception as e:
+                        raise Exception(f"error: {e}")
+                    
+                    self.logger.debug(f"response json: {response.json()}")
+                    payment_json = response.json()
+                    #TODO Need to do some error checking
+                
+                    self.logger.debug(f"need to do some error checking")
+                    # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
+                    # add keep proofs back into selected keyset proofs
+                    if payment_json.get("paid",False):        
+                        self.logger.info(f"Lightning payment ok")
                     else:
-                        keep_proofs.append(each)
-                        self.logger.debug(f"keep {each.amount}, {each.secret}")
-                
-                self.logger.debug(f"spend proofs: {spend_proofs}")
-                self.logger.debug(f"keep proofs: {keep_proofs}")
-                melt_proofs = []
-                for each_proof in spend_proofs:
-                        melt_proofs.append(each_proof.model_dump())
+                        self.logger.info(f"lighting payment did no go through")
+                        raise Exception(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
+                        # The following code is not necessary
+                        # Add back in spend proofs
+                        # for each in spend_proofs:   
+                        #    proofs_from_keyset.append(each)
+                    
 
-                data_to_send = {"quote": post_melt_response.quote,
-                            "inputs": melt_proofs }
-                
-            
-                
-                self.logger.debug(f"lightning payment we are here!: {data_to_send}")
-                try:
-                    response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
-                    response.raise_for_status()
-                except Exception as e:
-                    raise Exception(f"error: {e}")
-                
-                self.logger.debug(f"response json: {response.json()}")
-                payment_json = response.json()
-                #TODO Need to do some error checking
-            
-                self.logger.debug(f"need to do some error checking")
-                # {'detail': 'Lightning payment unsuccessful. no_route', 'code': 20000}
-                # add keep proofs back into selected keyset proofs
-                if payment_json.get("paid",False):        
-                    self.logger.info(f"Lightning payment ok")
-                else:
-                    self.logger.info(f"lighting payment did no go through")
-                    raise Exception(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
-                    # The following code is not necessary
-                    # Add back in spend proofs
-                    # for each in spend_proofs:   
-                    #    proofs_from_keyset.append(each)
-                
-
-                for each in keep_proofs:
-                    proofs_from_keyset.append(each)
-                # print("self proofs", self.proofs)
-                # need to reassign back into 
-                keyset_proofs[chosen_keyset]= proofs_from_keyset
-                # OK - now need to put proofs back into a flat lish
-                post_payment_proofs = []
-                for key in keyset_proofs:
-                    each_proofs = keyset_proofs[key]
-                    for each_proof in each_proofs:
-                        post_payment_proofs.append(each_proof)
+                    for each in keep_proofs:
+                        proofs_from_keyset.append(each)
+                    # print("self proofs", self.proofs)
+                    # need to reassign back into 
+                    keyset_proofs[chosen_keyset]= proofs_from_keyset
+                    # OK - now need to put proofs back into a flat lish
+                    post_payment_proofs = []
+                    for key in keyset_proofs:
+                        each_proofs = keyset_proofs[key]
+                        for each_proof in each_proofs:
+                            post_payment_proofs.append(each_proof)
+                    
+                    
+                    # asyncio.run(self._async_delete_proof_events())
+                    # self.delete_proof_events()
+                    
+                    self.proofs = post_payment_proofs
                 
                 
-                # asyncio.run(self._async_delete_proof_events())
-                # self.delete_proof_events()
                 
-                self.proofs = post_payment_proofs
-            
-            
-            
-            final_fees = amount_needed - amount
-            msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful!"
-            self.logger.info(msg_out)
-            await self.write_proofs()
-            await self.release_lock()
+                final_fees = amount_needed - amount
+                msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful!"
+                self.logger.info(msg_out)
+                await self.write_proofs()
+                await self.release_lock()
         except Exception as e:
             await self.release_lock()
             final_fees = 0
@@ -2468,7 +2479,9 @@ class Acorn:
         finally:
             await self.release_lock()
             print("all done pay_multi")
-            
+            print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
+            await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency)    
+        
         return msg_out, final_fees
 
     def _multi_melt(self, keysets_to_use):
