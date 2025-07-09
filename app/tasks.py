@@ -18,7 +18,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 
 from datetime import datetime, timedelta
-from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest
+from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest, nfcPayOutVault
 from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
@@ -310,6 +310,23 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
      
+async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data: object, headers: object):
+    cashu_token = await acorn_obj.issue_token(submit_data["amount"])
+    submit_data["cashu_token"] = cashu_token
     
+    print(f"submit data: {submit_data}")
+
+
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)
+    print(f"response: {response.json()}")
+    pass
+
+async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
+    comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
+    print(f"cashu_token: {nfc_pay_out.cashu_token}")
+    msg_out = await acorn_obj.accept_token(nfc_pay_out.cashu_token)
+    await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
+
+    pass  
 
     

@@ -32,7 +32,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -1037,6 +1037,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         
     task1.cancel()       
     print("websocket connection closed and task canceled")
+    # await websocket.close()
 
 @router.websocket("/wsrequesttransmittal/{nauth}")
 async def websocket_requesttransmittal( websocket: WebSocket, 
@@ -1098,6 +1099,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
         await asyncio.sleep(5)
         
      
+    # await websocket.close()
     print("websocket connection closed")
 
 @router.get("/getrecords", tags=["safebox", "protected"])
@@ -1598,6 +1600,7 @@ async def pay_to_nfc_tag( request: Request,
                     ):
     status = "OK"
     detail = "this is from safebox /paytonfctag"
+    nfc_ecash_clearing = settings.NFC_ECASH_CLEARING
     k = Keys(settings.SERVICE_SECRET_KEY)
     # Forward request with amount to get invoice
     print(f"nembed: {nfc_pay_out_request.nembed}, amount: {nfc_pay_out_request.amount} comment: {nfc_pay_out_request.comment}")
@@ -1632,28 +1635,48 @@ async def pay_to_nfc_tag( request: Request,
 
     vault_url = f"https://{host}/.well-known/nfcpayout"
     headers = { "Content-Type": "application/json"}
-
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
     nfc_comment = nfc_pay_out_request.comment
-    submit_data = { "token": vault_token, 
-                    "amount": final_amount, 
-                    "tendered_amount": nfc_pay_out_request.amount,
-                    "tendered_currency": nfc_pay_out_request.currency,
-                    "comment": nfc_comment, 
-                    "sig":sig, "pubkey":pubkey }
 
-    print(f"vault: {vault_url} submit data: {submit_data}" )
+    if nfc_ecash_clearing:
+        print("do nfc ecash clearing")
+       
 
-    # Put this into a task
-    task1 = asyncio.create_task(task_pay_to_nfc_tag(
-        acorn_obj=acorn_obj,
-        vault_url=vault_url,
-        submit_data=submit_data,
-        headers=headers,
-        nfc_pay_out_request=nfc_pay_out_request,
-        final_amount=final_amount
-    ))
+        submit_data = { "token": vault_token, 
+                        "amount": final_amount,                        
+                        "tendered_amount": nfc_pay_out_request.amount,
+                        "tendered_currency": nfc_pay_out_request.currency,
+                        "comment": nfc_comment, 
+                        "nfc_ecash_clearing": nfc_ecash_clearing,
+                        "sig":sig, "pubkey":pubkey }
+
+        # put this in a task
+        asyncio.create_task(task_to_send_along_ecash(acorn_obj=acorn_obj, vault_url=vault_url,submit_data=submit_data,headers=headers))
+
+
+
+    else:    
+
+        submit_data = { "token": vault_token, 
+                        "amount": final_amount, 
+                        "tendered_amount": nfc_pay_out_request.amount,
+                        "tendered_currency": nfc_pay_out_request.currency,
+                        "comment": nfc_comment, 
+                        "nfc_ecash_clearing": nfc_ecash_clearing,
+                        "sig":sig, "pubkey":pubkey }
+
+        print(f"vault: {vault_url} submit data: {submit_data}" )
+
+        # Put this into a task
+        task1 = asyncio.create_task(task_pay_to_nfc_tag(
+            acorn_obj=acorn_obj,
+            vault_url=vault_url,
+            submit_data=submit_data,
+            headers=headers,
+            nfc_pay_out_request=nfc_pay_out_request,
+            final_amount=final_amount
+        ))
 
 
     ## 

@@ -22,7 +22,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment, handle_payment
+from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash
 from app.utils import ( create_jwt_token, 
                         send_zap_receipt, 
                         recover_nsec_from_seed, 
@@ -386,19 +386,29 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     acorn_obj = await get_acorn_by_npub(k_payout.public_key_bech32())
 
     print(f"Balance of payout acorn {acorn_obj.handle} is {acorn_obj.balance}")
-     
-    cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
 
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
 
-    detail = f"Paid to {acorn_obj.handle}"
-    
-    # create task to monitor payment
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency, comment=comment_to_log, mint=HOME_MINT))
+    if nfc_pay_out.nfc_ecash_clearing:
+        ln_invoice = None
+        detail = f"Paid in ecash to {acorn_obj.handle}"
+       
+        task_ecash = asyncio.create_task(task_to_accept_ecash(acorn_obj, nfc_pay_out))
+    else:
+     
+        cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
+        ln_invoice = cli_quote.invoice
+
+        
+
+        detail = f"Paid to {acorn_obj.handle}"
+        
+        # create task to monitor payment
+        task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=nfc_pay_out.amount, tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency, comment=comment_to_log, mint=HOME_MINT))
 
    
 
-    return {"status": status, "detail": detail, "comment": comment_to_log,"invoice": cli_quote.invoice, "payee": acorn_obj.handle }
+    return {"status": status, "detail": detail, "comment": comment_to_log,"invoice": ln_invoice, "payee": acorn_obj.handle }
     
 @router.post("/onboard/{onboard_code}", tags=["lnaddress", "public"])
 async def onboard_safebox(  request: Request, 
