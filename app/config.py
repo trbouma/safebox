@@ -10,10 +10,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    HOME_RELAY: str = 'ws://localhost:8735'
+    HOME_RELAY: str = 'wss://relay.getsafebox.app'
     HOME_MINT: str= 'https://mint.getsafebox.app'      
     SERVICE_NAME: str = 'Safebox'
-    SERVICE_TAG_LINE: str = 'Your money. Your data'
+    SERVICE_TAG_LINE: str = 'Your Funds. Your Records'
     SERVICE_SECRET_KEY: str|None = 'nsec1s7kq8yqregp0pa0v4vmcan4s8m8dn6az6k6u8pe9gz4thzst595sl7grfd'
     SERVICE_RELAY_DB: str = "data/relay.db"
     TZ: str = "America/New_York"
