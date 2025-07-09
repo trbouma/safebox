@@ -203,8 +203,8 @@ async def ln_pay( amount: float,
 
     
 
-@router.post("/.well-known/nwcvault", tags=["public"])
-async def nwc_vault(request: Request, nwc_vault: nwcVault):
+@router.post("/.well-known/nfcvaultrequestpayment", tags=["public"])
+async def nwc_request_payment(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
 
@@ -217,20 +217,35 @@ async def nwc_vault(request: Request, nwc_vault: nwcVault):
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret}")
+    print(f"token secret {token_secret} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
     k_nwc = Keys(token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
-    pay_instruction = {
-    "method": "pay_invoice",
-    "params": { 
-        "invoice": nwc_vault.ln_invoice,
-        "comment": nwc_vault.comment,
-        "tendered_amount": nwc_vault.tendered_amount,
-        "tendered_currency": nwc_vault.tendered_currency 
+    if nwc_vault.nfc_ecash_clearing:
+        pay_instruction = {
+        "method": "pay_ecash",
+        "params": { 
+            "recipient_pubkey": nwc_vault.recipient_pubkey,
+            "relays": nwc_vault.relays,
+            "amount": nwc_vault.amount,
+            "tendered_amount": nwc_vault.tendered_amount,
+            "tendered_currency": nwc_vault.tendered_currency, 
+            "comment": nwc_vault.comment
+                }
             }
-        }
-    
+
+    else:
+
+        pay_instruction = {
+        "method": "pay_invoice",
+        "params": { 
+            "invoice": nwc_vault.ln_invoice,
+            "comment": nwc_vault.comment,
+            "tendered_amount": nwc_vault.tendered_amount,
+            "tendered_currency": nwc_vault.tendered_currency 
+                }
+            }
+        
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(pay_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:

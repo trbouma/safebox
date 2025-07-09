@@ -382,7 +382,7 @@ if (nfc_amount == 0) {
   consoleLog(`Advisory: Since 0 was provided for NFC, your minimun amount will be used`);
 
 }
-await fetch('/safebox/acceptpaymenttoken', {
+await fetch('/safebox/requestnfcpayment', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
 body: JSON.stringify(submit_data)         
@@ -826,13 +826,12 @@ function getInvoiceStatus(ln_invoice_status) {
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
       <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="0" size="24" style="width:30%">
-      <select id="ln_select_invoice_currency" name="select_invoice_currency"> 
-         <option value="SAT">SAT</option>
-        {% for each in currencies%}
-        <option value="{{each}}" {% if each == currency_code %}selected{% endif %}>{{each}}</option> 
-        {% endfor %}
-
-      </select>      
+    <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
+      <option value="SAT" selected>SAT</option>            
+      {% for each in currencies %}     
+       <option value="{{each}}" >{{each}}</option>        
+      {% endfor %}
+    </select>   
       <br><br>
       <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
       <br><br>
@@ -860,9 +859,9 @@ function getInvoiceStatus(ln_invoice_status) {
    
     <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
     <select id="ln_select_currency" name="ln_select_currency"> 
-      <option value="SAT">SAT</option>            
+      <option value="SAT" selected>SAT</option>            
       {% for each in currencies %}     
-       <option value="{{each}}" {% if each == currency_code %}selected{% endif %}>{{each}}</option>        
+       <option value="{{each}}" >{{each}}</option>        
       {% endfor %}
     </select>
     <br><br>

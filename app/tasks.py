@@ -288,9 +288,9 @@ async def handle_ecash(  acorn_obj: Acorn ):
     
     
     while True:
-        # print(f"listen for ecash payment for {acorn_obj.handle}") 
+        print(f"listen for ecash payment for {acorn_obj.handle}") 
         await acorn_obj.get_ecash_latest() 
-        await asyncio.sleep(5)  
+        await asyncio.sleep(3)  
         # print("done getting ecash")
 
    

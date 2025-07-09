@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']
     IP_INFO_TOKEN: str = "notset"
+    NFC_ECASH_CLEARING: bool = True
     LOCAL_RELAY_PORT: int = 8735
     TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8

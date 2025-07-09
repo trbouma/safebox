@@ -119,6 +119,8 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
                "metadata": {} 
             }
             tx_nwc_history.append(each_transaction)
+        
+
 
         result_transactions = {
                                 "result_type": "list_transactions",
@@ -263,6 +265,29 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             print(f'record name {record_name} record value {record_value} record type {record_type}' )
             if record_type == grant_kind:
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
+    
+    elif payinstruction_obj['method'] == 'pay_ecash':
+        print("we gotta do ecash!")
+        recipient_pubkey = payinstruction_obj['params']['recipient_pubkey']
+        amount = payinstruction_obj['params']['amount']
+        relays = payinstruction_obj['params']['relays']
+        tendered_amount = payinstruction_obj['params']['tendered_amount']
+        tendered_currency = payinstruction_obj['params']['tendered_currency']
+        comment = payinstruction_obj['params']['comment']
+        print(f"{amount} {recipient_pubkey} {relays}")
+        # Need to create the nembed object
+        cashu_token = await acorn_obj.issue_token(amount)
+        pay_obj =   {"token": cashu_token,
+                             "amount": amount, 
+                             "comment": comment,
+                             "tendered_amount": tendered_amount,
+                             "tendered_currency": tendered_currency}
+        nembed_to_send = create_nembed_compressed(pay_obj)
+        print(f"nembed to send: {nembed_to_send}")
+               
+
+        await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=1401)
+        await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
 
 async def listen_notes(url):
     c = Client(url)

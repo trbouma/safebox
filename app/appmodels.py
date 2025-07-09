@@ -157,12 +157,16 @@ class nfcPayOutRequest(BaseModel):
     comment: str = "nwc pay request"
     
 class nwcVault(BaseModel):
-    ln_invoice: str
+    ln_invoice: str|None = None
     token: str 
+    amount: int|None=None
     tendered_amount: float|None = None
     tendered_currency: str = "SAT"
     comment: str|None=None
     pubkey:str|None= None
+    nfc_ecash_clearing: bool = False
+    recipient_pubkey:str|None=None
+    relays: List[str]|None=None
     sig: str|None = None  
 
 class proofVault(BaseModel):    

@@ -983,7 +983,8 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         return
 
 
-    starting_balance = safebox_found.balance
+    # starting_balance = safebox_found.balance
+    starting_balance = acorn_obj.balance
     # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"
@@ -997,9 +998,11 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         try:
             await db_state_change()
              
-            new_balance = await fetch_balance(safebox_found.id)
+            # new_balance = await fetch_balance(safebox_found.id)
+            
             await acorn_obj.load_data()
-            # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
+            new_balance = acorn_obj.balance
+            print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
              
 
@@ -1502,25 +1505,26 @@ async def accept_incoming_record(       request: Request,
     return {"status": status, "detail": detail}  
 
 
-@router.post("/acceptpaymenttoken", tags=["safebox", "protected"])
-async def accept_payment_token( request: Request, 
+@router.post("/requestnfcpayment", tags=["safebox", "protected"])
+async def request_nfc_payment( request: Request, 
                                 payment_token: paymentByToken,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
    
 
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(settings.SERVICE_SECRET_KEY) # This is for the trusted service
 
     status = "OK"
     detail = "done"
     cli_quote: cliQuote
+   
+    nfc_ecash_clearing = settings.NFC_ECASH_CLEARING
     
     token_to_use = payment_token.payment_token
     
     token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]
-    vault_url = f"https://{host}/.well-known/nwcvault"
+    host = parsed_nembed["h"]   
     vault_token = parsed_nembed["k"]
 
     print(f"payment token: {payment_token}")
@@ -1537,32 +1541,53 @@ async def accept_payment_token( request: Request,
     else:
         final_amount = int(parsed_nembed.get("a", 21))
     
-
-    cli_quote = acorn_obj.deposit(final_amount)
-    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
-    
+    # This is to confirm that the originator is trusted
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
-
-    # need to send off to the vault for processing
-    submit_data = { "ln_invoice": cli_quote.invoice, 
-                    "token": vault_token, 
-                    "tendered_amount": payment_token.amount,
-                    "tendered_currency": payment_token.currency,                    
-                    "pubkey": pubkey, 
-                    "sig": sig, 
-                    "comment": payment_token.comment  
-                    }
-    print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
-    print(f"{vault_url}")
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    
-    print(response.json())
+    vault_url = f"https://{host}/.well-known/nfcvaultrequestpayment"
+    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
 
-    # add in the polling task here
-   
-    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
+    if nfc_ecash_clearing:
+        print("do ecash clearing")
+        detail = "doing the ecash thing";
+        submit_data = { "ln_invoice": None, 
+                        "token": vault_token, 
+                        "amount": final_amount,
+                        "tendered_amount": payment_token.amount,
+                        "tendered_currency": payment_token.currency,                    
+                        "pubkey": pubkey, 
+                        "nfc_ecash_clearing": nfc_ecash_clearing,
+                        "recipient_pubkey": acorn_obj.pubkey_hex,
+                        "relays": settings.RELAYS,
+                        "sig": sig, 
+                        "comment": payment_token.comment  
+                        }
+    else:
+        print("do lightning clearing")
+        
+        cli_quote = acorn_obj.deposit(final_amount)
+      
+
+        # need to send off to the vault for processing
+        submit_data = { "ln_invoice": cli_quote.invoice, 
+                        "token": vault_token, 
+                        "amount": final_amount,
+                        "tendered_amount": payment_token.amount,
+                        "tendered_currency": payment_token.currency,                    
+                        "pubkey": pubkey, 
+                        "nfc_ecash_clearing": nfc_ecash_clearing,
+                        "sig": sig, 
+                        "comment": payment_token.comment  
+                        }
+        print(f"data: {submit_data}")
+       
+        # add in the polling task here
+    
+        task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
+
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)        
+    print(response.json())
 
     return {"status": status, "detail": detail}  
 

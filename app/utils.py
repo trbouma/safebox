@@ -258,7 +258,7 @@ async def fetch_balance(id: int):
 
 async def db_state_change(id: int=0):
     # print(f"db state change for {id}")
-    await asyncio.sleep(5)
+    await asyncio.sleep(3)
     return
 
 
