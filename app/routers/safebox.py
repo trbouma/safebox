@@ -32,7 +32,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -1644,14 +1644,20 @@ async def pay_to_nfc_tag( request: Request,
                     "sig":sig, "pubkey":pubkey }
 
     print(f"vault: {vault_url} submit data: {submit_data}" )
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    print(f"safebox: {response.json()}")
-    final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
-    invoice = response.json()["invoice"]
-    payee = response.json()["payee"]
-    await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
-    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
 
-    detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} to {payee}@{request.url.hostname} sent."
+    # Put this into a task
+    task1 = asyncio.create_task(task_pay_to_nfc_tag(
+        acorn_obj=acorn_obj,
+        vault_url=vault_url,
+        submit_data=submit_data,
+        headers=headers,
+        nfc_pay_out_request=nfc_pay_out_request,
+        final_amount=final_amount
+    ))
+
+
+    ## 
+
+    detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
 
     return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 

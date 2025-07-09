@@ -6,7 +6,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 import signal, sys, string, cbor2, base64,os
 import aioconsole
-import json
+import json, requests
 
 from typing import Any, Dict, List, Optional, Union
 
@@ -18,7 +18,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 
 from datetime import datetime, timedelta
-from app.appmodels import RegisteredSafebox, PaymentQuote
+from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest
 from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
@@ -288,12 +288,28 @@ async def handle_ecash(  acorn_obj: Acorn ):
     
     
     while True:
-        print(f"listen for ecash payment for {acorn_obj.handle}") 
+        # print(f"listen for ecash payment for {acorn_obj.handle}") 
         await acorn_obj.get_ecash_latest() 
-        await asyncio.sleep(3)  
+        await asyncio.sleep(5)  
         # print("done getting ecash")
 
-   
+
+async def task_pay_to_nfc_tag(  acorn_obj: Acorn, 
+                                vault_url:str, 
+                                submit_data: object, 
+                                headers: object,
+                                nfc_pay_out_request: nfcPayOutRequest,
+                                final_amount: int
+                                ):
+    print("pay to nfc tag")
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)
+    print(f"safebox: {response.json()}")
+    final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
+    invoice = response.json()["invoice"]
+    payee = response.json()["payee"]
+    await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
+    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
+     
     
 
     

@@ -204,7 +204,7 @@ async def ln_pay( amount: float,
     
 
 @router.post("/.well-known/nfcvaultrequestpayment", tags=["public"])
-async def nwc_request_payment(request: Request, nwc_vault: nwcVault):
+async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
 

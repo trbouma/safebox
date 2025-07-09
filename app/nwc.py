@@ -267,7 +267,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
     
     elif payinstruction_obj['method'] == 'pay_ecash':
-        print("we gotta do ecash!")
+        print("we gotta pay ecash!")
         recipient_pubkey = payinstruction_obj['params']['recipient_pubkey']
         amount = payinstruction_obj['params']['amount']
         relays = payinstruction_obj['params']['relays']
@@ -288,6 +288,10 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
 
         await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=1401)
         await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
+
+    elif payinstruction_obj['method'] == 'accept_ecash':
+        print("we gotta accept ecash!")
+        pass
 
 async def listen_notes(url):
     c = Client(url)
