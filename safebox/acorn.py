@@ -2473,14 +2473,14 @@ class Acorn:
         except Exception as e:
             await self.release_lock()
             final_fees = 0
-            msg_out = f"There is an error in the payment. Did it go through? {e}"
+            msg_out = f"There is an error sending the payment. Did it go through?"
             print(msg_out)
-            # raise Exception(f"Error in pay_multi {e}")
+            raise Exception(msg_out)
         finally:
             await self.release_lock()
             print("all done pay_multi")
             print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
-            await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency)    
+            await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)    
         
         return msg_out, final_fees
 

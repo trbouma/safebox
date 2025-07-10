@@ -322,12 +322,16 @@ function getCreateInvoiceStatus(ln_invoice_status) {
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
+    logElement.innerHTML  += data + '\n' ;
   };
 
-  function userMessage(data) {
+  async function userMessage(data, status="INFO"){
     var logElement = document.getElementById('payment_notification');
     logElement.innerHTML = data ;
+    if (status=="ERROR") {
+      alert(data);
+    }
+   
   };
 
   function paytoMessage(data) {
@@ -608,9 +612,10 @@ function getlnPayStatus(ln_pay_status) {
 
     var status = JSON.stringify(ln_pay_status["detail"]);
     const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
-    alert("Payment " + parsedObject.detail);
+    // alert("Payment " + parsedObject.detail);
+    userMessage(parsedObject.detail);
 
-    location.reload();
+    // location.reload();
   
 
 }
@@ -633,6 +638,11 @@ async function lnPayAddress() {
     return;
   }
 
+  if (!confirm("Are you sure")) {
+    return;
+
+  }
+  
   var old_text = pay_button.textContent;
   pay_button.textContent = "Paying now. Please wait...";
   pay_button.disabled = true;
@@ -662,7 +672,7 @@ async function lnPayAddress() {
         pay_button.textContent = old_text;
         pay_button.disabled = false;
 
-        window.location.href="/safebox/access";
+        // window.location.href="/safebox/access";
       
 
 
@@ -746,6 +756,7 @@ function getInvoiceStatus(ln_invoice_status) {
       const fiat_balance = response.fiat_balance;
       const message = response.message;
       const status = response.status
+      userMessage(message, status)
 
       if (status == "RECD" || status == "SENT") {
       document.getElementById("heading_balance").innerText = `\u20BF${balance}`;

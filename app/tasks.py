@@ -9,6 +9,7 @@ import aioconsole
 import json, requests
 
 from typing import Any, Dict, List, Optional, Union
+from fastapi import WebSocket
 
 from monstr.util import util_funcs
 from monstr.encrypt import Keys
@@ -328,5 +329,21 @@ async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
 
     pass  
+
+async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:str, tendered_amount: float, tendered_currency: str, websocket: WebSocket|None=None):
+
+    status = "SENT"
+    try:
+        msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
+    except Exception as e:
+        msg_out =f"{e}"
+        status = "ERROR"
+        print(msg_out, status)
+    finally:
+        if websocket:
+            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":0, "message": msg_out, "status": status})
+   
+
+    
 
     

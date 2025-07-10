@@ -32,13 +32,14 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi
 from app.rates import get_currency_rate
 
 import logging, jwt
 
-
+global_websocket: WebSocket = None
 settings = Settings()
+
 
 HOME_MINT = settings.HOME_MINT
 MINTS = settings.MINTS
@@ -338,9 +339,14 @@ async def protected_route(    request: Request,
 async def ln_pay_address(   request: Request, 
                             ln_pay: lnPayAddress,
                             acorn_obj: Acorn = Depends(get_acorn)):
+    global global_websocket
     msg_out ="No payment"
     tendered = ""
     status = "OK"
+
+    
+    if global_websocket:
+        pass
 
     if ln_pay.currency == "SAT":
         sat_amount = int(ln_pay.amount)
@@ -376,7 +382,9 @@ async def ln_pay_address(   request: Request,
         
         pass
         # msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered)
-        task1 = asyncio.create_task(acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered, tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency))
+        # task1 = asyncio.create_task(acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered, tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency))
+
+        task2 = asyncio.create_task(task_pay_multi(acorn_obj=acorn_obj,amount=sat_amount,lnaddress=final_address, comment=ln_pay.comment+tendered,tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency, websocket=global_websocket))
 
         # await acorn_obj.add_tx_history( tx_type='D',
         #                                amount=sat_amount,
@@ -972,7 +980,16 @@ async def root_get_user_profile(    request: Request,
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
 
+ 
+    global global_websocket
     await websocket.accept()
+    
+    global_websocket = websocket
+    
+   
+
+    
+   
 
     # access_token = websocket.cookies.get("access_token")
     try:
@@ -1016,7 +1033,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 status = "SENT"
 
             elif new_balance == starting_balance:
-                message = f"Payment Ready."
+                message = f"Ready."
                 status = "OK"
 
             fiat_currency = await get_currency_rate(safebox_found.currency_code)
@@ -1028,6 +1045,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
             fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {safebox_found.currency_code}"
             await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
             starting_balance = new_balance
+
           
         
         except Exception as e:
