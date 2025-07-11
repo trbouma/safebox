@@ -18,6 +18,7 @@ import bolt11
 import hashlib
 from monstr.util import util_funcs
 import requests
+import time
 
 from monstr.relay.relay import Relay
 
@@ -986,10 +987,9 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     
     global_websocket = websocket
     
-   
+    start_time = time.time()
+    duration = 120  # 2 minutes in seconds
 
-    
-   
 
     # access_token = websocket.cookies.get("access_token")
     try:
@@ -1011,7 +1011,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     
     task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
     
-    while True:
+    while time.time() - start_time < duration:
         try:
             await db_state_change()
              

@@ -29,12 +29,25 @@ from app.rates import refresh_currency_rates, init_currency_rates, get_online_cu
 from app.relay import run_relay
 from app.nwc import listen_nwc, listen_notes
 from safebox.acorn import Acorn
+import sys
 
 lock_path = "/tmp/monstr_listener.lock"
 listener_task = None
 
 # Create Settings:
 settings = Settings()
+
+
+print(f"settings service key {settings.SERVICE_SECRET_KEY}")
+if settings.SERVICE_SECRET_KEY:
+    
+    SERVICE_KEY = Keys(settings.SERVICE_SECRET_KEY)
+else:
+    print("add new key")
+    SERVICE_KEY = Keys()
+    print(f"Please add this entry to you your enviroment: SERVICE_SECRET_KEY={SERVICE_KEY.private_key_bech32()}")
+    raise Exception("error")
+
 
 nwc_task_handle = None
 
@@ -98,7 +111,6 @@ async def lifespan(app: FastAPI):
 
 
 
-SERVICE_KEY = Keys(settings.SERVICE_SECRET_KEY)
 
 
 # asyncio.run(init_currency_rates())
