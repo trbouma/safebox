@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
+from fastapi import FastAPI,  HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel

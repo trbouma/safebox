@@ -991,14 +991,6 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     duration = 120  # 2 minutes in seconds
 
 
-    # access_token = websocket.cookies.get("access_token")
-    try:
-       
-       safebox_found = await fetch_safebox_by_npub(acorn_obj.pubkey_bech32)
-    except:
-        await websocket.close(code=1008)  # Policy violation
-        return
-
 
     # starting_balance = safebox_found.balance
     starting_balance = acorn_obj.balance
@@ -1010,52 +1002,59 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     since_now = int(datetime.now(timezone.utc).timestamp())
     
     task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
+    try:
     
-    while time.time() - start_time < duration:
-        try:
-            await db_state_change()
-             
-            # new_balance = await fetch_balance(safebox_found.id)
+        while time.time() - start_time < duration:
+            try:
+                await db_state_change()
+                
+                # new_balance = await fetch_balance(safebox_found.id)
+                
+                await acorn_obj.load_data()
+                new_balance = acorn_obj.balance
+                print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
+
+                
+
+
+                if new_balance > starting_balance:
+                    message = f"Payment received! {new_balance-starting_balance} sats."
+                    status = "RECD"
+
+                elif new_balance < starting_balance:
+                    message = f"Payment sent! {starting_balance-new_balance} sats."
+                    status = "SENT"
+
+                elif new_balance == starting_balance:
+                    message = f"Ready."
+                    status = "OK"
+
+                
+                fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+                # currency_code  = fiat_currency.currency_code
+                currency_rate = fiat_currency.currency_rate
+                currency_symbol = fiat_currency.currency_symbol
+                
+                # fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
+                fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
+                await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
+                starting_balance = new_balance
+
             
-            await acorn_obj.load_data()
-            new_balance = acorn_obj.balance
-            print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
-
-             
-
-
-            if new_balance > starting_balance:
-                message = f"Payment received! {new_balance-starting_balance} sats."
-                status = "RECD"
-
-            elif new_balance < starting_balance:
-                message = f"Payment sent! {starting_balance-new_balance} sats."
-                status = "SENT"
-
-            elif new_balance == starting_balance:
-                message = f"Ready."
-                status = "OK"
-
-            fiat_currency = await get_currency_rate(safebox_found.currency_code)
-            # currency_code  = fiat_currency.currency_code
-            currency_rate = fiat_currency.currency_rate
-            currency_symbol = fiat_currency.currency_symbol
             
-            # fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
-            fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {safebox_found.currency_code}"
-            await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
-            starting_balance = new_balance
+            except Exception as e:
+                print(f"Websocket message: {e}")
+                break
+    except Exception as e:
+        print ("Error {e}")
+    finally:
+        task1.cancel() 
+        print("websocket connection closed and task canceled")
+        await websocket.close()
 
+        
           
-        
-        except Exception as e:
-            print(f"Websocket message: {e}")
-            break
-        
-        
-    task1.cancel()       
-    print("websocket connection closed and task canceled")
-    # await websocket.close()
+    
 
 @router.websocket("/wsrequesttransmittal/{nauth}")
 async def websocket_requesttransmittal( websocket: WebSocket, 
