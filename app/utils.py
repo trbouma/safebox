@@ -30,9 +30,10 @@ from typing import Optional, List
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 
 settings = Settings()
+config = ConfigWithFallback()
 # Secret key for signing JWT
 # SECRET_KEY = "foobar"
 # ALGORITHM = "HS256"
@@ -54,7 +55,7 @@ def get_id_by_label(data, target_label):
     return None
 
 def create_jwt_token(data: dict, expires_delta: timedelta = None):
-    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    k = Keys(priv_k=config.SERVICE_NSEC)
 
     my_enc = NIP44Encrypt(k.private_key_bech32())
 
@@ -64,20 +65,20 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
     else:
         expire = datetime.now(timezone) + timedelta(days=1)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SERVICE_SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, config.SERVICE_NSEC, algorithm=settings.ALGORITHM)
     encrypted_encoded_jwt = my_enc.encrypt(encoded_jwt,k.public_key_hex())
     print(f"encrypted encoded jwt: {encrypted_encoded_jwt}")
     
     return encrypted_encoded_jwt
 
 def decode_jwt_token(token: str):
-    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    k = Keys(priv_k=config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k.private_key_bech32())
    
 
     try:
         decrypt_token = my_enc.decrypt(token, k.public_key_hex())
-        decoded_token = jwt.decode(decrypt_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        decoded_token = jwt.decode(decrypt_token, config.SERVICE_NSEC, algorithms=[settings.ALGORITHM])
         return decoded_token
     except jwt.ExpiredSignatureError:
         return "Token has expired"
@@ -92,7 +93,7 @@ def authenticate_user(username: str, password: str):
     return None
 
 async def fetch_safebox(access_token) -> RegisteredSafebox:
-    k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    k = Keys(priv_k=config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k.private_key_bech32())
     non_custodial = False
 
@@ -100,7 +101,7 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
         raise HTTPException(status_code=401, detail="Missing access token")
     try:
         decrypt_access_token = my_enc.decrypt(access_token, k.public_key_hex())
-        payload = jwt.decode(decrypt_access_token, settings.SERVICE_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(decrypt_access_token, config.SERVICE_NSEC, algorithms=[settings.ALGORITHM])
         access_key = payload.get("sub")
         
 
@@ -989,7 +990,7 @@ def generate_nonce():
 
 async def send_zap_receipt(nostr:str, lninvoice:str=None):
 
-    service_k = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+    service_k = Keys(priv_k=config.SERVICE_NSEC)
     try:
         # print(f"nostr parm: type: {type(nostr)} {nostr}")
         # nostr_decode=urllib.parse.unquote(nostr)

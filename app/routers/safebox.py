@@ -32,14 +32,17 @@ from safebox.models import cliQuote
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi
 from app.rates import get_currency_rate
 
 import logging, jwt
 
+
+
 global_websocket: WebSocket = None
 settings = Settings()
+config = ConfigWithFallback()
 
 
 HOME_MINT = settings.HOME_MINT
@@ -142,7 +145,7 @@ async def login(request: Request, access_key: str = Form()):
 @router.post("/loginwithnfc", tags=["safebox"])
 async def nfc_login(request: Request, nfc_card: nfcCard):
 
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     nembed_acquired = nfc_card.nembed
     try:
@@ -867,7 +870,7 @@ async def my_danger_zone(       request: Request,
     nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
   
     encrypt_token = my_enc.encrypt(acorn_obj.privkey_hex, to_pub_k=k.public_key_hex())
@@ -988,7 +991,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     global_websocket = websocket
     
     start_time = time.time()
-    duration = 120  # 2 minutes in seconds
+    duration = 60  # 1 minutes in seconds
 
 
 
@@ -1046,11 +1049,19 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 print(f"Websocket message: {e}")
                 break
     except Exception as e:
-        print ("Error {e}")
+        # print ("Error {e}")
+        pass
     finally:
-        task1.cancel() 
+        task1.cancel()
+        try:
+            await task1
+        except asyncio.CancelledError:
+            pass
         print("websocket connection closed and task canceled")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
         
           
@@ -1531,7 +1542,7 @@ async def request_nfc_payment( request: Request,
                     ):
    
 
-    k = Keys(settings.SERVICE_SECRET_KEY) # This is for the trusted service
+    k = Keys(config.SERVICE_NSEC) # This is for the trusted service
 
     status = "OK"
     detail = "done"
@@ -1618,7 +1629,7 @@ async def pay_to_nfc_tag( request: Request,
     status = "OK"
     detail = "this is from safebox /paytonfctag"
     nfc_ecash_clearing = settings.NFC_ECASH_CLEARING
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(config.SERVICE_NSEC)
     # Forward request with amount to get invoice
     print(f"nembed: {nfc_pay_out_request.nembed}, amount: {nfc_pay_out_request.amount} comment: {nfc_pay_out_request.comment}")
 

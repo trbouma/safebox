@@ -10,7 +10,7 @@ from filelock import FileLock, Timeout
 
 from monstr.encrypt import Keys
 
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 from app.routers import     (   lnaddress, 
                                 safebox, 
                                 scanner, 
@@ -35,13 +35,17 @@ lock_path = "/tmp/monstr_listener.lock"
 listener_task = None
 
 # Create Settings:
-settings = Settings()
+SETTINGS = Settings()
+
+config = ConfigWithFallback()
+# print(f"config: {config.SERVICE_NSEC}")
 
 
-print(f"settings service key {settings.SERVICE_SECRET_KEY}")
-if settings.SERVICE_SECRET_KEY:
+
+# print(f"SETTINGS service key {config.SERVICE_NSEC}")
+if config.SERVICE_NSEC:
     
-    SERVICE_KEY = Keys(settings.SERVICE_SECRET_KEY)
+    SERVICE_KEY = Keys(config.SERVICE_NSEC)
 else:
     print("add new key")
     SERVICE_KEY = Keys()
@@ -64,7 +68,7 @@ async def lifespan(app: FastAPI):
     # stop_event = asyncio.Event()  # Event to signal stopping
     global nwc_task_handle
     try:
-        engine = create_engine(settings.DATABASE)
+        engine = create_engine(SETTINGS.DATABASE)
         SQLModel.metadata.create_all(engine, checkfirst=True)
     except:
         pass
@@ -74,13 +78,13 @@ async def lifespan(app: FastAPI):
    
 
     asyncio.create_task(run_relay())
-    if settings.NWC_SERVICE:
+    if SETTINGS.NWC_SERVICE:
         pass
         # nwc_task_handle = asyncio.create_task(listen_nwc())
     
     print("let's start up!")
     # Create Task
-    # task = asyncio.create_task(periodic_task(settings.REFRESH_CURRENCY_INTERVAL, stop_event))
+    # task = asyncio.create_task(periodic_task(SETTINGS.REFRESH_CURRENCY_INTERVAL, stop_event))
     global listener_task
     lock_path = "/tmp/monstr_listener.lock"
     file_lock = FileLock(lock_path)
@@ -165,14 +169,14 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
     return templates.TemplateResponse(  "welcome.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_MESSAGE})
+                                            "branding": SETTINGS.BRANDING,
+                                            "branding_message": SETTINGS.BRANDING_MESSAGE})
 
 @app.get("/.well-known/nostr.json",tags=["public"])
 async def get_nostr_name(request: Request, name: str, ):
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
-    engine = create_engine(settings.DATABASE)
+    engine = create_engine(SETTINGS.DATABASE)
     
     if name == "_":
         npub_hex = SERVICE_KEY.public_key_hex()
@@ -181,7 +185,7 @@ async def get_nostr_name(request: Request, name: str, ):
             "_": npub_hex
         },
         "relays":
-                     { f"{npub_hex}": settings.RELAYS}  }
+                     { f"{npub_hex}": SETTINGS.RELAYS}  }
     else:
         pass
         with Session(engine) as session:
@@ -230,7 +234,7 @@ async def get_nostr_name(request: Request, name: str, ):
                         f"{name}": pubkey
                         },
                      "relays":
-                     { f"{pubkey}": settings.RELAYS}   
+                     { f"{pubkey}": SETTINGS.RELAYS}   
                     
                     }
 
@@ -245,7 +249,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
     # Either the custom handle or default
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
-    engine = create_engine(settings.DATABASE)
+    engine = create_engine(SETTINGS.DATABASE)
     
     if name == "_":
         npub_hex = SERVICE_KEY.public_key_hex()
@@ -254,7 +258,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
             "_": npub_hex
         },
         "relays":
-                     { f"{npub_hex}": settings.RELAYS}  }
+                     { f"{npub_hex}": SETTINGS.RELAYS}  }
     else:
         pass
         with Session(engine) as session:
@@ -280,7 +284,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
 
     safebox_json = {
                     "pubkey": npub_hex,                       
-                     "relays": settings.RELAYS   
+                     "relays": SETTINGS.RELAYS   
                     
                     }
 

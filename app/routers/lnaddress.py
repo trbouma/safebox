@@ -34,9 +34,10 @@ from app.utils import ( create_jwt_token,
                         sign_payload,
                         verify_payload)
 
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 
 settings = Settings()
+config = ConfigWithFallback()
 templates = Jinja2Templates(directory="app/templates")
 password_hasher = PasswordHasher()
 
@@ -49,7 +50,7 @@ LOGGING_LEVEL = 10
 HOME_MINT = settings.HOME_MINT
 
 
-service_key_obj = Keys(priv_k=settings.SERVICE_SECRET_KEY)
+service_key_obj = Keys(priv_k=config.SERVICE_NSEC)
 
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine, checkfirst=True)
@@ -166,7 +167,7 @@ async def ln_pay( amount: float,
     if safebox_found.nsec == None:
         # This is a non-custodial safebox
        
-        acorn_obj = Acorn(nsec=settings.SERVICE_SECRET_KEY, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=settings.LOGGING_LEVEL)
+        acorn_obj = Acorn(nsec=config.SERVICE_NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=settings.LOGGING_LEVEL)
         await acorn_obj.load_data(force_profile_creation=True)
         message = "Payment being sent as a non-custodial payment..."
     
@@ -213,7 +214,7 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
         print("Payload is verified!")
  
 
-    k  = Keys(settings.SERVICE_SECRET_KEY)
+    k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
@@ -276,7 +277,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
         print("Payload is verified!")
  
 
-    k  = Keys(settings.SERVICE_SECRET_KEY)
+    k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
@@ -323,7 +324,7 @@ async def offer_vault(request: Request, offer_vault: offerVault):
         print("Payload is verified!")
  
 
-    k  = Keys(settings.SERVICE_SECRET_KEY)
+    k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(offer_vault.token, for_pub_k=k.public_key_hex())
@@ -370,7 +371,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
         print("NFC Pay Out Payload is verified!")
 
     
-    k  = Keys(settings.SERVICE_SECRET_KEY)
+    k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(nfc_pay_out.token, for_pub_k=k.public_key_hex())

@@ -1063,7 +1063,7 @@ async def accept_proof_token( request: Request,
                     ):
    
 
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(config.SERVICE_NSEC)
 
     status = "OK"
     detail = "done"
@@ -1112,7 +1112,7 @@ async def accept_offer_token( request: Request,
                     ):
    
 
-    k = Keys(settings.SERVICE_SECRET_KEY)
+    k = Keys(config.SERVICE_NSEC)
 
     status = "OK"
     detail = "done"
