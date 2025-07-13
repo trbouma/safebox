@@ -1589,6 +1589,8 @@ async def request_nfc_payment( request: Request,
                         "sig": sig, 
                         "comment": payment_token.comment  
                         }
+        
+        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj))
     else:
         print("do lightning clearing")
         
