@@ -10,8 +10,9 @@ services:
     environment:
       - TZ=America/New_York
     
-    volumes:    
-      - ./data:/app/data
+    volumes:  
+      - ./:/app  
+      # - ./data:/app/data
       # - ./setup:/app/setup
       # - ./app/templates:/app/app/templates
 
