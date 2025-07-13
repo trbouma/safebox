@@ -286,7 +286,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         print(f"nembed to send: {nembed_to_send}")
                
 
-        await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=1401)
+        await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=21401)
         await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
 
     elif payinstruction_obj['method'] == 'accept_ecash':

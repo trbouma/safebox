@@ -1004,7 +1004,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     test_balance = acorn_obj.balance
     since_now = int(datetime.now(timezone.utc).timestamp())
     
-    task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
+    
     try:
     
         while time.time() - start_time < duration:
@@ -1052,11 +1052,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         # print ("Error {e}")
         pass
     finally:
-        task1.cancel()
-        try:
-            await task1
-        except asyncio.CancelledError:
-            pass
+
         print("websocket connection closed and task canceled")
         try:
             await websocket.close()

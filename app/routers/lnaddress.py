@@ -22,7 +22,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash
+from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash
 from app.utils import ( create_jwt_token, 
                         send_zap_receipt, 
                         recover_nsec_from_seed, 
@@ -182,6 +182,7 @@ async def ln_pay( amount: float,
         pass
         print("don't bother creating an invoice because ecash")
         pr = None
+        task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
     else:    
         cli_quote = acorn_obj.deposit(sat_amount) 
         pr = cli_quote.invoice 

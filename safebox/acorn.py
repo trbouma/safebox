@@ -827,7 +827,7 @@ class Acorn:
             return "insufficient funds"
         
         print(f"sending via {ecash_relays}")
-        out_msg = await self.secure_transmittal(nrecipient=npub,message=token_msg,dm_relays=ecash_relays,kind=1401)
+        out_msg = await self.secure_transmittal(nrecipient=npub,message=token_msg,dm_relays=ecash_relays,kind=21401)
         
         return f" {amount} {out_msg}"    
 
@@ -1450,7 +1450,7 @@ class Acorn:
             # print(f"ecash latest: {ecash_latest}")
            
             
-            user_records = await self.get_user_records(record_kind=1401, relays=relays, since=ecash_latest+1, reverse=True)
+            user_records = await self.get_user_records(record_kind=21401, relays=relays, since=ecash_latest+1, reverse=True)
             
            
 
@@ -2190,7 +2190,7 @@ class Acorn:
                 
                 
 
-                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=1401)
+                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=21401)
                 await self.release_lock()
             else: #     return f"Payment in ecash of {amount} sats", 0
 

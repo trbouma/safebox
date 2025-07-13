@@ -24,6 +24,8 @@ from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
 
+import time
+
 from app.utils import send_zap_receipt
 
 settings = Settings()
@@ -285,11 +287,13 @@ async def handle_payment(   acorn_obj: Acorn,
 
 
 async def handle_ecash(  acorn_obj: Acorn ):
+    print(f"handle ecash listen for {acorn_obj.handle}")
 
+    start_time = time.time()
+    duration = 60  # 1 minutes in seconds
     
-    
-    while True:
-        # print(f"listen for ecash payment for {acorn_obj.handle}") 
+    while time.time() - start_time < duration:
+        print(f"listen for ecash payment for {acorn_obj.handle}") 
         await acorn_obj.get_ecash_latest() 
         await asyncio.sleep(5)  
         # print("done getting ecash")
