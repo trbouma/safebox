@@ -10,13 +10,8 @@ services:
     environment:
       - TZ=America/New_York
     
-    volumes:  
-      - ./:/app  
-      # - ./data:/app/data
-      # - ./setup:/app/setup
-      # - ./app/templates:/app/app/templates
-
-   
+    volumes:        
+      - ./data:/app/data
     command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
    
     
