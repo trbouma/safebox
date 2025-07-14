@@ -20,7 +20,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
 
@@ -28,6 +28,7 @@ import logging, jwt
 
 
 settings = Settings()
+config = ConfigWithFallback()
 
 templates = Jinja2Templates(directory="app/templates")
 
