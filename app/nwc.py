@@ -103,7 +103,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         print(tx_history)
         tx_nwc_history = []
         for each in tx_history[:10]:
-            print(each)
+            # print(each)
             each_transaction = {
                "type": "incoming" if each['tx_type'] == 'C' else "outgoing", 
                "invoice": "123", 
@@ -293,40 +293,42 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         print("we gotta accept ecash!")
         pass
 
+
+def my_handler(the_client: Client, sub_id: str, evt: Event):
+    
+    try:
+        
+        
+        
+        
+        if add_nwc_event_if_not_exists(event_id=evt.id):
+            
+            print(f"we have a new event! {evt.created_at}, {evt.tags}")
+        else:
+            print("this event has been handled")
+            return
+        
+        safebox_npub = hex_to_npub(evt.p_tags[0])
+        
+        safebox_found = nwc_db_lookup_safebox(safebox_npub)
+        if safebox_found:
+            decryptor = NIP4Encrypt(key=Keys(safebox_found.nsec))
+            decrypt_event = decryptor.decrypt_event(evt=evt)
+            pay_instruction = json.loads(decrypt_event.content)
+            asyncio.create_task(nwc_handle_pay_instruction(safebox_found, pay_instruction,evt))
+        else:
+            print('no wallet on file')
+
+    except Exception as e:
+        print(f"Error: {e}")
+
 async def listen_notes(url):
+    
     c = Client(url)
     asyncio.create_task(c.run())
     await c.wait_connect()
 
     print(f"listening for nwc at: {url}")
-
-    def my_handler(the_client: Client, sub_id: str, evt: Event):
-        
-        try:
-            
-            
-           
-            
-            if add_nwc_event_if_not_exists(event_id=evt.id):
-                
-                print(f"we have a new event! {evt.created_at}, {evt.tags}")
-            else:
-                print("this event has been handled")
-                return
-            
-            safebox_npub = hex_to_npub(evt.p_tags[0])
-            
-            safebox_found = nwc_db_lookup_safebox(safebox_npub)
-            if safebox_found:
-                decryptor = NIP4Encrypt(key=Keys(safebox_found.nsec))
-                decrypt_event = decryptor.decrypt_event(evt=evt)
-                pay_instruction = json.loads(decrypt_event.content)
-                asyncio.create_task(nwc_handle_pay_instruction(safebox_found, pay_instruction,evt))
-            else:
-                print('no wallet on file')
-
-        except Exception as e:
-            print(f"Error: {e}")
 
     c.subscribe(
         handlers=my_handler,
