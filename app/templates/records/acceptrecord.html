@@ -108,7 +108,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
        body: JSON.stringify(submit_data)         
       })
    .then((response) => response.json())
-   .then((data) =>  {  alert(`Done! ${data.detail}`);
+   .then((data) =>  {  window.location.href=`/records/present`
                     });
    
    
@@ -126,6 +126,13 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function refreshRecords() {
+
+
+ location.reload() ;
+
+}
+
 
 
 
@@ -140,6 +147,8 @@ setDarkMode();
 
   <br><br>
   <button onclick="backToProfile()">Home</button>
+    <br><br>
+  <button onclick="refreshRecords()">Refresh Records</button>
   <hr>
   <br><br>
   Record Kind: {{transmittal_kind}}

@@ -86,6 +86,7 @@ async def invoice_poll_for_payment(acorn_obj: Acorn, quote: str, mint: str, amou
     
     # await acorn_obj.load_data()
     #FIX ME DO THE POLLING HERE INSTEAD OF THE OBJECT
+    print(f"the mint: {mint}")
     await acorn_obj.poll_for_payment(quote=quote,amount=amount,mint=mint)
     print("We are done!!!!")
 
@@ -259,6 +260,7 @@ async def handle_payment(   acorn_obj: Acorn,
 
     success = False
     lninvoice = None
+    print(f"handle payment: {mint}")
     success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
     pass
     

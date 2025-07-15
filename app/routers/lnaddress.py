@@ -184,7 +184,7 @@ async def ln_pay( amount: float,
         pr = None
         task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
     else:    
-        cli_quote = acorn_obj.deposit(sat_amount) 
+        cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT) 
         pr = cli_quote.invoice 
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
    
@@ -398,7 +398,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
         task_ecash = asyncio.create_task(task_to_accept_ecash(acorn_obj, nfc_pay_out))
     else:
      
-        cli_quote = acorn_obj.deposit(nfc_pay_out.amount)
+        cli_quote = acorn_obj.deposit(nfc_pay_out.amount, mint=HOME_MINT)
         ln_invoice = cli_quote.invoice
 
         
