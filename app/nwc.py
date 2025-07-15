@@ -347,6 +347,43 @@ async def listen_notes(url):
         await c.end()
         raise
 
+async def listen_notes_connected(url):
+    while True:
+        c = Client(url)
+        run_task = asyncio.create_task(c.run())
+
+        try:
+            await c.wait_connect(timeout=10)
+            print(f"listening for nwc at: {url}")
+
+            c.subscribe(
+                handlers=my_handler,
+                filters={
+                    'limit': 1024,
+                    'kinds': [23194]
+                }
+            )
+
+            # Wait until the client task finishes
+            await run_task
+
+        except asyncio.TimeoutError:
+            print(f"[{url}] Connection timed out. Retrying...")
+
+        except Exception as e:
+            print(f"[{url}] Error occurred: {e}. Restarting listener...")
+
+        finally:
+            if not run_task.done():
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    pass
+
+            await c.end()
+            await asyncio.sleep(5)  # short delay before retrying
+
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
     url = "wss://relay.getsafebox.app"

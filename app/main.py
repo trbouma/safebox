@@ -27,7 +27,7 @@ from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 from app.relay import run_relay
-from app.nwc import listen_nwc, listen_notes
+from app.nwc import listen_nwc, listen_notes, listen_notes_connected
 from safebox.acorn import Acorn
 import sys
 
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
     # The single event handling is now done in nwc.py, so all listeners can be running
     print(f"[PID {os.getpid()}] Starting nwc listener.")
     url = "wss://relay.getsafebox.app"
-    listener_task = asyncio.create_task(listen_notes(url))
+    listener_task = asyncio.create_task(listen_notes_connected(url))
     
     yield
 
@@ -171,6 +171,11 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
                                             "title": "Welcome Page", 
                                             "branding": SETTINGS.BRANDING,
                                             "branding_message": SETTINGS.BRANDING_MESSAGE})
+
+# Define a npub endpoint
+@app.get("/npub", tags=["public"])
+async def get_npub(request: Request): 
+    return {"npub": Keys(config.SERVICE_NSEC).public_key_bech32()}
 
 @app.get("/.well-known/nostr.json",tags=["public"])
 async def get_nostr_name(request: Request, name: str, ):
