@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 import os
 from app.config import Settings
+from aiohttp.client_exceptions import WSMessageTypeError
 
 settings = Settings()
 
@@ -31,6 +32,22 @@ k = Keys(settings.NWC_NSEC)
 decryptor = NIP4Encrypt(k)
 
 engine = create_engine(settings.DATABASE)
+
+# Monkey-patch _my_consumer to suppress unhandled WSMessageTypeError
+original_my_consumer = Client._my_consumer
+
+async def safe_my_consumer(self, ws):
+    try:
+        await original_my_consumer(self, ws)
+    except WSMessageTypeError as e:
+        # print(f"[patched _my_consumer] WSMessageTypeError suppressed: {e}")
+        pass
+    except Exception as e:
+        # print(f"[patched _my_consumer] Unexpected error: {e}")
+        pass
+
+Client._my_consumer = safe_my_consumer
+
 
 def add_nwc_event_if_not_exists(event_id: str) -> bool:
     with Session(engine) as session:
@@ -100,7 +117,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
     elif payinstruction_obj['method'] == 'list_transactions':
         print("we have a list_transactions!") 
         tx_history = await acorn_obj.get_tx_history()
-        print(tx_history)
+        # print(tx_history)
         tx_nwc_history = []
         for each in tx_history[:10]:
             # print(each)
@@ -139,7 +156,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
 
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
-            print(f"we published the transactin to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
+            print(f"we published the transaction to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
 
         
     
@@ -347,10 +364,22 @@ async def listen_notes(url):
         await c.end()
         raise
 
+    
+
+def suppress_task_exception(task):
+    try:
+        if task.cancelled():
+            return
+        _ = task.exception()
+    except Exception:
+        pass  # suppress logging, including WSMessageTypeError or any other
+
+
 async def listen_notes_connected(url):
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
+        run_task.add_done_callback(suppress_task_exception)
 
         try:
             await c.wait_connect(timeout=10)
@@ -359,7 +388,7 @@ async def listen_notes_connected(url):
             c.subscribe(
                 handlers=my_handler,
                 filters={
-                    'limit': 1024,
+                    'limit': 4096,
                     'kinds': [23194]
                 }
             )
@@ -369,6 +398,9 @@ async def listen_notes_connected(url):
 
         except asyncio.TimeoutError:
             print(f"[{url}] Connection timed out. Retrying...")
+
+        except WSMessageTypeError as wse:
+            print(f"[{url}] WebSocket message error: {wse}. Restarting listener...")
 
         except Exception as e:
             print(f"[{url}] Error occurred: {e}. Restarting listener...")
@@ -382,7 +414,53 @@ async def listen_notes_connected(url):
                     pass
 
             await c.end()
-            await asyncio.sleep(5)  # short delay before retrying
+            await asyncio.sleep(5)  
+
+async def listen_notes_query(url):
+    while True:
+        c = Client(url)
+        
+
+        try:
+
+            print("do a query")
+            events = await c.query(
+                
+                filters={
+                    'limit': 4096,
+                    'kinds': [23194]
+                    
+                }
+            )
+            print(f"events: {events}")
+            for each in events:
+                my_handler(c,"test", each)
+
+        except:
+            pass
+
+
+        await asyncio.sleep(5)  # short delay before retrying
+
+async def listen_notes_periodic(url):
+    while True:
+        run_task = asyncio.create_task(listen_notes_connected(url))
+        try:
+            await asyncio.sleep(3600)  # Run for one hour
+        except asyncio.CancelledError:
+            print("Periodic listener cancelled. Shutting down...")
+            run_task.cancel()
+            try:
+                await run_task
+            except:
+                pass
+            raise
+        print("Restarting listen_notes_connected...")
+        run_task.cancel()
+        try:
+            await run_task
+        except:
+            pass
 
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
