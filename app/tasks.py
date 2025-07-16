@@ -347,7 +347,9 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
         print(msg_out, status)
     finally:
         if websocket:
-            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+            #FIXME - may not need this refernce
+            # await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+            pass
    
 
     

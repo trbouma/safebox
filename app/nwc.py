@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 import os
 from app.config import Settings
 from aiohttp.client_exceptions import WSMessageTypeError
+from aiohttp import ClientSession, ClientConnectionError
 
 settings = Settings()
 
@@ -33,20 +34,81 @@ decryptor = NIP4Encrypt(k)
 
 engine = create_engine(settings.DATABASE)
 
-# Monkey-patch _my_consumer to suppress unhandled WSMessageTypeError
-original_my_consumer = Client._my_consumer
+# Save original method
+_original_my_consumer = Client._my_consumer
 
 async def safe_my_consumer(self, ws):
     try:
-        await original_my_consumer(self, ws)
+        await _original_my_consumer(self, ws)
     except WSMessageTypeError as e:
-        # print(f"[patched _my_consumer] WSMessageTypeError suppressed: {e}")
-        pass
+        print(f"[patched _my_consumer] Suppressed WSMessageTypeError: {e}")
     except Exception as e:
-        # print(f"[patched _my_consumer] Unexpected error: {e}")
-        pass
+        print(f"[patched _my_consumer] Unexpected error: {e}")
 
-Client._my_consumer = safe_my_consumer
+async def patched_run(self):
+    # Track producer/consumer
+    self._consumer_task = None
+    self._producer_task = None
+
+    # Ensure session and connection signal
+    if not hasattr(self, "_session") or self._session is None:
+        self._session = ClientSession()
+
+    if not hasattr(self, "_connect_ev") or self._connect_ev is None:
+        self._connect_ev = asyncio.Event()
+
+    try:
+        ws = await self._session.ws_connect(self._url)
+        self._ws = ws
+        self._connect_ev.set()
+
+        # Launch child tasks
+        self._consumer_task = asyncio.create_task(self._my_consumer(ws))
+        self._producer_task = asyncio.create_task(self._my_producer(ws))
+
+        # Wait on both, let either end naturally or be cancelled
+        await asyncio.gather(
+            self._consumer_task,
+            self._producer_task,
+            return_exceptions=True
+        )
+
+    except asyncio.CancelledError:
+        print("[patched_run] Cancelled. Shutting down producer/consumer...")
+        for task in [self._producer_task, self._consumer_task]:
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except Exception:
+                    pass
+        raise
+
+    except (WSMessageTypeError, ClientConnectionError) as e:
+        print(f"[patched_run] WebSocket error: {e}")
+
+    except Exception as e:
+        print(f"[patched_run] Unexpected error in run(): {e}")
+
+    finally:
+        self._ws = None
+
+        # Cancel leftover child tasks in case they weren't awaited
+        for task in [self._producer_task, self._consumer_task]:
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except Exception:
+                    pass
+
+# ✅ Apply patch once at app startup
+
+
+
+# Monkey-patch it
+# Client.run = patched_run
+# Client._my_consumer = safe_my_consumer
 
 
 def add_nwc_event_if_not_exists(event_id: str) -> bool:
@@ -366,35 +428,33 @@ async def listen_notes(url):
 
     
 
-def suppress_task_exception(task):
+def suppress_exceptions(task):
     try:
-        if task.cancelled():
-            return
-        _ = task.exception()
+        exception = task.exception()
+        if exception and not isinstance(exception, asyncio.CancelledError):
+            print(f"[suppress_exceptions] Suppressed task exception: {type(exception).__name__}: {exception}")
     except Exception:
-        pass  # suppress logging, including WSMessageTypeError or any other
-
+        pass  # Task might already be awaited or finished without exception
 
 async def listen_notes_connected(url):
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
-        run_task.add_done_callback(suppress_task_exception)
+        run_task.add_done_callback(suppress_exceptions)
 
         try:
             await c.wait_connect(timeout=10)
-            print(f"listening for nwc at: {url}")
+            print(f"Listening for nwc at: {url}")
 
             c.subscribe(
-                handlers=my_handler,
+                handlers=my_handler,  # Make sure this is defined in your scope
                 filters={
                     'limit': 4096,
                     'kinds': [23194]
                 }
             )
 
-            # Wait until the client task finishes
-            await run_task
+            await run_task  # Wait for client to finish normally
 
         except asyncio.TimeoutError:
             print(f"[{url}] Connection timed out. Retrying...")
@@ -406,15 +466,17 @@ async def listen_notes_connected(url):
             print(f"[{url}] Error occurred: {e}. Restarting listener...")
 
         finally:
-            if not run_task.done():
+            if run_task and not run_task.done():
                 run_task.cancel()
                 try:
-                    await run_task
+                    await run_task  # Ensures proper cleanup
                 except asyncio.CancelledError:
                     pass
+                except Exception as e:
+                    print(f"[{url}] Suppressed exception from cancelled run_task: {e}")
 
             await c.end()
-            await asyncio.sleep(5)  
+            await asyncio.sleep(5)  # Delay before reconnecting
 
 async def listen_notes_query(url):
     while True:
@@ -456,8 +518,9 @@ async def listen_notes_periodic(url):
                 pass
             raise
         print("Restarting listen_notes_connected...")
-        run_task.cancel()
+       
         try:
+            await run_task.cancel()
             await run_task
         except:
             pass
