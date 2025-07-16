@@ -461,6 +461,15 @@ async def listen_notes_periodic(url):
             await run_task
         except:
             pass
+        finally:
+            if not run_task.done():
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    print(f"Suppressed exception from cancelled run_task: {e}")
 
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
