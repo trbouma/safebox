@@ -34,82 +34,130 @@ decryptor = NIP4Encrypt(k)
 
 engine = create_engine(settings.DATABASE)
 
-# Save original method
-_original_my_consumer = Client._my_consumer
+import asyncio
+import logging
+from aiohttp import ClientSession
+from aiohttp.client_exceptions import WSMessageTypeError, ClientConnectorError
+from aiohttp import WSMsgType, WSMessageTypeError
 
-async def safe_my_consumer(self, ws):
+def custom_exception_handler(loop, context):
+    msg = context.get("message")
+    if msg and "Task was destroyed but it is pending" in msg:
+        return  # silently suppress
+    if "coroutine ignored GeneratorExit" in msg:
+        return
+    loop.default_exception_handler(context)  # fallback to default
+
+loop = asyncio.get_event_loop()
+loop.set_exception_handler(custom_exception_handler)
+
+async def patched_my_consumer(self, ws):
+    """
+    Safely consume WebSocket messages and handle unexpected types.
+    Replaces the original _my_consumer from monstr.client.Client.
+    """
     try:
-        await _original_my_consumer(self, ws)
-    except WSMessageTypeError as e:
-        print(f"[patched _my_consumer] Suppressed WSMessageTypeError: {e}")
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                try:
+                    payload = json.loads(msg.data)
+                    self._on_message(payload)
+                except Exception as e:
+                    logging.warning(f"[patched_my_consumer] Failed to process TEXT message: {e}")
+            elif msg.type == WSMsgType.BINARY:
+                logging.debug(f"[patched_my_consumer] Ignoring BINARY message.")
+            elif msg.type == WSMsgType.PING:
+                await ws.pong()
+            elif msg.type == WSMsgType.PONG:
+                logging.debug(f"[patched_my_consumer] Received PONG.")
+            elif msg.type == WSMsgType.CLOSE:
+                logging.info(f"[patched_my_consumer] WebSocket CLOSE received.")
+                break
+            elif msg.type == WSMsgType.CLOSED:
+                logging.info(f"[patched_my_consumer] WebSocket CLOSED.")
+                break
+            elif msg.type == WSMsgType.ERROR:
+                logging.error(f"[patched_my_consumer] WebSocket ERROR: {msg}")
+                break
+            else:
+                logging.warning(f"[patched_my_consumer] Unhandled message type: {msg.type}")
+    except asyncio.CancelledError:
+        logging.info("[patched_my_consumer] Cancelled.")
+        raise
     except Exception as e:
-        print(f"[patched _my_consumer] Unexpected error: {e}")
+        logging.exception(f"[patched_my_consumer] Unexpected error: {e}")
+
+Client._my_consumer = patched_my_consumer
 
 async def patched_run(self):
-    # Track producer/consumer
-    self._consumer_task = None
-    self._producer_task = None
+    self._run = True
+    reconnect_delay = 1
 
-    # Ensure session and connection signal
-    if not hasattr(self, "_session") or self._session is None:
-        self._session = ClientSession()
+    while self._run:
+        try:
+            if self._relay_info is None:
+                await self.get_relay_information()
 
-    if not hasattr(self, "_connect_ev") or self._connect_ev is None:
-        self._connect_ev = asyncio.Event()
+            async with ClientSession(connector=self._get_tor_connector(self.url)) as session:
+                async with session.ws_connect(
+                    self._url,
+                    timeout=self._timeout,
+                    heartbeat=self._ping_timeout,
+                    ssl=self._ssl
+                ) as ws:
 
-    try:
-        ws = await self._session.ws_connect(self._url)
-        self._ws = ws
-        self._connect_ev.set()
+                    self._is_connected = True
+                    self._connected_count += 1
+                    self._last_err = None
+                    self._fail_count = 0
+                    self._last_connect = datetime.now()
+                    reconnect_delay = 1
 
-        # Launch child tasks
-        self._consumer_task = asyncio.create_task(self._my_consumer(ws))
-        self._producer_task = asyncio.create_task(self._my_producer(ws))
+                    if self._on_connect:
+                        self._on_connect(self)
 
-        # Wait on both, let either end naturally or be cancelled
-        await asyncio.gather(
-            self._consumer_task,
-            self._producer_task,
-            return_exceptions=True
-        )
+                    self._do_status()
 
-    except asyncio.CancelledError:
-        print("[patched_run] Cancelled. Shutting down producer/consumer...")
-        for task in [self._producer_task, self._consumer_task]:
-            if task and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except Exception:
-                    pass
-        raise
+                    # Start client tasks
+                    consumer_task = asyncio.create_task(self._my_consumer(ws))
+                    producer_task = asyncio.create_task(self._my_producer(ws))
+                    terminate_task = asyncio.create_task(self.my_terminate(ws))
 
-    except (WSMessageTypeError, ClientConnectionError) as e:
-        print(f"[patched_run] WebSocket error: {e}")
+                    # Wait until one fails or finishes
+                    done, pending = await asyncio.wait(
+                        [consumer_task, producer_task, terminate_task],
+                        return_when=asyncio.FIRST_EXCEPTION
+                    )
 
-    except Exception as e:
-        print(f"[patched_run] Unexpected error in run(): {e}")
+                    # Cancel any pending tasks
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+                        except Exception as e:
+                            logging.debug(f"Suppressed exception from cancelled task: {e}")
 
-    finally:
-        self._ws = None
+        except asyncio.CancelledError:
+            self._run = False
+            self._is_connected = False
+            logging.debug("patched_run received cancellation.")
+            raise
 
-        # Cancel leftover child tasks in case they weren't awaited
-        for task in [self._producer_task, self._consumer_task]:
-            if task and not task.done():
-                task.cancel()
-                try:
-                    await task
-                except Exception:
-                    pass
+        except Exception as e:
+            self._last_err = str(e)
+            logging.debug(f"patched_run error: {e}")
 
-# ✅ Apply patch once at app startup
-
+        finally:
+            self._is_connected = False
+            self._do_status()
+            await asyncio.sleep(reconnect_delay)
+            reconnect_delay = min(reconnect_delay * 2, 60)
 
 
-# Monkey-patch it
-# Client.run = patched_run
-# Client._my_consumer = safe_my_consumer
 
+Client.run = patched_run
 
 def add_nwc_event_if_not_exists(event_id: str) -> bool:
     with Session(engine) as session:
@@ -440,43 +488,51 @@ async def listen_notes_connected(url):
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
-        run_task.add_done_callback(suppress_exceptions)
 
         try:
             await c.wait_connect(timeout=10)
-            print(f"Listening for nwc at: {url}")
+            print(f"[{url}] Connected and listening...")
 
             c.subscribe(
-                handlers=my_handler,  # Make sure this is defined in your scope
+                handlers=my_handler,
                 filters={
                     'limit': 4096,
                     'kinds': [23194]
                 }
             )
 
-            await run_task  # Wait for client to finish normally
+            # Wait for run() to complete
+            await run_task
 
-        except asyncio.TimeoutError:
-            print(f"[{url}] Connection timed out. Retrying...")
-
-        except WSMessageTypeError as wse:
-            print(f"[{url}] WebSocket message error: {wse}. Restarting listener...")
+        except asyncio.CancelledError:
+            print(f"[{url}] listen_notes_connected cancelled.")
+            run_task.cancel()
+            try:
+                await run_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                print(f"[{url}] Exception while awaiting cancelled run_task: {e}")
+            await c.end()
+            raise  # must re-raise to properly propagate cancellation
 
         except Exception as e:
-            print(f"[{url}] Error occurred: {e}. Restarting listener...")
+            print(f"[{url}] Listener error: {e}. Restarting in 5 seconds...")
 
         finally:
-            if run_task and not run_task.done():
+            if not run_task.done():
                 run_task.cancel()
                 try:
-                    await run_task  # Ensures proper cleanup
+                    await run_task
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
-                    print(f"[{url}] Suppressed exception from cancelled run_task: {e}")
+                    print(f"[{url}] Suppressed error from cancelled run_task: {e}")
 
             await c.end()
-            await asyncio.sleep(5)  # Delay before reconnecting
+            await asyncio.sleep(5)
+
+
 
 async def listen_notes_query(url):
     while True:
@@ -508,31 +564,27 @@ async def listen_notes_periodic(url):
     while True:
         run_task = asyncio.create_task(listen_notes_connected(url))
         try:
-            await asyncio.sleep(3600)  # Run for one hour
+            # Let the task run for 30 seconds
+            await asyncio.sleep(3600)
         except asyncio.CancelledError:
             print("Periodic listener cancelled. Shutting down...")
             run_task.cancel()
             try:
                 await run_task
-            except:
+            except Exception:
                 pass
             raise
-        print("Restarting listen_notes_connected...")
-       
-        try:
-            await run_task.cancel()
-            await run_task
-        except:
-            pass
-        finally:
+        else:
+            print("Restarting listen_notes_connected...")
+
+            # Cancel the task after the sleep if it's still running
             if not run_task.done():
                 run_task.cancel()
                 try:
                     await run_task
-                except asyncio.CancelledError:
+                except Exception:
                     pass
-                except Exception as e:
-                    print(f"Suppressed exception from cancelled run_task: {e}")
+
 
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
