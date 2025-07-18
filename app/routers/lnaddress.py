@@ -332,8 +332,11 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
-    token_secret = my_enc.decrypt(offer_vault.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret}")
+    decrypt_payload = my_enc.decrypt(offer_vault.token, for_pub_k=k.public_key_hex())
+    token_secret = decrypt_payload.split(':')[0]
+    secure_pin = decrypt_payload.split(':')[1]
+
+    print(f"token secret: {token_secret} secure pin: {secure_pin}")
     k_nwc = Keys(token_secret)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
