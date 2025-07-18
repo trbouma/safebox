@@ -153,13 +153,16 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         print(parsed_data)
         host = parsed_data["h"]
         encrypted_key = parsed_data["k"]
-        decrypted_key = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
-        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key}")
+        decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
+        decrypted_key = decrypted_payload.split(':')[0]
+        decrypted_secure_pin = decrypted_payload.split(':')[1]
+
+        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin}")
         if host != request.url.hostname:
             print(f"This is the wrong host - need to go to https://{host}")
             return RedirectResponse(url=f"https://{host}",status_code=301)
            
-
+        #FIXME This needs to be changed to look up an ephermeral key
         k_wallet = Keys(priv_k=decrypted_key)
         npub = k_wallet.public_key_bech32()
         print(f"safebox {npub}")
