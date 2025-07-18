@@ -218,8 +218,12 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
-    token_secret = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
+    decrypt_token = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
+    token_secret = decrypt_token.split(':')[0]
+    token_pin = decrypt_token.split(':')[1]
+    
+    
+    print(f"token secret {token_secret} token pin {token_pin} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
     k_nwc = Keys(token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
@@ -375,8 +379,11 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
-    token_secret = my_enc.decrypt(nfc_pay_out.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret}")
+    decrypt_token = my_enc.decrypt(nfc_pay_out.token, for_pub_k=k.public_key_hex())
+    
+    token_secret = decrypt_token.split(':')[0]
+    token_pin = decrypt_token.split(':')[1]
+    print(f"token secret {token_secret} token pin {token_pin}")
     k_payout = Keys(token_secret)
     
     print(f"vault nfcpayout: {nfc_pay_out.token} amount: {nfc_pay_out.amount} comment: {nfc_pay_out.comment} to npub: {k_payout.public_key_bech32()}")

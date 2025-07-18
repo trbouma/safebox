@@ -29,7 +29,7 @@ from monstr.event.event import Event
 from safebox.models import cliQuote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings, ConfigWithFallback
@@ -872,8 +872,11 @@ async def my_danger_zone(       request: Request,
     
     k = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
+
+    secure_pin = generate_secure_pin()
+    plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
   
-    encrypt_token = my_enc.encrypt(acorn_obj.privkey_hex, to_pub_k=k.public_key_hex())
+    encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
    
     token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21}
     nembed = create_nembed_compressed(token_obj)
@@ -884,7 +887,8 @@ async def my_danger_zone(       request: Request,
                                         {   "request": request,
                                             "emergency_code": emergency_code,
                                             "currencies": settings.SUPPORTED_CURRENCIES,
-                                            "payment_token" : payment_token
+                                            "payment_token" : payment_token,
+                                            "secure_pin": secure_pin
 
                                         })
 

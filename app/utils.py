@@ -42,6 +42,12 @@ engine = create_engine(settings.DATABASE)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
 
+def generate_secure_pin():
+    while True:
+        pin = ''.join(secrets.choice('0123456789') for _ in range(4))
+        if len(set(pin)) > 1:  # Ensure not all digits are the same
+            return pin
+
 def get_label_by_id(data, target_id):
     for entry in data:
         if entry[0] == target_id:
