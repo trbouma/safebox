@@ -301,25 +301,22 @@ async function setCustomHandle() {
   Web NFC: Android/Chrome only
   <br><br>
  
-  <button onclick="readTag()">Test NFC Read</button>
+  <button onclick="readTag()">NFC Read</button>
   <br><br>
   <textarea id="nfc_text" name="nfc_text" rows="8" style="width:90%;">{{payment_token}}</textarea>
   <br><br>
-  Secure PIN: {{secure_pin}} (not yet implemented)
+  Secure PIN: <b>{{secure_pin}}</b> <i>( Write this down! )</i>
   <br><br>
-  <button onclick="writeTag()">Test NFC Write</button>
+  <button onclick="writeTag()">NFC Write</button>
+  <br><br>
+  <hr>
   <br><br>
   <button onclick="backToHome()">Home</button> 
   <br><br>
  
 </div>
 <div class="center-text">
-  <hr>
-  Payment by NFC Card
-  <br><br>
-  <input type="number" placeholder="0" id="input_nfc_amount"   value="21" width="10"> sats
-  <br><br>
-  <button onclick="paybyNFC()">Pay by NFC Card</button>
+ 
   <hr>
   Read from USB NFC Reader
   <br><br>
@@ -334,11 +331,7 @@ async function setCustomHandle() {
    
 
 <div class="center-text">
-  <hr>
-    
-
-        
-        
+ 
         
     <br><br>
     <button onclick="backToHome()">Home</button>
