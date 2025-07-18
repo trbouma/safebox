@@ -142,6 +142,53 @@ async def login(request: Request, access_key: str = Form()):
     )
     return response
 
+@router.post("/accesstoken", tags=["safebox"])
+async def access_token(request: Request, access_key: str):
+
+
+    access_key=access_key.strip().lower()
+    match = False
+    # Authenticate user
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        print(statement)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            pass
+            # Try to find withouy hypens
+            leading_num = extract_leading_numbers(access_key)
+            if not leading_num:
+                return {"access_token": None}
+            
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
+            safeboxes = session.exec(statement)
+            for each_safebox in safeboxes:
+                access_key_on_record = each_safebox.access_key
+                split_key= access_key_on_record.split("-")
+                if split_key[1] in access_key and split_key[2] in access_key:
+                    print("match!")
+                    # set the access key to the one of record
+                    access_key = access_key_on_record
+                    match=True
+                    break
+                
+                print(each_safebox)
+            
+            if not match:
+                
+                return {"access_token": None}
+
+
+    # Create JWT token
+    settings.TOKEN_EXPIRES_HOURS
+    access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
+    
+   
+    return {"access_token": access_token}
+
 @router.post("/loginwithnfc", tags=["safebox"])
 async def nfc_login(request: Request, nfc_card: nfcCard):
 
