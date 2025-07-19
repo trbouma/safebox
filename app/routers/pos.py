@@ -19,6 +19,9 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
+from app.appmodels import lnPOSInvoice, lnPOSInfo
+from app.rates import get_currency_rate
+from app.tasks import handle_payment
 
 import logging, jwt
 
@@ -50,3 +53,95 @@ async def calculate(request: Request, expression: str = Form(...)):
         result = "Error"
     return templates.TemplateResponse("result.html", {"request": request, "expression": str(result)})
 
+@router.post("/accesstoken", tags=["pos"])
+async def access_token(request: Request, access_key: str):
+
+
+    access_key=access_key.strip().lower()
+    match = False
+    # Authenticate user
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        print(statement)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            pass
+            # Try to find withouy hypens
+            leading_num = extract_leading_numbers(access_key)
+            if not leading_num:
+                return {"access_token": None}
+            
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
+            safeboxes = session.exec(statement)
+            for each_safebox in safeboxes:
+                access_key_on_record = each_safebox.access_key
+                split_key= access_key_on_record.split("-")
+                if split_key[1] in access_key and split_key[2] in access_key:
+                    print("match!")
+                    # set the access key to the one of record
+                    access_key = access_key_on_record
+                    match=True
+                    break
+                
+                print(each_safebox)
+            
+            if not match:
+                
+                return {"access_token": None}
+
+
+    # Create JWT token
+    settings.TOKEN_EXPIRES_HOURS
+    access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
+    
+   
+    return {"access_token": access_token}
+
+
+@router.post("/invoice", tags=["pos"])
+async def ln_invoice_payment(   request: Request, 
+                        ln_invoice: lnPOSInvoice
+                        ):
+    
+    safebox_found = await fetch_safebox(access_token=ln_invoice.access_token)
+    acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+    await acorn_obj.load_data()
+    msg_out ="No payment"
+
+    if ln_invoice.currency == "SAT":
+        sat_amount = int(ln_invoice.amount)
+    else:
+        local_currency = await get_currency_rate(ln_invoice.currency.upper())
+        print(local_currency.currency_rate)
+        sat_amount = int(ln_invoice.amount* 1e8 // local_currency.currency_rate)
+    
+    
+
+    cli_quote = acorn_obj.deposit(amount=sat_amount, mint=settings.HOME_MINT )   
+
+    task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, tendered_amount= ln_invoice.amount, tendered_currency= ln_invoice.currency, comment=ln_invoice.comment, mint=settings.HOME_MINT))
+
+   
+    
+    return {"status": "ok", "invoice": cli_quote.invoice}
+
+@router.post("/info", tags=["pos"])
+async def info(   request: Request, 
+                        ln_pos: lnPOSInfo
+                        ):
+    
+    try:
+        safebox_found = await fetch_safebox(access_token=ln_pos.access_token)
+        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+        await acorn_obj.load_data()
+    except:
+        return {"status": "ERROR", "detail": "Not found"}
+       
+    
+    return {    "status": "OK", 
+                "detail": "Found", 
+                "handle": acorn_obj.handle,
+                "balance": acorn_obj.balance}

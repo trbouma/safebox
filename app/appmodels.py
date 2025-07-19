@@ -65,6 +65,15 @@ class lnInvoice(BaseModel):
     currency: str = "SAT"
     comment: str = "Please Pay!"
 
+class lnPOSInvoice(BaseModel):
+    amount: float
+    currency: str = "SAT"
+    comment: str = "Please Pay!"
+    access_token: str
+
+class lnPOSInfo(BaseModel):   
+    access_token: str
+
 class ecashRequest(BaseModel):
     amount: int 
     
