@@ -1759,7 +1759,12 @@ async def pay_to_nfc_tag( request: Request,
         ))
 
 
-    ## 
+    ###
+    await acorn_obj.add_tx_history( tx_type='D', 
+                                    amount=final_amount,
+                                    tendered_amount=nfc_pay_out_request.amount,
+                                    tendered_currency=nfc_pay_out_request.currency,
+                                    comment= nfc_pay_out_request.comment            ) 
 
     detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
 
