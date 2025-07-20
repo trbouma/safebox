@@ -1,4 +1,4 @@
-from fastapi import FastAPI,  HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, WebSocket
+from fastapi import FastAPI,  HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
@@ -150,87 +150,39 @@ async def info(   request: Request,
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(   websocket: WebSocket,  
-                             ln_pos: lnPOSInfo):
-
-    try:
-        safebox_found = await fetch_safebox(access_token=ln_pos.access_token)
-        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
-        await acorn_obj.load_data()
-    except:
-        return {"status": "ERROR", "detail": "Not found"}
-
+async def websocket_endpoint(   websocket: WebSocket 
+                             ):
 
     global global_websocket
     await websocket.accept()
-    
-    global_websocket = websocket
-    
-    start_time = time.time()
-    duration = 60  # 1 minutes in seconds
 
-
-
-    # starting_balance = safebox_found.balance
-    starting_balance = acorn_obj.balance
-    # new_balance = starting_balance
-    message = "All payments up to date!"
-    status = "SAME"
-
-    test_balance = acorn_obj.balance
-    since_now = int(datetime.now(timezone.utc).timestamp())
-    
-    
+    await websocket.send_json({"status":"OK","detail":"connected"})
     try:
-    
-        while time.time() - start_time < duration:
+        while True:
+            data = await websocket.receive_text()  # raw message
             try:
-                await db_state_change()
-                
-                # new_balance = await fetch_balance(safebox_found.id)
-                
-                await acorn_obj.load_data()
-                new_balance = acorn_obj.balance
-                print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
+                message = json.loads(data)  # parse JSON
+                logging.info(f"Received message: {message}")
 
-                
+                # Example: handle specific message types
+                if message.get("action") == "subscribe":
+                    topic = message.get("topic")
+                    terminal_id = message.get("data", {}).get("terminal_id")
+                    logging.info(f"Client subscribed to topic '{topic}' from terminal '{terminal_id}'")
 
+                    # Optionally send back an acknowledgment
+                    await websocket.send_json({"status": "subscribed", "topic": topic})
+                elif message.get("action") == "access_key":
+                    pass
+                    await websocket.send_json({"status": "access_key", "detail": "123"})
 
-                if new_balance > starting_balance:
-                    message = f"Payment received! {new_balance-starting_balance} sats."
-                    status = "RECD"
+                else:
+                    await websocket.send_json({"error": "unknown action"})
 
-                elif new_balance < starting_balance:
-                    message = f"Payment sent! {starting_balance-new_balance} sats."
-                    status = "SENT"
+            except json.JSONDecodeError:
+                await websocket.send_text("Invalid JSON format")
 
-                elif new_balance == starting_balance:
-                    message = f"Ready."
-                    status = "OK"
-
-                
-                fiat_currency = await get_currency_rate(acorn_obj.local_currency)
-                # currency_code  = fiat_currency.currency_code
-                currency_rate = fiat_currency.currency_rate
-                currency_symbol = fiat_currency.currency_symbol
-                
-                # fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
-                fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
-                await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
-                starting_balance = new_balance
-
-            
-            
-            except Exception as e:
-                print(f"Websocket message: {e}")
-                break
-    except Exception as e:
-        # print ("Error {e}")
-        pass
-    finally:
-
-        print("websocket connection closed and task canceled")
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+    except WebSocketDisconnect:
+        logging.info("WebSocket disconnected")
+    
+    

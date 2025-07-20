@@ -165,6 +165,33 @@
   </style>
 </head>
 <body>
+<script>
+  const ws = new WebSocket("wss://{{request.url.hostname}}/pos/ws");
+
+  ws.onopen = () => { 
+    console.log("WebSocket connected"); 
+    // Example JSON message to send when the socket opens
+    const message = {
+    action: "access_key",
+    topic: "sales",
+    data: {
+      terminal_id: "POS-123"
+    }
+  };
+
+  ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+
+  }
+  ws.onmessage = (event) => {
+    console.log("Message received:", event.data);
+
+  };
+
+  
+
+  ws.onclose = () => console.log("WebSocket closed");
+
+</script>
 
 <div class="pos-container">
   <div class="pos-heading">Point of Sale</div>
