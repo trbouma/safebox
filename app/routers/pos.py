@@ -153,7 +153,7 @@ async def info(   request: Request,
 async def websocket_endpoint(   websocket: WebSocket 
                              ):
 
-    global global_websocket
+    acorn_obj: Acorn
     await websocket.accept()
 
     await websocket.send_json({"status":"OK","detail":"connected"})
@@ -163,6 +163,7 @@ async def websocket_endpoint(   websocket: WebSocket
             try:
                 message = json.loads(data)  # parse JSON
                 logging.info(f"Received message: {message}")
+                print(f"Received message: {message}")
 
                 # Example: handle specific message types
                 if message.get("action") == "subscribe":
@@ -172,9 +173,20 @@ async def websocket_endpoint(   websocket: WebSocket
 
                     # Optionally send back an acknowledgment
                     await websocket.send_json({"status": "subscribed", "topic": topic})
-                elif message.get("action") == "access_key":
+                elif message.get("action") == "access_token":
+                    access_token = message.get("value")
+
                     pass
-                    await websocket.send_json({"status": "access_key", "detail": "123"})
+                    try:
+                        safebox_found = await fetch_safebox(access_token=access_token)
+                        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+                        await acorn_obj.load_data()
+                        await websocket.send_json({"status": "OK", "detail": acorn_obj.handle})
+                    except:
+                        await websocket.send_json({"status": "ERROR", "detail": "Not found"})
+                    
+                elif message.get("action") == "get_balance":
+                    await websocket.send_json({"status": "OK", "detail": acorn_obj.balance})
 
                 else:
                     await websocket.send_json({"error": "unknown action"})
