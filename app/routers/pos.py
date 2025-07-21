@@ -181,12 +181,12 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox(access_token=access_token)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "detail": acorn_obj.handle})
+                        await websocket.send_json({"status": "OK", "action": "access_token", "detail": acorn_obj.handle})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
                     
                 elif message.get("action") == "get_balance":
-                    await websocket.send_json({"status": "OK", "detail": acorn_obj.balance})
+                    await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
 
                 else:
                     await websocket.send_json({"error": "unknown action"})
