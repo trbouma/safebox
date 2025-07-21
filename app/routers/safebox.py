@@ -1,3 +1,4 @@
+import urllib.parse
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
@@ -295,8 +296,10 @@ async def create_nwc_qr(request: Request,
     handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
 
     qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+
     # &lud16={handle}@{request.url.hostname}
-    print(f"nwc secret link: {qr_text}")  
+    encoded_qr_text = urllib.parse.quote(qr_text)
+    print(f"nwc secret link: {qr_text} {encoded_qr_text}")  
 
     # Publish the info event
     # 

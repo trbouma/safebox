@@ -171,13 +171,7 @@
   ws.onopen = () => { 
     console.log("WebSocket connected"); 
     // Example JSON message to send when the socket opens
-    const message = {
-    action: "access_token",
-    value: "AqDWGL+PVzTl1uP9cq9jmzX4V+EzNQ8bqzj0yS7ojfpITFNAOgv7NUpnuR1VuxY0sJKsXVsRmTKfoj4pDdMSk0iIiD0plKuvF3BoD3OjkJS2iCLU+cNYvcy/sR9gGQz0kuvhgQoqnZ8H028750WJYTDGC9oiuDyVaIQrJuDFS51pRIPq9Bs8RSMk3ns1d+63lwMbv3KLC0PwSiAbZr/0t+s7mDM2lCboWighJqa6/lNcXeOBlg3M/EqAvHKaaGbpTS9F2Pj9VGuSV9PmbnVy8q0x1nmG4KliH59CxleqP0lIL5Q=",
 
-  };
-
-  ws.send(JSON.stringify(message));  // 👈 Send JSON as string
 
   }
   ws.onmessage = (event) => {
@@ -222,6 +216,7 @@
   <button class="reset" onclick="resetTotal()">Reset Total</button>
   <button class="pay" onclick="payNow()">Pay</button>
   <button class="pay" onclick="getBalance()">Balance</button>
+   <button class="pay" onclick="setAccessKey()">Set Access Key</button>
 </div>
 
 <script>
@@ -293,6 +288,33 @@
 
   ws.send(JSON.stringify(message));  // 👈 Send JSON as string
   }
+
+  async function setAccessKey(){
+    let accessKey = prompt("Please enter your access key:");
+    // alert("You entered: " + accessKey);
+
+  
+      await fetch(`/pos/accesstoken?access_key=${accessKey}`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"}        
+                    
+          })
+        .then((response) => response.json())
+        .then((data) => { // alert(data.access_token);
+                          const message = {
+                          action: "access_token",
+                          value: data.access_token,
+
+                          };
+
+                          ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+
+                        });
+
+      }
+ 
+   
+ 
 
   function setDarkMode() {
     document.documentElement.classList.add('dark-mode');
