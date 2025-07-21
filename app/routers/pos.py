@@ -186,6 +186,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
                     
                 elif message.get("action") == "get_balance":
+                    await acorn_obj.load_data()
                     await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
 
                 else:
