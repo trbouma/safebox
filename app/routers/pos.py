@@ -205,7 +205,10 @@ async def websocket_endpoint(   websocket: WebSocket
 
                 elif message.get("action") == "nfc_token":
                     nfc_token = message.get("value")
-                    print(f"nfc_token: {nfc_token}")
+                    nfc_amount = message.get("amount")
+                    nfc_currency = message.get("currency")
+
+                    print(f"nfc_token: {nfc_token} {nfc_amount} {nfc_currency}")
                     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": acorn_obj.handle})
                 else:
                     await websocket.send_json({"error": "unknown action"})

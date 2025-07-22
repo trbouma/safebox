@@ -194,8 +194,8 @@
 
 <div class="pos-container">
   <div class="pos-heading">Point of Sale</div>
-  <div class="total-display" id="totalDisplay">Total: $0.00</div>
-  <div id="display" class="display">$0.00</div>
+  <div class="total-display" id="totalDisplay">0</div>
+  <div id="display" class="display">0</div>
   <div class="keypad">
     <button onclick="press('7')">7</button>
     <button onclick="press('8')">8</button>
@@ -236,29 +236,29 @@
   }
 
   function updateDisplay(val) {
-    document.getElementById('display').innerText = val || '$0.00';
+    document.getElementById('display').innerText = val || '0';
   }
 
   function clearDisplay() {
     rawInput = '';
-    updateDisplay('$0.00');
+    updateDisplay('0');
   }
 
   function removeLast() {
     rawInput = rawInput.slice(0, -1);
-    updateDisplay(formatAsCurrency(rawInput));
+    updateDisplay(rawInput);
   }
 
   function formatAsCurrency(str) {
     let num = parseInt(str || '0', 10);
-    return `$${(num / 100).toFixed(2)}`;
+    return `${num}`;
   }
 
   function addItem() {
     const value = parseInt(rawInput || '0', 10);
     total += value;
     rawInput = '';
-    updateDisplay('$0.00');
+    updateDisplay('0');
     updateTotalDisplay();
   }
 
@@ -267,7 +267,7 @@
   }
 
   function updateTotalDisplay() {
-    document.getElementById('totalDisplay').innerText = `Total: $${(total / 100).toFixed(2)}`;
+    document.getElementById('totalDisplay').innerText = `${(total )}`;
   }
 
   function resetTotal() {
@@ -314,6 +314,8 @@
     alert(`Pay with NFC`);
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
+    var amount_to_pay = parseInt(document.getElementById('totalDisplay').innerText)
+    
    
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
@@ -327,6 +329,8 @@
             const message = {
                       action: "nfc_token",
                       value: nfc_token,
+                      amount: amount_to_pay,
+                      currency: "SAT"
 
                           };
             ws.send(JSON.stringify(message));  // 👈 Send JSON as string
