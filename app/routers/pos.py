@@ -156,7 +156,9 @@ async def websocket_endpoint(   websocket: WebSocket
     acorn_obj: Acorn = None
     await websocket.accept()
 
-    await websocket.send_json({"status":"OK","detail":"connected"})
+    await websocket.send_json({ "status":"OK",
+                                "action": "init",
+                                "detail":"Please connect to safebox!"})
     try:
         while True:
             data = await websocket.receive_text()  # raw message
@@ -164,6 +166,10 @@ async def websocket_endpoint(   websocket: WebSocket
                 message = json.loads(data)  # parse JSON
                 logging.info(f"Received message: {message}")
                 print(f"Received message: {message}")
+
+                if acorn_obj == None and message.get("action") != "access_key":
+                    await websocket.send_json({"status": "ERROR", "detail": "not logged in!"})
+                    continue
 
                 # Example: handle specific message types
                 if message.get("action") == "access_key":
@@ -174,7 +180,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox_by_access_key(access_key=access_key)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "action": "access_key", "detail": acorn_obj.handle})
+                        await websocket.send_json({"status": "OK", "action": "access_key", "detail": f"Connected to: {acorn_obj.handle}"})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
                     
@@ -186,7 +192,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox(access_token=access_token)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "action": "access_token", "detail": acorn_obj.handle})
+                        await websocket.send_json({"status": "OK", "action": "access_token", "detail": f"Logged in as: {acorn_obj.handle}"})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
                     

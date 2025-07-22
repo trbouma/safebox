@@ -179,7 +179,7 @@
     console.log("Message received:", event.data);
     parsedObject = JSON.parse(event.data);
     if (parsedObject.status == "OK") {
-      alert(`OK ${parsedObject.action}`);
+      alert(`OK ${parsedObject.detail}`);
     }
 
   };
