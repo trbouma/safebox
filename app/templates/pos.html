@@ -350,10 +350,12 @@
           for (const record of event.message.records) {
 
             nfc_token = decoder.decode(record.data);
+            let promptPIN = prompt("Please enter your PIN");
             const message = {
                       "action": "nfc_token",
                       "value": nfc_token,
                       "amount": amount_to_pay,
+                      "pin": promptPIN,
                       "currency": "SAT",
                       "comment": comment
 

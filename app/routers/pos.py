@@ -202,7 +202,7 @@ async def websocket_endpoint(   websocket: WebSocket
                 elif message.get("action") == "get_balance":
                     if acorn_obj:
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": f"{acorn_obj.balance} for {acorn_obj.handle}"})
+                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
                     else:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
 
@@ -211,6 +211,7 @@ async def websocket_endpoint(   websocket: WebSocket
                     nfc_amount = message.get("amount")
                     nfc_currency = message.get("currency")
                     nfc_comment = message.get("comment")
+                    nfc_pin = message.get("pin")
                     parsed_nembed = parse_nembed_compressed(nfc_token)
 
                     
@@ -237,7 +238,7 @@ async def websocket_endpoint(   websocket: WebSocket
                     pubkey = k.public_key_hex()
                     headers = { "Content-Type": "application/json"}
                     vault_url = f"https://{host}/.well-known/nfcvaultrequestpayment"
-                    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
+                    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats pin:{nfc_pin}")
                     nfc_ecash_clearing = True
                     submit_data = { "ln_invoice": None, 
                         "token": vault_token, 
