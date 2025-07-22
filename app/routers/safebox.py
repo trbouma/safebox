@@ -1605,7 +1605,7 @@ async def request_nfc_payment( request: Request,
     
     token_to_use = payment_token.payment_token
     
-    token_split = token_to_use.split(':')
+    # token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
     host = parsed_nembed["h"]   
     vault_token = parsed_nembed["k"]

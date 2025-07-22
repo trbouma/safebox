@@ -11,17 +11,19 @@ from safebox.acorn import Acorn
 from time import sleep
 import json
 from monstr.util import util_funcs
+from monstr.encrypt import Keys
 import ipinfo
+import requests
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, fetch_access_token, fetch_safebox_by_access_key
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, fetch_access_token, fetch_safebox_by_access_key, parse_nembed_compressed, sign_payload
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.appmodels import lnPOSInvoice, lnPOSInfo
 from app.rates import get_currency_rate
-from app.tasks import handle_payment
+from app.tasks import handle_payment, handle_ecash
 
 import logging, jwt
 import time
@@ -29,6 +31,7 @@ import time
 
 
 settings = Settings()
+config = ConfigWithFallback()
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -199,7 +202,7 @@ async def websocket_endpoint(   websocket: WebSocket
                 elif message.get("action") == "get_balance":
                     if acorn_obj:
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
+                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": f"{acorn_obj.balance} for {acorn_obj.handle}"})
                     else:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
 
@@ -207,9 +210,55 @@ async def websocket_endpoint(   websocket: WebSocket
                     nfc_token = message.get("value")
                     nfc_amount = message.get("amount")
                     nfc_currency = message.get("currency")
+                    nfc_comment = message.get("comment")
+                    parsed_nembed = parse_nembed_compressed(nfc_token)
 
-                    print(f"nfc_token: {nfc_token} {nfc_amount} {nfc_currency}")
-                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": acorn_obj.handle})
+                    
+                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": "Processing payment..."})
+                    if nfc_currency == "SAT":
+                        sat_amount = int(nfc_amount)
+                    else:
+                        local_currency = await get_currency_rate(nfc_currency.upper())
+                        print(local_currency.currency_rate)
+                        sat_amount = int(nfc_amount* 1e8 // local_currency.currency_rate)
+    
+                    if sat_amount > 0:        
+                        final_amount = sat_amount
+                    else:
+                        final_amount = int(parsed_nembed.get("a", 21))
+                    
+                    print(f"nfc_token: {nfc_token} {nfc_amount}/{sat_amount} {nfc_currency} {parsed_nembed}")
+
+                    k = Keys(config.SERVICE_NSEC) # This is for the trusted service
+                    host = parsed_nembed["h"]   
+                    vault_token = parsed_nembed["k"]
+                    # This is to confirm that the originator is trusted
+                    sig = sign_payload(vault_token, k.private_key_hex())
+                    pubkey = k.public_key_hex()
+                    headers = { "Content-Type": "application/json"}
+                    vault_url = f"https://{host}/.well-known/nfcvaultrequestpayment"
+                    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
+                    nfc_ecash_clearing = True
+                    submit_data = { "ln_invoice": None, 
+                        "token": vault_token, 
+                        "amount": final_amount,
+                        "tendered_amount": nfc_amount,
+                        "tendered_currency": nfc_currency,                    
+                        "pubkey": pubkey, 
+                        "nfc_ecash_clearing": nfc_ecash_clearing,
+                        "recipient_pubkey": acorn_obj.pubkey_hex,
+                        "relays": settings.RELAYS,
+                        "sig": sig, 
+                        "comment": nfc_comment  
+                        }
+                    task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj))
+                    response = requests.post(url=vault_url, json=submit_data, headers=headers)        
+                    print(response.json())
+                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment being sent to {acorn_obj.handle}!"})
+                    
+
+
+
                 else:
                     await websocket.send_json({"error": "unknown action"})
 

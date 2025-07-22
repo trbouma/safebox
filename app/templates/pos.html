@@ -167,10 +167,14 @@
 <body>
 <script>
   const ws = new WebSocket("wss://{{request.url.hostname}}/pos/ws");
+  const access_key = localStorage.getItem("access_key");
+  console.log(access_key); // "myValue"
 
   ws.onopen = () => { 
     console.log("WebSocket connected"); 
     // Example JSON message to send when the socket opens
+
+    getStoredKey();
     
 
 
@@ -299,13 +303,32 @@
     let accessKey = prompt("Please enter your access key:");
     // alert("You entered: " + accessKey);
 
+    const storedKey = localStorage.getItem("access_key");
+    console.log(storedKey); // "stored key"
+
     const message = {
                       action: "access_key",
                       value: accessKey,
 
                           };
     ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-  
+    localStorage.setItem("access_key", accessKey);
+
+
+      }
+
+  async function getStoredKey(){
+
+    const storedKey = localStorage.getItem("access_key");
+    console.log(storedKey); // "stored key"
+
+    const message = {
+                      action: "access_key",
+                      value: storedKey,
+
+                          };
+    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+   
 
 
       }
@@ -315,6 +338,7 @@
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
     var amount_to_pay = parseInt(document.getElementById('totalDisplay').innerText)
+    var comment = "Paid from POS!";
     
    
     if ("NDEFReader" in window) {
@@ -327,14 +351,15 @@
 
             nfc_token = decoder.decode(record.data);
             const message = {
-                      action: "nfc_token",
-                      value: nfc_token,
-                      amount: amount_to_pay,
-                      currency: "SAT"
+                      "action": "nfc_token",
+                      "value": nfc_token,
+                      "amount": amount_to_pay,
+                      "currency": "SAT",
+                      "comment": comment
 
                           };
             ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-            alert(nfc_token);
+            // alert(nfc_token);
           }
           
           
