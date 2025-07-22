@@ -14,7 +14,7 @@ from monstr.util import util_funcs
 import ipinfo
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, fetch_access_token, fetch_safebox_by_access_key
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
@@ -153,7 +153,7 @@ async def info(   request: Request,
 async def websocket_endpoint(   websocket: WebSocket 
                              ):
 
-    acorn_obj: Acorn
+    acorn_obj: Acorn = None
     await websocket.accept()
 
     await websocket.send_json({"status":"OK","detail":"connected"})
@@ -166,13 +166,18 @@ async def websocket_endpoint(   websocket: WebSocket
                 print(f"Received message: {message}")
 
                 # Example: handle specific message types
-                if message.get("action") == "subscribe":
-                    topic = message.get("topic")
-                    terminal_id = message.get("data", {}).get("terminal_id")
-                    logging.info(f"Client subscribed to topic '{topic}' from terminal '{terminal_id}'")
+                if message.get("action") == "access_key":
+                    access_key = message.get("value")
+                    
 
-                    # Optionally send back an acknowledgment
-                    await websocket.send_json({"status": "subscribed", "topic": topic})
+                    try:
+                        safebox_found = await fetch_safebox_by_access_key(access_key=access_key)
+                        acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
+                        await acorn_obj.load_data()
+                        await websocket.send_json({"status": "OK", "action": "access_key", "detail": acorn_obj.handle})
+                    except:
+                        await websocket.send_json({"status": "ERROR", "detail": "Not found"})
+                    
                 elif message.get("action") == "access_token":
                     access_token = message.get("value")
 
@@ -186,9 +191,16 @@ async def websocket_endpoint(   websocket: WebSocket
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
                     
                 elif message.get("action") == "get_balance":
-                    await acorn_obj.load_data()
-                    await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
+                    if acorn_obj:
+                        await acorn_obj.load_data()
+                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
+                    else:
+                        await websocket.send_json({"status": "ERROR", "detail": "Not found"})
 
+                elif message.get("action") == "nfc_token":
+                    nfc_token = message.get("value")
+                    print(f"nfc_token: {nfc_token}")
+                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": acorn_obj.handle})
                 else:
                     await websocket.send_json({"error": "unknown action"})
 

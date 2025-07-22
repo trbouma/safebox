@@ -171,11 +171,16 @@
   ws.onopen = () => { 
     console.log("WebSocket connected"); 
     // Example JSON message to send when the socket opens
+    
 
 
   }
   ws.onmessage = (event) => {
     console.log("Message received:", event.data);
+    parsedObject = JSON.parse(event.data);
+    if (parsedObject.status == "OK") {
+      alert(`OK ${parsedObject.action}`);
+    }
 
   };
 
@@ -216,6 +221,7 @@
   <button class="reset" onclick="resetTotal()">Reset Total</button>
   <button class="pay" onclick="payNow()">Pay</button>
   <button class="pay" onclick="getBalance()">Balance</button>
+  <button class="pay" onclick="payWithNFC()">Pay with NFC</button>
    <button class="pay" onclick="setAccessKey()">Set Access Key</button>
 </div>
 
@@ -293,27 +299,52 @@
     let accessKey = prompt("Please enter your access key:");
     // alert("You entered: " + accessKey);
 
-  
-      await fetch(`/pos/accesstoken?access_key=${accessKey}`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"}        
-                    
-          })
-        .then((response) => response.json())
-        .then((data) => { // alert(data.access_token);
-                          const message = {
-                          action: "access_token",
-                          value: data.access_token,
+    const message = {
+                      action: "access_key",
+                      value: accessKey,
 
                           };
+    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+  
 
-                          ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-
-                        });
 
       }
  
+  async function payWithNFC() {
+    alert(`Pay with NFC`);
+    var nfc_token;
+    // var nfc_comment = document.getElementById("ln_recipient_memo").value;
    
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+            const message = {
+                      action: "nfc_token",
+                      value: nfc_token,
+
+                          };
+            ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+            alert(nfc_token);
+          }
+          
+          
+        }
+      } catch(error) {
+        console.log(error);
+      }
+    } else {
+      console.log("Web NFC is not supported.");
+    }
+
+
+  }
+  
  
 
   function setDarkMode() {
