@@ -174,7 +174,8 @@
     console.log("WebSocket connected"); 
     // Example JSON message to send when the socket opens
 
-    getStoredKey();
+   // getStoredKey();
+    getStoredHandle();
     
 
 
@@ -226,7 +227,8 @@
   <button class="pay" onclick="payNow()">Pay</button>
   <button class="pay" onclick="getBalance()">Balance</button>
   <button class="pay" onclick="payWithNFC()">Pay with NFC</button>
-   <button class="pay" onclick="setAccessKey()">Set Access Key</button>
+  <button class="pay" onclick="setAccessKey()">Set Access Key</button>
+  <button class="pay" onclick="setHandle()">Set Handle</button>
 </div>
 
 <script>
@@ -317,6 +319,24 @@
 
       }
 
+    async function setHandle(){
+    let handle = prompt("Please enter your handle:");
+    // alert("You entered: " + accessKey);
+
+    const storedHandle = localStorage.getItem("handle");
+    console.log(storedHandle); // "stored handle"
+
+    const message = {
+                      action: "handle",
+                      value: handle,
+
+                          };
+    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+    localStorage.setItem("handle", handle);
+
+
+      }
+
   async function getStoredKey(){
 
     const storedKey = localStorage.getItem("access_key");
@@ -325,6 +345,22 @@
     const message = {
                       action: "access_key",
                       value: storedKey,
+
+                          };
+    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
+   
+
+
+      }
+
+    async function getStoredHandle(){
+
+    const storedHandle = localStorage.getItem("handle");
+    console.log('stored handle ' + storedHandle); // "stored handle"
+
+    const message = {
+                      action: "handle",
+                      value: storedHandle,
 
                           };
     ws.send(JSON.stringify(message));  // 👈 Send JSON as string

@@ -187,6 +187,26 @@ async def fetch_safebox_by_access_key(access_key: str) -> RegisteredSafebox:
             raise Exception("Could not find safebox!")
         
     return safebox_found
+
+async def fetch_safebox_by_handle(handle: str) -> RegisteredSafebox:
+
+    print("fetch by handle")
+    with Session(engine) as session:
+        
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.handle==handle)
+        
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+       
+        if safebox_found:
+            print("found safebox!")
+
+        else:
+
+            raise Exception("Could not find safebox!")
+        
+    return safebox_found
+
 async def fetch_access_token(access_key:str):
     access_key=access_key.strip().lower()
     match = False
