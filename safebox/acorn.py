@@ -1447,7 +1447,8 @@ class Acorn:
                 relays = self.relays
         try:
             ecash_latest = int(await self.get_wallet_info("ecash_latest", record_kind=37376))
-            # print(f"ecash latest: {ecash_latest}")
+            
+            print(f"ecash latest: {ecash_latest}")
            
             
             user_records = await self.get_user_records(record_kind=21401, relays=relays, since=ecash_latest+1, reverse=True)
@@ -1458,24 +1459,36 @@ class Acorn:
                 ecash_record["ecash"] = each["payload"]
                 ecash_record["timestamp"] = each["timestamp"]
                
-                ecash_out.append(ecash_record)
+                # ecash_out.append(ecash_record)
                 latest_dm = each["timestamp"] 
                 print(f"accept with timestamp {since_now - latest_dm}s old {latest_dm}")
                 try:
-                    ecash_nembed = parse_nembed_compressed(each["payload"])
+                    ecash_nembed = parse_nembed_compressed(each["payload"])                    
+                    token_to_redeem = ecash_nembed["token"]
+                    print(f"token to redeem: {token_to_redeem}")
+                    msg_out, token_amount = await  self.accept_token(token_to_redeem)
 
-                    print(f"need to parss")
-                    msg_out, token_amount = await  self.accept_token(ecash_nembed["token"])
-                    tendered_amount = ecash_nembed.get("tendered_amount", None)
-                    tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
-
-                    print("add to tx history")
-                    await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
-                    
-                    
+                    if token_to_redeem == "nsf":
+                        pass
+                        print("it was nsf!")
+                        # tendered_amount = ecash_nembed.get("tendered_amount", None)
+                        # tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
+                        # ecash_out.append(("ERROR", 0,"SAT"))
+                        # await self.add_tx_history(tx_type='X',amount=0, comment="PAYMENT UNSUCCESSFUL", tendered_amount=0, tendered_currency="NSF" )
+                        ecash_out.append(("ADVISORY", 0,"SAT", "NSF"))
+                    else:
+                        print("ok to redeem!")
+                        
+                        tendered_amount = ecash_nembed.get("tendered_amount", None)
+                        tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
+                        
+                        print("add to tx history")
+                        await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
+                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK"))
                     
                     
                 except:
+                    ecash_out.append(("ERROR", 0,"SAT", "Redemption"))
                     pass
                 
                    
@@ -1483,7 +1496,7 @@ class Acorn:
             print("need to create ecash latest record")
             await self.set_wallet_info("ecash_latest", "0", record_kind=37376)
             
-
+        print(f"latest dm: {latest_dm}")
         if latest_dm > 0:
             await self.set_wallet_info("ecash_latest", str(latest_dm), record_kind=37376)
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
@@ -2164,7 +2177,7 @@ class Acorn:
         final_fees = 0
 
         try:
-            # await self.acquire_lock()
+            await self.acquire_lock()
             callback, safebox = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
             print(f"safebox: {safebox}") 
@@ -2470,6 +2483,9 @@ class Acorn:
                 self.logger.info(msg_out)
                 await self.write_proofs()
                 await self.release_lock()
+                print("all done pay_multi")
+                print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
+                await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
         except Exception as e:
             await self.release_lock()
             final_fees = 0
@@ -2478,9 +2494,7 @@ class Acorn:
             raise Exception(msg_out)
         finally:
             await self.release_lock()
-            print("all done pay_multi")
-            print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
-            await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)    
+    
         
         return msg_out, final_fees
 
@@ -2719,6 +2733,14 @@ class Acorn:
                     self.logger.info(f"Lightning payment ok")
             else:
                 self.logger.info(f"lighting payment did no go through")
+                for each in keep_proofs:
+                    proofs_from_keyset.append(each)
+                keyset_proofs[chosen_keyset] = proofs_from_keyset
+                post_payment_proofs = []
+                for key in keyset_proofs:
+                    post_payment_proofs.extend(keyset_proofs[key])
+                self.proofs = post_payment_proofs
+
                 raise Exception(f"Lightning payment not go through! Please try again.")
             # add keep proofs back into selected keyset proofs
             for each in keep_proofs:
@@ -4115,9 +4137,10 @@ class Acorn:
             
             
             self.logger.debug(f"available amount {available_amount} ")
-            if available_amount < amount:
-                msg_out = "insufficient balance. you need more funds!"
-                return msg_out
+            if available_amount < amount:                
+                raise ValueError("Insufficient balance.")
+                # msg_out = "insufficient balance. you need more funds!"
+                # return msg_out
             
             for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
                 
@@ -4192,9 +4215,9 @@ class Acorn:
             # print("proofs remaining:", proofs_remaining)
             await self.release_lock()
         except Exception as e:
-            self.logger(f"issue token error {e}")
+            # self.logger(f"issue token error {e}")
             await self.release_lock()
-            raise Exception(f"issue token error {e}")
+            raise Exception(f"Error {e}")
         finally:
             await self.release_lock()
         

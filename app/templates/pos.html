@@ -16,6 +16,10 @@
       padding: 10px;
     }
 
+    .pin-input {
+    width: 4ch; /* width of 4 character units */
+    }
+
     .pos-container {
       background: white;
       border-radius: 20px;
@@ -183,9 +187,26 @@
   ws.onmessage = (event) => {
     console.log("Message received:", event.data);
     parsedObject = JSON.parse(event.data);
+    const heading = document.getElementById("heading");
+    
+    heading.textContent = parsedObject.status + " " + parsedObject.detail;
+
     if (parsedObject.status == "OK") {
-      alert(`OK ${parsedObject.detail}`);
+
+      if (parsedObject.action == "nfc_token") {
+        heading.textContent = parsedObject.detail;
+
+      }
+      
+      else {
+         heading.textContent = parsedObject.detail;
+      }
+
+
+      // alert(`OK ${parsedObject.detail}`);
     }
+
+    
 
   };
 
@@ -198,7 +219,7 @@
 </script>
 
 <div class="pos-container">
-  <div class="pos-heading">Please Pay</div>
+  <div id="heading" class="pos-heading">Please Pay</div>
   <div class="pos-heading" id="totalDisplay">0</div>
   <div id="display" class="display">0</div>
   <div class="keypad">
@@ -227,6 +248,8 @@
   <button class="pay" onclick="payNow()">Pay</button>
   <button class="pay" onclick="getBalance()">Balance</button>
   <button class="pay" onclick="payWithNFC()">Pay with NFC</button>
+  <br>
+  Enter PIN: <center><input type="password" class="pin-input "id="pinInput" maxlength="4" size="4" placeholder="PIN" /></center>
   <button class="pay" onclick="setAccessKey()">Set Access Key</button>
   <button class="pay" onclick="setHandle()">Set Handle</button>
 </div>
@@ -372,11 +395,12 @@
   async function payWithNFC() {
     alert(`Pay with NFC`);
     var nfc_token;
-    // var nfc_comment = document.getElementById("ln_recipient_memo").value;
-    var amount_to_pay = parseInt(document.getElementById('totalDisplay').innerText)
+    var nfc_pin = document.getElementById("pinInput").value;
+    var amount_to_pay = parseInt(document.getElementById('totalDisplay').innerText);
     var comment = "Paid from POS!";
     
-   
+    document.getElementById("pinInput").value = ""; // clear it
+
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
       try {
@@ -386,12 +410,12 @@
           for (const record of event.message.records) {
 
             nfc_token = decoder.decode(record.data);
-            let promptPIN = prompt("Please enter your PIN");
+            
             const message = {
                       "action": "nfc_token",
                       "value": nfc_token,
                       "amount": amount_to_pay,
-                      "pin": promptPIN,
+                      "pin": nfc_pin,
                       "currency": "SAT",
                       "comment": comment
 

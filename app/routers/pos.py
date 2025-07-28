@@ -157,6 +157,7 @@ async def websocket_endpoint(   websocket: WebSocket
                              ):
 
     acorn_obj: Acorn = None
+    starting_balance = 0
     await websocket.accept()
 
     await websocket.send_json({ "status":"OK",
@@ -182,6 +183,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox_by_access_key(access_key=access_key)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
+                        starting_balance = acorn_obj.balance
                         await websocket.send_json({"status": "OK", "action": "access_key", "detail": f"Connected to: {acorn_obj.handle}"})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
@@ -194,6 +196,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox(access_token=access_token)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
+                        starting_balance = acorn_obj.balance
                         await websocket.send_json({"status": "OK", "action": "access_token", "detail": f"Logged in as: {acorn_obj.handle}"})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
@@ -206,6 +209,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         safebox_found = await fetch_safebox_by_handle(handle=handle)
                         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
                         await acorn_obj.load_data()
+                        starting_balance = acorn_obj.balance
                         await websocket.send_json({"status": "OK", "action": "handle", "detail": f"Logged in as: {acorn_obj.handle}"})
                     except:
                         await websocket.send_json({"status": "ERROR", "detail": "Not found"})
@@ -215,7 +219,7 @@ async def websocket_endpoint(   websocket: WebSocket
                         await acorn_obj.load_data()
                         await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
                     else:
-                        await websocket.send_json({"status": "ERROR", "detail": "Not found"})
+                        await websocket.send_json({"status": "ERROR", "action": "get_balance","detail": "Not found"})
 
                 elif message.get("action") == "nfc_token":
                     nfc_token = message.get("value")
@@ -263,10 +267,10 @@ async def websocket_endpoint(   websocket: WebSocket
                         "sig": sig, 
                         "comment": nfc_comment  
                         }
-                    task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj))
+                    task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj, websocket=websocket))
                     response = requests.post(url=vault_url, json=submit_data, headers=headers)        
                     print(response.json())
-                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment being sent to {acorn_obj.handle}!"})
+                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment being processed..."})
                     
 
 

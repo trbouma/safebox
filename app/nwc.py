@@ -292,18 +292,27 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         comment = payinstruction_obj['params']['comment']
         print(f"{amount} {recipient_pubkey} {relays}")
         # Need to create the nembed object
-        cashu_token = await acorn_obj.issue_token(amount)
+        try:
+            cashu_token = await acorn_obj.issue_token(amount)
+        except:
+            cashu_token = "nsf"
+            
         pay_obj =   {"token": cashu_token,
-                             "amount": amount, 
-                             "comment": comment,
-                             "tendered_amount": tendered_amount,
-                             "tendered_currency": tendered_currency}
+                            "amount": amount, 
+                            "comment": comment,
+                            "tendered_amount": tendered_amount,
+                            "tendered_currency": tendered_currency}
+        
         nembed_to_send = create_nembed_compressed(pay_obj)
         print(f"nembed to send: {nembed_to_send}")
                
 
         await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=21401)
-        await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
+        if cashu_token == "nsf":
+            pass
+            await acorn_obj.add_tx_history(tx_type='X', amount=0, comment="Failed due to NSF",tendered_amount=0,tendered_currency="NAN")
+        else:
+            await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
 
     elif payinstruction_obj['method'] == 'accept_ecash':
         print("we gotta accept ecash!")

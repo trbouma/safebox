@@ -504,8 +504,11 @@ def issue(amount:int):
     click.echo(f"Issue token amount: {amount}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
-    token = asyncio.run(acorn_obj.issue_token(amount))
-    click.echo(token)
+    try:
+        token = asyncio.run(acorn_obj.issue_token(amount))
+        click.echo(token)
+    except Exception as e:
+        click.echo(f"Error: {e}")
 
 @click.command("send", help="Send amount to nip05 address or npub")
 @click.argument('amount', default=21)

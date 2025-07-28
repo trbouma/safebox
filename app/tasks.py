@@ -288,7 +288,7 @@ async def handle_payment(   acorn_obj: Acorn,
     await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
 
 
-async def handle_ecash(  acorn_obj: Acorn ):
+async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
@@ -296,9 +296,27 @@ async def handle_ecash(  acorn_obj: Acorn ):
     
     while time.time() - start_time < duration:
         print(f"listen for ecash payment for {acorn_obj.handle}") 
-        await acorn_obj.get_ecash_latest() 
-        await asyncio.sleep(5)  
-        # print("done getting ecash")
+        ecash_out = await acorn_obj.get_ecash_latest() 
+        if ecash_out != []:
+            print(f"ecash out: {ecash_out}")
+            if websocket:
+                for each in ecash_out: 
+                    print(f"each for websocket: {each}") 
+                    if each[0] in ["OK", "ADVISORY"]:             
+                        await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}"})
+                        await asyncio.sleep(5)
+                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})                       
+                    else:
+                        pass
+                        # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
+                break
+
+         
+    
+    print("done getting ecash")
+
+    # if websocket:
+    #     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})
 
 
 async def task_pay_to_nfc_tag(  acorn_obj: Acorn, 
