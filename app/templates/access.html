@@ -758,16 +758,23 @@ function getInvoiceStatus(ln_invoice_status) {
       const status = response.status
       userMessage(message, status)
 
-      if (status == "RECD" || status == "SENT") {
+      if (status == "RECD") {
       document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
-      document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
-      document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
-      document.getElementById("img_qr_display").addEventListener("click", copyAddress);
-      document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
+      // document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+      // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
+      // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
+      // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
       
+      } else if (status == "SENT" || status == "PENDING") {
+
+
+      document.getElementById("payment_notification").innerText = `${message}`;
+
+
       }
+
 
   };
   ws.onclose = () => console.log("WebSocket closed");
@@ -806,7 +813,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <br>
 
   <span id="payment_notification">
-    {{ action_comment if action_comment else "Ready!"}}
+    {{ action_comment if action_comment else ""}}
   </span>  
   <br><br>
   

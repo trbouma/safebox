@@ -403,6 +403,7 @@ async def ln_pay_address(   request: Request,
 
     
     if global_websocket:
+        print("we have a global websocket")
         pass
 
     if ln_pay.currency == "SAT":
@@ -920,7 +921,22 @@ async def my_danger_zone(       request: Request,
         safebox_found = safeboxes.first()
        
     emergency_code = safebox_found.emergency_code
+
+    # Do the nostr wallet connect
     nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+
+    # Publish profile
+    async with Client(settings.NWC_RELAYS[0]) as c:
+        n_msg = Event(kind=13194,
+                    content= "pay_invoice get_balance get_info list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications",
+                    pub_key=acorn_obj.pubkey_hex,
+                    tags=[["notifications","payment_received payment_sent"]]
+                    )
+
+
+        n_msg.sign(acorn_obj.privkey_hex)
+        c.publish(n_msg)
+
 
     
     k = Keys(config.SERVICE_NSEC)
@@ -1086,7 +1102,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                     status = "SENT"
 
                 elif new_balance == starting_balance:
-                    message = f"Ready."
+                    message = f"Current Balance."
                     status = "OK"
 
                 

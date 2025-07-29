@@ -305,7 +305,7 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
                     if each[0] in ["OK", "ADVISORY"]:             
                         await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}"})
                         await asyncio.sleep(5)
-                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})                       
+                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment!"})                       
                     else:
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
@@ -356,6 +356,10 @@ async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
 
 async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:str, tendered_amount: float, tendered_currency: str, websocket: WebSocket|None=None):
 
+    if websocket:
+            #FIXME - may not need this refernce
+            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+
     status = "SENT"
     try:
         msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
@@ -366,7 +370,7 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
     finally:
         if websocket:
             #FIXME - may not need this refernce
-            # await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
             pass
    
 

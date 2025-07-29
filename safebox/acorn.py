@@ -2177,7 +2177,7 @@ class Acorn:
         final_fees = 0
 
         try:
-            await self.acquire_lock()
+            # await self.acquire_lock()
             callback, safebox = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
             print(f"safebox: {safebox}") 

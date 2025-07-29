@@ -181,6 +181,29 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
             print(f"we published the balance to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
+    
+    elif payinstruction_obj['method'] == 'get_info': 
+        print("we have a get info event!")
+        get_info = {
+                            "result_type": "get_info",
+                            "result": {
+                                "pubkey": k.public_key_hex(),
+                                "methods": ["pay_invoice", "get_balance", "list_transactions", "get_info", "make_invoice"],
+
+                                }
+                            }
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                    content= my_enc.encrypt(json.dumps(get_info), to_pub_k=evt.pub_key),
+                    pub_key=k.public_key_hex(),
+                    tags=[['e',evt.id],['p', evt.pub_key]])        
+
+
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+
+        
+    
     elif payinstruction_obj['method'] == 'present_record':
         nauth = payinstruction_obj['params']['nauth']
         label = payinstruction_obj['params']['label']
