@@ -585,3 +585,6 @@ class TxHistory(BaseModel):
     tendered_currency: str
     fees: int
     current_balance: int|None = None
+    invoice: str|None=None
+    preimage: str|None = None
+    payment_hash: str|None = None

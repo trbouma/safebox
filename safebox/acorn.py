@@ -1093,7 +1093,10 @@ class Acorn:
                                 comment:str = "", 
                                 tendered_amount: float=None,
                                 tendered_currency: str = "SAT",
-                                fees: int =0
+                                fees: int =0,
+                                invoice:str=None,
+                                payment_preimage: str = None,
+                                payment_hash: str = None
                                 ):
         self.logger.debug("Add tx history")
         my_enc = NIP44Encrypt(self.k)
@@ -1109,7 +1112,7 @@ class Acorn:
         # await self.load_data()
         
 
-
+       
         tx_history = TxHistory( create_time=created_at,
                                 tx_type=tx_type,
                                 amount= amount,
@@ -1117,7 +1120,12 @@ class Acorn:
                                 tendered_amount=tendered_amount,
                                 tendered_currency=tendered_currency,
                                 fees=fees,
-                                current_balance=self.balance 
+                                current_balance=self.balance,
+                                invoice=invoice,
+                                payment_hash=payment_hash,
+                                preimage=payment_preimage
+                               
+                                 
                                 )
         tx_history_str = json.dumps(tx_history.model_dump())
         tx_history_encrypt = my_enc.encrypt(tx_history_str,to_pub_k=self.pubkey_hex)
@@ -1154,7 +1162,7 @@ class Acorn:
                 json_obj = json.loads(decrypt_content) 
                 # Convert create_time to datetime
                 json_obj['create_time'] = datetime.fromtimestamp(json_obj['create_time']).strftime('%Y-%m-%d %H:%M:%S')
-
+               
                 tx_history.append(json_obj)         
            
         return tx_history
@@ -2583,11 +2591,13 @@ class Acorn:
                     lninvoice: str, 
                     comment: str = "Paid!"): 
                     
+        payment_hash = None
+        payment_preimage = None
         # decode amount from invoice
         try:
             await self.acquire_lock()
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
-        
+            payment_hash = bolt11.decode(lninvoice).payment_hash
 
             self.logger.debug("pay from multiple mints")
             available_amount = 0
@@ -2729,8 +2739,10 @@ class Acorn:
             response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 
+            payment_preimage = payment_json.get('payment_preimage', None)
+           
             if payment_json.get("paid",False):        
-                    self.logger.info(f"Lightning payment ok")
+                    self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
             else:
                 self.logger.info(f"lighting payment did no go through")
                 for each in keep_proofs:
@@ -2761,6 +2773,7 @@ class Acorn:
             # self.add_proofs_obj(post_payment_proofs)
             # self._load_proofs()
             
+            
             final_fees = amount_needed-ln_amount
             msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful!"
             self.logger.info(msg_out)
@@ -2777,8 +2790,8 @@ class Acorn:
             print("all done pay_multi_invoice!")
            
         
-
-        return msg_out, final_fees
+        
+        return msg_out, final_fees, payment_hash,payment_preimage
 
     async def delete_kind_events(self, record_kind:int):
         """

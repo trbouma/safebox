@@ -12,6 +12,7 @@ from filelock import FileLock, Timeout
 from datetime import datetime, timezone
 
 from safebox.acorn import Acorn
+from safebox.models import TxHistory
 import signal
 import json
 import bolt11
@@ -101,32 +102,61 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         
         print(f"balance {acorn_obj.balance}")
         try:
-            msg_out, final_fees = await acorn_obj.pay_multi_invoice(invoice)
+            msg_out, final_fees, payment_hash, payment_preimage = await acorn_obj.pay_multi_invoice(invoice)
             nfc_msg = f"💳 {comment} "
+           
             await acorn_obj.add_tx_history(     tx_type="D", 
                                                 amount=invoice_amount, 
                                                 tendered_amount=tendered_amount,
                                                 tendered_currency=tendered_currency,
                                                 comment=nfc_msg, 
-                                                fees=final_fees)
+                                                fees=final_fees,
+                                                invoice=invoice,
+                                                payment_hash=payment_hash,
+                                                payment_preimage=payment_preimage)
             
         except Exception as e:
             # raise Exception(f"Error {e}")
             print(f"Error {e}")
+
+
+        response_json = {
+                            "result_type": "pay_invoice",
+                            "result": {
+                                "preimage": payment_preimage, 
+                                "fees_paid": final_fees * 1000
+                                }
+                        }
+
+       
+        
+
+
+
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]])
+
+
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+
     elif payinstruction_obj['method'] == 'list_transactions':
         print("we have a list_transactions!") 
         tx_history = await acorn_obj.get_tx_history()
-        # print(tx_history)
+        print(tx_history)
         tx_nwc_history = []
         for each in tx_history[:10]:
-            # print(each)
+            print(f"each: {each}")
             each_transaction = {
                "type": "incoming" if each['tx_type'] == 'C' else "outgoing", 
-               "invoice": "123", 
-               "description": "456",
-               "description_hash": "789", 
-               "preimage": "123", 
-               "payment_hash": "123", 
+               "invoice": each.get("invoice", None), 
+               "description": each["comment"],
+               "description_hash": None, 
+               "preimage": each.get("preimage", None), 
+               "payment_hash":each.get("payment_hash", None), 
                "amount": each['amount'] * 1000, 
                "fees_paid": each['fees'] * 1000,
                "created_at": int(datetime.strptime(each['create_time'], '%Y-%m-%d %H:%M:%S').timestamp()), 
@@ -155,7 +185,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
 
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
-            print(f"we published the transaction to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} ")
+            print(f"we published the transaction to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} {result_transactions}")
 
         
     
