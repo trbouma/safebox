@@ -22,7 +22,7 @@ from app.appmodels import RegisteredSafebox, NWCEvent
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy.exc import IntegrityError
 
-from app.tasks import handle_payment
+from app.tasks import handle_payment, safe_handle_payment
 
 import os
 from app.config import Settings
@@ -135,15 +135,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
        
         nwc_reply = True
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(kind=23195,
-                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                        pub_key=k.public_key_hex(),
-                        tags=[['e',evt.id],['p', evt.pub_key]])
 
-
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
 
     elif instruction_obj['method'] == 'make_invoice':
         print(f"make invoice! {instruction_obj}")
@@ -170,34 +162,10 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 }
         print(f"make invoice response! {response_json}")
         nwc_reply = True
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(  kind=23195,
-                            content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                            pub_key=k.public_key_hex(),
-                            tags=[['e',evt.id],['p', evt.pub_key]]
-                            
-                            )
 
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
-            # asyncio.sleep(3)
+
         
 
-
-        async with Client(settings.NWC_RELAYS[0]) as c_1:
-            pass
-            # n_msg = Event(kind=23195,
-            # content= my_enc.encrypt(json.dumps(payment_received), to_pub_k=evt.pub_key),
-            # pub_key=k.public_key_hex(),
-            # tags=[['e',evt.id],['p', evt.pub_key]])
-            # n_msg.sign(k.private_key_hex())
-            # c.publish(n_msg)
-        
-        asyncio.create_task(handle_payment(  acorn_obj=acorn_obj,
-                                                    cli_quote=cli_quote,
-                                                    amount=amount,
-                                                    mint=settings.HOME_MINT
-                                                    ))
 
        
 
@@ -242,19 +210,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
                                 }  
         nwc_reply = True
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(kind=23195,
-                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                        pub_key=k.public_key_hex(),
-                        tags=[['e',evt.id],['p', evt.pub_key]],
-                        created_at=int((datetime.now() - timedelta(seconds=TIMEDELTA_SECONDS)).timestamp())
-                        
-                        )
 
-
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
-            # print(f"we published the transaction to {evt.pub_key} {n_msg.e_tags} {n_msg.p_tags} {settings.NWC_RELAYS[0]} {response_json}")
 
         
     
@@ -268,16 +224,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         print(response_json)
 
         nwc_reply = True
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(kind=23195,
-                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                        pub_key=k.public_key_hex(),
-                        tags=[['e',evt.id],['p', evt.pub_key]],
-                        created_at=int((datetime.now() - timedelta(seconds=TIMEDELTA_SECONDS)).timestamp())
-                        
-                        )
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
+
 
     
     elif instruction_obj['method'] == 'get_info': 
@@ -292,15 +239,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                 }
                             }
         nwc_reply = True
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(kind=23195,
-                    content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                    pub_key=k.public_key_hex(),
-                    tags=[['e',evt.id],['p', evt.pub_key]])        
 
-
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
 
         
     
@@ -443,6 +382,25 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     if nwc_reply:
         print(f"we should be reply here for nwc {instruction_obj["method"]} with {response_json}")
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]],
+                        created_at=int((datetime.now() - timedelta(seconds=0)).timestamp())
+                        
+                        )
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+            await asyncio.sleep(3)
+
+    if nwc_reply and instruction_obj["method"] == "make_invoice":
+        print("do the make_invoice task here")
+        asyncio.create_task(safe_handle_payment(  acorn_obj=acorn_obj,
+                                                   cli_quote=cli_quote,
+                                                    amount=amount,
+                                                    mint=settings.HOME_MINT
+                                                    ))        
 
 def my_handler(the_client: Client, sub_id: str, evt: Event):
     

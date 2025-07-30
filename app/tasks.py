@@ -248,6 +248,12 @@ async def listen_nip17(self, url):
         print('stopping...')
         c.end()
 
+async def safe_handle_payment(*args, **kwargs):
+    try:
+        await handle_payment(*args, **kwargs)
+    except Exception as e:
+        # Log or handle the exception properly
+        print(f"Error in handle_payment: {e}")
        
 async def handle_payment(   acorn_obj: Acorn,
                             cli_quote: cliQuote, 
@@ -256,13 +262,19 @@ async def handle_payment(   acorn_obj: Acorn,
                             tendered_amount: float|None = None,
                             tendered_currency: str = "SAT",                            
                             nostr: str = None, 
-                            comment: str ="" ):
-
+                           comment: str ="" ):
     success = False
     lninvoice = None
-    print(f"handle payment: {mint}")
-    success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
-    pass
+    try:
+
+        print(f"handle payment: {mint}")
+        success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
+        pass
+    except Exception as e:
+        import traceback
+        print(f"[handle_payment] Exception: {e}")
+        traceback.print_exc()
+
     
 
     #FIXME Implement zaps here
@@ -277,15 +289,18 @@ async def handle_payment(   acorn_obj: Acorn,
     await acorn_obj.load_data()
 
     # Update the cache amountt   
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-        safeboxes = session.exec(statement)
-        safebox_update = safeboxes.first()
-        safebox_update.balance = acorn_obj.balance
-        session.add(safebox_update)
-        session.commit()
-  
-    await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
+    if success: 
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_update = safeboxes.first()
+            safebox_update.balance = acorn_obj.balance
+            session.add(safebox_update)
+            session.commit()
+    
+        await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
+
+    return success
 
 
 async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
