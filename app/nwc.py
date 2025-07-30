@@ -12,7 +12,7 @@ from filelock import FileLock, Timeout
 from datetime import datetime, timezone
 
 from safebox.acorn import Acorn
-from safebox.models import TxHistory
+from safebox.models import TxHistory, cliQuote
 import signal
 import json
 import bolt11
@@ -21,6 +21,8 @@ from typing import Optional
 from app.appmodels import RegisteredSafebox, NWCEvent
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy.exc import IntegrityError
+
+from app.tasks import handle_payment
 
 import os
 from app.config import Settings
@@ -83,7 +85,7 @@ def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
 
 
 async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstruction_obj, evt: Event):
-    # print(f"nwc {safebox_found} pay instruction {payinstruction_obj}")
+    print(f"nwc {safebox_found} pay instruction: {payinstruction_obj['method']}")
     k = Keys(priv_k=safebox_found.nsec)
     my_enc = NIP4Encrypt(key=k)
 
@@ -94,6 +96,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         invoice = payinstruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
         invoice_amount = invoice_decoded.amount_msat//1000
+        
 
         comment = payinstruction_obj['params'].get("comment", "nwc pay")
         tendered_amount = payinstruction_obj['params'].get("tendered_amount", None)
@@ -102,7 +105,7 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
         
         print(f"balance {acorn_obj.balance}")
         try:
-            msg_out, final_fees, payment_hash, payment_preimage = await acorn_obj.pay_multi_invoice(invoice)
+            msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice)
             nfc_msg = f"💳 {comment} "
            
             await acorn_obj.add_tx_history(     tx_type="D", 
@@ -129,9 +132,6 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
                         }
 
        
-        
-
-
 
         async with Client(settings.NWC_RELAYS[0]) as c:
             n_msg = Event(kind=23195,
@@ -143,25 +143,98 @@ async def nwc_handle_pay_instruction(safebox_found: RegisteredSafebox, payinstru
             n_msg.sign(k.private_key_hex())
             c.publish(n_msg)
 
+    elif payinstruction_obj['method'] == 'make_invoice':
+        print(f"make invoice! {payinstruction_obj}")
+        
+        cli_quote: cliQuote
+        amount = payinstruction_obj['params']['amount']//1000
+        cli_quote = acorn_obj.deposit(amount, settings.HOME_MINT)
+        invoice_decoded = bolt11.decode(cli_quote.invoice)
+
+        
+        response_json = {
+                "result_type": "make_invoice",
+                "result": {
+                    "type": "incoming", 
+                    "invoice": cli_quote.invoice,
+                    "description": invoice_decoded.description,
+                    "description_hash": invoice_decoded.description_hash,
+                    "payment_hash": invoice_decoded.payment_hash,
+                    "amount": payinstruction_obj['params']['amount'],
+                    "fees_paid": 0, 
+                    "created_at": int(datetime.now().timestamp()),
+                    "metadata": {}
+                    }
+                }
+        print(f"make invoice response! {response_json}")
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]])
+
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+        
+        payment_received = {
+                            "notification_type": "payment_received",
+                            "notification": {
+                            "type": "incoming",
+                            "invoice": cli_quote.invoice,
+                            "preimage": invoice_decoded.payment_secret, 
+                            "payment_hash": invoice_decoded.payment_hash,
+                            "amount": amount,
+                            "fees_paid": 0,
+                            "created_at": int(datetime.now().timestamp()),  
+                           
+                            "settled_at": int(datetime.now().timestamp()),
+                            "metadata": {} 
+                            }
+                            }
+
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+            content= my_enc.encrypt(json.dumps(payment_received), to_pub_k=evt.pub_key),
+            pub_key=k.public_key_hex(),
+            tags=[['e',evt.id],['p', evt.pub_key]])
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+        
+        asyncio.create_task(handle_payment(  acorn_obj=acorn_obj,
+                                                    cli_quote=cli_quote,
+                                                    amount=amount,
+                                                    mint=settings.HOME_MINT
+                                                    ))
+
+       
+
+ 
+        
+    
     elif payinstruction_obj['method'] == 'list_transactions':
         print("we have a list_transactions!") 
         tx_history = await acorn_obj.get_tx_history()
-        print(tx_history)
+        # print(tx_history)
         tx_nwc_history = []
         for each in tx_history[:10]:
-            print(f"each: {each}")
+            # print(f"each: {each}")
+            if each['tx_type'] == 'C':
+                tx_type = 'incoming'
+            else:
+                tx_type = 'outgoing'
+            
             each_transaction = {
-               "type": "incoming" if each['tx_type'] == 'C' else "outgoing", 
+               "type": tx_type, 
+              
                "invoice": each.get("invoice", None), 
                "description": each["comment"],
-               "description_hash": None, 
+               "description_hash": each.get("description_hash", None), 
                "preimage": each.get("preimage", None), 
                "payment_hash":each.get("payment_hash", None), 
                "amount": each['amount'] * 1000, 
                "fees_paid": each['fees'] * 1000,
                "created_at": int(datetime.strptime(each['create_time'], '%Y-%m-%d %H:%M:%S').timestamp()), 
-               "expires_at": int(datetime.now().timestamp()), 
-               "settled_at": int(datetime.now().timestamp()), 
+
                "metadata": {} 
             }
             tx_nwc_history.append(each_transaction)

@@ -588,3 +588,4 @@ class TxHistory(BaseModel):
     invoice: str|None=None
     preimage: str|None = None
     payment_hash: str|None = None
+    description_hash: str|None=None

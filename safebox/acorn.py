@@ -1096,7 +1096,8 @@ class Acorn:
                                 fees: int =0,
                                 invoice:str=None,
                                 payment_preimage: str = None,
-                                payment_hash: str = None
+                                payment_hash: str = None,
+                                description_hash: str = None
                                 ):
         self.logger.debug("Add tx history")
         my_enc = NIP44Encrypt(self.k)
@@ -1123,7 +1124,8 @@ class Acorn:
                                 current_balance=self.balance,
                                 invoice=invoice,
                                 payment_hash=payment_hash,
-                                preimage=payment_preimage
+                                preimage=payment_preimage,
+                                description_hash=description_hash
                                
                                  
                                 )
@@ -2593,11 +2595,13 @@ class Acorn:
                     
         payment_hash = None
         payment_preimage = None
+        description_hash = None
         # decode amount from invoice
         try:
             await self.acquire_lock()
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
             payment_hash = bolt11.decode(lninvoice).payment_hash
+            description_hash = bolt11.decode(lninvoice).description_hash
 
             self.logger.debug("pay from multiple mints")
             available_amount = 0
@@ -2791,7 +2795,7 @@ class Acorn:
            
         
         
-        return msg_out, final_fees, payment_hash,payment_preimage
+        return msg_out, final_fees, payment_hash,payment_preimage, description_hash
 
     async def delete_kind_events(self, record_kind:int):
         """
