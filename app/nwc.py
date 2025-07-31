@@ -381,7 +381,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         pass
 
     if nwc_reply:
-        print(f"we should be reply here for nwc {instruction_obj["method"]} with {response_json}")
+        print(f"we should be reply here for nwc {instruction_obj['method']} with {response_json}")
         async with Client(settings.NWC_RELAYS[0]) as c:
             n_msg = Event(kind=23195,
                         content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
