@@ -1064,7 +1064,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     global_websocket = websocket
     
     start_time = time.time()
-    duration = 60  # 1 minutes in seconds
+    duration = 300  # 5 minutes in seconds
 
 
 
@@ -1080,6 +1080,11 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
     
     try:
     
+        fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+        currency_code  = fiat_currency.currency_code
+        currency_rate = fiat_currency.currency_rate
+        currency_symbol = fiat_currency.currency_symbol
+        
         while time.time() - start_time < duration:
             try:
                 await db_state_change()
@@ -1088,9 +1093,10 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 
                 await acorn_obj.load_data()
                 new_balance = acorn_obj.balance
-                print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
+                # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
-                
+
+                fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
 
 
                 if new_balance > starting_balance:
@@ -1102,17 +1108,12 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                     status = "SENT"
 
                 elif new_balance == starting_balance:
-                    message = f"Current Balance."
+                    message = f"Ready."
                     status = "OK"
 
                 
-                fiat_currency = await get_currency_rate(acorn_obj.local_currency)
-                # currency_code  = fiat_currency.currency_code
-                currency_rate = fiat_currency.currency_rate
-                currency_symbol = fiat_currency.currency_symbol
-                
-                # fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {safebox_found.currency_code}"
-                fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
+                fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {currency_code}"
+
                 await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
                 starting_balance = new_balance
 

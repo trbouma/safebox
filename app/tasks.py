@@ -373,7 +373,10 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
 
     if websocket:
             #FIXME - may not need this refernce
-            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+            except:
+                pass
 
     status = "SENT"
     try:
@@ -385,8 +388,10 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
     finally:
         if websocket:
             #FIXME - may not need this refernce
-            await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
-            pass
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+            except:
+                pass
    
 
     

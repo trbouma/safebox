@@ -178,7 +178,8 @@ class Acorn:
         try:
 
           
-            wallet_config= await self.get_wallet_config()
+            # wallet_config= await self.get_wallet_config()
+            wallet_config=None
             if wallet_config:
                 self.acorn_tags = wallet_config
             else:
@@ -1234,7 +1235,7 @@ class Acorn:
                  
         label_name_hash = m.digest().hex()
         
-        # print(label, label_info)
+        print(f"set wallet info {label}, {label_info}")
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
@@ -1624,7 +1625,7 @@ class Acorn:
                         self.acorn_tags[index]=tag_value
             
         
-        print(self.acorn_tags)
+        print(f"update tags: {self.acorn_tags}")
         await self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
@@ -1887,39 +1888,44 @@ class Acorn:
             write_relays = [self.home_relay]
 
         # Create the format for NIP 60 proofs
-        nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
-        for each in proofs_arg:
-            nip60_proofs.proofs.append(each)
-   
-        #TODO Do some error checking on size of record
+        #FIXME This is where the swap error handling needs to be fixed
+        # proofs_arg[0].id - is null sometimes
+        try:
+            nip60_proofs = NIP60Proofs(mint=self.known_mints[proofs_arg[0].id])
+            for each in proofs_arg:
+                nip60_proofs.proofs.append(each)
+    
+            #TODO Do some error checking on size of record
 
-        record = nip60_proofs.model_dump_json()
-        print(f"Length of proof record: {len(record)} with {len(nip60_proofs.proofs)}")
+            record = nip60_proofs.model_dump_json()
+            print(f"Length of proof record: {len(record)} with {len(nip60_proofs.proofs)}")
 
-        if len(record) > self.max_proof_event_size:
-            print(f"WARNING: Record length {len(record)} is greater than max, splitting proofs")
-            self.logger.warning(f"Record length {len(record)} is greater than max, splitting proofs")
-            split_proofs = split_proofs_instance(original=nip60_proofs, num_splits=math.ceil(len(record)/self.max_proof_event_size))
-            
-            for each in split_proofs:
-                records_to_write.append(each.model_dump_json())
-        else:
-            records_to_write =[record]
-        
-
-        for each in records_to_write:
-            payload_encrypt = my_enc.encrypt(each,to_pub_k=self.pubkey_hex)
-        
-            async with ClientPool(write_relays) as c:
+            if len(record) > self.max_proof_event_size:
+                print(f"WARNING: Record length {len(record)} is greater than max, splitting proofs")
+                self.logger.warning(f"Record length {len(record)} is greater than max, splitting proofs")
+                split_proofs = split_proofs_instance(original=nip60_proofs, num_splits=math.ceil(len(record)/self.max_proof_event_size))
                 
-                #FIXME kind
-                n_msg = Event(kind=7375,
-                            content=payload_encrypt,
-                            pub_key=self.pubkey_hex)
-                n_msg.sign(self.privkey_hex)
-                self.logger.debug(f"proof event content {n_msg.kind} {record}")
-                c.publish(n_msg)
-                await asyncio.sleep(0.2)
+                for each in split_proofs:
+                    records_to_write.append(each.model_dump_json())
+            else:
+                records_to_write =[record]
+            
+
+            for each in records_to_write:
+                payload_encrypt = my_enc.encrypt(each,to_pub_k=self.pubkey_hex)
+            
+                async with ClientPool(write_relays) as c:
+                    
+                    #FIXME kind
+                    n_msg = Event(kind=7375,
+                                content=payload_encrypt,
+                                pub_key=self.pubkey_hex)
+                    n_msg.sign(self.privkey_hex)
+                    self.logger.debug(f"proof event content {n_msg.kind} {record}")
+                    c.publish(n_msg)
+                    await asyncio.sleep(0.2)
+        except Exception as e:
+            raise Exception(f"Error {e}")
         
         return
 

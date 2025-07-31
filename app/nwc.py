@@ -396,11 +396,32 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     if nwc_reply and instruction_obj["method"] == "make_invoice":
         print("do the make_invoice task here")
-        asyncio.create_task(safe_handle_payment(  acorn_obj=acorn_obj,
+        await safe_handle_payment(  acorn_obj=acorn_obj,
                                                    cli_quote=cli_quote,
                                                     amount=amount,
                                                     mint=settings.HOME_MINT
-                                                    ))        
+                                                    ) 
+        
+        response_json = {
+            "notification_type": "payment_received", 
+            "notification": {
+        "payment_hash": invoice_decoded.payment_hash 
+            }
+        }
+        print(f"payment notification {response_json}")
+        await asyncio.sleep(5)
+        async with Client(settings.NWC_RELAYS[0]) as c:
+            n_msg = Event(kind=23195,
+                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
+                        pub_key=k.public_key_hex(),
+                        tags=[['e',evt.id],['p', evt.pub_key]],
+                        created_at=int((datetime.now() - timedelta(seconds=0)).timestamp())
+                        
+                        )
+            n_msg.sign(k.private_key_hex())
+            c.publish(n_msg)
+            await asyncio.sleep(3)
+              
 
 def my_handler(the_client: Client, sub_id: str, evt: Event):
     
