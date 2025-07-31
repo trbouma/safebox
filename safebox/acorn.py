@@ -429,8 +429,8 @@ class Acorn:
             access_key_hash = access_key_digest.hexdigest()
             self.access_key = generate_access_key_from_hex(access_key_hash)
             self.logger.debug(f"acorn tags: {self.acorn_tags} npub: {self.pubkey_bech32}")
-            # await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
-            await self.set_wallet_config()
+            await self.set_wallet_info(label=name,label_info=json.dumps(self.acorn_tags))
+            # await self.set_wallet_config()
         else:
             #keepkey = true # we already have a private key
             # need to check if a profile exists, if not create one
