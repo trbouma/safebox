@@ -1112,7 +1112,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                     status = "OK"
 
                 
-                fiat_balance = f"{currency_symbol}{"{:.2f}".format(currency_rate * new_balance / 1e8)} {currency_code}"
+                fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * new_balance / 1e8)} {currency_code}"
 
                 await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
                 starting_balance = new_balance
