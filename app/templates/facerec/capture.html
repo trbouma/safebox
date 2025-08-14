@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deterministic Biometric Nostr Key Generator</title>
-    <script src="https://unpkg.com/crypto-js@4.1.1/crypto-js.js"></script>
-    <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
+    <script src="/src/fr/crypto-js.js"></script>
+    <script src="/src/fr/face-api.min.js"></script>
+    <script src="/src/fr/nostr.bundle.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -277,8 +277,8 @@
                     // Load face-api.js models locally to avoid CORS issues
                     // Use relative path that works both locally and on GitHub Pages
                     const modelPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-                        ? '/src/frmodels/' 
-                        : '/src/frmodels/';
+                        ? '/src/fr/' 
+                        : '/src/fr/';
                     
                     await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
                     await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
