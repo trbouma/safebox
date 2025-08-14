@@ -174,7 +174,7 @@ async def ln_pay( amount: float,
     else:
         acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
         await acorn_obj.load_data()
-        message = "Payment being sent..."
+        message = f"Payment being sent to {name}@{request.url.hostname}"
     
     
 

@@ -22,7 +22,7 @@ from app.appmodels import RegisteredSafebox, NWCEvent
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy.exc import IntegrityError
 
-from app.tasks import handle_payment, safe_handle_payment
+from app.tasks import handle_payment, safe_handle_payment, handle_nwc_payment
 
 import os
 from app.config import Settings
@@ -145,6 +145,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         cli_quote = acorn_obj.deposit(amount, settings.HOME_MINT)
         invoice_decoded = bolt11.decode(cli_quote.invoice)
 
+
+
         
         response_json = {
                 "result_type": "make_invoice",
@@ -173,7 +175,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         
     
     elif instruction_obj['method'] == 'list_transactions':
-        print("we have a list_transactions!") 
+        # print("we have a list_transactions!") 
         tx_history = await acorn_obj.get_tx_history()
         # print(tx_history)
         tx_nwc_history = []
@@ -381,7 +383,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         pass
 
     if nwc_reply:
-        print(f"we should be reply here for nwc {instruction_obj['method']} with {response_json}")
+        # print(f"we should be reply here for nwc {instruction_obj['method']} with {response_json}")
         async with Client(settings.NWC_RELAYS[0]) as c:
             n_msg = Event(kind=23195,
                         content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
@@ -396,32 +398,48 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     if nwc_reply and instruction_obj["method"] == "make_invoice":
         print("do the make_invoice task here")
-        await safe_handle_payment(  acorn_obj=acorn_obj,
+
+        await handle_nwc_payment(  acorn_obj=acorn_obj,
                                                    cli_quote=cli_quote,
                                                     amount=amount,
-                                                    mint=settings.HOME_MINT
+                                                    mint=settings.HOME_MINT,
+                                                    callback=paid_callback,
+                                                    evt=evt
+                                                   
                                                     ) 
+
         
-        response_json = {
-            "notification_type": "payment_received", 
-            "notification": {
-        "payment_hash": invoice_decoded.payment_hash 
-            }
+
+
+def paid_callback(nsec: str, payment_hash, evt: Event):  
+
+    print("This is the callback!")   
+    
+    # asyncio.run(paid_response(nsec,payment_hash,evt))
+
+async def paid_response(nsec: str, payment_hash:str, evt: Event):
+        
+    k = Keys(priv_k=nsec)
+    my_enc = NIP4Encrypt(key=k)
+    response_json = {
+        "notification_type": "payment_received", 
+        "notification": {
+    "payment_hash": payment_hash 
         }
-        print(f"payment notification {response_json}")
-        await asyncio.sleep(5)
-        async with Client(settings.NWC_RELAYS[0]) as c:
-            n_msg = Event(kind=23195,
-                        content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                        pub_key=k.public_key_hex(),
-                        tags=[['e',evt.id],['p', evt.pub_key]],
-                        created_at=int((datetime.now() - timedelta(seconds=0)).timestamp())
-                        
-                        )
-            n_msg.sign(k.private_key_hex())
-            c.publish(n_msg)
-            await asyncio.sleep(3)
-              
+    }
+    print(f"payment notification {response_json}")
+    await asyncio.sleep(5)
+    async with Client(settings.NWC_RELAYS[0]) as c:
+        n_msg = Event(kind=23196,
+                    content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
+                    pub_key=k.public_key_hex(),
+                    tags=[['p', evt.pub_key],["encryption", "nip04"]],
+                    created_at=int((datetime.now() - timedelta(seconds=60)).timestamp())
+                    
+                    )
+        n_msg.sign(k.private_key_hex())
+        c.publish(n_msg)
+        await asyncio.sleep(3)       
 
 def my_handler(the_client: Client, sub_id: str, evt: Event):
     

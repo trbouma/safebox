@@ -928,9 +928,10 @@ async def my_danger_zone(       request: Request,
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
         n_msg = Event(kind=13194,
-                    content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications",
+                    content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
                     pub_key=acorn_obj.pubkey_hex,
-                    tags=[["notifications","payment_received payment_sent"]]
+                    tags=[["notifications","payment_received payment_sent balance_changed"]],
+                   
                     )
 
 

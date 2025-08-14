@@ -8,7 +8,7 @@ import signal, sys, string, cbor2, base64,os
 import aioconsole
 import json, requests
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
 from fastapi import WebSocket
 
 from monstr.util import util_funcs
@@ -302,6 +302,49 @@ async def handle_payment(   acorn_obj: Acorn,
 
     return success
 
+async def handle_nwc_payment(   acorn_obj: Acorn,
+                            cli_quote: cliQuote, 
+                            amount: int, 
+                            mint:str, 
+                            tendered_amount: float|None = None,
+                            tendered_currency: str = "SAT", 
+                            comment: str ="",
+                            callback: Callable[..., None]=None,
+                            payment_hash: str = None,                    
+                            evt: Event = None  ):
+    success = False
+    lninvoice = None
+    try:
+
+        print(f"handle nwc payment: {mint}")
+        success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
+        pass
+    except Exception as e:
+        import traceback
+        print(f"[handle_payment] Exception: {e}")
+        traceback.print_exc()
+
+  
+
+    await acorn_obj.load_data()
+
+    # Update the cache amountt   
+    if success: 
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_update = safeboxes.first()
+            safebox_update.balance = acorn_obj.balance
+            session.add(safebox_update)
+            session.commit()
+    
+        await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
+        if callback:
+            pass
+            
+            callback(nsec=acorn_obj.privkey_bech32, payment_hash="test", evt=evt)
+
+    return success
 
 async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
     print(f"handle ecash listen for {acorn_obj.handle}")
