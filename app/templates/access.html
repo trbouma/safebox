@@ -83,6 +83,13 @@ window.location.href="/scanner/scan/?wallet_name={{acorn.handle}}";
 
 }
 
+async function dangerZone() {
+
+
+window.location.href="/safebox/dangerzone/";
+
+}
+
 function revealBalance() {
     var heading_balance = document.getElementById("heading_balance");
     var heading_balance = document.getElementById("fiat_balance");
@@ -967,12 +974,13 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>
   <a href="/public/rates">Exchange Rates</a>
   <br><br>
-  <a href="/safebox/dangerzone">Danger Zone!</a>
+  <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
+  
   <br><br>
   
   
   
-  <br><br><a href="https://github.com/trbouma/safebox">Verify the Code</a>
+  <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
 
             
 </div>

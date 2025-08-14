@@ -118,6 +118,13 @@ async function setCustomHandle() {
 
 
       }
+
+async function scanFace() {
+// alert("scan!");
+
+window.location.href="/safebox/facerec/";
+
+}
 </script>
 
 
@@ -328,17 +335,18 @@ async function setCustomHandle() {
 
 <div class="center-text">
  
-  <hr>
+ 
   Local Facial Recognition
   <br><br>
-
+  <button onclick="scanFace()">Scan Face</button> 
+  <br><br>
   
-  <a href="/safebox/facerec">Facial Recognition</a></p> 
+
   <hr>
-  <pre id="log"></pre>
+  
 </div>
 
-<a href="/safebox/facerec">Facial Recognition</a></p> 
+
 
    
 
