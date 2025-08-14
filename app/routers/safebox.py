@@ -962,6 +962,17 @@ async def my_danger_zone(       request: Request,
 
                                         })
 
+@router.get("/facerec", tags=["safebox", "protected"])
+async def my_face_rec(       request: Request, 
+                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to danger zone"""
+
+    return templates.TemplateResponse(      "facerec/capture.html", 
+                                        {   "request": request
+                                            
+
+                                        })
 
 @router.get("/displaycard", tags=["safebox", "protected"])
 async def display_card(     request: Request, 

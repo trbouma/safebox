@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deterministic Biometric Nostr Key Generator</title>
+    <script src="https://unpkg.com/crypto-js@4.1.1/crypto-js.js"></script>
+    <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="https://unpkg.com/nostr-tools@1.17.0/lib/nostr.bundle.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        
+        .container {
+            background: #2d2d2d;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #bb86fc;
+            margin-bottom: 30px;
+        }
+        
+        .camera-section {
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        #videoElement {
+            width: 100%;
+            max-width: 480px;
+            height: auto;
+            border-radius: 8px;
+            background: #000;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 480px;
+            width: 100%;
+            pointer-events: none;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        button {
+            background: #bb86fc;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #9c6ddb;
+        }
+        
+        button:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+        
+        .status.info {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+        }
+        
+        .status.success {
+            background: #166534;
+            border: 1px solid #22c55e;
+        }
+        
+        .status.error {
+            background: #7f1d1d;
+            border: 1px solid #ef4444;
+        }
+        
+        .status.warning {
+            background: #92400e;
+            border: 1px solid #f59e0b;
+        }
+        
+        .key-output {
+            background: #000;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            border: 1px solid #555;
+            margin: 15px 0;
+        }
+        
+        .security-notice {
+            background: #7f1d1d;
+            border: 1px solid #ef4444;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .biometric-data {
+            background: #1a2332;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .biometric-measurements {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        @media (min-width: 480px) {
+            .biometric-measurements {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 15px;
+            }
+            
+            button {
+                width: 100%;
+                margin: 5px 0;
+            }
+            
+            .key-output {
+                font-size: 10px;
+            }
+        }
+        
+        .measurement {
+            background: #2a2a2a;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .consistency-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .consistency-bar {
+            flex: 1;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .consistency-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Deterministic Biometric Nostr Key Generator</h1>
+        
+        <div class="security-notice">
+            <strong>Security Notice:</strong> This generates deterministic keys from facial geometry. 
+            Same face = same key. DO NOT USE FOR THINGS YOU CARE ABOUT.
+        </div>
+        
+        <div class="camera-section">
+            <video id="videoElement" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button id="startCamera">Start Camera</button>
+            <button id="captureKey" disabled>Generate Key</button>
+            <button id="stopCamera" disabled>Stop Camera</button>
+        </div>
+        
+        <div id="status" class="status info" style="display: none;">
+            Initializing face detection models...
+        </div>
+        
+        <div id="consistencyCheck" class="consistency-indicator" style="display: none;">
+            <span>Measurement Stability:</span>
+            <div class="consistency-bar">
+                <div class="consistency-fill" style="width: 0%"></div>
+            </div>
+            <span id="consistencyPercent">0%</span>
+        </div>
+        
+        <div id="biometricData" class="biometric-data" style="display: none;">
+            <h3>Normalized Facial Measurements:</h3>
+            <div id="measurements" class="biometric-measurements"></div>
+        </div>
+        
+        <div id="keyOutput" style="display: none;">
+            <h3>Generated Nostr Keys:</h3>
+            <div>
+                <strong>Private Key (hex):</strong>
+                <div id="privateKey" class="key-output"></div>
+            </div>
+            <div>
+                <strong>Private Key (nsec):</strong>
+                <div id="nsecKey" class="key-output"></div>
+            </div>
+            <div>
+                <strong>Public Key (npub):</strong>
+                <div id="npubKey" class="key-output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DeterministicBiometricGenerator {
+            constructor() {
+                this.video = document.getElementById('videoElement');
+                this.overlay = document.getElementById('overlay');
+                this.overlayCtx = this.overlay.getContext('2d');
+                this.stream = null;
+                this.isProcessing = false;
+                this.modelsLoaded = false;
+                this.measurementHistory = [];
+                this.maxHistorySize = 10;
+                
+                this.initializeElements();
+                this.loadModels();
+            }
+            
+            initializeElements() {
+                document.getElementById('startCamera').onclick = () => this.startCamera();
+                document.getElementById('captureKey').onclick = () => this.generateKey();
+                document.getElementById('stopCamera').onclick = () => this.stopCamera();
+            }
+            
+            async loadModels() {
+                try {
+                    this.showStatus('Loading face detection models...', 'info');
+                    
+                    // Load face-api.js models locally to avoid CORS issues
+                    // Use relative path that works both locally and on GitHub Pages
+                    const modelPath = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                        ? '/src/frmodels/' 
+                        : '/src/frmodels/';
+                    
+                    await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
+                    await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
+                    
+                    this.modelsLoaded = true;
+                    this.showStatus('Face detection models loaded successfully', 'success');
+                } catch (error) {
+                    this.showStatus('Error loading models, using fallback detection', 'warning');
+                    this.modelsLoaded = false;
+                }
+            }
+            
+            async startCamera() {
+                try {
+                    // Use front camera on mobile
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    });
+                    this.video.srcObject = this.stream;
+                    
+                    // Setup overlay canvas
+                    this.video.onloadedmetadata = () => {
+                        this.overlay.width = this.video.videoWidth;
+                        this.overlay.height = this.video.videoHeight;
+                        this.startDetection();
+                    };
+                    
+                    document.getElementById('startCamera').disabled = true;
+                    document.getElementById('captureKey').disabled = false;
+                    document.getElementById('stopCamera').disabled = false;
+                    
+                    this.showStatus('Camera started - keep face centered and still', 'success');
+                } catch (error) {
+                    this.showStatus('Error accessing camera: ' + error.message, 'error');
+                }
+            }
+            
+            stopCamera() {
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+                
+                document.getElementById('startCamera').disabled = false;
+                document.getElementById('captureKey').disabled = true;
+                document.getElementById('stopCamera').disabled = true;
+                
+                this.showStatus('Camera stopped', 'info');
+                document.getElementById('consistencyCheck').style.display = 'none';
+            }
+            
+            async startDetection() {
+                if (!this.stream) return;
+                
+                document.getElementById('consistencyCheck').style.display = 'flex';
+                this.detectFace();
+            }
+            
+            async detectFace() {
+                if (!this.stream || !this.video.readyState) {
+                    requestAnimationFrame(() => this.detectFace());
+                    return;
+                }
+                
+                try {
+                    let landmarks = null;
+                    
+                    if (this.modelsLoaded) {
+                        const detection = await faceapi.detectSingleFace(
+                            this.video, 
+                            new faceapi.TinyFaceDetectorOptions()
+                        ).withFaceLandmarks();
+                        
+                        if (detection) {
+                            landmarks = detection.landmarks.positions;
+                        }
+                    }
+                    
+                    // Fallback to basic detection if models failed
+                    if (!landmarks) {
+                        landmarks = this.detectFaceFallback();
+                    }
+                    
+                    if (landmarks && landmarks.length > 0) {
+                        const measurements = this.extractStableMeasurements(landmarks);
+                        this.updateMeasurementHistory(measurements);
+                        this.drawOverlay(landmarks);
+                    }
+                } catch (error) {
+                    console.log('Detection error:', error.message);
+                }
+                
+                requestAnimationFrame(() => this.detectFace());
+            }
+            
+            detectFaceFallback() {
+                // Simple geometric face detection as fallback
+                // This is a simplified implementation
+                const width = this.video.videoWidth;
+                const height = this.video.videoHeight;
+                
+                // Estimate key facial points based on typical proportions
+                const centerX = width / 2;
+                const centerY = height / 2;
+                const faceWidth = width * 0.3;
+                const faceHeight = height * 0.4;
+                
+                return [
+                    { x: centerX - faceWidth * 0.3, y: centerY - faceHeight * 0.2 }, // left eye
+                    { x: centerX + faceWidth * 0.3, y: centerY - faceHeight * 0.2 }, // right eye
+                    { x: centerX, y: centerY }, // nose tip
+                    { x: centerX - faceWidth * 0.2, y: centerY + faceHeight * 0.2 }, // left mouth
+                    { x: centerX + faceWidth * 0.2, y: centerY + faceHeight * 0.2 }, // right mouth
+                    { x: centerX, y: centerY - faceHeight * 0.4 }, // forehead
+                    { x: centerX, y: centerY + faceHeight * 0.3 }  // chin
+                ];
+            }
+            
+            extractStableMeasurements(landmarks) {
+                if (!landmarks || landmarks.length < 20) return null;
+                
+                // Simple approach: just use a few key points
+                const leftEye = landmarks[36] || landmarks[0];
+                const rightEye = landmarks[45] || landmarks[1];
+                const nose = landmarks[30] || landmarks[2];
+                const mouthLeft = landmarks[48] || landmarks[3];
+                const mouthRight = landmarks[54] || landmarks[4];
+                
+                // Basic measurements - keep it simple!
+                const eyeDistance = this.distance(leftEye, rightEye);
+                if (eyeDistance <= 0) return null;
+                
+                // Just 3 simple ratios that are fairly stable
+                return {
+                    noseRatio: Math.round((this.distance(nose, leftEye) / eyeDistance) * 10) / 10,
+                    mouthWidth: Math.round((this.distance(mouthLeft, mouthRight) / eyeDistance) * 10) / 10,
+                    faceShape: Math.round((this.distance(nose, {x: (mouthLeft.x + mouthRight.x)/2, y: mouthLeft.y}) / eyeDistance) * 10) / 10
+                };
+            }
+            
+            distance(p1, p2) {
+                return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+            }
+            
+            updateMeasurementHistory(measurements) {
+                if (!measurements) return;
+                
+                this.measurementHistory.push(measurements);
+                if (this.measurementHistory.length > this.maxHistorySize) {
+                    this.measurementHistory.shift();
+                }
+                
+                // Calculate consistency
+                const consistency = this.calculateConsistency();
+                this.updateConsistencyIndicator(consistency);
+                
+                // Display current measurements
+                this.displayMeasurements(measurements);
+            }
+            
+            calculateConsistency() {
+                if (this.measurementHistory.length < 3) return 0;
+                
+                const recent = this.measurementHistory.slice(-5);
+                if (recent.length < 2) return 0;
+                
+                // Simple check: are the last few measurements similar?
+                const lastMeasurement = recent[recent.length - 1];
+                const secondLast = recent[recent.length - 2];
+                
+                let diff = 0;
+                for (const key in lastMeasurement) {
+                    diff += Math.abs(lastMeasurement[key] - secondLast[key]);
+                }
+                
+                // Convert difference to stability percentage
+                const stability = Math.max(0, 100 - (diff * 100));
+                return Math.round(stability);
+            }
+            
+            updateConsistencyIndicator(consistency) {
+                const fill = document.querySelector('.consistency-fill');
+                const percent = document.getElementById('consistencyPercent');
+                
+                fill.style.width = consistency + '%';
+                percent.textContent = Math.round(consistency) + '%';
+            }
+            
+            displayMeasurements(measurements) {
+                const container = document.getElementById('measurements');
+                const biometricDiv = document.getElementById('biometricData');
+                
+                biometricDiv.style.display = 'block';
+                container.innerHTML = '';
+                
+                for (const [key, value] of Object.entries(measurements)) {
+                    const div = document.createElement('div');
+                    div.className = 'measurement';
+                    div.innerHTML = `<strong>${key}:</strong> ${value}`;
+                    container.appendChild(div);
+                }
+            }
+            
+            drawOverlay(landmarks) {
+                this.overlayCtx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+                this.overlayCtx.fillStyle = '#bb86fc';
+                
+                landmarks.forEach(point => {
+                    this.overlayCtx.beginPath();
+                    this.overlayCtx.arc(point.x, point.y, 3, 0, 2 * Math.PI);
+                    this.overlayCtx.fill();
+                });
+            }
+            
+            async generateKey() {
+                if (this.isProcessing || this.measurementHistory.length < 5) {
+                    this.showStatus('Hold still for a moment...', 'warning');
+                    return;
+                }
+                
+                // Check if measurements are stable enough
+                const consistency = this.calculateConsistency();
+                if (consistency < 70) {
+                    this.showStatus('Almost there! Keep your face still...', 'warning');
+                    return;
+                }
+                
+                this.isProcessing = true;
+                this.showStatus('Generating deterministic key from biometric signature...', 'info');
+                
+                try {
+                    // Use average of recent stable measurements
+                    const stableMeasurements = this.getStableMeasurements();
+                    
+                    if (!stableMeasurements) {
+                        throw new Error('Unable to get stable measurements');
+                    }
+                    
+                    // Generate deterministic seed
+                    const seed = this.createDeterministicSeed(stableMeasurements);
+                    
+                    // Generate nostr keys
+                    const keys = this.generateNostrKeys(seed);
+                    
+                    this.displayKeys(keys);
+                    this.showStatus('Deterministic keys generated successfully!', 'success');
+                    
+                } catch (error) {
+                    this.showStatus('Error generating key: ' + error.message, 'error');
+                } finally {
+                    this.isProcessing = false;
+                }
+            }
+            
+            getStableMeasurements() {
+                if (this.measurementHistory.length < 3) return null;
+                
+                // Just use the most recent stable measurement
+                const recent = this.measurementHistory.slice(-3);
+                
+                // Simple average of the last 3 measurements
+                const averaged = {};
+                for (const key in recent[0]) {
+                    const sum = recent.reduce((acc, m) => acc + m[key], 0);
+                    averaged[key] = Math.round((sum / recent.length) * 10) / 10;
+                }
+                
+                return averaged;
+            }
+            
+            createDeterministicSeed(measurements) {
+                // Create a deterministic string from measurements
+                const sortedKeys = Object.keys(measurements).sort();
+                const valueString = sortedKeys.map(key => `${key}:${measurements[key]}`).join('|');
+                
+                // Hash to create consistent seed
+                const hash = CryptoJS.SHA256(valueString + 'biometric_seed_v1');
+                return hash.toString(CryptoJS.enc.Hex);
+            }
+            
+            generateNostrKeys(seed) {
+                // Generate private key from seed - ensure it's 32 bytes
+                const privateKeyHash = CryptoJS.SHA256(seed).toString(CryptoJS.enc.Hex);
+                
+                // Ensure private key is exactly 32 bytes (64 hex chars)
+                const privateKeyHex = privateKeyHash.substring(0, 64);
+                
+                // Use nostr-tools to get the public key from private key
+                const publicKeyHex = window.NostrTools.getPublicKey(privateKeyHex);
+                
+                // Use nostr-tools to encode keys in bech32 format
+                const nsec = window.NostrTools.nip19.nsecEncode(privateKeyHex);
+                const npub = window.NostrTools.nip19.npubEncode(publicKeyHex);
+                
+                return {
+                    privateKeyHex: privateKeyHex,
+                    publicKeyHex: publicKeyHex,
+                    nsec: nsec,
+                    npub: npub
+                };
+            }
+            
+            displayKeys(keys) {
+                document.getElementById('keyOutput').style.display = 'block';
+                document.getElementById('privateKey').textContent = keys.privateKeyHex;
+                document.getElementById('nsecKey').textContent = keys.nsec;
+                document.getElementById('npubKey').textContent = keys.npub;
+            }
+            
+            showStatus(message, type) {
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.className = `status ${type}`;
+                status.style.display = 'block';
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            new DeterministicBiometricGenerator();
+        });
+    </script>
+</body>
+</html>
