@@ -196,12 +196,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Deterministic Biometric Nostr Key Generator</h1>
-        
-        <div class="security-notice">
-            <strong>Security Notice:</strong> This generates deterministic keys from facial geometry. 
-            Same face = same key. DO NOT USE FOR THINGS YOU CARE ABOUT.
-        </div>
+        <h1>Face Scan</h1>   
         
         <div class="camera-section">
             <video id="videoElement" autoplay muted playsinline></video>
@@ -245,10 +240,22 @@
                 <strong>Public Key (npub):</strong>
                 <div id="npubKey" class="key-output"></div>
             </div>
+            <div>
+                <strong>Face Name:</strong>
+                <div id="facename" class="key-output">none</div>
+            </div>
+        </div>
+
+        <div class="security-notice">
+            <strong>Security Notice:</strong> This generates deterministic keys from facial geometry. 
+            Same face = same key. DO NOT USE FOR THINGS YOU CARE ABOUT.
         </div>
     </div>
 
+   <script type="module" src="/src/fr/generate_name_from_hex.js"></script>
+
     <script>
+       
         class DeterministicBiometricGenerator {
             constructor() {
                 this.video = document.getElementById('videoElement');
@@ -572,6 +579,9 @@
                 
                 // Use nostr-tools to get the public key from private key
                 const publicKeyHex = window.NostrTools.getPublicKey(privateKeyHex);
+                // alert(publicKeyHex);
+                const name = generateNameFromHex(publicKeyHex);
+                console.log(name);
                 
                 // Use nostr-tools to encode keys in bech32 format
                 const nsec = window.NostrTools.nip19.nsecEncode(privateKeyHex);
@@ -590,6 +600,9 @@
                 document.getElementById('privateKey').textContent = keys.privateKeyHex;
                 document.getElementById('nsecKey').textContent = keys.nsec;
                 document.getElementById('npubKey').textContent = keys.npub;
+                document.getElementById('facename').textContent = generateNameFromHex(keys.publicKeyHex);
+
+                
             }
             
             showStatus(message, type) {
