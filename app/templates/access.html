@@ -89,6 +89,12 @@ async function dangerZone() {
 window.location.href="/safebox/dangerzone/";
 
 }
+async function issueCard() {
+
+
+window.location.href="/safebox/issuecard/";
+
+}
 
 function revealBalance() {
     var heading_balance = document.getElementById("heading_balance");
@@ -954,6 +960,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>  
   <button onclick="doAccountHistory()">Account History</button>
+  <br><br>
+  <button id="issue_card" onclick="issueCard()" >Issue Card</button>
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <br>

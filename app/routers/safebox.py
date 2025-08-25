@@ -962,6 +962,62 @@ async def my_danger_zone(       request: Request,
 
                                         })
 
+@router.get("/issuecard", tags=["safebox", "protected"])
+async def issue_card(       request: Request, 
+                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to danger zone"""
+
+    
+
+
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub ==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+       
+    emergency_code = safebox_found.emergency_code
+
+    # Do the nostr wallet connect
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+
+    # Publish profile
+    async with Client(settings.NWC_RELAYS[0]) as c:
+        n_msg = Event(kind=13194,
+                    content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
+                    pub_key=acorn_obj.pubkey_hex,
+                    tags=[["notifications","payment_received payment_sent balance_changed"]],
+                   
+                    )
+
+
+        n_msg.sign(acorn_obj.privkey_hex)
+        c.publish(n_msg)
+
+
+    
+    k = Keys(config.SERVICE_NSEC)
+    my_enc = NIP44Encrypt(k)
+
+    secure_pin = generate_secure_pin()
+    plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
+  
+    encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
+   
+    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21}
+    nembed = create_nembed_compressed(token_obj)
+    print(f"nembed length {len(nembed)} {nembed}")
+    payment_token=nembed
+
+    return templates.TemplateResponse(      "issuecard.html", 
+                                        {   "request": request,
+                                            "emergency_code": emergency_code,
+                                            "currencies": settings.SUPPORTED_CURRENCIES,
+                                            "payment_token" : payment_token,
+                                            "secure_pin": secure_pin
+
+                                        })
+
 @router.get("/facerec", tags=["safebox", "protected"])
 async def my_face_rec(       request: Request, 
                         acorn_obj: Acorn = Depends(get_acorn)

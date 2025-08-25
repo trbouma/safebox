@@ -1,0 +1,299 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Issue Card{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+<script>
+
+async function backToHome() {
+
+window.location.href="/safebox/access" ;
+
+}
+
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
+
+}
+
+async function setCustomHandle() {
+    
+    var data;
+   
+    var input_custom_handle = document.getElementById("input_custom_handle");
+
+    custom_handle = input_custom_handle.value;
+    user_confirm = confirm(`Are you sure you want to proceed with ${custom_handle.toLowerCase()} as your custom handle`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"custom_handle": custom_handle};
+
+   await fetch('/safebox/setcustomhandle', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
+
+    async function setOwnerNpub() {
+    
+    var data;
+   
+    var input_owner_npbub = document.getElementById("input_owner_npub");
+
+    owner_npub = input_owner_npub.value;
+    user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_npub} as your owner npub?`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"npub": owner_npub, "local_currency": null};
+
+   await fetch('/safebox/setownerdata', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
+    async function setOwnerCurrency() {
+    
+    var data;
+   
+    var input_owner_npbub = document.getElementById("input_owner_currency");
+
+    owner_currency = select_currency.value;
+    user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_currency} as your owner currency?`);
+    if (user_confirm == false) {return;}
+    
+
+    const submit_data = {"npub": null, "local_currency": owner_currency};
+
+   await fetch('/safebox/setownerdata', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => getStatus(data));
+
+
+      }
+
+  async function swapProofs() {
+    
+    var data;
+   
+   
+
+    
+    user_confirm = confirm(`Are you sure you want to swap proofs?`);
+    if (user_confirm == false) {return;}
+    
+
+  
+
+   await fetch('/safebox/swap', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"}        
+               
+       })
+    .then((response) => response.json())
+    .then((data) => { alert(`${data.status} ${data.detail}`);});
+
+
+      }
+
+async function scanFace() {
+// alert("scan!");
+
+window.location.href="/safebox/facerec/";
+
+}
+</script>
+
+
+<script>
+  var ecash_write = "{{nfc_write}}";
+  
+  async function readTag() {
+    var nfc_text_area = document.getElementById("nfc_text");
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+            consoleLog("Record type:  " + record.recordType);
+            consoleLog("MIME type:    " + record.mediaType);
+            consoleLog("=== data ===\n" + decoder.decode(record.data));
+            nfc_text_area.value = decoder.decode(record.data);
+          }
+          alert("Done!");
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+  }
+  
+  async function writeTag() {
+    var nfc_text_area = document.getElementById("nfc_text");
+    var nfc_text = nfc_text_area.value
+    
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.write(nfc_text);
+        alert("NDEF message written!");
+        consoleLog("NDEF message written: " + nfc_text);
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      alert("Web NFC is not supported.");
+    }
+  }
+  
+  async function paybyNFC() {
+    var nfc_amount = document.getElementById("input_nfc_amount").value;
+    var nfc_token;
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+          }
+          consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
+          submitToken(nfc_amount, nfc_token)
+          
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+
+
+  }
+
+  function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+  
+  if (localStorage) {
+  
+      //alert("Local Storage!");
+      // localStorage.setItem("name", "Tim");
+  }
+  async function submitToken(nfc_amount,nfc_token) {
+
+    consoleLog(`submitToken ${nfc_amount} ${nfc_token}`);
+    const submit_data = {"payment_token": nfc_token, "amount": parseInt(nfc_amount)};
+
+  await fetch('/safebox/acceptpaymenttoken', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},        
+    body: JSON.stringify(submit_data)         
+  })   
+    .then((data) => {consoleLog(`done ${data}`)});
+
+    window.location.href="/safebox/access" ;
+
+
+
+   }
+
+  async function readfromUSB() {
+    consoleLog(`read from USB`);
+    var usb_output;
+    try {
+        const device = await navigator.usb.requestDevice({ filters: [] }); // you can specify vendorId/productId
+        await device.open();
+        await device.selectConfiguration(1);         // Choose the correct config
+        await device.claimInterface(0);              // Interface number may vary
+
+        usb_output += `Connected to: ${device.productName}\n`;
+
+        // Send a command (example: APDU or reader-specific command)
+        // This part depends on your device
+        const response = await device.transferIn(1, 64); // Endpoint #1, 64 bytes
+        const decoder = new TextDecoder();
+        usb_output += `Data: ${decoder.decode(response.data)}\n`;
+      } catch (err) {
+        usb_output += `Error: ${err.message}\n`;
+      }
+    
+      consoleLog(usb_output)
+  }
+  
+  
+  </script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h1>Issue Card</h1>
+        
+</div>
+<div class="center-text">
+  <hr>
+  Web NFC: Android/Chrome only
+  <br><br>
+ 
+  <button onclick="readTag()">Card Read</button>
+  <br><br>
+  <textarea id="nfc_text" name="nfc_text" rows="8" style="width:90%;">{{payment_token}}</textarea>
+  <br><br>
+  Secure PIN: <b>{{secure_pin}}</b> <i>( Write this down! )</i>
+  <br><br>
+  <button onclick="writeTag()">Card Write</button>
+  <br><br>
+  <hr>
+  <br><br>
+  <button onclick="backToHome()">Home</button> 
+  <br><br>
+ 
+</div>
+
+     
+<script>
+  setDarkMode();
+</script>
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}
