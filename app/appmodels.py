@@ -49,6 +49,12 @@ class NWCEvent(SQLModel, table=True):
     event_id: str = Field(unique=True, nullable=False)
     # Add more fields below as needed for your use case    
 
+class NWCSecret(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nwc_secret: str = Field(unique=True, nullable=False)
+    npub: str = Field(unique=False, nullable=False)
+    # Add more fields below as needed for your use case  
+
 class lnPayAddress(BaseModel):
     address: str 
     amount: float 

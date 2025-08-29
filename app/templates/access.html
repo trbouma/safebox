@@ -830,7 +830,6 @@ function getInvoiceStatus(ln_invoice_status) {
   <span id="payment_notification">
     {{ action_comment if action_comment else ""}}
   </span>  
-  <br><br>
   
   {% if onboard == true %}
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
@@ -838,6 +837,7 @@ function getInvoiceStatus(ln_invoice_status) {
   {% endif %}
   
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+  
   <br><br>
 
   {% if action_mode == "lninvoice" %}
@@ -867,6 +867,8 @@ function getInvoiceStatus(ln_invoice_status) {
     </select>   
       <br><br>
       <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <br><br>              
+      <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
       <br><br>
       <!-- New checkbox for NFC payment -->
       <label>
@@ -879,8 +881,7 @@ function getInvoiceStatus(ln_invoice_status) {
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
     
     {% endif %} 
-    <br><br>
-    <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
+
     <hr>
     <h2 style="margin: 0;">Make a Payment</h2>
     <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
@@ -908,6 +909,8 @@ function getInvoiceStatus(ln_invoice_status) {
   {% endif %}
 
   <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
+  <br><br>  
+  <button onclick="doAccountHistory()">Account History</button>
   <pre id="pay_to_message">Ready.</pre>
   
   <hr>
@@ -918,29 +921,19 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
   <br><br>
   <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
-  <br><br>
-  <button id="my_private_health_button" onclick="myHealthData()" >Health Records</button>
+  
   <hr>
   <h2>Official</h2>
-  <button id="my_credentials_button" onclick="myCredentials()" >Present Credentials</button> 
-  <br><br>
-  <button id="my_credentials_button" onclick="myRecords()" >Present My Records</button> 
-  <br><br>
-  <button id="pay_or_pass_button" onclick="payOrPass()" >Pay or Pass</button>
+  <button id="my_credentials_button" onclick="myRecords()" >Present a Record</button> 
+
 
   <hr>
   <h2>Professional</h2>   
-  <button id="do_consult_button" onclick="doHealthConsult()" >Health Consultation</button>  
-  <br>
-  <br>
-  <button id="do_issue_credential" onclick="doOfferCredential()" >Offer Credentials</button>  
 
+  <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Record</button>  
   <br>
   <br>
-  <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Records</button>  
-  <br>
-  <br>
-  <button id="do_verify_credential" onclick="doVerifyCredential()" >Verification Request</button> 
+  <button id="do_verify_credential" onclick="doVerifyCredential()" >Verify Record</button> 
   <br>
   <br>
   <button id="do_verify_credential" onclick="doRequestRecord()" >Request Record</button> 
@@ -958,8 +951,6 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
-  <br><br>  
-  <button onclick="doAccountHistory()">Account History</button>
   <br><br>
   <button id="issue_card" onclick="issueCard()" >Issue Card</button>
   <br><br>
