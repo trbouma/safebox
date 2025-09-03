@@ -131,10 +131,38 @@ The wolf howls at night
 ```
 
 
+## Running a Docker Container
 
+1. create a new directory and cd to this directory 
+2. add the following contents in a `docker-compose.yaml`
+3. run `docker compose run -d`
+4. check if no errors with `docker compose logs`
+5. configure your reverse proxy to go your docker container running at port `7375`
+6. set up appropriate TLS certificates
+
+Invite code is `alpha`
+
+
+```
+services:
+  lnapp:
+    restart: always
+    image: trbouma/safebox:latest
+    container_name: safebox
+    ports:
+      - "7375:7375"
+    environment:
+      - TZ=America/New_York
+    
+    volumes:        
+      - ./data:/app/data
+    command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
+    ```
 
 
 
 No guarantees. No promises of support. This is very experimental - more to come! 
 
 ![](./assets/safebox-nostr.png)
+
+
