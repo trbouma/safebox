@@ -157,7 +157,7 @@ services:
     volumes:        
       - ./data:/app/data
     command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
-    ```
+```
 
 
 
