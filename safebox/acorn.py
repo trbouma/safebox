@@ -2387,7 +2387,8 @@ class Acorn:
                                         "unit": "sat"
 
                                     }
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
+                        response.raise_for_status()
                         # print("post melt response:", response.json())
                         post_melt_response = PostMeltQuoteResponse(**response.json())
                         # print("mint response:", post_melt_response)
