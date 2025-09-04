@@ -958,7 +958,8 @@ async def my_danger_zone(       request: Request,
                                             "emergency_code": emergency_code,
                                             "currencies": settings.SUPPORTED_CURRENCIES,
                                             "payment_token" : payment_token,
-                                            "secure_pin": secure_pin
+                                            "secure_pin": secure_pin,
+                                            "nwc_key": nwc_key
 
                                         })
 
