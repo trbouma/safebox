@@ -8,6 +8,19 @@
 
 <script>
 
+async function copyNWC() {
+  
+  const nwc = document.getElementById("nwcKey");
+  var textToCopy = nwc.textContent;
+  // alert(textToCopy);  
+  navigator.clipboard.writeText(textToCopy).then(() => {
+        alert("Copied to clipboard: " + textToCopy);
+      }).catch(err => {
+        console.error("Failed to copy text: ", err);
+      });
+
+}
+
 async function backToHome() {
 
 window.location.href="/safebox/access" ;
@@ -251,6 +264,7 @@ window.location.href="/safebox/facerec/";
       consoleLog(usb_output)
   }
   
+
   
   </script>
 
@@ -297,6 +311,7 @@ window.location.href="/safebox/facerec/";
       <br><br>
       <img src="/safebox/nwcqr">
       <br><br>
+       NWC: <span id="nwcKey" onclick="copyNWC()">{{ nwc_key }}</span>
       <hr>
 
       <br><br>
