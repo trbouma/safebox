@@ -176,7 +176,12 @@ window.location.href="/safebox/personalmessages";
 
 async function myRecords() {
 
-window.location.href="/records/present";
+window.location.href="/records/display";
+}
+
+async function presentRecord() {
+
+window.location.href="/records/request";
 }
 
 async function myEcash() {
@@ -192,7 +197,7 @@ window.location.href="/credentials/present";
 
 async function myRecords() {
 
-window.location.href="/records/present";
+window.location.href="/records/display";
 
 }
 
@@ -835,7 +840,7 @@ function getInvoiceStatus(ln_invoice_status) {
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
   <br><br>
   {% endif %}
-  
+  <br><br>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
   
   <br><br>
@@ -924,7 +929,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <hr>
   <h2>Official</h2>
-  <button id="my_credentials_button" onclick="myRecords()" >Present a Record</button> 
+  <button id="my_credentials_button" onclick="presentRecord()" >Present a Record</button> 
 
 
   <hr>

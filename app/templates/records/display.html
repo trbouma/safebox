@@ -93,7 +93,7 @@ async function selectRecordKind() {
   var select_record_kind = document.getElementById("select_record_kind");
 
  // alert(`record kind ${select_record_kind.value}`);
-  window.location.href=`/records/present?record_kind=${select_record_kind.value}`;
+  window.location.href=`/records/display?record_kind=${select_record_kind.value}`;
 
 }
 
@@ -152,7 +152,7 @@ async function selectRecordKind() {
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
   {% else %}
-  <h1>My {{ record_label}}</h1>
+  <h1>Display My {{ record_label}}</h1>
   {% endif %}
 
     <button onclick="gotoHome()">Home</button>

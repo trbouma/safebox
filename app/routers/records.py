@@ -139,8 +139,8 @@ async def do_record_offer(      request: Request,
 
                                         })
 
-@router.get("/presentationrequest", tags=["records", "protected"])
-async def credential_presentation_request(      request: Request,
+@router.get("/request", tags=["records", "protected"])
+async def record_presentation_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34003,   
                                     nprofile:str = None, 
@@ -199,7 +199,7 @@ async def credential_presentation_request(      request: Request,
        pass
     
 
-    return templates.TemplateResponse(  "credentials/presentationrequest.html", 
+    return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
@@ -298,7 +298,7 @@ async def transmit_records(        request: Request,
 
     return {"status": status, "detail": detail} 
 
-@router.get("/present", tags=["records", "protected"])
+@router.get("/display", tags=["records", "protected"])
 async def my_records(       request: Request, 
                                 nauth: str = None,
                                 nonce: str = None,
@@ -371,7 +371,7 @@ async def my_records(       request: Request,
   
     record_label = get_label_by_id(grant_kinds, record_kind)
     
-    return templates.TemplateResponse(  "records/present.html", 
+    return templates.TemplateResponse(  "records/display.html", 
                                         {   "request": request,
                                             
                                             

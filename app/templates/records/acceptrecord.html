@@ -108,7 +108,7 @@ if (confirm(`Are you sure you want to accept incoming record: ${title} into your
        body: JSON.stringify(submit_data)         
       })
    .then((response) => response.json())
-   .then((data) =>  {  window.location.href=`/records/present`
+   .then((data) =>  {  window.location.href=`/records/display`
                     });
    
    
