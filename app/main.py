@@ -101,7 +101,8 @@ async def lifespan(app: FastAPI):
     
     # The single event handling is now done in nwc.py, so all listeners can be running
     print(f"[PID {os.getpid()}] Starting nwc listener.")
-    url = "wss://relay.getsafebox.app"
+    # url = "wss://relay.getsafebox.app"
+    url = SETTINGS.NWC_RELAYS[0]
     listener_task = asyncio.create_task(listen_notes_periodic(url))
     
     yield

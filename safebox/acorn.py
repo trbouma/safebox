@@ -2199,7 +2199,7 @@ class Acorn:
             print(f"safebox: {safebox}") 
 
             if safebox:
-                
+                print(f"pay ecash directly to safebox")
                 ln_parts = lnaddress.split('@')
                 local_part = ln_parts[0]
                 safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
@@ -2208,6 +2208,7 @@ class Acorn:
                 pubkey = response.get("pubkey",None)
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
+                print(f"transmit ecash directly to safebox relays: {relays}")
                 cashu_token = await self.issue_token(amount)
                 pay_obj =   {"token": cashu_token,
                              "amount": amount, 
