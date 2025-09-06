@@ -4226,10 +4226,11 @@ class Acorn:
             self.proofs = post_payment_proofs
             await self._async_delete_proof_events()
             
-            #TODO change this to write_proogs
-            await self.add_proofs_obj(post_payment_proofs)
+            #TODO change this to write_proof
+            await self.write_proofs()
+            # await self.add_proofs_obj(post_payment_proofs)
             
-            await self._load_proofs()
+            # await self._load_proofs()
 
 
             
