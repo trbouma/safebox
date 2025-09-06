@@ -295,7 +295,7 @@ async def create_nwc_qr(request: Request,
 
     handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
 
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # &lud16={handle}@{request.url.hostname}
     encoded_qr_text = urllib.parse.quote(qr_text)
@@ -923,7 +923,7 @@ async def my_danger_zone(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
@@ -980,7 +980,7 @@ async def issue_card(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
