@@ -424,6 +424,7 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
     status = "SENT"
     try:
         msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
+        
     except Exception as e:
         msg_out =f"{e}"
         status = "ERROR"

@@ -2222,6 +2222,7 @@ class Acorn:
 
                 await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=21401)
                 await self.release_lock()
+                await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
             else: #     return f"Payment in ecash of {amount} sats", 0
 
 
@@ -4052,7 +4053,8 @@ class Acorn:
         finally:
             pass
             
-        await self.add_proofs_obj(swap_proofs)
+        # await self.add_proofs_obj(swap_proofs)
+        await self.write_proofs()
             
 
         return f'Successfully accepted {token_amount} sats!', token_amount
