@@ -453,7 +453,7 @@ async def ln_pay_address(   request: Request,
     except Exception as e:
         return {"status": "ERROR", f"detail": f"error {e}"}
 
-    msg_out = "Payment sent!"
+    msg_out = "Payment sent!!"
 
     return {"status": "OK", "detail": msg_out}
 
@@ -1138,6 +1138,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
 
 
     # starting_balance = safebox_found.balance
+    await acorn_obj.load_data()
     starting_balance = acorn_obj.balance
     # new_balance = starting_balance
     message = "All payments up to date!"
@@ -1164,12 +1165,14 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 new_balance = acorn_obj.balance
                 # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
-
+                print(f"acorn local currency {acorn_obj.local_currency}")
                 fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
 
 
                 if new_balance > starting_balance:
-                    message = f"Payment received! {new_balance-starting_balance} sats."
+                    fiat_received = f"{currency_symbol}{(currency_rate * (new_balance-starting_balance) / 1e8):.2f} {acorn_obj.local_currency}"
+
+                    message = f"Payment received: {fiat_received}!"
                     status = "RECD"
 
                 elif new_balance < starting_balance:
@@ -1732,8 +1735,14 @@ async def request_nfc_payment( request: Request,
                         "sig": sig, 
                         "comment": payment_token.comment  
                         }
+        #FIXME Need to get relays to listen
+        pass
+        settings_url = f"https://{host}/.well-known/settings"
+        response = requests.get(url=settings_url)
+        print(response.json())
+        ecash_relays = response.json().get("relays", settings.RELAYS)
+        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
         
-        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj))
     else:
         print("do lightning clearing")
         

@@ -1459,7 +1459,7 @@ class Acorn:
         try:
             ecash_latest = int(await self.get_wallet_info("ecash_latest", record_kind=37376))
             
-            print(f"ecash latest: {ecash_latest}")
+            print(f"ecash latest: {ecash_latest}, {relays}")
            
             
             user_records = await self.get_user_records(record_kind=21401, relays=relays, since=ecash_latest+1, reverse=True)

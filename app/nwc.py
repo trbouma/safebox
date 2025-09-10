@@ -189,7 +189,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             each_transaction = {
                "type": tx_type, 
               
-               "invoice": each.get("invoice", None), 
+               "invoice": each.get("invoice", "None"), 
                "description": each["comment"],
                "description_hash": each.get("description_hash", None), 
                "preimage": each.get("preimage", None), 
@@ -198,11 +198,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                "fees_paid": each['fees'] * 1000,
                "created_at": int(datetime.strptime(each['create_time'], '%Y-%m-%d %H:%M:%S').timestamp()), 
 
-               "metadata": {} 
+               "metadata": {"description": "test"} 
             }
             tx_nwc_history.append(each_transaction)
         
-
+        # print(tx_nwc_history)
         
         response_json = {
                                 "result_type": "list_transactions",
@@ -223,7 +223,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                             "balance": int(acorn_obj.balance * 1000), 
                                 }
                             }
-        print(response_json)
+        # print(response_json)
 
         nwc_reply = True
 

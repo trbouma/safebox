@@ -346,7 +346,7 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
 
     return success
 
-async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
+async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None ):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
@@ -354,7 +354,7 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
     
     while time.time() - start_time < duration:
         print(f"listen for ecash payment for {acorn_obj.handle}") 
-        ecash_out = await acorn_obj.get_ecash_latest() 
+        ecash_out = await acorn_obj.get_ecash_latest(relays=relays) 
         if ecash_out != []:
             print(f"ecash out: {ecash_out}")
             if websocket:
@@ -424,7 +424,7 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
     status = "SENT"
     try:
         msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
-        
+
     except Exception as e:
         msg_out =f"{e}"
         status = "ERROR"

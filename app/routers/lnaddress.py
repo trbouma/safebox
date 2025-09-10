@@ -272,6 +272,11 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
 
     return {"status": status, "detail": detail}
 
+@router.get("/.well-known/settings",tags=["public"])
+async def get_settings(request: Request):
+    
+    return {"relays": settings.RELAYS}
+
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"
