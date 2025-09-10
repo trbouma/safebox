@@ -1165,7 +1165,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 new_balance = acorn_obj.balance
                 # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
-                print(f"acorn local currency {acorn_obj.local_currency}")
+                # print(f"acorn local currency {acorn_obj.local_currency}")
                 fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
 
 
@@ -1742,7 +1742,7 @@ async def request_nfc_payment( request: Request,
         print(response.json())
         ecash_relays = response.json().get("relays", settings.RELAYS)
         task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
-        
+
     else:
         print("do lightning clearing")
         
