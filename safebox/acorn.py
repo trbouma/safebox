@@ -2208,7 +2208,8 @@ class Acorn:
                 pubkey = response.get("pubkey",None)
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
-                print(f"transmit ecash directly to safebox relays: {relays}")
+                ecash_relays = response.get("ecash_relays", relays)
+                print(f"transmit ecash directly to ecash relays: {ecash_relays}")
                 cashu_token = await self.issue_token(amount)
                 pay_obj =   {"token": cashu_token,
                              "amount": amount, 
@@ -2220,7 +2221,7 @@ class Acorn:
                 
                 
 
-                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=21401)
+                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=ecash_relays,kind=21401)
                 await self.release_lock()
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
             else: #     return f"Payment in ecash of {amount} sats", 0

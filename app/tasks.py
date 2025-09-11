@@ -353,7 +353,7 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
     duration = 60  # 1 minutes in seconds
     
     while time.time() - start_time < duration:
-        print(f"listen for ecash payment for {acorn_obj.handle}") 
+        print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
         ecash_out = await acorn_obj.get_ecash_latest(relays=relays) 
         if ecash_out != []:
             print(f"ecash out: {ecash_out}")

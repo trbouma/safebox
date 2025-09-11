@@ -264,7 +264,9 @@ async def get_safebox_pubhex(request: Request, name: str, ):
             "_": npub_hex
         },
         "relays":
-                     { f"{npub_hex}": SETTINGS.RELAYS}  }
+                     { f"{npub_hex}": SETTINGS.RELAYS},
+        "ecash_relays":
+                     { f"{npub_hex}": SETTINGS.ECASH_RELAYS}                  }
     else:
         pass
         with Session(engine) as session:
@@ -290,7 +292,8 @@ async def get_safebox_pubhex(request: Request, name: str, ):
 
     safebox_json = {
                     "pubkey": npub_hex,                       
-                     "relays": SETTINGS.RELAYS   
+                     "relays": SETTINGS.RELAYS,
+                    "ecash_relays": SETTINGS.ECASH_RELAYS     
                     
                     }
 

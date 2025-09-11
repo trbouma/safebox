@@ -177,12 +177,12 @@ async def ln_pay( amount: float,
         message = f"Payment being sent to {name}@{request.url.hostname}"
     
     
-
+    # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
     if safebox:
         pass
         print("don't bother creating an invoice because ecash")
         pr = None
-        task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
+        task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS) ) 
     else:    
         cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT) 
         pr = cli_quote.invoice 
