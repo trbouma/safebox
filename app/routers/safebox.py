@@ -1740,7 +1740,7 @@ async def request_nfc_payment( request: Request,
         settings_url = f"https://{host}/.well-known/settings"
         response = requests.get(url=settings_url)
         print(response.json())
-        ecash_relays = response.json().get("relays", settings.RELAYS)
+        ecash_relays = response.json().get("ecash_relays", settings.ECASH_RELAYS)
         task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
 
     else:

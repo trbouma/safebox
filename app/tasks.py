@@ -367,7 +367,7 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
                     else:
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
-            break
+                break
 
          
     

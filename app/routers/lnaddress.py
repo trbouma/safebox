@@ -227,12 +227,13 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     k_nwc = Keys(token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
+    #FIXME determine right relays
     if nwc_vault.nfc_ecash_clearing:
         pay_instruction = {
         "method": "pay_ecash",
         "params": { 
             "recipient_pubkey": nwc_vault.recipient_pubkey,
-            "relays": nwc_vault.relays,
+            "relays": settings.ECASH_RELAYS,
             "amount": nwc_vault.amount,
             "tendered_amount": nwc_vault.tendered_amount,
             "tendered_currency": nwc_vault.tendered_currency, 
@@ -275,7 +276,8 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
 @router.get("/.well-known/settings",tags=["public"])
 async def get_settings(request: Request):
     
-    return {"relays": settings.RELAYS}
+    return {"relays": settings.RELAYS,
+            "ecash_relays": settings.ECASH_RELAYS}
 
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):

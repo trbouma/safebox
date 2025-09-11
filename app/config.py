@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
+    ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']
     IP_INFO_TOKEN: str = "notset"
     NFC_ECASH_CLEARING: bool = True

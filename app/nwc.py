@@ -368,7 +368,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                             "tendered_currency": tendered_currency}
         
         nembed_to_send = create_nembed_compressed(pay_obj)
-        print(f"nembed to send: {nembed_to_send}")
+        print(f"nwc nembed to send: {nembed_to_send} using {relays}")
+        
                
 
         await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=21401)

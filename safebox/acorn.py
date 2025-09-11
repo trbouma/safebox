@@ -2216,7 +2216,7 @@ class Acorn:
                              "tendered_amount": tendered_amount,
                              "tendered_currency": tendered_currency}
                 nembed_to_send = create_nembed_compressed(pay_obj)
-                print(f"nembed to send: {nembed_to_send}")
+                print(f"acorn nembed to send: {nembed_to_send}")
                 
                 
 
