@@ -34,7 +34,7 @@ from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, f
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings, ConfigWithFallback
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -482,17 +482,16 @@ async def ln_pay_invoice(   request: Request,
     try:
 
 
-        msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
-        decoded_invoice = bolt11.decode(ln_invoice.invoice)
+        task2 = asyncio.create_task(task_pay_multi_invoice(acorn_obj=acorn_obj,lninvoice=ln_invoice.invoice,comment=ln_invoice.comment, websocket=global_websocket)) 
+        msg_out = "Payment sent"
+        # msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
+        # decoded_invoice = bolt11.decode(ln_invoice.invoice)
        
-        print(f"decoded invoice: {decoded_invoice}")
-        amount = decoded_invoice.amount_msat//1000
-        description = decoded_invoice.description
+        # print(f"decoded invoice: {decoded_invoice}")
+        # amount = decoded_invoice.amount_msat//1000
+        # description = decoded_invoice.description
 
-        await acorn_obj.add_tx_history( tx_type='D',
-                                        amount=amount,
-                                        comment=description,
-                                        fees=final_fees)
+
        
 
     except Exception as e:

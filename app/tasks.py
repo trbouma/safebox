@@ -437,7 +437,32 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
             except:
                 pass
    
+async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, websocket: WebSocket|None=None):
 
+    if websocket:
+            #FIXME - may not need this refernce
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+            except:
+                pass
+
+    status = "SENT"
+    try:
+        # msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
+
+        msg_out, final_fees,_,_,_ = await  acorn_obj.pay_multi_invoice(lninvoice=lninvoice, comment=comment)
+
+    except Exception as e:
+        msg_out =f"{e}"
+        status = "ERROR"
+        print(msg_out, status)
+    finally:
+        if websocket:
+            #FIXME - may not need this refernce
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+            except:
+                pass
     
 
     

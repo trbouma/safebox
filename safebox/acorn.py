@@ -2803,7 +2803,10 @@ class Acorn:
             await self.release_lock()
             print("all done pay_multi_invoice!")
            
-        
+        await self.add_tx_history( tx_type='D',
+                                        amount=ln_amount,
+                                        comment=comment,
+                                        fees=final_fees)
         
         return msg_out, final_fees, payment_hash,payment_preimage, description_hash
 
