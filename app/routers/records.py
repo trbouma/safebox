@@ -139,8 +139,8 @@ async def do_record_offer(      request: Request,
 
                                         })
 
-@router.get("/request", tags=["records", "protected"])
-async def record_presentation_request(      request: Request,
+@router.get("/present", tags=["records", "protected"])
+async def record_presentation(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34003,   
                                     nprofile:str = None, 
@@ -199,7 +199,7 @@ async def record_presentation_request(      request: Request,
        pass
     
 
-    return templates.TemplateResponse(  "records/request.html", 
+    return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
@@ -208,7 +208,8 @@ async def record_presentation_request(      request: Request,
                                             "client_nprofile": nprofile,
                                             "client_nprofile_parse": nprofile_parse,
                                             "client_nauth": response_nauth,
-                                            "nauth": nauth
+                                            "nauth": nauth,
+                                            "grant_kinds": settings.GRANT_KINDS
 
                                         })
 @router.get("/verificationrequest", tags=["records", "protected"])
