@@ -77,6 +77,27 @@
 
 <!--<script src="/src/qr-scanner.umd.min.js"></script>-->
 <!--<script src="/src/qr-scanner.legacy.min.js"></script>-->
+<script>
+
+async function gotoScanResult(scandata) {
+
+    //alert(scandata);
+
+    const submit_data = {"data": scandata};
+
+    await fetch('/scanner/scanresult', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(submit_data)
+    }).then((response) => {
+    if (response.redirected) {
+        window.location.href = response.url;  // actually follow redirect in browser
+    }
+    });
+}
+
+</script>
+
 <script type="module">
     import QrScanner from "/src/qr-scanner.min.js";
 
@@ -105,7 +126,8 @@
         var header_msg = document.getElementById('header-msg');
         header_msg.innerText = "Success! Please wait a moment...";
         scanner.stop();
-        window.location.href= `/scanner/scanresult?qr_code=${result.data}&referer=${referer}`;
+        gotoScanResult(result.data)
+        // window.location.href= `/scanner/scanresult?qr_code=${result.data}&referer=${referer}`;
         
     }
 

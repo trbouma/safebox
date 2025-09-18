@@ -35,6 +35,7 @@ from app.utils import ( create_jwt_token,
                         verify_payload)
 
 from app.config import Settings, ConfigWithFallback
+from app.rates import get_currency_rate
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -71,11 +72,49 @@ def get_info(request: Request):
 
         
 
-    return {"detail": request.url.hostname}
+    return HTMLResponse(request.url.hostname)
+
+@router.post("/info", tags=["lnaddress"], response_class=HTMLResponse)
+def get_info_post(request: Request):
+    
+
+        
+
+    # return {"detail": request.url.hostname}
+    return HTMLResponse(request.url.hostname)
 
 @router.get("/.well-known/lnurlp/{name}")
-def ln_resolve(request: Request, name: str = None, amount: int = None):
+async def ln_resolve(request: Request, name: str = None, amount: int = None):
     match = False
+    amount = None
+    currency = None
+    min_sendable = 1000
+    max_sendable = 210000000
+   
+
+
+    name_parts = name.split("+")
+
+    name = name_parts[0]
+    if len(name_parts) >= 2:
+        amount = float(name_parts[1])
+
+        if len(name_parts) == 3:
+            currency = name_parts[2].upper()
+            if currency == "SAT":
+                min_sendable = int(amount)*1000
+                max_sendable = int(amount)*1000
+            else:
+                local_currency = await get_currency_rate(currency.upper())
+                print(local_currency.currency_rate)
+                min_sendable= max_sendable = int(amount* 1e8 // local_currency.currency_rate)*1000
+        else:
+            min_sendable = int(amount) * 1000
+            max_sendable = int(amount) * 1000
+
+    
+
+
     ln_callback = f"https://{request.url.hostname}/lnpay/{name}"
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
@@ -96,8 +135,8 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
                 raise HTTPException(status_code=404, detail=f"{name} not found")
 
     ln_response = {     "callback": ln_callback,
-                        "minSendable": 1000,
-                        "maxSendable": 210000000,
+                        "minSendable": min_sendable,
+                        "maxSendable": max_sendable,
                         "metadata": f"[[\"text/plain\", \"Send Payment to: {name}\"]]",
                         "commentAllowed": 60,                        
                         "allowsNostr" :True,

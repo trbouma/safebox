@@ -1,5 +1,5 @@
 import urllib.parse
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
@@ -28,6 +28,7 @@ from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt
 from monstr.event.event import Event
 from safebox.models import cliQuote
+from urllib.parse import quote, unquote
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin
@@ -324,7 +325,7 @@ async def create_nwc_qr(request: Request,
     buf.seek(0) # important here!
     return StreamingResponse(buf, media_type="image/jpeg")
 
-@router.get("/access", tags=["safebox", "protected"])
+@router.api_route("/access", tags=["safebox", "protected"], methods=["GET","POST"])
 async def protected_route(    request: Request, 
                         onboard: bool = False, 
                         action_mode:str=None, 
@@ -336,6 +337,16 @@ async def protected_route(    request: Request,
 
     if not acorn_obj:
         return RedirectResponse(url="/")
+
+    if request.method == "POST":
+        data = await request.json()
+        print(f"data from post {data}")
+        action_data = data.get("data", None)
+        
+    if action_data:    
+        # action_data = action_data.replace(' ', '+')
+        action_data = unquote(action_data)
+
 
 
     with Session(engine) as session:
@@ -1866,3 +1877,26 @@ async def pay_to_nfc_tag( request: Request,
     detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
 
     return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 
+
+
+@router.get("/balance", tags=["public", "hx"])
+async def hx_balance(request: Request,
+                        acorn_obj: Acorn= Depends(get_acorn)):
+    
+            await acorn_obj.load_data()
+            
+            return HTMLResponse(f"Balance: {acorn_obj.balance}")
+
+@router.get("/requestqr", tags=["public", "hx"])
+async def hx_request_qr(    request: Request,
+                            amount: float = Query(...), 
+                            select_currency: str = Query(...), 
+                            acorn_obj: Acorn= Depends(get_acorn)):
+            await acorn_obj.load_data()
+    
+            final_address = f"{acorn_obj.handle}+{amount}+{select_currency}@{request.url.hostname}"
+
+            final_img = f'<img id="request" src="/safebox/qr/{final_address}">'
+           
+            
+            return HTMLResponse(final_img)
