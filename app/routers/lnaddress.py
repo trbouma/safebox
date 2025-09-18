@@ -86,6 +86,7 @@ def get_info_post(request: Request):
 @router.get("/.well-known/lnurlp/{name}")
 async def ln_resolve(request: Request, name: str = None, amount: int = None):
     match = False
+    ln_payment_request = False
     amount = None
     currency = None
     min_sendable = 1000
@@ -97,6 +98,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
 
     name = name_parts[0]
     if len(name_parts) >= 2:
+        ln_payment_request = True
         amount = float(name_parts[1])
 
         if len(name_parts) == 3:
@@ -133,11 +135,20 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
                 match = True
             if not match:
                 raise HTTPException(status_code=404, detail=f"{name} not found")
+    if safebox_found.custom_handle:
+        out_name = safebox_found.custom_handle
+    else:
+        out_name = safebox_found.handle
+    
+    if ln_payment_request:
+        metadata = f"[[\"text/plain\", \"Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats \"]]"
+    else:        
+        metadata = f"[[\"text/plain\", \"Send Payment to: {out_name}\"]]"
 
     ln_response = {     "callback": ln_callback,
                         "minSendable": min_sendable,
                         "maxSendable": max_sendable,
-                        "metadata": f"[[\"text/plain\", \"Send Payment to: {name}\"]]",
+                        "metadata": metadata,
                         "commentAllowed": 60,                        
                         "allowsNostr" :True,
                         "safebox": True,
