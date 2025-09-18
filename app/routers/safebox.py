@@ -1894,7 +1894,7 @@ async def hx_request_qr(    request: Request,
                             acorn_obj: Acorn= Depends(get_acorn)):
             await acorn_obj.load_data()
     
-            final_address = f"{acorn_obj.handle}+{amount}+{select_currency}@{request.url.hostname}"
+            final_address = f"{acorn_obj.handle}--{amount}--{select_currency}@{request.url.hostname}"
 
             final_img = f'<img id="request" src="/safebox/qr/{final_address}">'
            

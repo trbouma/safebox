@@ -83,7 +83,7 @@ async def get_scan_result(  request: Request,
         action_mode ="lnaddress"
         action_data= unquote(qr_code)
         address_parts = action_data.split("@")
-        local_part = address_parts[0].split('+')
+        local_part = address_parts[0].split('--')
         name = local_part[0]
 
         if len(local_part) >= 2:
