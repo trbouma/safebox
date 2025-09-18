@@ -103,8 +103,8 @@ async function selectRecordKind() {
   var qr_img_func = document.getElementById("img_qr_display");
 
   qr_img_func.src="/img/circle-256.gif";
-   await fetch('/records/nauth?scope=vissue', {
-        method: "GET",
+   await fetch('/records/nauth?scope=vgrant', {
+        method: "POST",
         headers: {"Content-Type": "application/json"}        
               
        })
@@ -174,7 +174,7 @@ async function selectRecordKind() {
 <div id="card-container"></div>
 
   <script>
-    const jsonUserData = {{ credential_records | tojson }}; 
+    const jsonUserData = {{ user_records | tojson }}; 
 
     // Function to create and add a card
     function addCard(title, content) {

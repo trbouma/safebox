@@ -1891,10 +1891,20 @@ async def hx_balance(request: Request,
 async def hx_request_qr(    request: Request,
                             amount: float = Query(...), 
                             select_currency: str = Query(...), 
-                            acorn_obj: Acorn= Depends(get_acorn)):
+                            acorn_obj: Acorn = Depends(get_acorn)):
             await acorn_obj.load_data()
+
+            with Session(engine) as session:  
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first() 
+
+            if safebox_found.custom_handle:
+                final_handle = safebox_found.custom_handle
+            else:
+                final_handle = safebox_found.handle
     
-            final_address = f"{acorn_obj.handle}--{amount}--{select_currency}@{request.url.hostname}"
+            final_address = f"{final_handle}--{amount}--{select_currency}@{request.url.hostname}"
 
             final_img = f'<img id="request" src="/safebox/qr/{final_address}">'
            

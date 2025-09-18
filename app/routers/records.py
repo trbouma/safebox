@@ -362,9 +362,9 @@ async def my_records(       request: Request,
        pass
 
     try:
-        credential_records = await acorn_obj.get_user_records(record_kind=record_kind )
+        user_records = await acorn_obj.get_user_records(record_kind=record_kind )
     except:
-        credential_records = None
+        user_records = None
     
     #FIXME don't need the grant kinds
     
@@ -376,7 +376,7 @@ async def my_records(       request: Request,
                                         {   "request": request,
                                             
                                             
-                                            "credential_records": credential_records ,
+                                            "user_records": user_records ,
                                             "nauth": nauth_response,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
