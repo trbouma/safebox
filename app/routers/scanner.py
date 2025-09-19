@@ -69,6 +69,8 @@ async def get_scan_result(  request: Request,
         
     action_mode = None
     action_data = None
+    amount = 0
+    currency = None
     
     #remove any scheme prefixes
     qr_code = qr_code.replace('lightning:','').replace('bitcoin:','').replace("LIGHTNING:","")
