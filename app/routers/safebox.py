@@ -1910,7 +1910,9 @@ async def hx_request_qr(    request: Request,
     
             final_address = f"{final_handle}__{amount}__{select_currency}@{request.url.hostname}"
 
-            final_img = f'<img id="request" src="/safebox/qr/{final_address}">'
+            final_txt = f"""<img id=\"request\" src=\"/safebox/qr/{final_address}\"> <br><br>
+                        Request for {amount} {select_currency} for {final_handle}@{request.url.hostname}
+                        """
            
             
-            return HTMLResponse(final_img)
+            return HTMLResponse(final_txt)

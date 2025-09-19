@@ -141,7 +141,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
         out_name = safebox_found.handle
     
     if ln_payment_request:
-        metadata = f"[[\"text/plain\", \"Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats \"]]"
+        metadata = f"[[\"text/plain\", \"Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats \"],[\"text/long-desc\", \"This is a Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats\"]]"
     else:        
         metadata = f"[[\"text/plain\", \"Send Payment to: {out_name}\"]]"
 
