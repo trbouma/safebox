@@ -106,6 +106,17 @@ async def get_scan_result(  request: Request,
                 ln_parts = urlparse(url)
                 action_data = ln_parts.path.split('/')[-1]+ "@" + ln_parts.netloc
                 action_mode = "lnaddress"
+                # Add parsing logic here
+                address_parts = action_data.split("@")
+                local_part = address_parts[0].split('__')
+                name = local_part[0]
+                if len(local_part) >= 2:
+                    amount = float(local_part[1])
+
+                if len(local_part) == 3:
+                    currency = local_part[2]
+
+                action_data = f"{name}@{address_parts[1]}"
                 
         except:
             # logger.debug("there is an error")

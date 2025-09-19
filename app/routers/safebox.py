@@ -21,6 +21,7 @@ from monstr.util import util_funcs
 import requests
 import time
 
+
 from monstr.relay.relay import Relay
 
 from monstr.client.client import Client
@@ -31,7 +32,7 @@ from safebox.models import cliQuote
 from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings, ConfigWithFallback
@@ -1909,9 +1910,15 @@ async def hx_request_qr(    request: Request,
                 final_handle = safebox_found.handle
     
             final_address = f"{final_handle}__{amount}__{select_currency}@{request.url.hostname}"
+            final_url, final_lnurl= lightning_address_to_lnurl(final_address)
+            # final_qr = final_address
+            final_qr = f"lightning:{final_lnurl}"
 
-            final_txt = f"""<img id=\"request\" src=\"/safebox/qr/{final_address}\"> <br><br>
+
+
+            final_txt = f"""<img id=\"request\" src=\"/safebox/qr/{final_qr}\"> <br><br>
                         Request for {amount} {select_currency} for {final_handle}@{request.url.hostname}
+                        <br> {final_lnurl} {final_url}
                         """
            
             

@@ -14,6 +14,7 @@ from fastapi import Depends, Cookie, HTTPException
 from hashlib import sha256
 import base64
 import secp256k1
+import re, idna
 
 
 from bech32 import bech32_decode, convertbits, bech32_encode
@@ -388,7 +389,85 @@ def decode_lnurl(lnurl: str) -> str:
         return url
     except Exception as e:
         raise ValueError(f"Error decoding LNURL: {e}")
+
+
+
+def build_lnurlp_url(address: str, prefer_well_known: bool = True) -> str:
+    """
+    Convert a Lightning Address (name@domain) to its HTTPS LNURL-pay URL.
+    Tries /.well-known/lnurlp/<name> (preferred) and can fall back to /lnurlp/<name>.
+
+    Args:
+        address: Lightning Address, e.g., "alice@example.com"
+        prefer_well_known: If False, build /lnurlp/<name> instead.
+
+    Returns:
+        HTTPS URL string.
+    """
+    if not isinstance(address, str):
+        raise ValueError("address must be a string")
+
+    addr = address.strip()
+    if "@" not in addr:
+        raise ValueError("Invalid Lightning Address (missing @)")
+
+    # Split into local-part and domain
+    local, domain = addr.split("@", 1)
+    if not local or not domain:
+        raise ValueError("Invalid Lightning Address")
+
+    # Basic local-part sanity (allow common email chars, incl. '+', '.', '-', '_')
+    if not re.fullmatch(r"[A-Za-z0-9._%+\-~]+", local):
+        raise ValueError("Local part contains unsupported characters")
+
+    # IDNA (punycode) encode the domain to be safe with unicode domains
+    try:
+        ascii_domain = idna.encode(domain.strip().lower()).decode("ascii")
+    except idna.IDNAError as e:
+        raise ValueError(f"Invalid domain in Lightning Address: {e}")
+
+    path = f"/.well-known/lnurlp/{local}" if prefer_well_known else f"/lnurlp/{local}"
+    return f"https://{ascii_domain}{path}"
+
+
+def encode_lnurl(url: str) -> str:
+    """
+    Encodes a URL into a Bech32-encoded LNURL string (HRP='lnurl').
+    Requires a module exposing bech32_encode and convertbits akin to the 'bech32' package.
+    """
+    # If you're using the 'bech32' pip package, import its helpers:
+    # from bech32 import bech32_encode, convertbits
+
+    # ---- Minimal inline adaptors; replace with your bech32 helpers if already available ----
+    from bech32 import bech32_encode, convertbits  # noqa: F401
+
+    url_bytes = url.encode("utf-8")
+    data = convertbits(list(url_bytes), 8, 5, True)
+    if data is None:
+        raise ValueError("Failed to convert URL bytes to Bech32 data")
+    return bech32_encode("lnurl", data).upper()
+
+
+def lightning_address_to_lnurl(address: str, prefer_well_known: bool = True) -> tuple[str, str]:
+    """
+    Convenience: take a Lightning Address, produce (pay_url, LNURL1...).
+    """
+    url = build_lnurlp_url(address, prefer_well_known=prefer_well_known)
+    lnurl = encode_lnurl(url)
+    return url, lnurl
+
+
+# ---- Examples ----
+# url, lnurl = lightning_address_to_lnurl("coffee@example.com")
+# print(url)   # https://example.com/.well-known/lnurlp/coffee
+# print(lnurl) # LNURL1...
+#
+# # If you need the /lnurlp/<name> style instead of well-known:
+# url2, lnurl2 = lightning_address_to_lnurl("coffee@example.com", prefer_well_known=False)
+
     
+
+
 def extract_leading_numbers(input_string: str) -> str:
     """
     Extracts the leading numbers from a string.
