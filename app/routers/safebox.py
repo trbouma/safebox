@@ -332,6 +332,8 @@ async def protected_route(    request: Request,
                         action_data: str = None,
                         action_amount: int = None,
                         action_comment: str = None,
+                        amount: float = 0,
+                        currency: str = None,
                         acorn_obj = Depends(get_acorn)
                     ):
 
@@ -398,6 +400,8 @@ async def protected_route(    request: Request,
                                             "action_mode": action_mode,
                                             "action_data": action_data,
                                             "action_amount": action_amount,
+                                            "amount": amount,
+                                            "currency": currency,
                                             "action_comment": action_comment
 
                                         })
@@ -1904,7 +1908,7 @@ async def hx_request_qr(    request: Request,
             else:
                 final_handle = safebox_found.handle
     
-            final_address = f"{final_handle}--{amount}--{select_currency}@{request.url.hostname}"
+            final_address = f"{final_handle}__{amount}__{select_currency}@{request.url.hostname}"
 
             final_img = f'<img id="request" src="/safebox/qr/{final_address}">'
            

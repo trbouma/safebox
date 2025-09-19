@@ -863,11 +863,11 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
-      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="0" size="24" style="width:30%">
+      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="{{amount}}" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
-      <option value="SAT" selected>SAT</option>            
+      <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
       {% for each in currencies %}     
-       <option value="{{each}}" >{{each}}</option>        
+       <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>   
       <br><br>
@@ -896,11 +896,12 @@ function getInvoiceStatus(ln_invoice_status) {
     </datalist>
     <br>
    
-    <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
+    <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%" value="{{amount}}">
+    
     <select id="ln_select_currency" name="ln_select_currency"> 
-      <option value="SAT" selected>SAT</option>            
+      <option value="SAT" >SAT</option>            
       {% for each in currencies %}     
-       <option value="{{each}}" >{{each}}</option>        
+       <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>
     <br><br>

@@ -83,7 +83,7 @@ async def get_scan_result(  request: Request,
         action_mode ="lnaddress"
         action_data= unquote(qr_code)
         address_parts = action_data.split("@")
-        local_part = address_parts[0].split('--')
+        local_part = address_parts[0].split('__')
         name = local_part[0]
 
         if len(local_part) >= 2:
@@ -172,7 +172,7 @@ async def get_scan_result(  request: Request,
     else:
         return RedirectResponse(f"/safebox/access")
 
-    return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}")
+    return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}&amount={amount}&currency={currency}")
     
       
 

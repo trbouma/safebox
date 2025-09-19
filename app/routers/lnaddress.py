@@ -94,7 +94,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
    
 
 
-    name_parts = name.split("--")
+    name_parts = name.split("__")
 
     name = name_parts[0]
     if len(name_parts) >= 2:
