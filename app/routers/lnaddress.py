@@ -149,7 +149,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
                         "minSendable": min_sendable,
                         "maxSendable": max_sendable,
                         "metadata": metadata,
-                        "commentAllowed": 60,                        
+                        "commentAllowed": 256,                        
                         "allowsNostr" :True,
                         "safebox": True,
                         "nostrPubkey" :     service_key_obj.public_key_hex(),
