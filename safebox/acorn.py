@@ -3251,7 +3251,7 @@ class Acorn:
         return f"multi swap ok  {len(self.proofs)} proofs in {self.events} proof events"
 
     async def swap_multi_each(self):
-        #TODO this is used before consolidate to throw out any dups or doublespend. Fix events
+        #FIXME this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []

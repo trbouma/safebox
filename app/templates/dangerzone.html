@@ -88,9 +88,9 @@ async function setCustomHandle() {
     
     var data;
    
-    var input_owner_npbub = document.getElementById("input_owner_currency");
+    var owner_currency = document.getElementById("select_currency").value;
 
-    owner_currency = select_currency.value;
+   
     user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_currency} as your owner currency?`);
     if (user_confirm == false) {return;}
     

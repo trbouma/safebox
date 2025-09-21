@@ -385,6 +385,8 @@ async def protected_route(    request: Request,
 
     currencies = settings.SUPPORTED_CURRENCIES
     # Token is valid, proceed
+
+    final_url, final_lnurl= lightning_address_to_lnurl(lightning_address)
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
@@ -396,6 +398,7 @@ async def protected_route(    request: Request,
                                             "currency_symbol": currency_symbol,
                                             "currencies" : currencies,
                                             "lightning_address": lightning_address,
+                                            "lnurl": final_lnurl,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
                                             "action_mode": action_mode,

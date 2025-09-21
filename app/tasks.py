@@ -254,6 +254,12 @@ async def safe_handle_payment(*args, **kwargs):
     except Exception as e:
         # Log or handle the exception properly
         print(f"Error in handle_payment: {e}")
+
+async def send_payment_message( nrecipient: str, acorn_obj: Acorn, message: str):
+    print(f"send payment message {message}")
+    await acorn_obj.secure_transmittal(nrecipient=nrecipient, message=message, dm_relays=settings.RELAYS, kind=1059)
+            
+    pass        
        
 async def handle_payment(   acorn_obj: Acorn,
                             cli_quote: cliQuote, 

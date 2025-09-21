@@ -296,12 +296,14 @@ alert("Lightning invoice copied to clipboard!");
     var data;
    
    
+    var owner_currency = document.getElementById("select_currency").value;
 
-    owner_currency = select_currency.value;
+    console.log(`owner currency: ${owner_currency}`);
 
     
 
     const submit_data = {"npub": null, "local_currency": owner_currency};
+    
 
    await fetch('/safebox/setownerdata', {
         method: "POST",
@@ -579,7 +581,7 @@ function checkBalance(balance) {
   if (ux_mode == "init") {
         
       //do a check here so it doesn't load the image everytime    
-      img_qr_display_pic.src = "/safebox/qr/{{lightning_address}}";
+      img_qr_display_pic.src = "/safebox/qr/{{lnurl}}";
 
               
       } 
@@ -780,7 +782,7 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
-      document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
       // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
       // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
       // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
@@ -859,7 +861,7 @@ function getInvoiceStatus(ln_invoice_status) {
     {% else %}
     <h2 style="margin: 0;">Receive a Payment</h2>
       <br>
-      <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
+      <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>

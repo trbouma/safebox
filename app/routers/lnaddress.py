@@ -22,7 +22,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash
+from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
                         send_zap_receipt, 
                         recover_nsec_from_seed, 
@@ -141,6 +141,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
         out_name = safebox_found.handle
     
     if ln_payment_request:
+
         metadata = f"[[\"text/plain\", \"Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats \"],[\"text/long-desc\", \"This is a Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats\"]]"
     else:        
         metadata = f"[[\"text/plain\", \"Send Payment to: {out_name}\"]]"
@@ -239,6 +240,13 @@ async def ln_pay( amount: float,
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
+
+
+    if safebox_found.owner:
+        pass
+        print("safebox has an owner!")
+        message = f"You just received {sat_amount} sats! Comment: {comment}"
+        task = asyncio.create_task(send_payment_message(nrecipient=safebox_found.owner, acorn_obj=acorn_obj, message=message))
 
    
 
