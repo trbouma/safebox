@@ -134,7 +134,9 @@ class Settings(BaseSettings):
                             [34019, "Educational Diplomas"],
                             [34021, "Official Documentation"],
                             [34023, "Insurance"],
-                            [34025, "Recipes"]
+                            [34025, "Recipes"],
+                            [34101, "Ayra Cards"],
+                            [34103, "First Person Network"]
                         ]  
  
     GRANT_KINDS: List =     [  
@@ -154,7 +156,9 @@ class Settings(BaseSettings):
                             [34020, "Educational Diplomas"],
                             [34022, "Official Documentation"],
                             [34024, "Insurance"],
-                            [34026, "Recipes"]
+                            [34026, "Recipes"],
+                            [34102, "Ayra Cards"],
+                            [34104, "First Person Network"]
                         ] 
 
     WALLET_SWAP_MODE: bool = False

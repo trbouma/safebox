@@ -4070,6 +4070,7 @@ class Acorn:
             
             await self.release_lock()  
 
+        await self.add_tx_history(tx_type='C', amount=token_amount, comment='ecash deposit')
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 
@@ -4176,6 +4177,8 @@ class Acorn:
             raise Exception(f"Error {e}")
         finally:
             await self.release_lock()
+
+        await self.add_tx_history(tx_type='D',amount=amount,comment='ecash withdrawal')
         
         return v3_token.serialize()   
 

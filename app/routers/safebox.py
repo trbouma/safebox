@@ -532,7 +532,7 @@ async def issue_ecash(   request: Request,
 
         # msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         msg_out = await acorn_obj.issue_token(ecash_request.amount)
-        await acorn_obj.add_tx_history(tx_type='D',amount=ecash_request.amount,comment='ecash withdrawal')
+        # await acorn_obj.add_tx_history(tx_type='D',amount=ecash_request.amount,comment='ecash withdrawal')
     except Exception as e:
         return {    "status": "ERROR",
                     f"detail": "error {e}"}
@@ -553,7 +553,7 @@ async def accept_ecash(   request: Request,
      
         
         msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token)
-        await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
+        # await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
         pass
     except Exception as e:
         return {    "status": "ERROR",
