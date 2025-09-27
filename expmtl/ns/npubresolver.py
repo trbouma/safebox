@@ -35,6 +35,16 @@ def is_valid_npub(label: str) -> bool:
         return decoded is not None and len(decoded) == 32
     except Exception:
         return False
+# Zone SOA config
+ZONE   = "supername.app."
+MNAME  = "ns1.supername.app."           # primary nameserver
+RNAME  = "hostmaster.supername.app."    # admin email with '.' instead of '@'
+SERIAL = 2025092701                     # bump when you change zone data
+REFRESH = 3600
+RETRY   = 600
+EXPIRE  = 604800
+MINIMUM = 3600
+SOA_TTL = 3600
 
 
 # -------------------------------
@@ -95,6 +105,24 @@ def rr_txt(name, text, ttl):
     b = text.encode(); b = b[:255]
     return rr_header(name, 16, ttl, struct.pack("B", len(b))+b)
 
+def rr_soa(qname: str, mname: str, rname: str,
+           serial: int, refresh: int, retry: int,
+           expire: int, minimum: int, ttl: int = 3600) -> bytes:
+    def _enc(name: str) -> bytes:
+        parts = name.rstrip(".").split(".")
+        return b"".join(bytes([len(p)]) + p.encode() for p in parts) + b"\x00"
+
+    rdata = (
+        _enc(mname) +
+        _enc(rname) +
+        struct.pack(">IIIII", serial, refresh, retry, expire, minimum)
+    )
+    return (
+        _enc(qname) +
+        struct.pack(">HHI", 6, 1, ttl) +            # TYPE=SOA, CLASS=IN, TTL
+        struct.pack(">H", len(rdata)) + rdata
+    )
+
 # -------------------------------
 # Forward to upstream
 # -------------------------------
@@ -110,6 +138,36 @@ def forward_query(req: bytes) -> bytes | None:
             log.debug(f"forwarder {host}:{port} failed: {e}")
             continue
     return None
+def rr_soa(qname: str, mname: str, rname: str,
+           serial: int, refresh: int, retry: int,
+           expire: int, minimum: int, ttl: int = 3600) -> bytes:
+    """
+    Build a DNS SOA record.
+    
+    qname: zone name (e.g., 'supername.app.')
+    mname: primary master nameserver (e.g., 'ns1.supername.app.')
+    rname: responsible party (e.g., 'hostmaster.supername.app.')
+    """
+    # Encode names
+    def encode_name(name: str) -> bytes:
+        parts = name.rstrip('.').split('.')
+        out = b''.join(struct.pack("B", len(p)) + p.encode() for p in parts)
+        return out + b'\x00'
+
+    rdata = (
+        encode_name(mname) +
+        encode_name(rname) +
+        struct.pack(">IIIII", serial, refresh, retry, expire, minimum)
+    )
+
+    return (
+        encode_name(qname) +
+        struct.pack(">HHI", 6, 1, ttl) +  # type=SOA (6), class=IN (1), ttl
+        struct.pack(">H", len(rdata)) +
+        rdata
+    )
+
+
 
 # -------------------------------
 # Build response
@@ -124,17 +182,26 @@ def build_response(req: bytes) -> bytes:
         resp = forward_query(req)
         if resp:
             return resp
-        # fallback SERVFAIL
         flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
         return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
+
+    # --- SOA at zone apex (authoritative answer) ---
+    if qtype in (6, 255) and qname == ZONE:
+        answer = rr_soa(
+            qname=ZONE, mname=MNAME, rname=RNAME,
+            serial=SERIAL, refresh=REFRESH, retry=RETRY,
+            expire=EXPIRE, minimum=MINIMUM, ttl=SOA_TTL
+        )
+        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+        return header + question + answer
+    # -----------------------------------------------
 
     # Check leftmost label for npub
     leftmost = qname.split(".", 1)[0]
     if is_valid_npub(leftmost):
         records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
-        
         print(f"we have the records {records}")
-        
 
         if records:
             answers = b""
@@ -147,41 +214,32 @@ def build_response(req: bytes) -> bytes:
             ancount = count_rrs(answers)
             header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
             return header + question + answers
-        
+
         answers = b""
-        # A or ANY
         if qtype in (1, 255):
             answers += rr_a(qname, "100.100.100.100", ttl=60)
-        # TXT or ANY
         if qtype in (16, 255):
             answers += rr_txt(qname, leftmost, ttl=60)
 
-        # If we produced any answers locally, return them; otherwise delegate
         if answers:
             flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
             ancount = count_rrs(answers)
             header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
             return header + question + answers
         else:
-            # npub detected but unsupported type -> delegate
             resp = forward_query(req)
             if resp:
                 return resp
-            flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
+            flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
             return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
-        
-
-        
 
     # No valid npub -> delegate immediately
     resp = forward_query(req)
     if resp:
         return resp
 
-    # Fallback: SERVFAIL if all forwarders failed
     flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
     return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
-
 
 
 
