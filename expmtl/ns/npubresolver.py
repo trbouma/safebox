@@ -9,7 +9,7 @@ import asyncio
 import signal
 import sys
 
-from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples
+from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples, Settings
 import urllib.request
 
 def get_public_ip() -> str:
@@ -58,8 +58,8 @@ MINIMUM = 3600
 SOA_TTL = 3600
 
 
-NS    = ["ns1.supername.app."]          # you can add ns2 later
-GLUE = {"ns1.supername.app.": get_public_ip()}
+NS    = ["ns1.openproof.org."]          # you can add ns2 later
+GLUE = {"ns1.openproof.org.": get_public_ip()}
 
 
 # -------------------------------
@@ -313,6 +313,8 @@ def count_rrs(rr_blob: bytes) -> int:
 # UDP server
 # -------------------------------
 def start_dns_server(host="0.0.0.0", port=53):
+    settings = Settings()
+    print(settings)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # allow quick restart
     try:
@@ -329,6 +331,8 @@ def start_dns_server(host="0.0.0.0", port=53):
     def _term_handler(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, _term_handler)
+
+    
 
     try:
         while True:
