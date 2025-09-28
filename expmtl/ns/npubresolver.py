@@ -47,9 +47,9 @@ def is_valid_npub(label: str) -> bool:
     except Exception:
         return False
 # Zone SOA config
-ZONE   = "supername.app."
-MNAME  = "ns1.supername.app."           # primary nameserver
-RNAME  = "hostmaster.supername.app."    # admin email with '.' instead of '@'
+ZONE   = "openproof.org."
+MNAME  = "ns1.openproof.org."           # primary nameserver
+RNAME  = "hostmaster.openproof.org."    # admin email with '.' instead of '@'
 SERIAL = 2025092701                     # bump when you change zone data
 REFRESH = 3600
 RETRY   = 600
