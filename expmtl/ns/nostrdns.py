@@ -2,20 +2,27 @@ import asyncio
 import json
 import bech32  # for npub -> pubkey
 from typing import List, Tuple, Optional
+from pydantic_settings import BaseSettings
 
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 
-# Relays you want to query
-NOSTR_RELAYS = [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://relay.primal.net",
-    "wss://relay.snort.social"
-]
 
-# Custom event kind for “DNS record” (choose any free kind you prefer)
-KIND_DNS = 11111
+class Settings(BaseSettings):
+    NOSTR_RELAYS: List = [
+        "wss://relay.damus.io",
+        "wss://nos.lol",
+        "wss://relay.primal.net",
+        "wss://relay.snort.social"
+    ]
+    KIND_DNS: int = 11111 # Custom event kind for “DNS record” (choose any free kind you prefer)
+
+
+
+
+
+
+settings = Settings()
 
 # ---------------------------
 # Helpers
@@ -102,11 +109,11 @@ async def _nostr_fetch_for_npub(
     """
     results: List[Tuple[str, str, int]] = []
 
-    print(f"fetch for {npub_hex} using {KIND_DNS}")
+    print(f"fetch for {npub_hex} using {settings.KIND_DNS}")
     # Simple handler that collects matching events
     def handler(evt: Event, *_args, **_kwargs):
-        print(f"evt {evt} {KIND_DNS}")
-        if evt.kind != KIND_DNS:
+        print(f"evt {evt} {settings.KIND_DNS}")
+        if evt.kind != settings.KIND_DNS:
             return
         # filter by author
         if getattr(evt, "pub_key", None) != npub_hex:
@@ -116,7 +123,7 @@ async def _nostr_fetch_for_npub(
             results.append(parsed)
 
     # Create clients for each relay
-    clients = [Client(url) for url in NOSTR_RELAYS]
+    clients = [Client(url) for url in settings.NOSTR_RELAYS]
     run_tasks = []
     try:
         # Start all clients
@@ -134,7 +141,7 @@ async def _nostr_fetch_for_npub(
         # Subscribe: authors + kinds (NIP-01 filter)
         filters = {
             "authors": [npub_hex],
-            "kinds": [KIND_DNS],
+            "kinds": [settings.KIND_DNS],
             "limit": 64
         }
         for c in clients:
@@ -245,13 +252,13 @@ async def lookup_npub_records(npub: str, qtype: int):
     FILTER = [{
                 'limit': 64, 
                 'authors'  :  [npub_hex],              
-                'kinds': [KIND_DNS]               
+                'kinds': [settings.KIND_DNS]               
                 
                 }]
     
-    print(f"npub hex {npub_hex} {NOSTR_RELAYS} {FILTER}")
+    print(f"npub hex {npub_hex} {settings.NOSTR_RELAYS} {FILTER}")
 
-    async with ClientPool(NOSTR_RELAYS) as c:  
+    async with ClientPool(settings.NOSTR_RELAYS) as c:  
             events = await c.query(FILTER)  
 
     print(f"records retrieved: {len(events)} ")
@@ -285,13 +292,13 @@ async def lookup_npub_records_tuples(npub: str, qtype: int):
     FILTER = [{
         'limit': 64,
         'authors': [npub_hex],
-        'kinds': [KIND_DNS]
+        'kinds': [settings.KIND_DNS]
     }]
-    print(f"npub hex {npub_hex} {NOSTR_RELAYS} {FILTER}")
+    print(f"npub hex {npub_hex} {settings.NOSTR_RELAYS} {FILTER}")
 
     tuples: list[tuple[str, str, int]] = []
 
-    async with ClientPool(NOSTR_RELAYS) as c:
+    async with ClientPool(settings.NOSTR_RELAYS) as c:
         events = await c.query(FILTER)
 
     print(f"records retrieved: {len(events)} ")

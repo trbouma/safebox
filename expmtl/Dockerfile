@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Python deps
 # Tip: switch to requirements.txt later if you prefer.
 RUN pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir bech32 monstr
+  && pip install --no-cache-dir bech32 monstr pydantic pydantic-core pydantic-settings
 
 # App
 WORKDIR /app
