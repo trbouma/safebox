@@ -6,7 +6,18 @@ from monstr.encrypt import Keys
 import bech32
 import asyncio
 
+import signal
+import sys
+
 from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples
+import urllib.request
+
+def get_public_ip() -> str:
+    try:
+        with urllib.request.urlopen("https://api.ipify.org") as resp:
+            return resp.read().decode().strip()
+    except Exception:
+        return "127.0.0.1"  # fallback
 
 # ---- logging ----
 logging.basicConfig(
@@ -45,6 +56,10 @@ RETRY   = 600
 EXPIRE  = 604800
 MINIMUM = 3600
 SOA_TTL = 3600
+
+
+NS    = ["ns1.supername.app."]          # you can add ns2 later
+GLUE = {"ns1.supername.app.": get_public_ip()}
 
 
 # -------------------------------
@@ -96,6 +111,11 @@ def build_flags(req_flags, rcode=0, aa=False, ra=True):
     if ra: flags |= 0x0080       # RA
     flags |= rcode
     return struct.pack(">H", flags)
+
+def rr_ns(name: str, host: str, ttl: int = 3600) -> bytes:
+    rdata = encode_name(host)
+    return encode_name(name) + struct.pack(">HHI", 2, 1, ttl) + struct.pack(">H", len(rdata)) + rdata
+
 
 def rr_header(name, rtype, ttl, rdata):
     return encode_name(name) + struct.pack(">HHI", rtype, 1, ttl) + struct.pack(">H", len(rdata)) + rdata
@@ -182,11 +202,11 @@ def build_response(req: bytes) -> bytes:
         resp = forward_query(req)
         if resp:
             return resp
-        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
+        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
         return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
 
-    # --- SOA at zone apex (authoritative answer) ---
-    if qtype in (6, 255) and qname == ZONE:
+    # ---------- Authoritative apex SOA ----------
+    if qname == ZONE and qtype in (6, 255):  # SOA or ANY
         answer = rr_soa(
             qname=ZONE, mname=MNAME, rname=RNAME,
             serial=SERIAL, refresh=REFRESH, retry=RETRY,
@@ -195,52 +215,83 @@ def build_response(req: bytes) -> bytes:
         flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
         header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
         return header + question + answer
-    # -----------------------------------------------
 
-    # Check leftmost label for npub
+    # ---------- Authoritative apex NS (+ glue in Additional) ----------
+    if qname == ZONE and qtype in (2, 255):  # NS or ANY
+        answers = b"".join(rr_ns(ZONE, ns) for ns in NS)
+        additionals = b"".join(
+            rr_a(host, ip, 3600) for host, ip in GLUE.items() if host in NS
+        )
+        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+        ancount = count_rrs(answers)
+        arcount = count_rrs(additionals)
+        header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, arcount)
+        return header + question + answers + additionals
+
+    # ---------- Authoritative glue host A (e.g., ns1.supername.app.) ----------
+    if qname in GLUE and qtype in (1, 255):  # A or ANY
+        answer = rr_a(qname, GLUE[qname], 3600)
+        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+        return header + question + answer
+
+    # ---------- npub handling ----------
     leftmost = qname.split(".", 1)[0]
     if is_valid_npub(leftmost):
-        records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
-        print(f"we have the records {records}")
+        # Try to fetch tuples from Nostr: [("A", "...", ttl), ("TXT", "...", ttl), ...]
+        try:
+            records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
+        except RuntimeError:
+            # already inside an event loop; use a new loop
+            loop = asyncio.new_event_loop()
+            try:
+                records = loop.run_until_complete(lookup_npub_records_tuples(leftmost, qtype))
+            finally:
+                loop.close()
+        except Exception:
+            records = []
 
         if records:
             answers = b""
             for rtype, val, ttl in records:
                 if rtype == "A":
-                    answers += rr_a(qname, val, ttl)
+                    answers += rr_a(qname, val, int(ttl))
                 elif rtype == "TXT":
-                    answers += rr_txt(qname, val, ttl)
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            ancount = count_rrs(answers)
-            header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
-            return header + question + answers
+                    answers += rr_txt(qname, str(val), int(ttl))
+            if answers:
+                flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+                ancount = count_rrs(answers)
+                header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
+                return header + question + answers
 
+        # Optional local fallback when npub but nothing found (A/TXT only)
         answers = b""
-        if qtype in (1, 255):
+        if qtype in (1, 255):   # A
             answers += rr_a(qname, "100.100.100.100", ttl=60)
-        if qtype in (16, 255):
+        if qtype in (16, 255):  # TXT
             answers += rr_txt(qname, leftmost, ttl=60)
-
         if answers:
             flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
             ancount = count_rrs(answers)
             header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
             return header + question + answers
-        else:
-            resp = forward_query(req)
-            if resp:
-                return resp
-            flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
-            return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
 
-    # No valid npub -> delegate immediately
+        # npub detected but unsupported query type -> delegate
+        resp = forward_query(req)
+        if resp:
+            return resp
+        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
+        return header + question + answers  # header defined above if needed; else rebuild:
+        # return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
+
+    # ---------- Otherwise: delegate upstream ----------
     resp = forward_query(req)
     if resp:
         return resp
 
-    flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
+    # ---------- Upstreams failed ----------
+    flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
     return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
-
 
 
 def count_rrs(rr_blob: bytes) -> int:
@@ -263,16 +314,58 @@ def count_rrs(rr_blob: bytes) -> int:
 # -------------------------------
 def start_dns_server(host="0.0.0.0", port=53):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # allow quick restart
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    except Exception:
+        pass
     sock.bind((host, port))
-    log.info(f"[Local+Forward DNS] listening on {host}:{port}")
-    while True:
-        data, addr = sock.recvfrom(4096)
+    # allow loop to wake up and handle shutdown
+    sock.settimeout(1.0)
+
+    print(f"[DNS] listening on {host}:{port} (UDP)")
+
+    # Make SIGTERM behave like Ctrl-C (useful for docker stop)
+    def _term_handler(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _term_handler)
+
+    try:
+        while True:
+            try:
+                data, addr = sock.recvfrom(4096)
+            except socket.timeout:
+                continue  # check again (and allows Ctrl-C to be processed)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                # ignore transient recv errors and keep serving
+                # print(f"recv error: {e}")
+                continue
+
+            try:
+                resp = build_response(data)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                # FORMERR fallback
+                tid = data[:2] if len(data) >= 2 else b"\x00\x00"
+                flags = build_flags(data[2:4] if len(data) >= 4 else b"\x00\x00", rcode=1, aa=False, ra=True)
+                resp = tid + flags + b"\x00\x00\x00\x00\x00\x00\x00\x00"
+
+            try:
+                sock.sendto(resp, addr)
+            except Exception:
+                pass
+
+    except KeyboardInterrupt:
+        print("\n[DNS] shutting down...")
+    finally:
         try:
-            resp = build_response(data)
-        except Exception as e:
-            log.error(f"error building response: {e}")
-            resp = data[:2] + build_flags(data[2:4], rcode=1) + b"\x00\x00\x00\x00\x00\x00\x00\x00"
-        sock.sendto(resp, addr)
+            sock.close()
+        except Exception:
+            pass
+        print("[DNS] socket closed")
 
 if __name__ == "__main__":
     start_dns_server()  # runs on port 53 by default
