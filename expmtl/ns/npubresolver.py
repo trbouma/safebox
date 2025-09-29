@@ -292,7 +292,28 @@ def build_response(req: bytes) -> bytes:
                 header = tid + flags + struct.pack(">HHHH", 1, count_rrs(answers), 0, 0)
                 return header + question + answers
 
-        # optional fallback
+        # --- AAAA handling: NOERROR / NODATA (with SOA in AUTHORITY if we know the zone) ---
+        if qtype == 28:  # AAAA
+            auth = b""
+            zname = find_zone(qname) if 'find_zone' in globals() else None
+            if zname:
+                s = ZONES[zname]["soa"]
+                auth = rr_soa(
+                    qname=zname,
+                    mname=s["mname"], rname=s["rname"],
+                    serial=s["serial"], refresh=s["refresh"],
+                    retry=s["retry"], expire=s["expire"],
+                    minimum=s["minimum"], ttl=s["ttl"],
+                )
+                nscount = 1
+            else:
+                nscount = 0
+
+            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)  # NOERROR
+            header = tid + flags + struct.pack(">HHHH", 1, 0, nscount, 0)
+            return header + question + b"" + auth
+
+        # optional fallback (A/TXT)
         fallback = b""
         if qtype in (1,255):  fallback += rr_a(qname, "100.100.100.100", 60)
         if qtype in (16,255): fallback += rr_txt(qname, leftmost, 60)
