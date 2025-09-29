@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import socket
+import socket, threading
 import struct
 import logging
 from monstr.encrypt import Keys
@@ -401,6 +401,32 @@ def count_rrs(rr_blob: bytes) -> int:
         cnt += 1
     return cnt
 
+def handle_tcp_client(conn, addr):
+    try:
+        # TCP DNS uses a 2-byte length prefix
+        l = conn.recv(2)
+        if len(l) < 2:
+            return
+        ln = int.from_bytes(l, "big")
+        req = conn.recv(ln)
+        resp = build_response(req)
+        conn.send(len(resp).to_bytes(2, "big") + resp)
+    finally:
+        conn.close()
+
+def start_dns_tcp(host="0.0.0.0", port=53):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    s.listen(100)
+    print(f"[DNS] listening on {host}:{port} (TCP)")
+    try:
+        while True:
+            conn, addr = s.accept()
+            threading.Thread(target=handle_tcp_client, args=(conn, addr), daemon=True).start()
+    finally:
+        s.close()
+
 # -------------------------------
 # UDP server
 # -------------------------------
@@ -464,4 +490,5 @@ def start_dns_server(host="0.0.0.0", port=53):
         print("[DNS] socket closed")
 
 if __name__ == "__main__":
-    start_dns_server()  # runs on port 53 by default
+    threading.Thread(target=start_dns_tcp, daemon=True).start()
+    start_dns_server()  # your UDP loop

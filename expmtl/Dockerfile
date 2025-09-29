@@ -24,6 +24,7 @@ COPY . /app
 
 # Expose UDP 53 for DNS
 EXPOSE 53/udp
+EXPOSE 53/tcp
 
 # Run your resolver
 CMD ["python", "ns/npubresolver.py"]
