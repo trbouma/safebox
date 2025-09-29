@@ -47,9 +47,9 @@ def is_valid_npub(label: str) -> bool:
     except Exception:
         return False
 # Zone SOA config
-ZONE   = "openproof.org."
-MNAME  = "ns1.openproof.org."           # primary nameserver
-RNAME  = "hostmaster.openproof.org."    # admin email with '.' instead of '@'
+ZONE   = "npub.openproof.org."
+MNAME  = "ns1.npub.openproof.org."           # primary nameserver
+RNAME  = "hostmaster.npub.openproof.org."    # admin email with '.' instead of '@'
 SERIAL = 2025092701                     # bump when you change zone data
 REFRESH = 3600
 RETRY   = 600
@@ -58,8 +58,8 @@ MINIMUM = 3600
 SOA_TTL = 3600
 
 
-NS    = ["ns1.openproof.org."]          # you can add ns2 later
-GLUE = {"ns1.openproof.org.": get_public_ip()}
+NS    = ["ns1.npub.openproof.org."]          # you can add ns2 later
+GLUE = {"ns1.npub.openproof.org.": get_public_ip()}
 
 
 # -------------------------------
