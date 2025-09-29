@@ -12,6 +12,18 @@ import sys
 from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples, Settings
 import urllib.request
 
+ACME_TOKENS = {}  # {"_acme-challenge.<FQDN>.": ("<token>", 120)}
+
+def maybe_acme_answer(qname: str, qtype: int):
+    if qtype != 16:  # TXT
+        return None
+    key = qname if qname.endswith(".") else qname + "."
+    if key in ACME_TOKENS:
+        token, ttl = ACME_TOKENS[key]
+        return rr_txt(key, token, ttl)
+    return None
+
+
 def get_public_ip() -> str:
     try:
         with urllib.request.urlopen("https://api.ipify.org") as resp:
@@ -265,6 +277,13 @@ def build_response(req: bytes) -> bytes:
             flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
             header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
             return header + question + ans
+        
+    acme = maybe_acme_answer(qname, qtype)
+    if acme:
+        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+        return header + question + acme
+
 
     # ----- Your existing npub handling (for labels under zones you serve) -----
     leftmost = qname.split(".", 1)[0]
