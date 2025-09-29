@@ -12,16 +12,23 @@ import sys
 from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples, Settings
 import urllib.request
 
-ACME_TOKENS = {}  # {"_acme-challenge.<FQDN>.": ("<token>", 120)}
+# --- ACME support ---
+ACME_TOKENS = {
+    # fill at runtime:  "_acme-challenge.<FQDN>.": ("<token>", ttl)
+    # Example:
+    # "_acme-challenge.npub1h9...rhx0.npub.openproof.org.": ("<paste-token-here>", 120),
+}
 
-def maybe_acme_answer(qname: str, qtype: int):
-    if qtype != 16:  # TXT
+def acme_txt_answer(qname: str, qtype: int):
+    if qtype != 16:  # TXT only
         return None
     key = qname if qname.endswith(".") else qname + "."
-    if key in ACME_TOKENS:
-        token, ttl = ACME_TOKENS[key]
-        return rr_txt(key, token, ttl)
-    return None
+    rec = ACME_TOKENS.get(key)
+    if not rec:
+        return None
+    token, ttl = rec
+    return rr_txt(key, token, int(ttl))
+
 
 
 def get_public_ip() -> str:
@@ -247,6 +254,14 @@ def build_response(req: bytes) -> bytes:
                                       + struct.pack(">HHHH", 1,0,0,0) + question)
         return resp
 
+    # --- ACME TXT fast path (authoritative) ---
+    acme = acme_txt_answer(qname, qtype)
+    if acme:
+        print("we got an acme challenge!")
+        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+        return header + question + acme
+    
     zone = find_zone(qname)
     if zone:
         z = ZONES[zone]
@@ -278,11 +293,7 @@ def build_response(req: bytes) -> bytes:
             header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
             return header + question + ans
         
-    acme = maybe_acme_answer(qname, qtype)
-    if acme:
-        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-        return header + question + acme
+
 
 
     # ----- Your existing npub handling (for labels under zones you serve) -----
@@ -340,6 +351,26 @@ def build_response(req: bytes) -> bytes:
             flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
             header = tid + flags + struct.pack(">HHHH", 1, count_rrs(fallback), 0, 0)
             return header + question + fallback
+
+        # --- For types we don't serve at leaf (e.g., NS on a host), reply NODATA, not SERVFAIL ---
+        # This prevents validators from seeing SERVFAIL when they probe NS/TLSA/etc. at leaf names.
+        if qtype not in (1, 16, 28, 255):  # not A/TXT/AAAA/ANY
+            auth = b""
+            zname = find_zone(qname) if 'find_zone' in globals() else None
+            nscount = 0
+            if zname:
+                s = ZONES[zname]["soa"]
+                auth = rr_soa(
+                    qname=zname,
+                    mname=s["mname"], rname=s["rname"],
+                    serial=s["serial"], refresh=s["refresh"],
+                    retry=s["retry"], expire=s["expire"],
+                    minimum=s["minimum"], ttl=s["ttl"],
+                )
+                nscount = 1  # SOA in AUTHORITY for negative caching (RFC 2308)
+            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)  # NOERROR
+            header = tid + flags + struct.pack(">HHHH", 1, 0, nscount, 0)
+            return header + question + b"" + auth
 
         # unsupported type -> delegate
         resp = forward_query(req)
