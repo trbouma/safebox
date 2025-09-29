@@ -79,6 +79,39 @@ FORWARDERS = [
 ]
 FORWARD_TIMEOUT = 2.0
 
+# ---- multi-zone config ----
+ZONES = {
+    "openproof.org.": {
+        "ns": ["ns1.openproof.org."],
+        "glue_a": {"ns1.openproof.org.": "15.235.3.226"},
+        "soa": {
+            "mname": "ns1.openproof.org.",
+            "rname": "hostmaster.openproof.org.",
+            "serial": 2025092801,
+            "refresh": 3600, "retry": 600, "expire": 604800, "minimum": 3600, "ttl": 3600
+        },
+    },
+    "npub.openproof.org.": {
+        "ns": ["ns1.openproof.org."],       # reuse same server
+        "glue_a": {},                       # parent provides glue for ns1.openproof.org
+        "soa": {
+            "mname": "ns1.openproof.org.",
+            "rname": "hostmaster.openproof.org.",
+            "serial": 2025092801,
+            "refresh": 3600, "retry": 600, "expire": 604800, "minimum": 3600, "ttl": 3600
+        },
+    },
+}
+
+def find_zone(qname: str) -> str | None:
+    """Return the longest matching zone apex for qname."""
+    q = qname.rstrip(".") + "."
+    best = None
+    for zone in ZONES.keys():
+        if q.endswith(zone) and (best is None or len(zone) > len(best)):
+            best = zone
+    return best
+
 # -------------------------------
 # DNS wire helpers
 # -------------------------------
@@ -197,52 +230,48 @@ def build_response(req: bytes) -> bytes:
     qname, qtype, qclass, qend = parse_question(req)
     question = req[12:qend]
 
-    # If not IN class, delegate immediately
     if qclass != 1:
-        resp = forward_query(req)
-        if resp:
-            return resp
-        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
-        return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
+        resp = forward_query(req) or (tid + build_flags(req_flags, rcode=2, aa=False, ra=True)
+                                      + struct.pack(">HHHH", 1,0,0,0) + question)
+        return resp
 
-    # ---------- Authoritative apex SOA ----------
-    if qname == ZONE and qtype in (6, 255):  # SOA or ANY
-        answer = rr_soa(
-            qname=ZONE, mname=MNAME, rname=RNAME,
-            serial=SERIAL, refresh=REFRESH, retry=RETRY,
-            expire=EXPIRE, minimum=MINIMUM, ttl=SOA_TTL
-        )
-        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-        return header + question + answer
+    zone = find_zone(qname)
+    if zone:
+        z = ZONES[zone]
+        # SOA at apex
+        if qname == zone and qtype in (6, 255):
+            s = z["soa"]
+            ans = rr_soa(zone, s["mname"], s["rname"], s["serial"], s["refresh"],
+                         s["retry"], s["expire"], s["minimum"], s["ttl"])
+            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+            header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+            return header + question + ans
 
-    # ---------- Authoritative apex NS (+ glue in Additional) ----------
-    if qname == ZONE and qtype in (2, 255):  # NS or ANY
-        answers = b"".join(rr_ns(ZONE, ns) for ns in NS)
-        additionals = b"".join(
-            rr_a(host, ip, 3600) for host, ip in GLUE.items() if host in NS
-        )
-        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-        ancount = count_rrs(answers)
-        arcount = count_rrs(additionals)
-        header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, arcount)
-        return header + question + answers + additionals
+        # NS at apex (+ glue A in Additional if in-zone host present)
+        if qname == zone and qtype in (2, 255):
+            answers = b"".join(rr_ns(zone, ns) for ns in z["ns"])
+            additionals = b"".join(
+                rr_a(h, ip, 3600) for h, ip in z.get("glue_a", {}).items() if h in z["ns"]
+            )
+            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+            ancount = count_rrs(answers)
+            arcount = count_rrs(additionals)
+            header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, arcount)
+            return header + question + answers + additionals
 
-    # ---------- Authoritative glue host A (e.g., ns1.supername.app.) ----------
-    if qname in GLUE and qtype in (1, 255):  # A or ANY
-        answer = rr_a(qname, GLUE[qname], 3600)
-        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-        return header + question + answer
+        # Glue host A (e.g., ns1.openproof.org.) if this zone hosts it
+        if qtype in (1, 255) and qname in z.get("glue_a", {}):
+            ans = rr_a(qname, z["glue_a"][qname], 3600)
+            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
+            header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
+            return header + question + ans
 
-    # ---------- npub handling ----------
+    # ----- Your existing npub handling (for labels under zones you serve) -----
     leftmost = qname.split(".", 1)[0]
     if is_valid_npub(leftmost):
-        # Try to fetch tuples from Nostr: [("A", "...", ttl), ("TXT", "...", ttl), ...]
         try:
             records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
         except RuntimeError:
-            # already inside an event loop; use a new loop
             loop = asyncio.new_event_loop()
             try:
                 records = loop.run_until_complete(lookup_npub_records_tuples(leftmost, qtype))
@@ -260,37 +289,29 @@ def build_response(req: bytes) -> bytes:
                     answers += rr_txt(qname, str(val), int(ttl))
             if answers:
                 flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-                ancount = count_rrs(answers)
-                header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
+                header = tid + flags + struct.pack(">HHHH", 1, count_rrs(answers), 0, 0)
                 return header + question + answers
 
-        # Optional local fallback when npub but nothing found (A/TXT only)
-        answers = b""
-        if qtype in (1, 255):   # A
-            answers += rr_a(qname, "100.100.100.100", ttl=60)
-        if qtype in (16, 255):  # TXT
-            answers += rr_txt(qname, leftmost, ttl=60)
-        if answers:
+        # optional fallback
+        fallback = b""
+        if qtype in (1,255):  fallback += rr_a(qname, "100.100.100.100", 60)
+        if qtype in (16,255): fallback += rr_txt(qname, leftmost, 60)
+        if fallback:
             flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            ancount = count_rrs(answers)
-            header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, 0)
-            return header + question + answers
+            header = tid + flags + struct.pack(">HHHH", 1, count_rrs(fallback), 0, 0)
+            return header + question + fallback
 
-        # npub detected but unsupported query type -> delegate
+        # unsupported type -> delegate
         resp = forward_query(req)
-        if resp:
-            return resp
-        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
-        return header + question + answers  # header defined above if needed; else rebuild:
-        # return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
+        if resp: return resp
+        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
+        return tid + flags + struct.pack(">HHHH", 1,0,0,0) + question
 
-    # ---------- Otherwise: delegate upstream ----------
+    # ----- Otherwise delegate (outside zones you serve or non-npub names) -----
     resp = forward_query(req)
     if resp:
         return resp
-
-    # ---------- Upstreams failed ----------
-    flags = build_flags(req_flags, rcode=2, aa=False, ra=True)  # SERVFAIL
+    flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
     return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
 
 
