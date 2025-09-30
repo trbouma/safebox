@@ -94,6 +94,95 @@ def _parse_dns_event(evt: Event, want_type: str, qname: Optional[str]) -> Option
 
     return None
 
+# Map wire qtype -> RR type string
+_QTYPE_TO_STR = {
+    1: "A",
+    16: "TXT",
+    28: "AAAA",
+    255: "ANY",
+}
+
+async def lookup_npub_a_first(npub: str, want_qtype: int):
+    """
+    One-shot query to Nostr; parse all records; return:
+        (a_recs, wanted_recs)
+    where each is a list of (rtype, value, ttl).
+    """
+    print(f"[A-FIRST] npub={npub} want_qtype={want_qtype}")
+    npub_hex = npub_to_hex_pubkey(npub)
+
+    FILTER = [{
+        'limit': 64,
+        'authors': [npub_hex],
+        'kinds': [settings.KIND_DNS]
+    }]
+
+    wanted_str = _QTYPE_TO_STR.get(want_qtype, None)
+
+    a_recs: list[tuple[str, str, int]] = []
+    wanted_recs: list[tuple[str, str, int]] = []
+
+    try:
+        async with ClientPool(settings.NOSTR_RELAYS) as c:
+            events = await c.query(FILTER)
+    except Exception as e:
+        print(f"[ERR] Nostr query failed: {e}")
+        events = []
+
+    print(f"[A-FIRST] events retrieved: {len(events)}")
+
+    # Parse all events once
+    parsed: list[dict] = []
+    for each in events:
+        try:
+            parsed.extend(parse_into_dns_records(each.tags) or [])
+        except Exception as e:
+            print(f"[ERR] parse tags: {e}")
+
+    # Collect A first
+    for rec in parsed:
+        try:
+            rtype = str(rec.get("type", "")).upper()
+            val = rec.get("value")
+            ttl = int(rec.get("ttl", 300))
+            if not (rtype and val):
+                continue
+            if rtype == "A":
+                a_recs.append((rtype, str(val), ttl))
+        except Exception as e:
+            print(f"[ERR] parse rec(A): {e}")
+
+    # Then collect the specifically requested type (unless it's A)
+    if want_qtype == 1:
+        wanted_recs = list(a_recs)  # same list for convenience
+    else:
+        for rec in parsed:
+            try:
+                rtype = str(rec.get("type", "")).upper()
+                val = rec.get("value")
+                ttl = int(rec.get("ttl", 300))
+                if not (rtype and val):
+                    continue
+                if wanted_str == "ANY":
+                    wanted_recs.append((rtype, str(val), ttl))
+                elif rtype == wanted_str:
+                    wanted_recs.append((rtype, str(val), ttl))
+            except Exception as e:
+                print(f"[ERR] parse rec(wanted): {e}")
+
+    # Optional defaults (so you can still answer deterministically)
+    if not a_recs:
+        # comment out if you want “pure” NODATA instead of a fallback A
+        # a_recs = [("A", "100.100.100.101", 60)]
+        pass
+
+    if not wanted_recs and wanted_str in ("TXT", "ANY"):
+        # small example TXT default; comment out if you prefer NODATA
+        # wanted_recs = [("TXT", f"npub={npub}", 60)]
+        pass
+
+    return a_recs, wanted_recs
+
 # ---------------------------
 # Async fetch (one-shot)
 # ---------------------------

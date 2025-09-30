@@ -9,7 +9,7 @@ import asyncio
 import signal
 import sys
 
-from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples, Settings
+from nostrdns import npub_to_hex_pubkey, lookup_npub_records, lookup_npub_records_tuples, Settings, lookup_npub_a_first
 import urllib.request
 
 # --- ACME support ---
@@ -378,46 +378,47 @@ def build_response(req: bytes) -> bytes:
         # ---- npub leaf handling (A/TXT/AAAA/ANY) ----
         leftmost = fqdn.split(".", 1)[0]
         if is_valid_npub(leftmost):
-            answers = b""
-            # Try to obtain records from Nostr (tuples of (rtype, value, ttl))
             try:
+                # Get A first, then the requested type
                 try:
-                    records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
+                    a_recs, wanted_recs = asyncio.run(lookup_npub_a_first(leftmost, qtype))
                 except RuntimeError:
                     loop = asyncio.new_event_loop()
                     try:
-                        records = loop.run_until_complete(lookup_npub_records_tuples(leftmost, qtype))
+                        a_recs, wanted_recs = loop.run_until_complete(lookup_npub_a_first(leftmost, qtype))
                     finally:
                         loop.close()
             except Exception as e:
-                print(f"[ERR] npub lookup: {e}")
-                records = []
+                print(f"[ERR] npub A-first flow: {e}")
+                a_recs, wanted_recs = [], []
 
-            # Build answers for supported rtypes
-            for rtype, val, ttl in (records or []):
-                if rtype == "A" and qtype in (1, 255):
-                    answers += rr_a(fqdn, str(val), int(ttl))
-                elif rtype == "AAAA" and qtype in (28, 255):
-                    answers += rr_aaaa(fqdn, str(val), int(ttl))
-                elif rtype == "TXT" and qtype in (16, 255):
-                    answers += rr_txt(fqdn, str(val), int(ttl))
+            answers = b""
+
+            # Return only what was ASKED for (but we already fetched A up front)
+            if qtype in (1, 255):  # A or ANY
+                for rtype, val, ttl in a_recs:
+                    if rtype == "A":
+                        answers += rr_a(fqdn, str(val), int(ttl))
+
+            if qtype in (16, 255):  # TXT or ANY
+                for rtype, val, ttl in wanted_recs:
+                    if rtype == "TXT":
+                        answers += rr_txt(fqdn, str(val), int(ttl))
+
+            if qtype in (28, 255):  # AAAA or ANY
+                for rtype, val, ttl in wanted_recs:
+                    if rtype == "AAAA":
+                        answers += rr_aaaa(fqdn, str(val), int(ttl))
 
             if answers:
-                return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=RA, add_opt=add_opt)
+                return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=False, add_opt=True)
 
-            # If qtype is AAAA and we didn't produce any → NOERROR/NODATA
-            if qtype == 28:
-                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
-
-            # For any other type at this leaf that we don't serve → NOERROR/NODATA
-            if qtype not in (1, 16, 28, 255):
-                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
-
-            # As a conservative fallback for A/TXT when nothing found: NOERROR/NODATA
+            # Nothing found → clean NOERROR/NODATA (+ SOA) for in-zone names
+            zone = find_zone(fqdn)
+            if zone:
+                return negative_nodata(zone, req_flags, tid, question, add_opt=True, ra=False)
+            # ---- Non-npub in-zone name: reply NODATA (we're authoritative; don't SERVFAIL) ----
             return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
-
-        # ---- Non-npub in-zone name: reply NODATA (we're authoritative; don't SERVFAIL) ----
-        return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
     # ---- Not our zone: refuse (authoritative-only server). No forwarding. ----
     flags = build_flags(req_flags, rcode=5, aa=False, ra=RA)  # REFUSED
