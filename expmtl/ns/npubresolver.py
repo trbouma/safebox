@@ -363,7 +363,6 @@ def build_response(req: bytes) -> bytes:
         # Apex NS (NS or ANY) + in-bailiwick glue A in Additional
         if fqdn == zone and qtype in (2, 255):  # NS
             answers = b"".join(rr_ns(zone, ns) for ns in z["ns"])
-            # glue A only for hosts we control in-zone and listed as NS
             glue_map = z.get("glue_a", {})
             additionals = b"".join(
                 rr_a(h, ip, 3600) for h, ip in glue_map.items() if h in z["ns"]
@@ -411,14 +410,13 @@ def build_response(req: bytes) -> bytes:
                         answers += rr_aaaa(fqdn, str(val), int(ttl))
 
             if answers:
-                return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=False, add_opt=True)
+                return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=RA, add_opt=add_opt)
 
             # Nothing found → clean NOERROR/NODATA (+ SOA) for in-zone names
-            zone = find_zone(fqdn)
-            if zone:
-                return negative_nodata(zone, req_flags, tid, question, add_opt=True, ra=False)
-            # ---- Non-npub in-zone name: reply NODATA (we're authoritative; don't SERVFAIL) ----
             return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
+
+        # NEW: Non-npub name under this zone → authoritative NODATA (not REFUSED)
+        return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
     # ---- Not our zone: refuse (authoritative-only server). No forwarding. ----
     flags = build_flags(req_flags, rcode=5, aa=False, ra=RA)  # REFUSED
