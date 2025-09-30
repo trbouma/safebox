@@ -131,6 +131,8 @@ def find_zone(qname: str) -> str | None:
             best = zone
     return best
 
+
+
 # -------------------------------
 # DNS wire helpers
 # -------------------------------
@@ -239,7 +241,40 @@ def rr_soa(qname: str, mname: str, rname: str,
         rdata
     )
 
+OVERRIDES = {
+    # "npub1...rhx0.npub.openproof.org.": {
+    #     "A":   ("172.105.26.76", 300),
+    #     # add "AAAA": ("2001:db8::1", 300) only if you truly serve HTTP on IPv6
+    # }
+}
 
+def normalize_name(name: str) -> str:
+    n = (name or "").rstrip(".").lower()
+    return n + "."
+
+def rr_opt(udp_payload=1232) -> bytes:
+    """
+    Minimal empty OPT record:
+      NAME=root(0), TYPE=41, CLASS=udp_payload, TTL=0, RDLEN=0
+    """
+    return b"\x00" + struct.pack(">H H I H", 41, udp_payload, 0, 0)
+
+def negative_nodata(zone: str, req_flags: bytes, tid: bytes, question: bytes, add_opt=True, ra=False) -> bytes:
+    """Return NOERROR with SOA in AUTHORITY (RFC 2308), 0 answers."""
+    s = ZONES[zone]["soa"]
+    auth = rr_soa(zone, s["mname"], s["rname"], s["serial"], s["refresh"],
+                  s["retry"], s["expire"], s["minimum"], s["ttl"])
+    flags = build_flags(req_flags, rcode=0, aa=True, ra=ra)
+    ar = rr_opt() if add_opt else b""
+    header = tid + flags + struct.pack(">HHHH", 1, 0, 1, 1 if ar else 0)
+    return header + question + auth + ar
+
+def positive_answer(tid, req_flags, question, answers=b"", authorities=b"", additionals=b"", aa=True, ra=False, add_opt=True) -> bytes:
+    """Compose a normal positive response, optionally appending OPT."""
+    flags = build_flags(req_flags, rcode=0, aa=aa, ra=ra)
+    ar = additionals + (rr_opt() if add_opt else b"")
+    header = tid + flags + struct.pack(">HHHH", 1, count_rrs(answers), count_rrs(authorities), count_rrs(ar))
+    return header + question + answers + authorities + ar
 
 # -------------------------------
 # Build response
@@ -249,141 +284,114 @@ def build_response(req: bytes) -> bytes:
     qname, qtype, qclass, qend = parse_question(req)
     question = req[12:qend]
 
-    if qclass != 1:
-        resp = forward_query(req) or (tid + build_flags(req_flags, rcode=2, aa=False, ra=True)
-                                      + struct.pack(">HHHH", 1,0,0,0) + question)
-        return resp
+    # Authoritative servers typically set RA=0
+    RA = False
+    add_opt = True  # append an empty OPT to every reply to avoid EDNS warnings
+    fqdn = normalize_name(qname)
 
-    # --- ACME TXT fast path (authoritative) ---
-    acme = acme_txt_answer(qname, qtype)
-    if acme:
-        print("we got an acme challenge!")
-        flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-        header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-        return header + question + acme
-    
-    zone = find_zone(qname)
+    # We are authoritative only for IN class
+    if qclass != 1:  # not IN
+        # NOTIMP for other classes (or REFUSED). Avoid SERVFAIL.
+        flags = build_flags(req_flags, rcode=4, aa=True, ra=RA)
+        header = tid + flags + struct.pack(">HHHH", 1, 0, 0, 1 if add_opt else 0)
+        return header + question + (rr_opt() if add_opt else b"")
+
+    # ---- Hard overrides (for issuance or special hosts) ----
+    if fqdn in OVERRIDES:
+        recs = OVERRIDES[fqdn]
+        answers = b""
+        # A / AAAA (and ANY)
+        if qtype in (1, 255) and "A" in recs:
+            answers += rr_a(fqdn, recs["A"][0], int(recs["A"][1]))
+        if qtype in (28, 255) and "AAAA" in recs:
+            answers += rr_aaaa(fqdn, recs["AAAA"][0], int(recs["AAAA"][1]))
+        # If AAAA requested but we don't have one → NOERROR/NODATA with SOA
+        if qtype == 28 and "AAAA" not in recs:
+            zone = find_zone(fqdn)
+            if zone:
+                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
+        if answers:
+            return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=RA, add_opt=add_opt)
+        # If some other type was asked at this leaf → NODATA
+        zone = find_zone(fqdn)
+        if zone:
+            return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
+
+    # ---- Which zone are we authoritative for? ----
+    zone = find_zone(fqdn)
     if zone:
         z = ZONES[zone]
-        # SOA at apex
-        if qname == zone and qtype in (6, 255):
+
+        # Apex SOA (SOA or ANY)
+        if fqdn == zone and qtype in (6, 255):  # SOA
             s = z["soa"]
             ans = rr_soa(zone, s["mname"], s["rname"], s["serial"], s["refresh"],
                          s["retry"], s["expire"], s["minimum"], s["ttl"])
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-            return header + question + ans
+            return positive_answer(tid, req_flags, question, answers=ans, aa=True, ra=RA, add_opt=add_opt)
 
-        # NS at apex (+ glue A in Additional if in-zone host present)
-        if qname == zone and qtype in (2, 255):
+        # Apex NS (NS or ANY) + in-bailiwick glue A in Additional
+        if fqdn == zone and qtype in (2, 255):  # NS
             answers = b"".join(rr_ns(zone, ns) for ns in z["ns"])
+            # glue A only for hosts we control in-zone and listed as NS
+            glue_map = z.get("glue_a", {})
             additionals = b"".join(
-                rr_a(h, ip, 3600) for h, ip in z.get("glue_a", {}).items() if h in z["ns"]
+                rr_a(h, ip, 3600) for h, ip in glue_map.items() if h in z["ns"]
             )
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            ancount = count_rrs(answers)
-            arcount = count_rrs(additionals)
-            header = tid + flags + struct.pack(">HHHH", 1, ancount, 0, arcount)
-            return header + question + answers + additionals
+            return positive_answer(tid, req_flags, question, answers=answers, additionals=additionals, aa=True, ra=RA, add_opt=add_opt)
 
-        # Glue host A (e.g., ns1.openproof.org.) if this zone hosts it
-        if qtype in (1, 255) and qname in z.get("glue_a", {}):
-            ans = rr_a(qname, z["glue_a"][qname], 3600)
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            header = tid + flags + struct.pack(">HHHH", 1, 1, 0, 0)
-            return header + question + ans
-        
+        # In-zone glue host A (e.g., ns1.openproof.org.)
+        if qtype in (1, 255) and fqdn in z.get("glue_a", {}):
+            ans = rr_a(fqdn, z["glue_a"][fqdn], 3600)
+            return positive_answer(tid, req_flags, question, answers=ans, aa=True, ra=RA, add_opt=add_opt)
 
-
-
-    # ----- Your existing npub handling (for labels under zones you serve) -----
-    leftmost = qname.split(".", 1)[0]
-    if is_valid_npub(leftmost):
-        try:
-            records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            try:
-                records = loop.run_until_complete(lookup_npub_records_tuples(leftmost, qtype))
-            finally:
-                loop.close()
-        except Exception:
-            records = []
-
-        if records:
+        # ---- npub leaf handling (A/TXT/AAAA/ANY) ----
+        leftmost = fqdn.split(".", 1)[0]
+        if is_valid_npub(leftmost):
             answers = b""
-            for rtype, val, ttl in records:
-                if rtype == "A":
-                    answers += rr_a(qname, val, int(ttl))
-                elif rtype == "TXT":
-                    answers += rr_txt(qname, str(val), int(ttl))
+            # Try to obtain records from Nostr (tuples of (rtype, value, ttl))
+            try:
+                try:
+                    records = asyncio.run(lookup_npub_records_tuples(leftmost, qtype))
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    try:
+                        records = loop.run_until_complete(lookup_npub_records_tuples(leftmost, qtype))
+                    finally:
+                        loop.close()
+            except Exception as e:
+                print(f"[ERR] npub lookup: {e}")
+                records = []
+
+            # Build answers for supported rtypes
+            for rtype, val, ttl in (records or []):
+                if rtype == "A" and qtype in (1, 255):
+                    answers += rr_a(fqdn, str(val), int(ttl))
+                elif rtype == "AAAA" and qtype in (28, 255):
+                    answers += rr_aaaa(fqdn, str(val), int(ttl))
+                elif rtype == "TXT" and qtype in (16, 255):
+                    answers += rr_txt(fqdn, str(val), int(ttl))
+
             if answers:
-                flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-                header = tid + flags + struct.pack(">HHHH", 1, count_rrs(answers), 0, 0)
-                return header + question + answers
+                return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=RA, add_opt=add_opt)
 
-        # --- AAAA handling: NOERROR / NODATA (with SOA in AUTHORITY if we know the zone) ---
-        if qtype == 28:  # AAAA
-            auth = b""
-            zname = find_zone(qname) if 'find_zone' in globals() else None
-            if zname:
-                s = ZONES[zname]["soa"]
-                auth = rr_soa(
-                    qname=zname,
-                    mname=s["mname"], rname=s["rname"],
-                    serial=s["serial"], refresh=s["refresh"],
-                    retry=s["retry"], expire=s["expire"],
-                    minimum=s["minimum"], ttl=s["ttl"],
-                )
-                nscount = 1
-            else:
-                nscount = 0
+            # If qtype is AAAA and we didn't produce any → NOERROR/NODATA
+            if qtype == 28:
+                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)  # NOERROR
-            header = tid + flags + struct.pack(">HHHH", 1, 0, nscount, 0)
-            return header + question + b"" + auth
+            # For any other type at this leaf that we don't serve → NOERROR/NODATA
+            if qtype not in (1, 16, 28, 255):
+                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
-        # optional fallback (A/TXT)
-        fallback = b""
-        if qtype in (1,255):  fallback += rr_a(qname, "100.100.100.100", 60)
-        if qtype in (16,255): fallback += rr_txt(qname, leftmost, 60)
-        if fallback:
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)
-            header = tid + flags + struct.pack(">HHHH", 1, count_rrs(fallback), 0, 0)
-            return header + question + fallback
+            # As a conservative fallback for A/TXT when nothing found: NOERROR/NODATA
+            return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
-        # --- For types we don't serve at leaf (e.g., NS on a host), reply NODATA, not SERVFAIL ---
-        # This prevents validators from seeing SERVFAIL when they probe NS/TLSA/etc. at leaf names.
-        if qtype not in (1, 16, 28, 255):  # not A/TXT/AAAA/ANY
-            auth = b""
-            zname = find_zone(qname) if 'find_zone' in globals() else None
-            nscount = 0
-            if zname:
-                s = ZONES[zname]["soa"]
-                auth = rr_soa(
-                    qname=zname,
-                    mname=s["mname"], rname=s["rname"],
-                    serial=s["serial"], refresh=s["refresh"],
-                    retry=s["retry"], expire=s["expire"],
-                    minimum=s["minimum"], ttl=s["ttl"],
-                )
-                nscount = 1  # SOA in AUTHORITY for negative caching (RFC 2308)
-            flags = build_flags(req_flags, rcode=0, aa=True, ra=True)  # NOERROR
-            header = tid + flags + struct.pack(">HHHH", 1, 0, nscount, 0)
-            return header + question + b"" + auth
+        # ---- Non-npub in-zone name: reply NODATA (we're authoritative; don't SERVFAIL) ----
+        return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
 
-        # unsupported type -> delegate
-        resp = forward_query(req)
-        if resp: return resp
-        flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
-        return tid + flags + struct.pack(">HHHH", 1,0,0,0) + question
-
-    # ----- Otherwise delegate (outside zones you serve or non-npub names) -----
-    resp = forward_query(req)
-    if resp:
-        return resp
-    flags = build_flags(req_flags, rcode=2, aa=False, ra=True)
-    return tid + flags + struct.pack(">HHHH", 1, 0, 0, 0) + question
+    # ---- Not our zone: refuse (authoritative-only server). No forwarding. ----
+    flags = build_flags(req_flags, rcode=5, aa=False, ra=RA)  # REFUSED
+    header = tid + flags + struct.pack(">HHHH", 1, 0, 0, 1 if add_opt else 0)
+    return header + question + (rr_opt() if add_opt else b"")
 
 
 def count_rrs(rr_blob: bytes) -> int:
