@@ -175,6 +175,36 @@ def rr_header(name, rtype, ttl, rdata):
     return encode_name(name) + struct.pack(">HHI", rtype, 1, ttl) + struct.pack(">H", len(rdata)) + rdata
 
 def rr_a(name, ip, ttl):    return rr_header(name, 1, ttl, socket.inet_aton(ip))
+
+def rr_aaaa(name: str, ipv6: str, ttl: int) -> bytes:
+    """
+    Build a DNS AAAA resource record.
+
+    Args:
+        name (str): FQDN ending with a dot, e.g. "host.example.com."
+        ipv6 (str): IPv6 address string, e.g. "2001:db8::1"
+        ttl (int): TTL in seconds
+
+    Returns:
+        bytes: wire-format DNS AAAA RR
+    """
+    # compress address into 16 bytes
+    try:
+        ipv6_bytes = socket.inet_pton(socket.AF_INET6, ipv6)
+    except OSError:
+        raise ValueError(f"Invalid IPv6 address: {ipv6}")
+
+    rtype = 28      # AAAA
+    rclass = 1      # IN
+    rdlength = len(ipv6_bytes)
+
+    return (
+        encode_name(name)
+        + struct.pack(">HHI", rtype, rclass, ttl)
+        + struct.pack(">H", rdlength)
+        + ipv6_bytes
+    )
+
 def rr_txt(name, text, ttl):
     b = text.encode(); b = b[:255]
     return rr_header(name, 16, ttl, struct.pack("B", len(b))+b)
@@ -242,10 +272,7 @@ def rr_soa(qname: str, mname: str, rname: str,
     )
 
 OVERRIDES = {
-    # "npub1...rhx0.npub.openproof.org.": {
-    #     "A":   ("172.105.26.76", 300),
-    #     # add "AAAA": ("2001:db8::1", 300) only if you truly serve HTTP on IPv6
-    # }
+
 }
 
 def normalize_name(name: str) -> str:
