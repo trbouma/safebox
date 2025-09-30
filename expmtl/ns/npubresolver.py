@@ -313,6 +313,32 @@ def build_response(req: bytes) -> bytes:
     add_opt = True       # always add EDNS0 OPT to be friendly with public resolvers
     fqdn = normalize_name(qname)
 
+    # ---- Hard overrides (for issuance or special hosts) ----
+    recs = OVERRIDES.get(fqdn)
+    if recs:
+        answers = b""
+
+        # Add any overridden types we *do* have
+        if qtype in (1, 255) and "A" in recs:
+            answers += rr_a(fqdn, recs["A"][0], int(recs["A"][1]))
+        if qtype in (28, 255) and "AAAA" in recs:
+            answers += rr_aaaa(fqdn, recs["AAAA"][0], int(recs["AAAA"][1]))
+        if qtype in (16, 255) and "TXT" in recs:
+            answers += rr_txt(fqdn, str(recs["TXT"][0]), int(recs["TXT"][1]))
+
+        # If AAAA was requested but not overridden -> clean NOERROR/NODATA
+        if qtype == 28 and "AAAA" not in recs:
+            zone = find_zone(fqdn)
+            if zone:
+                return negative_nodata(zone, req_flags, tid, question, add_opt, ra=RA)
+
+        # If we actually built some answers from overrides, return them now
+        if answers:
+            return positive_answer(tid, req_flags, question, answers=answers, aa=True, ra=RA, add_opt=add_opt)
+
+    # Otherwise: DO NOT return NODATA here.
+    # Fall through to normal zone/npub handling so TXT (or other) can be resolved dynamically.
+
     # Only IN class
     if qclass != 1:
         flags = build_flags(req_flags, rcode=4, aa=True, ra=RA)  # NOTIMP for non-IN
