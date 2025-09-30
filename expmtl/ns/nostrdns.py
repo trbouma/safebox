@@ -10,15 +10,15 @@ from monstr.event.event import Event
 
 class Settings(BaseSettings):
     NOSTR_RELAYS: List = [
-        "wss://relay.damus.io",
-        "wss://nos.lol",
-        "wss://relay.primal.net",
-        "wss://relay.snort.social"
+        "wss://relay.damus.io"
+
     ]
     KIND_DNS: int = 11111 # Custom event kind for “DNS record” (choose any free kind you prefer)
 
 
-
+#        "wss://nos.lol",
+#        "wss://relay.primal.net",
+#        "wss://relay.snort.social"
 
 
 
@@ -102,6 +102,28 @@ _QTYPE_TO_STR = {
     255: "ANY",
 }
 
+_NPUB_LOOKUP_DEADLINE = 2.00  # seconds
+
+async def _npub_a_first_with_timeout(npub: str, qtype: int):
+    try:
+        return await asyncio.wait_for(lookup_npub_a_first(npub, qtype), timeout=_NPUB_LOOKUP_DEADLINE)
+    except Exception:
+        return ([], [])
+
+
+async def _npub_fetch_all_with_timeout(npub: str):
+    """
+    Get ALL tuples for an npub (using qtype=255/ANY) with a strict timeout.
+    Returns a list of (rtype, value, ttl).
+    """
+    try:
+        # Reuse your existing function but force ANY so we don’t miss data
+        return await asyncio.wait_for(lookup_npub_records_tuples(npub, 255),
+                                      timeout=_NPUB_LOOKUP_DEADLINE)
+    except Exception as e:
+        print(f"[NPUB] ANY fetch failed/timed out for {npub}: {e}")
+        return []
+    
 async def lookup_npub_a_first(npub: str, want_qtype: int):
     """
     One-shot query to Nostr; parse all records; return:
