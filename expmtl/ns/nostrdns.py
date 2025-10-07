@@ -10,12 +10,13 @@ from monstr.event.event import Event
 
 class Settings(BaseSettings):
     NOSTR_RELAYS: List = [
-        "wss://relay.damus.io"
+          "wss://relay.damus.io"
 
     ]
     KIND_DNS: int = 11111 # Custom event kind for “DNS record” (choose any free kind you prefer)
 
 
+#       "wss://relay.damus.io"
 #        "wss://nos.lol",
 #        "wss://relay.primal.net",
 #        "wss://relay.snort.social"
