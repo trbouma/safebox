@@ -162,6 +162,6 @@ services:
 
 No guarantees. No promises of support. This is very experimental - more to come! 
 
-![](./assets/safebox-nostr.png)
+![](./assets/safebox-orginal.png)
 
 
