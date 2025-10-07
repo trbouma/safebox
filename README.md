@@ -1,8 +1,5 @@
 # Nostr Safebox
-Your own private portable safebox on nostr!
-
-
-*You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
+*Control your funds and data!*
 
 ## General Concept 
 
@@ -18,7 +15,15 @@ Initial implementation will be a Python class that is invoked by a command line 
 
 The initial use case will be holding Cashu tokens for the purposes of accepting and sending payments via Lighting and Nostr.
 
+## Project Progress
 
+Phase 1 and Phase 2 are completed.
+
+[Phase 3](./docs/PHASE3-PROPOSAL.md) of the projected is currently underway
+
+*Read previous funding proposals and progress reports [here](./docs/INITIAL-PROPOSAL.md)*
+
+*You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
 
 Detailed install instructions are being developed [here](./INSTALL.md).
 
