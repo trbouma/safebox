@@ -1,7 +1,6 @@
 # Nostr Safebox
 Your own private portable safebox on nostr!
 
-*Just want to try it out? [Get the binary executables](https://github.com/trbouma/safebox-binaries).*
 
 *You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
 
