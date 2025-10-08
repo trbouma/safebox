@@ -28,7 +28,7 @@ The overall Safebox project is broken into four major phases - Phases 1 through 
 
 - Phase 1 (Complete): 'Possibility Phase' (Jul-Sept 2024) explored the proof of concept and the key mechanisms on how Safebox could work. After successful proof of concept, a GitHub project was set up.
 
-- Phase 2 (In Progress): 'Feasibility Phase' (Oct-Jan 2025) The goal of this phase is to specifically determine technical feasibility to inform a strategic decision on whether to develop a long-term stable product (Phases 3 and 4). Phase 2 is expected to be completed by Jan 2025 with the following milestone deliverables:
+- Phase 2 (Completed): 'Feasibility Phase' (Oct-Jan 2025) The goal of this phase is to specifically determine technical feasibility to inform a strategic decision on whether to develop a long-term stable product (Phases 3 and 4). Phase 2 is expected to be completed by Jan 2025 with the following milestone deliverables:
     1. A stable prototype implemented Python, which includes a documented cli command line utility.
     2. Compiled binaries for mac-os and ubuntu to illustrate how Safebox can operate in a multi-platform environment
     3. Demonstration of back-end integration into the openbalance.app Lightning Payment service,with a 'how-to' manual for others wishing to build a payment service using Safebox as the custodial component.
@@ -36,9 +36,9 @@ The overall Safebox project is broken into four major phases - Phases 1 through 
 
 For additional context (not in scope of this proposal) a brief description of Phase 3 and Phase 4
 
-- Phase 3: 'Scalability' is about 'scaling' Safebox in different dimensions to become a real product that can serve diverse ecosystem stakeholders. This entails building multiple reference implementations that can interoperate with one another, ensuring that Safebox can scale to support a service that could support thousands if not millions of users, and building in the discipline of a commercial product (testing, QA, support, documentation, etc.)
+- Phase 3 (Current): 'Scalability' is about 'scaling' Safebox in different dimensions to become a real product that can serve diverse ecosystem stakeholders. This entails building multiple reference implementations that can interoperate with one another, ensuring that Safebox can scale to support a service that could support thousands if not millions of users, and building in the discipline of a commercial product (testing, QA, support, documentation, etc.)
 
-- Phase 4: 'Usability' is about exploring the many different markets and use cases where Safebox can provide value. We see it being used to scale an egalitarian open payment system that can serve billions of users, and possibly trillions of devices.
+- Phase 4 (Future): 'Usability' is about exploring the many different markets and use cases where Safebox can provide value. We see it being used to scale an egalitarian open payment system that can serve billions of users, and possibly trillions of devices.
 
 ## License
 The source code of the project is publicly available at trbouma/safebox and published under the MITLicense.

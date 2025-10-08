@@ -1,4 +1,5 @@
 # Nostr Safebox Phase 3
+[Intial Proposal](./INITIAL-PROPOSAL.md)
 ## Description
  
  Nostr Safebox is a fully functional wallet that is native to the nostr network. The initial version (Phase
