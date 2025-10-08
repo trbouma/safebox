@@ -17,13 +17,18 @@ The initial use case will be holding Cashu tokens for the purposes of accepting 
 
 ## Project Progress
 
-Phase 1 and Phase 2 are completed.
+Phase 1 and Phase 2 are completed. Currently in [Phase 3](./docs/PHASE3-PROPOSAL.md)
 
-*Read previous funding proposals and progress reports [here](./docs/INITIAL-PROPOSAL.md)*
-
-[Phase 3](./docs/PHASE3-PROPOSAL.md) of the projected is currently underway
+Read previous funding proposals and progress reports [here](./docs/INITIAL-PROPOSAL.md)
 
 Phase 4 details will be explored in early 2026
+
+Demo highlights:
+
+* Live field test in Madeira, Portugual [video](https://youtu.be/rRX6p0Oy584)
+* A comprehensive overview [video](https://youtu.be/Q7nhgmGtemk)
+* A five minute overview showing the main functions [video](https://youtu.be/nxTBgffyssQ)
+
 
 *You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
 
