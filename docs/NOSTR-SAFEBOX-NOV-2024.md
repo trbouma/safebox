@@ -39,8 +39,8 @@ Summary of Proof of Work:
 
 ## 3) How did you make use of the money?*
 
-- To fund the opportunity cost of my time. It works out to approximately $40 USD per hour as personal income.
-- Since the grant is over the 2024/2025 period, I will be claiming 33% of the grant as income for the 2024 taxation year and 67% of the grant as income for the 2025 taxation year.
+- To fund the opportunity cost of my time as income. 
+- Since the grant is over the 2024/2025 period, I will be realizing of the grant as income for the 2025 taxation year.
 - To fund operating costs. The supporting infrastructure for my project (hosted lightning node, servers, etc) costs me approximately $100USD per month.
 - To fund travel (as after tax). As a result of the grant, I had sufficient funds to travel  to have in-depth in-person discussions with the sovereign engineers. A tangible example was tighter compliance to NIP-60 after discussion the pros and cons with the NIP author.
 
