@@ -27,7 +27,7 @@ Phase 4 details will be explored in early 2026
 
 *You can follow my development journey on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).*
 
-## Hand-On FAFO
+## Hands-On FAFO
 
 *Warning - not everything is promoted to main! No guarantee if this is going to work!*
 
