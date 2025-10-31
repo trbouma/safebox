@@ -584,8 +584,9 @@ def run(relays):
 @click.command("recover", help='Recover a wallet from seed phrase')
 @click.argument('seedphrase', default=None)
 @click.option('--homerelay','-h', default=HOME_RELAY)
-def recover(seedphrase, homerelay):
-    nsec = recover_nsec_from_seed(seed_phrase=seedphrase)
+@click.option('--legacy', is_flag=True, default=False, help='Use legacy key derivation (default: False)')
+def recover(seedphrase, homerelay, legacy):
+    nsec = recover_nsec_from_seed(seed_phrase=seedphrase, legacy=legacy)
    
     
 

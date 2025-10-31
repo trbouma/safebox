@@ -7,7 +7,7 @@ import os
 from bech32 import bech32_encode, convertbits
 from typing import List
 from mnemonic import Mnemonic
-from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 
 from safebox.models import NIP60Proofs
 
@@ -102,10 +102,15 @@ def name_to_hex(name):
 
     return hex_string
 
-def recover_nsec_from_seed(seed_phrase: str):
+def recover_nsec_from_seed(seed_phrase: str, legacy: bool = False):
     mnemo = Mnemonic("english")
+    print(f"legacy: {legacy}")
     seed = Bip39SeedGenerator(seed_phrase).Generate()
-    bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+    if legacy:
+        bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+    else:
+        bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
+    
     seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
    
 

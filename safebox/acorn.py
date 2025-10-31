@@ -19,7 +19,7 @@ from hotel_names import hotel_names
 from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
-from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 
 
 
@@ -280,7 +280,7 @@ class Acorn:
                 #TODO need to decide if to keep 24 seed phrase option.
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")                
 
@@ -296,7 +296,7 @@ class Acorn:
                 
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")
                 
@@ -386,7 +386,7 @@ class Acorn:
                 #TODO need to decide if to keep 24 seed phrase option.
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")                
 
@@ -403,7 +403,7 @@ class Acorn:
                 
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")
                 
@@ -489,6 +489,7 @@ class Acorn:
 
             out_string = f"""   \nnpub: {self.pubkey_bech32}
                                 \nnsec: {self.privkey_bech32} 
+                                \nnsechex: {self.privkey_hex} 
                                 \npubhex: {self.pubkey_hex}  
                                 \nhandle: {self.handle}   
                                 \naccess key: {self.access_key}  

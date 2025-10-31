@@ -131,6 +131,7 @@ class recoverIdentity(BaseModel):
     seed_phrase: str
     home_relay: Union[None,str]=None
     new_identity: bool = False
+    legacy: bool = False
 
 class sendCredentialParms(BaseModel):
     nauth: str
