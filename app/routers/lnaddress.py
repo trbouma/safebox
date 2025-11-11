@@ -669,7 +669,7 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
     
     
     try:
-        nsec_recover = recover_nsec_from_seed(recover.seed_phrase, recover.legacy)
+        nsec_recover = recover_nsec_from_seed(recover.seed_phrase)
         
         k = Keys(priv_k=nsec_recover)
         npub = k.public_key_bech32()
@@ -741,7 +741,7 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
 
     detail = f"Your {mode} handle: {handle} Your access key: {access_key}"
 
-    return {"status": status, "detail": detail, "handle": handle,"access_key":access_key}
+    return {"status": status, "detail": detail}
 
 
 

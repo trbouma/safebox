@@ -100,25 +100,27 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         invoice_amount = invoice_decoded.amount_msat//1000
         
 
-        comment = instruction_obj['params'].get("comment", "nwc pay")
+        comment = instruction_obj['params'].get("comment", "Paid!")
         tendered_amount = instruction_obj['params'].get("tendered_amount", None)
         tendered_currency = instruction_obj['params'].get("tendered_currency", "SAT")
+        nwc_msg = f"{comment} "
         print(f"this is the invoice to pay: {invoice}")
         
         print(f"balance {acorn_obj.balance}")
         try:
-            msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice)
-            nfc_msg = f"💳 {comment} "
+            msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice, comment=nwc_msg, tendered_amount=tendered_amount,tendered_currency=tendered_currency)
+            
            
-            await acorn_obj.add_tx_history(     tx_type="D", 
-                                                amount=invoice_amount, 
-                                                tendered_amount=tendered_amount,
-                                                tendered_currency=tendered_currency,
-                                                comment=nfc_msg, 
-                                                fees=final_fees,
-                                                invoice=invoice,
-                                                payment_hash=payment_hash,
-                                                payment_preimage=payment_preimage)
+            #FIXME - need to add these parameters to pay_multi_invoice
+            # await acorn_obj.add_tx_history(     tx_type="D", 
+            #                                   amount=invoice_amount, 
+            #                                    tendered_amount=tendered_amount,
+            #                                    tendered_currency=tendered_currency,
+            #                                    comment=nfc_msg, 
+            #                                    fees=final_fees,
+            #                                    invoice=invoice,
+            #                                    payment_hash=payment_hash,
+            #                                    payment_preimage=payment_preimage)
             
         except Exception as e:
             # raise Exception(f"Error {e}")

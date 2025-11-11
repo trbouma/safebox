@@ -2603,11 +2603,15 @@ class Acorn:
     async def pay_multi_invoice(  self, 
                      
                     lninvoice: str, 
-                    comment: str = "Paid!"): 
+                    comment: str = "Paid!",
+                    tendered_amount: float=None,
+                    tendered_currency: str = "SAT",
+                    fees: int =0,                             
+                    payment_preimage: str = None,
+                    payment_hash: str = None,
+                    description_hash: str = None): 
                     
-        payment_hash = None
-        payment_preimage = None
-        description_hash = None
+
         # decode amount from invoice
         try:
             await self.acquire_lock()
@@ -2808,6 +2812,8 @@ class Acorn:
         await self.add_tx_history( tx_type='D',
                                         amount=ln_amount,
                                         comment=comment,
+                                        tendered_amount=tendered_amount,
+                                        tendered_currency=tendered_currency,
                                         fees=final_fees)
         
         return msg_out, final_fees, payment_hash,payment_preimage, description_hash
