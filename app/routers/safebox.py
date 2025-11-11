@@ -623,7 +623,7 @@ async def accept_ecash(   request: Request,
     try:
      
         
-        msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token)
+        msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token, comment="test")
         # await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
         pass
     except Exception as e:

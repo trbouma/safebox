@@ -1478,7 +1478,7 @@ class Acorn:
                     ecash_nembed = parse_nembed_compressed(each["payload"])                    
                     token_to_redeem = ecash_nembed["token"]
                     print(f"token to redeem: {token_to_redeem}")
-                    msg_out, token_amount = await  self.accept_token(token_to_redeem)
+                    msg_out, token_amount = await  self.accept_token(cashu_token=token_to_redeem, comment=ecash_nembed["comment"])
 
                     if token_to_redeem == "nsf":
                         pass
@@ -1495,7 +1495,7 @@ class Acorn:
                         tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
                         
                         print("add to tx history")
-                        await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
+                        # await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
                         ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK"))
                     
                     
@@ -2211,7 +2211,7 @@ class Acorn:
                 relays = response.get("relays", None)
                 ecash_relays = response.get("ecash_relays", relays)
                 print(f"transmit ecash directly to ecash relays: {ecash_relays}")
-                cashu_token = await self.issue_token(amount)
+                cashu_token = await self.issue_token(amount=amount, comment=comment)
                 pay_obj =   {"token": cashu_token,
                              "amount": amount, 
                              "comment": comment,
@@ -2224,7 +2224,8 @@ class Acorn:
 
                 await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=ecash_relays,kind=21401)
                 await self.release_lock()
-                await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
+                # await self.add_tx_history(tx_type='D', amount=amount, comment=comment,
+                # tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
             else: #     return f"Payment in ecash of {amount} sats", 0
 
 
@@ -3993,7 +3994,7 @@ class Acorn:
     
 
 
-    async def accept_token(self,cashu_token: str):
+    async def accept_token(self,cashu_token: str, comment:str = "ecash deposit"):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
         # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
@@ -4071,7 +4072,7 @@ class Acorn:
             
             await self.release_lock()  
 
-        await self.add_tx_history(tx_type='C', amount=token_amount, comment='ecash deposit')
+        await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 
@@ -4080,7 +4081,7 @@ class Acorn:
         
 
 
-    async def issue_token(self, amount:int):
+    async def issue_token(self, amount:int, comment:str = "ecash withdrawal"):
 
         try:
             await self.acquire_lock()
@@ -4179,7 +4180,7 @@ class Acorn:
         finally:
             await self.release_lock()
 
-        await self.add_tx_history(tx_type='D',amount=amount,comment='ecash withdrawal')
+        await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
         
         return v3_token.serialize()   
 

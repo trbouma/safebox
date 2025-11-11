@@ -533,6 +533,8 @@ async def display_record(     request: Request,
     """Protected access to updating the card"""
 
     label_hash = None
+    template_to_use = "records/record.html"
+    content = ""
     
     if action_mode == 'edit':
 
@@ -544,7 +546,17 @@ async def display_record(     request: Request,
         except:
             content = record
         
-        
+    elif action_mode == 'offer':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+        template_to_use = "records/recordoffer.html"
+
+        try:
+            content = record["payload"]
+        except:
+            content = record    
+    
     elif action_mode =='add':
         card = ""
         content =""
@@ -559,11 +571,13 @@ async def display_record(     request: Request,
     referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?kind={kind}"
    
 
-    return templates.TemplateResponse(  "records/record.html", 
+    return templates.TemplateResponse(  template_to_use, 
                                         {   "request": request,
                                             
                                             "card": card,
                                             "record_kind": kind,
+                                            "offer_kind": kind,
+                                            "grant_kind": kind+1,
                                             "offer_label": offer_label,
                                             "select_kind": select_kind,
                                             "referer": referer,
@@ -981,7 +995,7 @@ async def ws_record_listen( websocket: WebSocket,
     print("websocket connection closed")
 
 @router.websocket("/wsrequesttransmittal/{nauth}")
-async def websocket_requesttransmittal( websocket: WebSocket, 
+async def ws_requesttransmittal( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):

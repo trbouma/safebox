@@ -414,7 +414,7 @@ async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
     print(f"cashu_token: {nfc_pay_out.cashu_token}")
     msg_out = await acorn_obj.accept_token(nfc_pay_out.cashu_token)
-    await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
+    # await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
 
     pass  
 
