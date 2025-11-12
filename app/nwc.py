@@ -101,10 +101,12 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         
 
         comment = instruction_obj['params'].get("comment", "Paid!")
+        metadata = instruction_obj['params'].get("metadata", {})
+        zap_comment = metadata.get("nostr", {}).get("content", comment)
         tendered_amount = instruction_obj['params'].get("tendered_amount", None)
         tendered_currency = instruction_obj['params'].get("tendered_currency", "SAT")
-        nwc_msg = f"{comment} "
-        print(f"this is the invoice to pay: {invoice}")
+        nwc_msg = f"Zap: {zap_comment} "
+        print(f"this is the invoice to pay: {invoice} and metadata: {nwc_msg}")
         
         print(f"balance {acorn_obj.balance}")
         try:

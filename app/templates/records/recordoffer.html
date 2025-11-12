@@ -12,6 +12,7 @@ var global_naddr = "";
 var global_transmit_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
+var global_offer_card = "{{card}}";
 
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
@@ -110,7 +111,7 @@ async function createQRCode() {
     
     var data;
     var qr_img_func = document.getElementById("img_qr_display");
-    const nfc_request = document.getElementById("nfc_request_checkbox");
+    const nfc_offer = document.getElementById("nfc_offer_checkbox");
     var offer_kind =  {{offer_kind}};
     var scope = "offer:{{offer_kind}}";
     var grant = "record:{{grant_kind}}";
@@ -140,7 +141,7 @@ async function createQRCode() {
                  // getQRStatus(data)
  );
 
-   if (nfc_request.checked == true) {  
+   if (nfc_offer.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       consoleLog("Tap NFC card!");
       
@@ -211,7 +212,8 @@ async function offerRecord() {
 
   const submit_data = { "nauth": nauth_to_transmit,
                         "originating_kind": global_offer_kind,
-                        "final_kind": global_grant_kind
+                        "final_kind": global_grant_kind,
+                        "record_name": global_offer_card
    };
 
   console.log(`data to submit: ${submit_data.nauth}`) ;
@@ -222,7 +224,7 @@ async function offerRecord() {
        body: JSON.stringify(submit_data)         
       })
    .then((response) => response.json())
-   .then((data) => { alert(`Done! ${data.status}`)}
+   .then((data) => { console.log(`Done! ${data.status}`)}
    
    // getStatus(data)
    );
@@ -241,12 +243,12 @@ async function offerRecord() {
 
 
 <div class="center-text">
-    <h1>Record Offer {{card}} </h1>
+    <h1>Offer {{card}} </h1>
     {{card}} {{offer_kind}}  {{grant_kind}}
    
 <div 
   id="offer_card" 
-  onclick="editOffer()" 
+  onclick="createQRCode()" 
   style="
     width: 80%;
     border-radius: 12px;
@@ -269,8 +271,8 @@ async function offerRecord() {
     <br>Please ask them to scan the generated QR code.
     <br><br>
     <label>
-    <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
-    Request by NFC
+    <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
+    Offer by NFC
     <br><br>
     </label>
     

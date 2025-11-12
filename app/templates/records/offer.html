@@ -214,7 +214,8 @@ async function offerKind() {
 
 <div class="center-text">
     <h1>Offer {{offer_kind_label}} </h1>
-    Create offer for: {{record_kind}} {{offer_kind_label}} {{grant_kind}}
+    Create offer for: {{offer_kind_label}} 
+    <br>(Offer Kind: {{record_kind}})
    
       <br><br>
   <select id="offer_kind" name="offer_kind" onchange="offerKind()">
@@ -226,7 +227,7 @@ async function offerKind() {
 
     <button onclick="addRecordOffer()">Add {{offer_kind_label}} Offer</button>
     <br><br>
-    Click on an existing {{offer_kind_label}} offer to modify or delete.
+    Click on an existing record to offer a {{offer_kind_label}}.
 
 
    

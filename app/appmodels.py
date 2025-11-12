@@ -121,6 +121,7 @@ class transmitConsultation(BaseModel):
     nauth: str
     originating_kind: int = 32227
     final_kind: int = 32225
+    record_name: str = None
 
 class incomingRecord(BaseModel):
     id: str

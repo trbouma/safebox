@@ -1970,6 +1970,7 @@ async def hx_balance(request: Request,
 async def hx_request_qr(    request: Request,
                             amount: float = Query(...), 
                             select_currency: str = Query(...), 
+                            description: str = Query(...),
                             acorn_obj: Acorn = Depends(get_acorn)):
             await acorn_obj.load_data()
 
@@ -1983,7 +1984,7 @@ async def hx_request_qr(    request: Request,
             else:
                 final_handle = safebox_found.handle
     
-            final_address = f"{final_handle}__{amount}__{select_currency}@{request.url.hostname}"
+            final_address = f"{final_handle}__{amount}__{select_currency}__{description}@{request.url.hostname}"
             final_url, final_lnurl= lightning_address_to_lnurl(final_address)
             # final_qr = final_address
             final_qr = f"lightning:{final_lnurl}"

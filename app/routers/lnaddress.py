@@ -97,11 +97,12 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
     name_parts = name.split("__")
 
     name = name_parts[0]
+    request_comment = "pay request"
     if len(name_parts) >= 2:
         ln_payment_request = True
         amount = float(name_parts[1])
 
-        if len(name_parts) == 3:
+        if len(name_parts) >= 3:
             currency = name_parts[2].upper()
             if currency == "SAT":
                 min_sendable = int(amount)*1000
@@ -110,6 +111,9 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
                 local_currency = await get_currency_rate(currency.upper())
                 print(local_currency.currency_rate)
                 min_sendable= max_sendable = int(amount* 1e8 // local_currency.currency_rate)*1000
+
+            if len(name_parts) == 4:
+                request_comment = name_parts[3]
         else:
             min_sendable = int(amount) * 1000
             max_sendable = int(amount) * 1000
@@ -142,7 +146,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
     
     if ln_payment_request:
 
-        metadata = f"[[\"text/plain\", \"Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats \"],[\"text/long-desc\", \"This is a Lightning Payment Request from: {out_name} for {amount} {currency} {max_sendable//1000} sats\"]]"
+        metadata = f"[[\"text/plain\", \"Payment Request {amount} {currency} / {max_sendable//1000} sats for {request_comment}\"],[\"text/long-desc\", \"Payment Request {amount} {currency} / {max_sendable//1000} sats for {request_comment}\"]]"
     else:        
         metadata = f"[[\"text/plain\", \"Send Payment to: {out_name}\"]]"
 

@@ -976,6 +976,15 @@ function getInvoiceStatus(ln_invoice_status) {
           {% endfor %}
         </select>
         <br><br>
+        <label for="desc">Description:</label>
+        <input 
+          type="text" 
+          id="description" 
+          name="description" 
+          maxlength="25" 
+          placeholder="Enter text (optional)"
+        >
+        <br><br>
 
         <button type="submit">Generate Payment Request</button></form>
     <br>   

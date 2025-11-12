@@ -247,7 +247,7 @@ async def transmit_records(        request: Request,
     # transmit_consultation.final_kind = 34002
 
     
-    print(f"transmit nauth: {transmit_consultation.nauth}")
+    print(f"transmit nauth: {transmit_consultation.nauth} record name: {transmit_consultation.record_name}")
 
     try:
 
@@ -278,17 +278,19 @@ async def transmit_records(        request: Request,
 
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
         for each_record in records_to_transmit:
-            print(f"transmitting: {each_record['tag']} {each_record['payload']}")
-
-            record_obj = { "tag"   : [each_record['tag']],
-                            "type"  : str(transmit_consultation.final_kind),
-                            "payload": each_record['payload']
-                          }
-            print(f"record obj: {record_obj}")
-            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
-            # 32227 are transmitted as kind 1060
             
-            msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
+            if each_record['tag'][0] == transmit_consultation.record_name:
+                print(f"transmitting: {each_record['tag'][0]} {each_record['payload']}")
+
+                record_obj = { "tag"   : [each_record['tag']],
+                                "type"  : str(transmit_consultation.final_kind),
+                                "payload": each_record['payload']
+                            }
+                print(f"record obj: {record_obj}")
+                # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+                # 32227 are transmitted as kind 1060
+                
+                msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successful"
         
