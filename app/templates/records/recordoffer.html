@@ -16,6 +16,13 @@ var global_offer_card = "{{card}}";
 
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
+
+
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -107,6 +114,64 @@ async function deleteOffer() {
 
 }  
 
+  async function submitOffer(nfc_token, nauth) {
+
+    consoleLog(`submit nfc_token ${nfc_token} ${nauth}`);
+    const submit_data = {"offer_token": nfc_token, "nauth": nauth };
+    await fetch('/records/acceptoffertoken', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},        
+    body: JSON.stringify(submit_data)         
+  })
+  .then((response) => response.json())   
+  .then((data) => { consoleLog(`done ${data.detail}`)});
+  
+  
+  
+  }  
+
+
+async function requestbyNFC(offer_kind, nauth) {
+   
+    var qr_img_func = document.getElementById("img_qr_display");
+    // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
+    const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
+    consoleLog(`Requesting by NFC. ${offer_kind} ${maskedNauth}. \n Please wait...`);
+    var nfc_token;
+    // var nfc_comment = document.getElementById("ln_recipient_memo").value;
+    
+    if ("NDEFReader" in window) {
+      const ndef = new NDEFReader();
+      try {
+        await ndef.scan();
+        ndef.onreading = event => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+
+            nfc_token = decoder.decode(record.data);
+          }
+         // alert(`Offer ${offer_kind} ${nfc_token}` );
+         qr_img_func.src = "/img/nfc-check.png";
+         consoleLog(`NFC card read successfully!`);
+
+         
+
+         submitOffer(nfc_token, nauth);
+          
+          
+          // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
+          
+        }
+      } catch(error) {
+        consoleLog(error);
+      }
+    } else {
+      consoleLog("Web NFC is not supported.");
+    }
+
+
+  }
+
 async function createQRCode() {
     
     var data;
@@ -117,6 +182,7 @@ async function createQRCode() {
     var grant = "record:{{grant_kind}}";
    
     // alert(scope);
+    consoleLog("test");
 
     qr_img_func.src="/img/circle-256.gif";   
     
@@ -156,7 +222,7 @@ async function createQRCode() {
 
   }
 
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wsrequesttransmittal/${global_nauth}`);
+ const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
 
    
 
@@ -216,7 +282,7 @@ async function offerRecord() {
                         "record_name": global_offer_card
    };
 
-  console.log(`data to submit: ${submit_data.nauth}`) ;
+  console.log(`data to submit: ${submit_data.nauth} ${submit_data.final_kind}`) ;
 
   await fetch('/records/transmit', {
        method: "POST",
@@ -295,6 +361,8 @@ async function offerRecord() {
 <div class="center-text">    
     <hr>
     {{action_mode}} {{record_kind}}  {{referer}}   
+    <hr>
+    <pre id="log"></pre>  
 </div>
 
      

@@ -470,6 +470,8 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
 
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
 
+    print(f"nfc_payout:  {nfc_pay_out}")
+
     if nfc_pay_out.nfc_ecash_clearing:
         ln_invoice = None
         detail = f"Paid in ecash to {acorn_obj.handle}"

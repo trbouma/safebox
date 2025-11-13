@@ -120,7 +120,7 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
   }
      
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wsrequesttransmittal/${global_nauth}`);
+  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
 
    
 

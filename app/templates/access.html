@@ -179,6 +179,11 @@ async function myRecords() {
 window.location.href="/records/display";
 }
 
+async function acceptRecords() {
+
+window.location.href="/records/accept";
+}
+
 async function presentRecord() {
 
 window.location.href="/records/present";
@@ -442,7 +447,7 @@ body: JSON.stringify(submit_data)
 
 
 
-window.location.href=`/safebox/access?action_comment=Payment+sent.` 
+// window.location.href=`/safebox/access?action_comment=Payment+sent.` 
 
 
 }
@@ -929,6 +934,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
   <br><br>
   <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
+  <br><br>
+  <button id="my_accept_records_button" onclick="acceptRecords()" >Accept Records</button>
   
   <hr>
   <h2>Official</h2>

@@ -397,6 +397,8 @@ async def accept_records(            request: Request,
                     ):
     """Protected access to inbox in home relay"""
     nprofile_parse = None
+    scope = ""
+    grant = ""
  
 
     
@@ -440,18 +442,41 @@ async def accept_records(            request: Request,
 
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+    else:
+        pass
+        transmittal_kind = settings.TRANSMITTAL_KIND
+        transmittal_relays = settings.TRANSMITTAL_RELAYS
 
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+    user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
 
-        offer_kind = int(scope.replace("offer:",""))
-        grant_kind = int(grant.replace("record:",""))
-        offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
-        grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
+    #FIXME this is the code to add immediately
+    for each_record in user_records:
+            type = int(each_record['type'])
+            print(f"incoming record: {each_record} type: {type}")
+            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            # 32227 are transmitted as kind 1060
+            # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+            
+            print(each_record)
+            print(each_record['tag'][0][0],each_record['payload'] )
+                # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
+                # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+            record_name = f"{each_record['tag'][0][0]}" 
+            record_value = each_record['payload']
+            print(f"record_name: {record_name} record value: {record_value} type: {type}")
+            await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type)
+    # End of FIXME            
+            
 
-        user_records_with_label = []
-        for each in user_records:
-            each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
-            user_records_with_label.append(each)
+    offer_kind = int(scope.replace("offer:",""))
+    grant_kind = int(grant.replace("record:",""))
+    offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
+    grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
+
+    user_records_with_label = []
+    for each in user_records:
+        each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
+        user_records_with_label.append(each)
 
     return templates.TemplateResponse(  "records/acceptrecord.html", 
                                         {   "request": request,
@@ -996,8 +1021,8 @@ async def ws_record_listen( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/wsrequesttransmittal/{nauth}")
-async def ws_requesttransmittal( websocket: WebSocket, 
+@router.websocket("/wslisten/{nauth}")
+async def ws_listen( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
@@ -1058,7 +1083,7 @@ async def ws_requesttransmittal( websocket: WebSocket,
 
                 ) 
 
-                nprofile = {'nauth': new_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
+                nprofile = {'nauth': new_nauth, 'name': acorn_obj.handle, 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
