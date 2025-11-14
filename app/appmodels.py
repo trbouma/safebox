@@ -94,6 +94,7 @@ class nauthRequest(BaseModel):
     scope: str|None = None
     grant: str|None = None
     transmittal_kind: int|None = None
+    compact: bool = False
 
     
 

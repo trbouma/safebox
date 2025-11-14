@@ -42,11 +42,7 @@ window.location.href="/scanner/scan";
 }
 
 
-async function shareCard() {
 
-  alert("Coming!");
-  
-}
 
 async function updateOffer() {
     
@@ -56,8 +52,8 @@ async function updateOffer() {
     var input_card_content = document.getElementById("input_card_content");
 
    
-    user_confirm = confirm(`Are you sure you want to proceed with updating ${input_card_title.value} ${record_kind}?`) ;
-    if (user_confirm == false) {return;}
+    // user_confirm = confirm(`Are you sure you want to proceed with updating ${input_card_title.value} ${record_kind}?`) ;
+    // if (user_confirm == false) {return;}
     
 
     const submit_data = {"title": input_card_title.value,
@@ -76,8 +72,10 @@ async function updateOffer() {
     .then((data) => data);
 
     
-    window.location.href=referer;
+    // window.location.href=referer;
     // window.history.back();
+    window.location.href="/records/offer?kind={{record_kind}}";
+    // console.log(referer);
       }
 
 async function deleteOffer() {
@@ -120,8 +118,6 @@ async function deleteOffer() {
     <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
     <br><br>
     <button onclick="updateOffer()">Update Offer</button>
-    <br><br>
-    <button onclick="shareCard()">Grant Offer</button>
     <br><br>
     <button onclick="deleteOffer()">Delete Offer</button>
     <br><br>

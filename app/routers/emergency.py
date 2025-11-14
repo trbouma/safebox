@@ -67,7 +67,8 @@ async def emergency_help (request: Request, emergency_code: str=""):
                 safebox_found = safeboxes.one()
                 acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=settings.MINTS)
                 await acorn_obj.load_data()
-                emergency_card = await acorn_obj.get_record("medical emergency card")
+                #FIXME change to configurable parameter
+                emergency_card = await acorn_obj.get_record("medical emergency card", record_kind=32226)
                 emergency__info = emergency_card['payload']
                 if safebox_found.owner:
                     print(f"send message to owner")

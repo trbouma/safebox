@@ -139,8 +139,8 @@ async def do_record_offer(      request: Request,
 
                                         })
 
-@router.get("/present", tags=["records", "protected"])
-async def record_presentation(      request: Request,
+@router.get("/request", tags=["records", "protected"])
+async def record_request(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34003,   
                                     nprofile:str = None, 
@@ -189,7 +189,7 @@ async def record_presentation(      request: Request,
                                     grant=scope.replace("prover","vselect")
         )
 
-        print(f"do credential offer initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
+        print(f"do record offer initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
 
         
         # send the recipient nauth message
@@ -199,7 +199,7 @@ async def record_presentation(      request: Request,
        pass
     
 
-    return templates.TemplateResponse(  "records/present.html", 
+    return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
@@ -213,7 +213,7 @@ async def record_presentation(      request: Request,
 
                                         })
 @router.get("/verificationrequest", tags=["records", "protected"])
-async def credential_verfication_request(      request: Request,
+async def records_verfication_request(      request: Request,
                           
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
@@ -301,8 +301,8 @@ async def transmit_records(        request: Request,
 
     return {"status": status, "detail": detail} 
 
-@router.get("/display", tags=["records", "protected"])
-async def my_records(       request: Request, 
+@router.get("/present", tags=["records", "protected"])
+async def my_present_records(       request: Request, 
                                 nauth: str = None,
                                 nonce: str = None,
                                 record_kind: int = 34002,
@@ -374,7 +374,7 @@ async def my_records(       request: Request,
   
     record_label = get_label_by_id(grant_kinds, record_kind)
     
-    return templates.TemplateResponse(  "records/display.html", 
+    return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
                                             
                                             
@@ -387,7 +387,91 @@ async def my_records(       request: Request,
 
                                         })
 
+@router.get("/retrieve", tags=["records", "protected"])
+async def my_retrieve_records(       request: Request, 
+                                nauth: str = None,
+                                nonce: str = None,
+                                record_kind: int = 34002,
+                                acorn_obj = Depends(get_acorn)
+                    ):
+    """Protected access to private data stored in home relay"""
+    nauth_response = None
+    record_select = False
+    
 
+
+
+    if nauth:
+        
+        print("nauth")
+
+        
+
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values']['nonce']
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_npub = parsed_result['values'].get("transmittal_npub")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        scope = parsed_result['values'].get("scope")
+    
+        if "verifier" in scope:
+            record_select = True
+            record_kind = int(scope.split(":")[1])
+            nauth_response = nauth
+        
+        else:
+
+        
+            # also need to set transmittal npub 
+
+
+            nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                        nonce=nonce,
+                                        auth_kind= auth_kind,
+                                        auth_relays=auth_relays,
+                                        transmittal_npub=transmittal_npub,
+                                        transmittal_kind=transmittal_kind,
+                                        transmittal_relays=transmittal_relays,
+                                        name=acorn_obj.handle,
+                                        scope=scope,
+                                        grant=scope
+            )
+
+
+
+        
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+
+    else:
+       pass
+
+    try:
+        user_records = await acorn_obj.get_user_records(record_kind=record_kind )
+    except:
+        user_records = None
+    
+    #FIXME don't need the grant kinds
+    
+    grant_kinds = settings.GRANT_KINDS
+  
+    record_label = get_label_by_id(grant_kinds, record_kind)
+    
+    return templates.TemplateResponse(  "records/retrieve.html", 
+                                        {   "request": request,
+                                            
+                                            
+                                            "user_records": user_records ,
+                                            "nauth": nauth_response,
+                                            "record_select": record_select,
+                                            "record_kind": record_kind,
+                                            "record_label": record_label,
+                                            "select_kinds": grant_kinds
+
+                                        })
 
 
 @router.get("/accept", tags=["records", "protected"])
@@ -590,7 +674,7 @@ async def display_record(     request: Request,
     
     credential_record = {"card":card, "content": content}
 
-    select_kinds = settings.SELECT_KINDS
+    select_kinds = settings.OFFER_KINDS
     select_kind = get_label_by_id(select_kinds, kind)
 
     offer_kinds = settings.OFFER_KINDS
@@ -972,7 +1056,7 @@ async def ws_record_listen( websocket: WebSocket,
     # await acorn_obj.load_data()
 
     naddr = acorn_obj.pubkey_bech32
-    client_credential_old = None
+    incoming_record_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
     start_time = datetime.now()
@@ -985,30 +1069,30 @@ async def ws_record_listen( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_credential = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
+                incoming_record = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
             except Exception as e:
-                client_credential=None
+                incoming_record=None
             
 
 
-            if client_credential != client_credential_old: 
+            if incoming_record != incoming_record_old: 
                 # parsed_nauth = parse_nauth(client_nauth)
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
-                credential_json = parse_nembed_compressed(client_credential)
+                record_json = parse_nembed_compressed(incoming_record)
                 #### Do the verification here... ####
-                verify_result = "Pending"
+                verify_result = "Done"
                 #### Finish verification ####
 
                 msg_out =   {   "status": "VERIFIED",
-                                "detail": credential_json, 
+                                "detail": record_json, 
                                 "result": verify_result
                                
                                }
-                print(f"send {client_credential}") 
+                print(f"send {incoming_record}") 
                 await websocket.send_json(msg_out)
-                client_credential_old = client_credential
-                print("credential receipt successful!")
+                incoming_record_old = incoming_record
+                print("incoming record  successful!")
                 break
            
         

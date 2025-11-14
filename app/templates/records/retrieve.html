@@ -93,7 +93,7 @@ async function selectRecordKind() {
   var select_record_kind = document.getElementById("select_record_kind");
 
  // alert(`record kind ${select_record_kind.value}`);
-  window.location.href=`/records/display?record_kind=${select_record_kind.value}`;
+  window.location.href=`/records/retrieve?record_kind=${select_record_kind.value}`;
 
 }
 
@@ -152,12 +152,12 @@ async function selectRecordKind() {
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
   {% else %}
-  <h1>Display My {{ record_label}}</h1>
+  <h1>Retrieve My {{ record_label}} Records</h1>
   {% endif %}
 
     <button onclick="gotoHome()">Home</button>
     <br><br>
-    Click on the record you wish to {{"present" if record_select else "view"}}.
+    Click on the record you wish to {{"present" if record_select else "retrieve"}}.
    
     <br><br>
     <select id="select_record_kind" onchange="selectRecordKind()"">
@@ -254,7 +254,7 @@ await fetch(`/records/sendrecord`, {
        })
     .then((response) => response.json())
     .then((data) => {
-    alert(`Verification Done! ${data.status} ${data.detail}`);
+    alert(`{{record_label}} sent!`);
 });
 
 }
@@ -271,21 +271,9 @@ await fetch(`/records/sendrecord`, {
 
 {% else %}
   <div class="center-text">
-    <hr>
-      <h2>Need More {{record_label}}?</h2>
-      Click on image below to authenticate.
-      <br><br>
-      <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
-      <br><br>
-      If your credential issuer can't scan your QR code, you can scan their QR code instead by clicking on the button below.
-      <br><br>
-      <button id="ln_scan_button" onclick="scanCode()">Authenticate Credential Issuer</button> 
-      <br><br>
-      Once you've authenticated, you can accept your credential offers.  
-      <br><br>
-      <button id="my_inbox_button" onclick="myInbox()" >Accept Credential Offers</button>
-      <br><br>
-      <button onclick="gotoHome()">Home</button>
+    <hr><br>
+
+    <button onclick="gotoHome()">Home</button>
       
   </div>
   <hr>

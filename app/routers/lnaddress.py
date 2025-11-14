@@ -521,7 +521,8 @@ async def onboard_safebox(  request: Request,
 
     medical_emergency_info = settings.EMERGENCY_INFO
     
-    await acorn_obj.put_record("medical emergency card", medical_emergency_info)
+    #FIXME Make medical emergency kind a configurable type
+    await acorn_obj.put_record("medical emergency card", medical_emergency_info, record_kind=32226)
     profile_info = acorn_obj.get_profile()
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()

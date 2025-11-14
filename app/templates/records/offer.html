@@ -409,45 +409,18 @@ setDarkMode();
 </script>
    
 
-<div class="center-text">
-  You need to authenticate your {{offer_kind_label}} recipient before you can offer a record.
-  <br><br>
 
-      
-  <button onclick="offerRecord()">Offer to {{offer_kind_label}} Recipient</button>  
-  <br><br>
-  <button onclick="backToProfile()">Home</button>
-  <br>
- <hr> 
- <h2>Offer to {{offer_kind_label}} Recipient?</h2>
- Click below to authenticate with {{offer_kind_label}} recipient. 
- <br>Please ask them to scan the generated QR code.
- <br><br>
-  <label>
-  <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
-  Request by NFC
-  <br><br>
-  </label>
-    
- <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
- <br><br>
- <button id="ln_scan_button" onclick="scanCode()">Authenticate {{offer_kind_label}} Recipient</button>
- <br><br>
 
-     
-        
-</div>
      
 <div class="center-text">
   <hr>
-  <pre id="log"></pre>  
-   <br><br>
-
-
-  {% if client_nauth %}
-  {{client_nauth[:20] }}...{{ client_nauth[-15:]}} 
-  {% endif %}    
-  <br>Kind: {{record_kind}}
+  <br>
+  <button onclick="backToProfile()">Home</button>
+  <br>
+ 
+  <hr>
+  <br>
+  Kind: {{record_kind}}
 </div>
 
 

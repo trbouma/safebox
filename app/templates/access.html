@@ -176,17 +176,14 @@ window.location.href="/safebox/personalmessages";
 
 async function myRecords() {
 
-window.location.href="/records/display";
-}
-
-async function acceptRecords() {
-
-window.location.href="/records/accept";
-}
-
-async function presentRecord() {
-
 window.location.href="/records/present";
+}
+
+
+
+async function requestRecord() {
+
+window.location.href="/records/request";
 }
 
 async function myEcash() {
@@ -202,7 +199,7 @@ window.location.href="/credentials/present";
 
 async function myRecords() {
 
-window.location.href="/records/display";
+window.location.href="/records/retrieve";
 
 }
 
@@ -232,7 +229,7 @@ async function payOrPass() {
 
 async function doVerifyCredential() {
 // alert('Coming soon!');
-window.location.href="/credentials/verificationrequest";
+window.location.href="/records/verificationrequest";
 
 }
 
@@ -928,37 +925,32 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <hr>
 
-  <h2>Personal</h2>
+  <h2>My Records</h2>
   <button id="my_personal_messages_button" onclick="personalMessages()" >Private Messages</button>
   <br><br>
   <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
   <br><br>
   <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
-  <br><br>
-  <button id="my_accept_records_button" onclick="acceptRecords()" >Accept Records</button>
+
   
   <hr>
-  <h2>Official</h2>
-  <button id="my_credentials_button" onclick="presentRecord()" >Present a Record</button> 
-
-
-  <hr>
-  <h2>Professional</h2>   
-
+  <h2>Community</h2>
   <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Record</button>  
   <br>
   <br>
-  <button id="do_verify_credential" onclick="doVerifyCredential()" >Verify Record</button> 
+  <button id="my_credentials_button" onclick="requestRecord()" >Request a Record</button> 
   <br>
   <br>
-  <button id="do_verify_credential" onclick="doRequestRecord()" >Request Record</button> 
-  <br>
-  <hr>
-  <h2>Community</h2>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Member</button>
+
+
+  <hr>
+
+  
+
   <br>
   <div class="center-text">
-    <hr>
+  
  
     <h2> Reusable Payment Request </h2> 
   
