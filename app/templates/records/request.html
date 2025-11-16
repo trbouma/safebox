@@ -82,11 +82,14 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   var grant_kind = document.getElementById("grant_kind").value;
   var record_label = document.getElementById("record_label").value;
   const nfc_request = document.getElementById("nfc_request_checkbox");
+  const compact_qr = document.getElementById("compact_qr_checkbox");
 
 
 
     var scope = `verifier:${grant_kind}`;
-    const submit_data = {"scope": scope  };
+    const submit_data = {"scope": scope, "compact": compact_qr.checked  };
+    
+    console.log(JSON.stringify(submit_data));
 
     await fetch(`/records/nauth`, {
       method: "POST",
@@ -184,6 +187,8 @@ ws.onclose = () => console.log("WebSocket closed");
   <label>
   <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
   Request by NFC
+  <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
+  Compact QR Code
   <br><br>
   </label>
  
@@ -204,12 +209,12 @@ window.location.href="/safebox/access" ;
 
 async function listenForRecord(nauth) {
     
-  console.log(`listen for credential presentation ${nauth}`);
+  console.log(`listen for record presentation ${nauth}`);
     
     const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforrecord/${nauth}`);  
     
        
-      // alert("listen for credential");
+      // alert("listen for records");
       // alert(span_msg_status.textContent)
       span_msg_status.textContent = "Listening for record...";
       ws.onopen = () => console.log("WebSocket connected");
@@ -226,7 +231,7 @@ async function listenForRecord(nauth) {
       if (response.status == "VERIFIED")
       {
         
-        // alert(`Credential has been received! ${JSON.stringify(response.detail)}`);
+        // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Record has been received!";
         addCard(response.detail.tag,`Verification: ${response.result}`,response.detail.payload);
         var qr_img_func = document.getElementById("img_qr_display");
@@ -335,12 +340,7 @@ async function listenForRecord(nauth) {
 
 
 
-async function addCredentialOffer() {
-// alert(`add card ${record_kind}`);
-window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
 
-
-}
 
 async function getStatus(return_result) {
 

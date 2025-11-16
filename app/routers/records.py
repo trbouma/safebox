@@ -55,8 +55,8 @@ async def issue_credentials (   request: Request,
     
     return templates.TemplateResponse("credentials/issuecredentials.html", {"request": request, "profile": profile})
 
-@router.get("/offer", tags=["records", "protected"])
-async def do_record_offer(      request: Request,
+@router.get("/offerlist", tags=["records", "protected"])
+async def offer_list(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = 34001,   
                                     nprofile:str = None, 
@@ -81,7 +81,7 @@ async def do_record_offer(      request: Request,
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_pubhex = parsed_result['values'].get("transmittal_pubhex")
@@ -123,7 +123,7 @@ async def do_record_offer(      request: Request,
     # Get correspond grant kind
     grant_kind = get_id_by_label(grant_kinds,offer_kind_label)
 
-    return templates.TemplateResponse(  "records/offer.html", 
+    return templates.TemplateResponse(  "records/offerlist.html", 
                                         {   "request": request,
                                            
                                             "user_records": user_records,
@@ -167,7 +167,7 @@ async def record_request(      request: Request,
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub") # It is the verifier that receives the credential
@@ -256,7 +256,7 @@ async def transmit_records(        request: Request,
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
         scope = parsed_nauth['values']['scope']
-        nonce = parsed_nauth['values']['nonce']
+        nonce = parsed_nauth['values'].get('nonce', '0')
         auth_kind = parsed_nauth['values']['auth_kind']
         auth_relays = parsed_nauth['values']['auth_relays']
 
@@ -323,12 +323,12 @@ async def my_present_records(       request: Request,
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -409,7 +409,7 @@ async def my_retrieve_records(       request: Request,
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
@@ -495,72 +495,13 @@ async def accept_records(            request: Request,
         return
 
 
-    if nauth:
-        
-        print("nauth")
-        parsed_result = parse_nauth(nauth)
-        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
-        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
-        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
-        scope = parsed_result['values'].get("scope",None)
-        grant = parsed_result['values'].get("grant",None)
-        
-
-        
-        print(f"scope: {scope} grant: {grant}")
-        # create the response nauth
-        response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
-                                    nonce=nonce,
-                                    auth_kind= auth_kind,
-                                    auth_relays=auth_relays,
-                                    transmittal_npub=acorn_obj.pubkey_bech32,
-                                    transmittal_kind=transmittal_kind,
-                                    transmittal_relays=transmittal_relays,
-                                    name=acorn_obj.handle,
-                                    scope=scope,
-                                    grant=grant
-        )
-
-        # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-    else:
-        pass
-        transmittal_kind = settings.TRANSMITTAL_KIND
-        transmittal_relays = settings.TRANSMITTAL_RELAYS
-
-    user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
-
-    #FIXME this is the code to add immediately
-    for each_record in user_records:
-            type = int(each_record['type'])
-            print(f"incoming record: {each_record} type: {type}")
-            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
-            # 32227 are transmitted as kind 1060
-            # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
-            
-            print(each_record)
-            print(each_record['tag'][0][0],each_record['payload'] )
-                # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
-                # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
-            record_name = f"{each_record['tag'][0][0]}" 
-            record_value = each_record['payload']
-            print(f"record_name: {record_name} record value: {record_value} type: {type}")
-            await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type)
-    # End of FIXME            
-            
-
-    offer_kind = int(scope.replace("offer:",""))
-    grant_kind = int(grant.replace("record:",""))
-    offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
-    grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
 
     user_records_with_label = []
-    for each in user_records:
-        each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
-        user_records_with_label.append(each)
+    offer_kind = 0
+    offer_kind_label=""
+    grant_kind = 0
+    grant_kind_label = ""
+    transmittal_kind = 0
 
     return templates.TemplateResponse(  "records/acceptrecord.html", 
                                         {   "request": request,
@@ -576,6 +517,74 @@ async def accept_records(            request: Request,
                                         })
 
 
+@router.websocket("/ws/accept")
+async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn = Depends(get_acorn)):
+
+ 
+    global global_websocket
+    user_records = []
+    await websocket.accept()
+    await acorn_obj.load_data()
+    
+    
+    global_websocket = websocket
+
+    print("This is the records websocket")
+    
+    print("This is the records websocket after sleep")
+    print("nauth")
+    parsed_result = parse_nauth(nauth)
+    npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+    nonce = parsed_result['values'].get('nonce', '0')
+    auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+    auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
+    transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
+    transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+    scope = parsed_result['values'].get("scope",None)
+    grant = parsed_result['values'].get("grant",None)
+    
+    
+    
+    print(f"scope: {scope} grant: {grant}")
+    # create the response nauth
+    response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                nonce=nonce,
+                                auth_kind= auth_kind,
+                                auth_relays=auth_relays,
+                                transmittal_npub=acorn_obj.pubkey_bech32,
+                                transmittal_kind=transmittal_kind,
+                                transmittal_relays=transmittal_relays,
+                                name=acorn_obj.handle,
+                                scope=scope,
+                                grant=grant
+    )
+
+    # send the recipient nauth message
+    msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+    print("let's sleep")
+    await asyncio.sleep(5)
+
+    
+    user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+    first_type = int(user_records[0].get('type',34002))
+    for each_record in user_records:
+        type = int(each_record['type'])
+        print(f"incoming record: {each_record} type: {type}")
+        # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+        # 32227 are transmitted as kind 1060
+        # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+        
+        print(each_record)
+        print(each_record['tag'][0][0],each_record['payload'] )
+            # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
+            # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+        record_name = f"{each_record['tag'][0][0]}" 
+        record_value = each_record['payload']
+        print(f"record_name: {record_name} record value: {record_value} type: {type}")
+        await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type)
+
+    await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
+   
 
 @router.post("/acceptincomingrecord", tags=["records", "protected"])
 async def accept_incoming_record(       request: Request, 
@@ -592,7 +601,7 @@ async def accept_incoming_record(       request: Request,
     try:
         parsed_result = parse_nauth(incoming_record.nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
@@ -679,7 +688,72 @@ async def display_record(     request: Request,
 
     offer_kinds = settings.OFFER_KINDS
     offer_label = get_label_by_id(offer_kinds, kind)
-    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?kind={kind}"
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
+   
+
+    return templates.TemplateResponse(  template_to_use, 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "offer_kind": kind,
+                                            "grant_kind": kind+1,
+                                            "offer_label": offer_label,
+                                            "select_kind": select_kind,
+                                            "referer": referer,
+                                            "label_hash": label_hash,
+                                            "action_mode":action_mode,
+                                            "content": content,
+                                            "credential_record": credential_record
+                                            
+                                        })
+
+@router.get("/manageoffer", tags=["records", "protected"])
+async def manage_offer(     request: Request, 
+                            card: str = None,
+                            kind: int = 34002,
+                            action_mode: str = None,
+                            acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
+
+    label_hash = None
+    template_to_use = "records/offer.html"
+    content = ""
+    
+    if action_mode == 'edit':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+
+        try:
+            content = record["payload"]
+        except:
+            content = record
+        
+    elif action_mode == 'offer':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+        template_to_use = "records/recordoffer.html"
+
+        try:
+            content = record["payload"]
+        except:
+            content = record    
+    
+    elif action_mode =='add':
+        card = ""
+        content =""
+    
+    credential_record = {"card":card, "content": content}
+
+    select_kinds = settings.OFFER_KINDS
+    select_kind = get_label_by_id(select_kinds, kind)
+
+    offer_kinds = settings.OFFER_KINDS
+    offer_label = get_label_by_id(offer_kinds, kind)
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
    
 
     return templates.TemplateResponse(  template_to_use, 
@@ -754,6 +828,7 @@ async def generate_nauth(    request: Request,
     status = "OK"
     detail = "None"
     print(f"nauth request: {nauth_request}")
+    nonce = None
 
     
     # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
@@ -764,7 +839,7 @@ async def generate_nauth(    request: Request,
 
     # pub_hex_to_use = acorn_obj.pubkey_hex
     npub_to_use = acorn_obj.pubkey_bech32
-    nonce = generate_nonce()
+    
     print(f"scope: {nauth_request.scope} nonce: {nonce}")
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
@@ -784,13 +859,25 @@ async def generate_nauth(    request: Request,
         else:
             transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
        
+        if nauth_request.compact:
+            nonce = generate_nonce(length=1)
+            auth_relays = None
+            transmittal_relays=None
+            
+            
+        else:
+           
+            auth_relays=settings.AUTH_RELAYS  
+            transmittal_relays=settings.RECORD_TRANSMITTAL_RELAYS
+            nonce = generate_nonce(length=16)
+
         detail = create_nauth(  npub=npub_to_use,
                                 nonce=nonce,
                                 auth_kind=settings.AUTH_KIND,
-                                auth_relays=settings.AUTH_RELAYS,
+                                auth_relays=auth_relays,
                                 transmittal_npub=transmittal_npub,
                                 transmittal_kind = transmittal_kind,
-                                transmittal_relays=settings.RECORD_TRANSMITTAL_RELAYS,
+                                transmittal_relays=transmittal_relays,
                                 name=acorn_obj.handle,
                                 scope=nauth_request.scope, 
                                 grant=nauth_request.grant
@@ -800,7 +887,7 @@ async def generate_nauth(    request: Request,
         
 
         print(f"scope: {nauth_request.scope} grant: {nauth_request.grant}")
-        print(f"generated nauth: {detail}")
+        print(f"generated nauth: {detail} {len(detail)}")
       
     except:
         detail = "Not created"
@@ -826,12 +913,12 @@ async def post_send_record(      request: Request,
         
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
-        nonce = parsed_nauth['values']['nonce']
-        auth_kind = parsed_nauth['values']['auth_kind']
-        auth_relays = parsed_nauth['values']['auth_relays']
+        nonce = parsed_nauth['values'].get('nonce', '0')
+        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)
+        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
         transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex',acorn_obj.pubkey_hex)
-        transmittal_kind = parsed_nauth['values']['transmittal_kind']
-        transmittal_relays = parsed_nauth['values']['transmittal_relays']
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
 
         print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
@@ -1046,8 +1133,8 @@ async def ws_record_listen( websocket: WebSocket,
 
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
-        transmittal_kind = parsed_nauth['values'] ['transmittal_kind']   
-        transmittal_relays = parsed_nauth['values']['transmittal_relays']
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)  
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
         print(f"ws transmittal relays: {transmittal_relays}")
 
 
@@ -1118,8 +1205,8 @@ async def ws_listen( websocket: WebSocket,
 
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
-        auth_kind = parsed_nauth['values'] ['auth_kind']   
-        auth_relays = parsed_nauth['values']['auth_relays']
+        auth_kind = parsed_nauth['values'].get('auth_kind',   settings.AUTH_KIND)
+        auth_relays = parsed_nauth['values'].get("auth_relays", settings.AUTH_RELAYS)
         print(f"ws auth relays: {auth_relays}")
 
 

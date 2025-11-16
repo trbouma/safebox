@@ -256,7 +256,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
@@ -302,7 +302,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         nauth = instruction_obj['params']['nauth']
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
+        nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind")
         auth_relays = parsed_result['values'].get("auth_relays")
         transmittal_npub = parsed_result['values'].get("transmittal_npub")

@@ -1,209 +1,106 @@
 {% extends "uxbase.html" %}
 
-{% block title %}Record Offer{% endblock %}
+{% block title %}Update Record{% endblock %}
 {% block head %}
 {{ super() }}
 
 
 
 <script>
-
-  const jsonUserData = {{ user_records | tojson }};
-  const record_kind = parseInt("{{ record_kind }}");
-  //There are two ways to receive client nauth 1) from scan, 2) from websockets
-  var client_nauth = "{{client_nauth}}";
-  
-
-  
-
-</script>
-
-<script>
-
-var global_naddr = "";
-var global_transmit_nauth = "None";
-var global_offer_kind = {{offer_kind}};
-var global_grant_kind = {{grant_kind}};
-
+var record_kind = parseInt("{{record_kind}}");
+var referer = "{{referer}}";
 async function backToProfile() {
 
-
 window.location.href="/safebox/access" ;
+
+}
+
+async function goBack() {
+    window.history.back();
+}
+
+async function privateData() {
+
+window.location.href="/safebox/privatedata";
+}
+
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
 
 }
 
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan?referer=credential-offer";
+window.location.href="/scanner/scan";
 
 }
 
 
 
-async function getQRStatus(return_result) {
 
-var qr_img_func = document.getElementById("img_qr_display");
-
-parsedResult = JSON.parse(JSON.stringify(return_result));
-
-
- global_nauth = parsedResult.detail;
-
-qr_img_func.src = "/safebox/qr/"+ global_nauth;
-// qr_img_func.addEventListener("click", copytoClipboard);
-
-
-
-}
-
-function consoleLog(data) {
-    var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
-  };
-
-async function requestbyNFC(offer_kind, nauth) {
-   
-    var qr_img_func = document.getElementById("img_qr_display");
-    // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
-    const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
-    consoleLog(`Requesting by NFC. ${offer_kind} ${maskedNauth}. \n Please wait...`);
-    var nfc_token;
-    // var nfc_comment = document.getElementById("ln_recipient_memo").value;
-    
-    if ("NDEFReader" in window) {
-      const ndef = new NDEFReader();
-      try {
-        await ndef.scan();
-        ndef.onreading = event => {
-          const decoder = new TextDecoder();
-          for (const record of event.message.records) {
-
-            nfc_token = decoder.decode(record.data);
-          }
-         // alert(`Offer ${offer_kind} ${nfc_token}` );
-         qr_img_func.src = "/img/nfc-check.png";
-         consoleLog(`NFC card read successfully!`);
-
-         
-
-         submitOffer(nfc_token, nauth);
-          
-          
-          // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
-          
-        }
-      } catch(error) {
-        consoleLog(error);
-      }
-    } else {
-      consoleLog("Web NFC is not supported.");
-    }
-
-
-  }
-
-  async function submitOffer(nfc_token, nauth) {
-
-    // alert(`submit proof ${record_label}`);
-    const submit_data = {"offer_token": nfc_token, "nauth": nauth };
-    await fetch('/records/acceptoffertoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
-  
-  
-  
-  }  
-async function createQRCode() {
+async function updateOffer() {
     
     var data;
-    var qr_img_func = document.getElementById("img_qr_display");
-    const nfc_request = document.getElementById("nfc_request_checkbox");
-    var offer_kind = document.getElementById("offer_kind").value;
-    var scope = "offer:{{offer_kind}}";
-    var grant = "record:{{grant_kind}}";
    
-    // alert(scope);
-
-    qr_img_func.src="/img/circle-256.gif";   
-    
-    const submit_data = {"scope": scope, "grant": grant };
-    console.log(`scope: ${scope} grant: ${grant}`);
-
-    await fetch(`/records/nauth`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(submit_data)         
-           
-      })
- .then((response) => response.json())
- .then((data) => {  // alert(data.detail);
-                    global_nauth = data.detail;
-                    // var qr_img_func = document.getElementById("img_qr_display");
-                    // qr_img_func.src = "/safebox/qr/"+ global_nauth;
-                    console.log(`nauth: ${global_nauth}`);
-
-                }
- 
-                 // getQRStatus(data)
- );
-
-   if (nfc_request.checked == true) {  
-      qr_img_func.src = "/img/nfc.png";
-      consoleLog("Tap NFC card!");
-      
-      await requestbyNFC(offer_kind, global_nauth);
-                     
-  } else {
-
-    // console.log(`grant kind: ${grant_kind}`);
-
-    // qr_img_func.src="/img/circle-256.gif";
-    qr_img_func.src = "/safebox/qr/"+ global_nauth;
-
-  }
-
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
+    var input_card_title = document.getElementById("input_card_title");
+    var input_card_content = document.getElementById("input_card_content");
 
    
-
-    ws.onopen = () => console.log("WebSocket connected");
-    ws.onmessage = (event) => {
-      console.log("Message received:", event.data);
-      const response = JSON.parse(event.data);  
-      global_transmit_nauth = response.nauth;
-      client_name = response.name;
-      client_transmittal_kind = response.transmittal_kind;
-      client_transmittal_relays = response.transmittal_relays;
-    // client_name = response.name;
-    // alert(`Client is authenticated! Ready to transmit files.`); 
-    if (global_transmit_nauth) {
-    // alert(`Client is authenticated! Ready to transmit files.`); 
-      qr_img_func.src="/img/check.png";
-    } else {
-    // alert(`Authentication has timed out! Please regenerate QR code`);  
-      qr_img_func.src="/img/safebox.png";
-    }
-    ws.close()
-    offerRecord();
+    // user_confirm = confirm(`Are you sure you want to proceed with updating ${input_card_title.value} ${record_kind}?`) ;
+    // if (user_confirm == false) {return;}
     
+
+    const submit_data = {"title": input_card_title.value,
+                          "content": input_card_content.value,
+                          "kind": record_kind,
+                          "final_kind":record_kind };
+
     
-  };
-  ws.onclose = () => console.log("WebSocket closed");
-  
 
-}
+   await fetch('/records/updaterecord', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
 
-async function offerKind() {
+    
+    // window.location.href=referer;
+    // window.history.back();
+    window.location.href="/records/offerlist?kind={{record_kind}}";
+    // console.log(referer);
+      }
 
-  var offer_kind_value = document.getElementById("offer_kind").value
-  // alert(`select kind ${offer_kind_value}`);
-  window.location.href=`/records/offer?kind=${offer_kind_value}`;
-}
+async function deleteOffer() {
+  var input_card_title = document.getElementById("input_card_title");
+
+  user_confirm = confirm(`Are you sure you want to proceed with deleting ${input_card_title.value}?`) ;
+
+  const submit_data = {"title": input_card_title.value, "kind": record_kind};
+
+    
+
+   await fetch('/records/deleterecord', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
+
+    window.location.href=referer ;
+
+}      
+
+
+
 </script>
 
 {% endblock %}
@@ -213,215 +110,35 @@ async function offerKind() {
 
 
 <div class="center-text">
-    <h1>Offer {{offer_kind_label}} </h1>
-    Create offer for: {{offer_kind_label}} 
-    <br>(Offer Kind: {{record_kind}})
+    <h1>Update {{offer_label}} Offer </h1>
+    {{card}} {{referer}} {{record_kind}}
    
-      <br><br>
-  <select id="offer_kind" name="offer_kind" onchange="offerKind()">
-   {% for entry in offer_kinds %}
-   <option value="{{entry[0]}}" {{"selected" if record_kind == entry[0] else " "}}>{{entry[1]}}</option>         
-   {% endfor %}
-   </select>
-   <br><br>
-
-    <button onclick="addRecordOffer()">Add {{offer_kind_label}} Offer</button>
+    <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
     <br><br>
-    Click on an existing record to offer a {{offer_kind_label}}.
-
-
-   
+    <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
+    <br><br>
+    <button onclick="updateOffer()">Update Offer</button>
+    <br><br>
+    <button onclick="deleteOffer()">Delete Offer</button>
+    <br><br>
+    <button onclick="goBack()">Back</button>
+    <br><br>
+    <button onclick="backToProfile()">Home</button>
     
 </div>
 
-<div id="card-container"></div>
 
-<script>
-
-  function renderJSONObject(data) {
-    // render json object
-    // return "json object";
-    let content = document.createElement('div');
-    content.className = 'json-content';
-    // Loop through the JSON object and display key-value pairs
-        for (let key in data) {
-            if (key !== 'title') {
-                let row = document.createElement('p');
-                row.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
-                content.appendChild(row);
-            }
-        }
-    return content;
-
-  }
-
-
-  // Function to create and add a card
-  function addCard(title, created_at, content) {
-    // Create a card element
-    const card = document.createElement('div');
-    card.className = 'card';
-
-    // Create and add the title element
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
-
-    // Create and add the created_at element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = `${created_at}`;
-
-    // Create and add the content element
-    const cardContent = document.createElement('div');
-    cardContent.className = 'card-content';
-    cardContent.textContent = content;
-   
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
-
-
-    // figure out what to do with the card conte
-
-    // Append title and content to the card
-
-    try {
-
-        if (typeof cardContent == 'object' ) {
-        console.log(cardContent);
-
-
-
-        } else {
-          console.log("string");
-        }
-
-
-
-
-      } catch (error) {
-        console.error("Invalid JSON:", error.message);
-    }
-
-
-    card.appendChild(cardContent);
-
-    
-
-    card.addEventListener('click', () => {
-        // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/records/displayrecord?card=${title}&action_mode=offer&kind={{record_kind}}`;
-      });
-
-    // Append the card to the container
-    const container = document.getElementById('card-container');
-    container.appendChild(card);
-  }
-
-  // Example usage
-  // alert("hello"+ JSON.stringify(jsonUserData)); 
-  var render_payload = "";
-  for (let record of jsonUserData)
-  {
-    if (record.hasOwnProperty("tag")) {
-        console.log(`Name: ${record.tag} ${typeof record.payload}`);
-        // check to see if payload is json
-       
-
-        addCard(record.tag, record.created_at,record.payload);
-
-
-    } else {
-        console.log("This record does not have a 'name' property.");
-    }
-    // addCard('Private Data 1', JSON.stringify(record));
-
-  }
-
-async function addRecordOffer() {
-// alert(`add card ${record_kind}`);
-window.location.href=`/records/displayrecord?action_mode=add&kind=${record_kind}`;
-
-
-}
-
-async function getStatus(return_result) {
-
-
-parsedResult = JSON.parse(JSON.stringify(return_result));
-// alert(`${parsedResult.status} ${parsedResult.detail}`);
-alert("Done!");
-
- 
-
-}
-
-async function offerRecord() {
-
-    
-    if (global_transmit_nauth=="None" && client_nauth == "None" ) {
-      alert(`Please authenticate your credential recipient!`);
-      return;
-    }
-
-    // if (confirm(`Are you sure you want to send?`)) {
-      // alert(`Sending...`);
-    // } else {return;}
-  
-    var data;
-    if (global_transmit_nauth == "None"){
-      
-      nauth_to_transmit = client_nauth;
-
-    } else {
-      nauth_to_transmit = global_transmit_nauth;
-    }
    
 
-
-  const submit_data = { "nauth": nauth_to_transmit,
-                        "originating_kind": global_offer_kind,
-                        "final_kind": global_grant_kind
-   };
-
-  console.log(`data to submit: ${submit_data.nauth}`) ;
-
-  await fetch('/records/transmit', {
-       method: "POST",
-       headers: {"Content-Type": "application/json"},        
-       body: JSON.stringify(submit_data)         
-      })
-   .then((response) => response.json())
-   .then((data) => { alert(`Done! ${data.status}`)}
-   
-   // getStatus(data)
-   );
-
-   // window.location.href=referer;
-     }
-
-
-
-
-setDarkMode();
-
-
-</script>
-   
-
-
+<div class="center-text">    
+    <hr>
+    {{action_mode}} {{record_kind}}  {{referer}}   
+</div>
 
      
-<div class="center-text">
-  <hr>
-  <br>
-  <button onclick="backToProfile()">Home</button>
-  <br>
- 
-  <hr>
-  <br>
-  Kind: {{record_kind}}
-</div>
+<script>
+  setDarkMode();
+</script>
 
 
 {% endblock %}

@@ -199,7 +199,7 @@ async function selectRecordKind() {
       card.addEventListener('click', () => {
 
         {% if record_select %}
-          if (confirm(`Present this credential ${title}`)) {
+          if (confirm(`Present this record ${title}?`)) {
             
             sendRecord(title); 
           }
@@ -240,7 +240,7 @@ async function sendRecord(title) {
 console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
-// send credential to verfier
+// send record to verfier
 submit_data = { "nauth": global_vrequest_nauth,
                 "grant": `${title}`
               };

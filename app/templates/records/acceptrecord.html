@@ -20,12 +20,30 @@
     <br><br>
 
   
-    Please click on Refresh until you see your records appear.
+    Your records will appear momentarily. If they do not, please click Refresh Records.
    
     
 </div>
 
 <div id="card-container"></div>
+
+<script>
+  const ws = new WebSocket("wss://{{request.url.hostname}}/records/ws/accept?nauth={{nauth}}");
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+      var grant_kind = JSON.parse(event.data).grant_kind;
+      console.log("Message received:", event.data);
+      
+     window.location.href=`/records/retrieve?record_kind=${grant_kind}`;
+      // refreshRecords();
+     
+
+  };
+  ws.onclose = () => console.log("WebSocket closed");
+
+
+</script>
 
 <script>
   const jsonUserData = {{ user_records | tojson }};

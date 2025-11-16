@@ -1149,8 +1149,8 @@ def validate_local_part(local_part: str) -> bool:
 
     return bool(re.fullmatch(local_part_regex, local_part))
 
-def generate_nonce():
-    return os.urandom(16).hex()
+def generate_nonce(length:int = 16):
+    return os.urandom(length).hex()
 
 
 async def send_zap_receipt(nostr:str, lninvoice:str=None):
