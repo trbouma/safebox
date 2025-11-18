@@ -246,7 +246,7 @@ async function createQRCode() {
     // alert(`Authentication has timed out! Please regenerate QR code`);  
       qr_img_func.src="/img/safebox.png";
     }
-    ws.close()
+    // ws.close()
     offerRecord();
     
     
@@ -293,7 +293,7 @@ async function offerRecord() {
        body: JSON.stringify(submit_data)         
       })
    .then((response) => response.json())
-   .then((data) => { console.log(`Done! ${data.status}`)}
+   .then((data) => { console.log(`Done! ${data.status} ${data.detail}`)}
    
    // getStatus(data)
    );
@@ -343,7 +343,7 @@ async function offerRecord() {
     <label>
     <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
     Offer by NFC
-    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
     Compact QR Code
   <br><br>
     <br><br>

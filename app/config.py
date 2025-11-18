@@ -92,35 +92,12 @@ class Settings(BaseSettings):
     RECORD_TRANSMITTAL_KIND: int = 21062
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
-    SELECT_KINDS: List = [  
-                            [340028, "ID"],
-                            [34016,"Boarding Pass"],
-                            [32225,"Health Record"],
-                            [37375, "Personal Note"],
-                            [34002, "Credential"],
-                            [34003, "Payment Card"],
-                            [34004, "Travel Document"],
-                            [34005, "Membership"],
-                            [34006, "Gift Card"],
-                            [34007, "Coupon"],
-                            [34008, "Event Ticket"],
-                            [34009, "Health Pass"],
-                            [34010, "Transit Cards"],
-                            [34011, "Immunization Record"],
-                            [34012, "Educational Diploma"],
-                            [34013, "Official Documentation"],
-                            [34014, "Insurance"],
-                            [34015, "Recipes"],
-                            [34101, "Ayra Card"],
-                            [34103, "First Person Network"]
 
-
-                        ]
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
-                            [340027, "ID"],
+                            
                             [34001, "Badge"],
                             [34029,"Pass"],
                             [32225,"Health Record"], 
@@ -143,7 +120,7 @@ class Settings(BaseSettings):
                         ]  
  
     GRANT_KINDS: List =     [  
-                            [34028, "ID"],
+                            
                             [34002, "Badge"],
                             [34030,"Pass"],
                             [32226,"Health Record"], 

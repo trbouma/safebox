@@ -256,9 +256,9 @@ async def transmit_records(        request: Request,
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
         scope = parsed_nauth['values']['scope']
-        nonce = parsed_nauth['values'].get('nonce', '0')
-        auth_kind = parsed_nauth['values']['auth_kind']
-        auth_relays = parsed_nauth['values']['auth_relays']
+        nonce = parsed_nauth['values'].get('nonce', generate_nonce(1))
+        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)
+        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
 
 
         
@@ -266,8 +266,8 @@ async def transmit_records(        request: Request,
         transmittal_npub = hex_to_npub(transmittal_pubhex)
         
         
-        transmittal_kind = parsed_nauth['values']['transmittal_kind']
-        transmittal_relays = parsed_nauth['values']['transmittal_relays']
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
 
         # print(f" session nonce {safebox_found.session_nonce} {nonce}")
         #TODO Need to figure out session nonce when authenticating from other side
@@ -292,7 +292,7 @@ async def transmit_records(        request: Request,
                 
                 msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
-        detail = f"Successful"
+        detail = f"Successfully transmitted kind {transmit_consultation.final_kind} to {transmittal_npub} via {transmittal_relays}"
         
     except Exception as e:
         status = "ERROR"
