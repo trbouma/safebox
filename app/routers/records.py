@@ -708,6 +708,58 @@ async def display_record(     request: Request,
                                             
                                         })
 
+@router.get("/displayoffer", tags=["records", "protected"])
+async def display_offer(     request: Request, 
+                            card: str = None,
+                            kind: int = 34002,
+                            action_mode: str = None,
+                            acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
+    #FIXME remove action mode because this path is now for offer only
+    label_hash = None
+   
+    content = ""
+    
+
+    record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+    label_hash = await acorn_obj.get_label_hash(label=card)
+    template_to_use = "records/displayoffer.html"
+
+    try:
+        content = record["payload"]
+    except:
+        content = record    
+    
+
+    
+    credential_record = {"card":card, "content": content}
+
+    select_kinds = settings.OFFER_KINDS
+    select_kind = get_label_by_id(select_kinds, kind)
+
+    offer_kinds = settings.OFFER_KINDS
+    offer_label = get_label_by_id(offer_kinds, kind)
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
+   
+
+    return templates.TemplateResponse(  template_to_use, 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "offer_kind": kind,
+                                            "grant_kind": kind+1,
+                                            "offer_label": offer_label,
+                                            "select_kind": select_kind,
+                                            "referer": referer,
+                                            "label_hash": label_hash,
+                                            "action_mode":action_mode,
+                                            "content": content,
+                                            "credential_record": credential_record
+                                            
+                                        })
+
 @router.get("/manageoffer", tags=["records", "protected"])
 async def manage_offer(     request: Request, 
                             card: str = None,
@@ -718,7 +770,7 @@ async def manage_offer(     request: Request,
     """Protected access to updating the card"""
 
     label_hash = None
-    template_to_use = "records/offer.html"
+    template_to_use = "records/manageoffer.html"
     content = ""
     
     if action_mode == 'edit':

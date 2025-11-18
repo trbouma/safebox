@@ -95,7 +95,8 @@ async function deleteOffer() {
     .then((response) => response.json())
     .then((data) => data);
 
-    window.location.href=referer ;
+    // window.location.href=referer ;
+    window.location.href="/records/offerlist?kind={{record_kind}}";
 
 }      
 

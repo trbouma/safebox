@@ -71,7 +71,9 @@ async function editOffer() {
     user_confirm = confirm(`Are you sure you want to proceed with updating {{card}}`) ;
     if (user_confirm == false) {return;}
 
-    window.location.href=`/records/displayrecord?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
+    // window.location.href=`/records/displayrecord?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
+
+    window.location.href=`/records/manageoffer?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
     
 
     const submit_data = {"title": "{{card}}",
@@ -180,13 +182,14 @@ async function createQRCode() {
     var offer_kind =  {{offer_kind}};
     var scope = "offer:{{offer_kind}}";
     var grant = "record:{{grant_kind}}";
+    const compact_qr = document.getElementById("compact_qr_checkbox");
    
     // alert(scope);
-    consoleLog("test");
+    consoleLog(`Create QR code with scope: ${scope}`);
 
     qr_img_func.src="/img/circle-256.gif";   
     
-    const submit_data = {"scope": scope, "grant": grant };
+    const submit_data = {"scope": scope, "grant": grant, "compact": compact_qr.checked };
     console.log(`scope: ${scope} grant: ${grant}`);
 
     await fetch(`/records/nauth`, {
@@ -309,7 +312,8 @@ async function offerRecord() {
 
 
 <div class="center-text">
-    <h1>Offer {{card}} </h1>
+    <h1>Display {{offer_label}} Offer </h1>
+    <h2> {{card}}</h2>
     {{card}} {{offer_kind}}  {{grant_kind}}
    
 <div 
@@ -339,6 +343,9 @@ async function offerRecord() {
     <label>
     <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
     Offer by NFC
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
+    Compact QR Code
+  <br><br>
     <br><br>
     </label>
     
