@@ -312,9 +312,8 @@ async function offerRecord() {
 
 
 <div class="center-text">
-    <h1>Display {{offer_label}} Offer </h1>
-    <h2> {{card}}</h2>
-    {{card}} {{offer_kind}}  {{grant_kind}}
+    <h1>Offer {{offer_label}} </h1>
+
    
 <div 
   id="offer_card" 
@@ -336,7 +335,7 @@ async function offerRecord() {
   <h3 style="margin-top: 0;">{{ card }}</h3>
   <p style="white-space: pre-wrap;">{{ content }}</p>
 </div>
-    <h2>{{offer_label}} Offer to Recipient?</h2>
+    <h2>Offer {{offer_label}} to Recipient?</h2>
     Click below to authenticate with {{offer_kind_label}} recipient. 
     <br>Please ask them to scan the generated QR code.
     <br><br>
@@ -352,9 +351,9 @@ async function offerRecord() {
     <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
     <br><br>
 
-    <button onclick= "editOffer()">Edit Offer</button>
+    <button onclick= "editOffer()">Edit {{offer_label}} Offer</button>
     <br><br>
-    <button onclick="deleteOffer()">Delete Offer</button>
+    <button onclick="deleteOffer()">Delete {{offer_label}} Offer</button>
     <br><br>
     <button onclick="goBack()">Back</button>
     <br><br>
