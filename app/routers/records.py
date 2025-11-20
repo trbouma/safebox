@@ -58,7 +58,7 @@ async def issue_credentials (   request: Request,
 @router.get("/offerlist", tags=["records", "protected"])
 async def offer_list(      request: Request,
                                     private_mode:str = "offer", 
-                                    kind:int = 34001,   
+                                    kind:int = None,   
                                     nprofile:str = None, 
                                     nauth: str = None,                            
                                     acorn_obj: Acorn = Depends(get_acorn)
@@ -67,6 +67,9 @@ async def offer_list(      request: Request,
     nprofile_parse = None
     auth_msg = None
 
+    offer_kinds = settings.OFFER_KINDS
+    if not kind:
+        kind = offer_kinds[0][0]
 
     user_records = await acorn_obj.get_user_records(record_kind=kind)
     
@@ -305,14 +308,16 @@ async def transmit_records(        request: Request,
 async def my_present_records(       request: Request, 
                                 nauth: str = None,
                                 nonce: str = None,
-                                record_kind: int = 34002,
+                                record_kind: int = None,
                                 acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
     nauth_response = None
     record_select = False
     
-
+    grant_kinds = settings.GRANT_KINDS
+    if not record_kind:
+        record_kind = grant_kinds[0][0]
 
 
     if nauth:
@@ -473,6 +478,92 @@ async def my_retrieve_records(       request: Request,
 
                                         })
 
+@router.get("/grantlist", tags=["records", "protected"])
+async def retrieve_grant_list(       request: Request, 
+                                nauth: str = None,
+                                nonce: str = None,
+                                record_kind: int = None,
+                                acorn_obj = Depends(get_acorn)
+                    ):
+    """Protected access to private data stored in home relay"""
+    nauth_response = None
+    record_select = False
+    
+    if not record_kind:
+        record_kind = settings.GRANT_KINDS[0][0]
+
+
+    if nauth:
+        
+        print("nauth")
+
+        
+
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind")
+        auth_relays = parsed_result['values'].get("auth_relays")
+        transmittal_npub = parsed_result['values'].get("transmittal_npub")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind")
+        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        scope = parsed_result['values'].get("scope")
+    
+        if "verifier" in scope:
+            record_select = True
+            record_kind = int(scope.split(":")[1])
+            nauth_response = nauth
+        
+        else:
+
+        
+            # also need to set transmittal npub 
+
+
+            nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+                                        nonce=nonce,
+                                        auth_kind= auth_kind,
+                                        auth_relays=auth_relays,
+                                        transmittal_npub=transmittal_npub,
+                                        transmittal_kind=transmittal_kind,
+                                        transmittal_relays=transmittal_relays,
+                                        name=acorn_obj.handle,
+                                        scope=scope,
+                                        grant=scope
+            )
+
+
+
+        
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+
+    else:
+       pass
+
+    try:
+        user_records = await acorn_obj.get_user_records(record_kind=record_kind )
+    except:
+        user_records = None
+    
+    #FIXME don't need the grant kinds
+    
+    grant_kinds = settings.GRANT_KINDS
+  
+    record_label = get_label_by_id(grant_kinds, record_kind)
+    
+    return templates.TemplateResponse(  "records/grantlist.html", 
+                                        {   "request": request,
+                                            
+                                            
+                                            "user_records": user_records ,
+                                            "nauth": nauth_response,
+                                            "record_select": record_select,
+                                            "record_kind": record_kind,
+                                            "record_label": record_label,
+                                            "select_kinds": grant_kinds
+
+                                        })
 
 @router.get("/accept", tags=["records", "protected"])
 async def accept_records(            request: Request,
@@ -645,6 +736,134 @@ async def accept_incoming_record(       request: Request,
 
 @router.get("/displayrecord", tags=["records", "protected"])
 async def display_record(     request: Request, 
+                            card: str = None,
+                            kind: int = 34002,
+                            action_mode: str = None,
+                            acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
+
+    label_hash = None
+    template_to_use = "records/record.html"
+    content = ""
+    
+    if action_mode == 'edit':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+
+        try:
+            content = record["payload"]
+        except:
+            content = record
+        
+    elif action_mode == 'offer':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+        template_to_use = "records/recordoffer.html"
+
+        try:
+            content = record["payload"]
+        except:
+            content = record    
+    
+    elif action_mode =='add':
+        card = ""
+        content =""
+    
+    credential_record = {"card":card, "content": content}
+
+    select_kinds = settings.OFFER_KINDS
+    select_kind = get_label_by_id(select_kinds, kind)
+
+    offer_kinds = settings.OFFER_KINDS
+    offer_label = get_label_by_id(offer_kinds, kind)
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
+   
+
+    return templates.TemplateResponse(  template_to_use, 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "offer_kind": kind,
+                                            "grant_kind": kind+1,
+                                            "offer_label": offer_label,
+                                            "select_kind": select_kind,
+                                            "referer": referer,
+                                            "label_hash": label_hash,
+                                            "action_mode":action_mode,
+                                            "content": content,
+                                            "credential_record": credential_record
+                                            
+                                        })
+
+@router.get("/displaygrant", tags=["records", "protected"])
+async def display_grant(     request: Request, 
+                            card: str = None,
+                            kind: int = None,
+                            action_mode: str = None,
+                            acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Protected access to updating the card"""
+
+    label_hash = None
+    template_to_use = "records/grant.html"
+    content = ""
+
+    if not kind:
+        kind = settings.GRANT_KINDS[0][0]
+    
+    if action_mode == 'edit':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+
+        try:
+            content = record["payload"]
+        except:
+            content = record
+        
+    elif action_mode == 'offer':
+
+        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        label_hash = await acorn_obj.get_label_hash(label=card)
+        template_to_use = "records/recordoffer.html"
+
+        try:
+            content = record["payload"]
+        except:
+            content = record    
+    
+    elif action_mode =='add':
+        card = ""
+        content =""
+    
+   
+
+
+
+    grant_kinds = settings.GRANT_KINDS
+    grant_label = get_label_by_id(grant_kinds, kind)
+    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
+   
+
+    return templates.TemplateResponse(  template_to_use, 
+                                        {   "request": request,
+                                            
+                                            "card": card,
+                                            "record_kind": kind,
+                                            "grant_label": grant_label,
+                                            "referer": referer,
+                                            "label_hash": label_hash,
+                                            "content": content
+                                            
+                                            
+                                        })
+
+@router.get("/displaygrant", tags=["records", "protected"])
+async def display_grant(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
                             action_mode: str = None,

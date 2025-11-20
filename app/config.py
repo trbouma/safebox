@@ -98,11 +98,13 @@ class Settings(BaseSettings):
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
                             
+                            [34035, "Contact"],
+                            [34101, "Business Card"],
                             [34001, "Badge"],
                             [34029,"Pass"],
-                            [32225,"Health Record"], 
+                            [32225,"Health"], 
                             [32229, "Prescription"],  
-                            [32231, "Immunization Record"],    
+                            [32231, "Immunization"],    
                             [34003, "Payment Card"],
                             [34005, "Travel Document"],
                             [34007, "Membership"],
@@ -114,18 +116,20 @@ class Settings(BaseSettings):
                             [34021, "Official Documentation"],
                             [34023, "Insurance"],
                             [34025, "Recipe"],
-                            [34031, "Voucher"],
-                            [34101, "Ayra Card"],
+                            [34031, "Voucher"],  
+                            [34033, "Letter"],                          
                             [34103, "First Person Network"]
                         ]  
  
     GRANT_KINDS: List =     [  
                             
+                            [34036, "Contact"],
+                            [34102, "Business Card"],
                             [34002, "Badge"],
                             [34030,"Pass"],
-                            [32226,"Health Record"], 
+                            [32226,"Health"], 
                             [32230, "Prescription"],  
-                            [32232, "Immunization Record"],    
+                            [32232, "Immunization"],    
                             [34004, "Payment Card"],
                             [34006, "Travel Document"],
                             [34008, "Membership"],
@@ -138,7 +142,7 @@ class Settings(BaseSettings):
                             [34024, "Insurance"],
                             [34026, "Recipe"],
                             [34032, "Voucher"],
-                            [34102, "Ayra Card"],
+                            [34034, "Letter"], 
                             [34104, "First Person Network"]
                         ] 
 

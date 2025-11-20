@@ -15,7 +15,7 @@
 
 
 <div class="center-text">
-    <h1>Accept Records</h1>  
+    <h1>Please Wait...</h1>  
    
     <br><br>
 
@@ -35,7 +35,7 @@
       var grant_kind = JSON.parse(event.data).grant_kind;
       console.log("Message received:", event.data);
       
-     window.location.href=`/records/retrieve?record_kind=${grant_kind}`;
+     window.location.href=`/records/grantlist?record_kind=${grant_kind}`;
       // refreshRecords();
      
 

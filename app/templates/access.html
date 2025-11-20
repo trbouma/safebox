@@ -176,7 +176,9 @@ window.location.href="/safebox/personalmessages";
 
 async function myRecords() {
 
-window.location.href="/records/present";
+
+window.location.href="/records/grantlist";
+
 }
 
 
@@ -197,11 +199,7 @@ window.location.href="/credentials/present";
 
 }
 
-async function myRecords() {
 
-window.location.href="/records/retrieve";
-
-}
 
 async function doHealthConsult() {
 
@@ -925,9 +923,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <h2>My Records</h2>
   <button id="my_personal_messages_button" onclick="personalMessages()" >Private Messages</button>
   <br><br>
-  <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
+  <button id="my_private_data_button" onclick="privateData()" >My Notes</button>
   <br><br>
-  <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
+  <button id="my_personal_records_button" onclick="myRecords()" >My Records</button>
 
   
   <hr>
