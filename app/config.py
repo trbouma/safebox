@@ -98,9 +98,9 @@ class Settings(BaseSettings):
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
                             
+                            [34002, "Badge"],
                             [34035, "Contact"],
-                            [34101, "Business Card"],
-                            [34001, "Badge"],
+                            [34101, "Business Card"],                            
                             [34029,"Pass"],
                             [32225,"Health"], 
                             [32229, "Prescription"],  
@@ -123,9 +123,9 @@ class Settings(BaseSettings):
  
     GRANT_KINDS: List =     [  
                             
-                            [34036, "Contact"],
-                            [34102, "Business Card"],
                             [34002, "Badge"],
+                            [34036, "Contact"],
+                            [34102, "Business Card"],                            
                             [34030,"Pass"],
                             [32226,"Health"], 
                             [32230, "Prescription"],  
