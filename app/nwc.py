@@ -93,6 +93,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
     await acorn_obj.load_data()
+    print(f"nwc watch: {acorn_obj.handle} {instruction_obj['method']}")
 
     if instruction_obj['method'] == 'pay_invoice':
         invoice = instruction_obj['params']['invoice']
@@ -303,11 +304,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 

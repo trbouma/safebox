@@ -653,11 +653,16 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     # send the recipient nauth message
     msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
     print("let's sleep")
-    await asyncio.sleep(5)
+    await asyncio.sleep(10)
 
     
     user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
-    first_type = int(user_records[0].get('type',34002))
+    if user_records == []:
+        first_type = 34002        
+    else:
+        first_type = int(user_records[0].get('type',34002))
+        
+
     for each_record in user_records:
         type = int(each_record['type'])
         print(f"incoming record: {each_record} type: {type}")
