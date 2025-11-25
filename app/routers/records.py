@@ -415,11 +415,11 @@ async def my_retrieve_records(       request: Request,
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -502,11 +502,11 @@ async def retrieve_grant_list(       request: Request,
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -1514,14 +1514,14 @@ async def ws_listen( websocket: WebSocket,
                 parsed_nauth = parse_nauth(client_nauth)
                 pubhex = parsed_nauth['values'].get('pubhex')
                 transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind',settings.TRANSMITTAL_KIND)
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
                 
                 # Need to create a new nauth where the transmittal npub points back to the initiator
                 new_nauth = create_nauth (  npub= hex_to_npub(pubhex),
                                             nonce = parsed_nauth['values'].get('nonce'),
-                                            auth_kind = parsed_nauth['values'].get('auth_kind'),
-                                            auth_relays = parsed_nauth['values'].get('auth_relays'),
+                                            auth_kind = parsed_nauth['values'].get('auth_kind',settings.AUTH_KIND),
+                                            auth_relays = parsed_nauth['values'].get('auth_relays',settings.AUTH_RELAYS),
                                             transmittal_npub = hex_to_npub(pubhex),
                                             transmittal_kind=  transmittal_kind,
                                             transmittal_relays= transmittal_relays,

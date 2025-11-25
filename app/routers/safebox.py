@@ -888,6 +888,7 @@ async def my_health_data(       request: Request,
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
+    #FIXME Remove this function
     nauth_response = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
@@ -1343,8 +1344,8 @@ async def websocket_requesttransmittal( websocket: WebSocket,
 
             if client_nauth != nauth_old: 
                 parsed_nauth = parse_nauth(client_nauth)
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind',settings.TRANSMITTAL_KIND)
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays',settings.TRANSMITTAL_RELAYS)
                 nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
