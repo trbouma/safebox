@@ -177,6 +177,11 @@ async def get_scan_result(  request: Request,
             else:
                 return RedirectResponse(f"/safebox/access?nauth={qr_code}") 
 
+    elif qr_code[:12].lower() == "nostr:nevent":
+        
+        nevent = qr_code[6:].lower()
+        print(f"we have a nevent: {nevent}")
+        
                
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)

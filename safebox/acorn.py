@@ -522,6 +522,34 @@ class Acorn:
     def get_instance(self):
         pass
         return "this is the instance"
+    
+
+    async def listen_for_record(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
+        # Listen for a record and return it
+        print("listening for incoming record...")
+
+        def incoming_handler(the_client: Client, sub_id: str, evt: Event):
+            print(f"handle event {sub_id} {evt.id}")
+            return
+
+        url = relays[0]
+        c = Client(url)
+        asyncio.create_task(c.run())
+   
+        await c.wait_connect()
+
+        c.subscribe(
+        handlers=incoming_handler,
+        filters={
+            'limit': 1024,
+            'kinds': [record_kind],
+            '#p': self.pubkey_hex,
+            
+        }
+        )
+
+        print(f"startt listening for incoming record kind {record_kind} at: {url}")
+        return
 
     async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
 
@@ -1318,7 +1346,7 @@ class Acorn:
 
         return decrypt_content
     
-    async def delete_wallet_info(self, label:str=None, record_kind:int=37375):
+    async def delete_record(self, label:str=None, record_kind:int=37375):
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
@@ -2834,7 +2862,8 @@ class Acorn:
 
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER) 
-
+        
+        print(f"events to delete: {len(events)} {FILTER}")
         for each in events:
             print(each.id)
         
@@ -2862,7 +2891,7 @@ class Acorn:
         except:
             raise Exception("error deleting proof events")  
         
-        return f"events of kind {record_kind} deleted" 
+        return f"events of kind {record_kind} deleted on {self.home_relay}" 
 
 
     async def _async_delete_proof_events(self):

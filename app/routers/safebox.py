@@ -1457,7 +1457,7 @@ async def delete_card(         request: Request,
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title, record_kind=delete_card.kind)
+        msg_out = await acorn_obj.delete_record(label=delete_card.title, record_kind=delete_card.kind)
         detail = f"Success! {msg_out}"
     except Exception as e:
         status = "ERROR"

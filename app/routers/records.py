@@ -1086,7 +1086,7 @@ async def delete_card(         request: Request,
     
     try:
 
-        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title, record_kind=delete_card.kind)
+        msg_out = await acorn_obj.delete_record(label=delete_card.title, record_kind=delete_card.kind)
         detail = f"Success! {msg_out}"
     except Exception as e:
         status = "ERROR"

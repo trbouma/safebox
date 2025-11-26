@@ -312,7 +312,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
-        print(f"present_record scope: {scope} grant: {grant}")
+        print(f"offer_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
 
         response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -328,11 +328,17 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         )
         print(f"response nauth: {response_nauth}")
 
+        since_now = int(datetime.now(timezone.utc).timestamp())
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-        since_now = int(datetime.now(timezone.utc).timestamp())
+        
         await asyncio.sleep(5)
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays )
+
+        print("listen for records")
+
+        # single_record = await acorn_obj.listen_for_record(record_kind=transmittal_kind, relays=transmittal_relays)
+
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
         # print(f"user records: {user_records}")
         offer_kind = int(scope.replace("offer:",""))
         grant_kind = int(grant.replace("record:",""))

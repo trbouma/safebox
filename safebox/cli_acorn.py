@@ -389,7 +389,7 @@ def delete_record(label):
     asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = asyncio.run(acorn_obj.delete_wallet_info(label))
+        out_info = asyncio.run(acorn_obj.delete_record(label))
         # safebox_info = wallet_obj.get_record(label)
         pass
 
