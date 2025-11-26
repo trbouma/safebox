@@ -98,7 +98,8 @@ class Settings(BaseSettings):
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
                             
-                            [34002, "Badge"],
+                            [34037, "Receipt"],
+                            [34001, "Badge"],
                             [34035, "Contact"],
                             [34101, "Business Card"],                            
                             [34029,"Pass"],
@@ -117,12 +118,12 @@ class Settings(BaseSettings):
                             [34023, "Insurance"],
                             [34025, "Recipe"],
                             [34031, "Voucher"],  
-                            [34033, "Letter"],                          
-                            [34103, "First Person Network"]
+                            [34033, "Letter"]                         
+                            
                         ]  
  
     GRANT_KINDS: List =     [  
-                            
+                            [34038, "Receipt"],
                             [34002, "Badge"],
                             [34036, "Contact"],
                             [34102, "Business Card"],                            
@@ -142,8 +143,8 @@ class Settings(BaseSettings):
                             [34024, "Insurance"],
                             [34026, "Recipe"],
                             [34032, "Voucher"],
-                            [34034, "Letter"], 
-                            [34104, "First Person Network"]
+                            [34034, "Letter"] 
+                            
                         ] 
 
     WALLET_SWAP_MODE: bool = False
