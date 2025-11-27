@@ -153,6 +153,7 @@ class proofByToken(BaseModel):
     proof_token: str|None = None
     nauth: str
     label: str|None=None
+    kind: int|None=None
 
 class OfferToken(BaseModel):
     offer_token: str|None = None
@@ -192,6 +193,7 @@ class proofVault(BaseModel):
     token: str 
     nauth: str
     label: str|None = None
+    kind: int|None = None
     pubkey:str|None= None
     sig: str|None = None  
 class offerVault(BaseModel):    

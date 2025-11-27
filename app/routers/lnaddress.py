@@ -355,15 +355,17 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret}")
-    k_nwc = Keys(token_secret)
+    token_key = token_secret.split(":")[0]
+    print(f"token secret {token_secret} token key {token_key}")
+    k_nwc = Keys(token_key)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
     wallet_instruction = {
     "method": "present_record",
     "params": { 
         "nauth": proof_vault.nauth,
-        "label": proof_vault.label
+        "label": proof_vault.label,
+        "kind": proof_vault.kind
 
             }
         }

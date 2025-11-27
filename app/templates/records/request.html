@@ -44,7 +44,7 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
          
 
-         submitProof(nfc_token, record_label, nauth);
+         submitProof(nfc_token, record_label, grant_kind, nauth);
           
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
@@ -60,17 +60,22 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
   }
 
-  async function submitProof(nfc_token, record_label, nauth) {
+  async function submitProof(nfc_token, record_label, record_kind, nauth) {
 
     // alert(`submit proof ${record_label}`);
-    const submit_data = {"proof_token": nfc_token, "nauth": nauth, "label":record_label };
+    var qr_img_func = document.getElementById("img_qr_display");
+    const submit_data = {"proof_token": nfc_token, "nauth": nauth, "label":record_label, "kind":record_kind };
+    consoleLog(JSON.stringify(submit_data));
     await fetch('/records/acceptprooftoken', {
     method: "POST",
     headers: {"Content-Type": "application/json"},        
     body: JSON.stringify(submit_data)         
   })
   .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
+  .then((data) => {   consoleLog(`${data.status} ${data.detail}`);
+                      qr_img_func.src = "/img/check.png";
+
+                  });
   
   
   
@@ -175,13 +180,19 @@ ws.onclose = () => console.log("WebSocket closed");
    Label: 
    <br><br>
    
-    <input style="width:60%;" type="text" list= "labels"   id="record_label" name="record_label" value="default" >
-    <datalist id="labels" >
-              <option value="default"></option>
-              <option value="home"></option>
-              <option value="business"></option>
-              <option value="school"></option>
-    </datalist>
+   <input
+  type="text"
+  id="record_label"
+  name="record_label"
+  list="labels"
+  style="width:60%;"
+  value="nfc"
+  />
+
+  <datalist id="labels">
+  <option value="nfc"></option>
+
+  </datalist>
   
   <br><br>  
   <label>

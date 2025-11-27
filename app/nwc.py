@@ -253,7 +253,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'present_record':
         nauth = instruction_obj['params']['nauth']
         label = instruction_obj['params']['label']
-        print(f"we are going to present a proof! {nauth}")
+        record_kind = instruction_obj['params']['kind']
+        print(f"we are going to present a record! label: {label} kind: {record_kind}")
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
@@ -285,7 +286,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
 
-        print(f"record out: {record_out}")
+        print(f"nwc record out: {record_out}")
         #TODO This error handling can be improved
         try:
             nembed = create_nembed_compressed(record_out)

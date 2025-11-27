@@ -1565,11 +1565,14 @@ async def accept_proof_token( request: Request,
   
     
     token_to_use = proof_token.proof_token
+    label_to_use = proof_token.label
+    record_kind_to_use = proof_token.kind
+    
     
     token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
     host = parsed_nembed["h"]
-    proof_url = f"https://{host}/.well-known/proof"
+    vault_url = f"https://{host}/.well-known/proof"
     proof_token_to_use = parsed_nembed["k"]
 
     print(f"proof token: {token_to_use}")
@@ -1583,14 +1586,16 @@ async def accept_proof_token( request: Request,
     submit_data = { "nauth": proof_token.nauth, 
                     "token": proof_token_to_use,
                     "label": proof_token.label,
+                    "kind": proof_token.kind,
                     "pubkey": pubkey,
                     "sig": sig
 
                     }
-    print(f"data: {submit_data}")
+   
     headers = { "Content-Type": "application/json"}
-    print(f"{proof_url}")
-    response = requests.post(url=proof_url, json=submit_data, headers=headers)
+    print(f"vault url: {vault_url} submit data: {submit_data}")
+
+    response = requests.post(url=vault_url, json=submit_data, headers=headers)
     
     print(response.json())
 
