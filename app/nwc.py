@@ -296,7 +296,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         print(f"nembed: {nembed}")
         print("sleep for 5 seconds")
-        await asyncio.sleep(5)
+        # await asyncio.sleep(5)
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
         print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
     elif instruction_obj['method'] == 'offer_record':
