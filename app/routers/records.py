@@ -620,6 +620,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     
     global_websocket = websocket
 
+    since_now = int(datetime.now(timezone.utc).timestamp())
+
     print("This is the records websocket")
     
     print("This is the records websocket after sleep")
@@ -652,11 +654,14 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
 
     # send the recipient nauth message
     msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-    print("let's sleep")
-    await asyncio.sleep(10)
+    print("let's poll for the records")
+    # await asyncio.sleep(10)
+    #FIXME - add in an ack here using auth relays
 
-    
-    user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+    while user_records == []:
+        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays,since=since_now)
+        await asyncio.sleep(1)
+
     if user_records == []:
         first_type = 34002        
     else:
