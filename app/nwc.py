@@ -281,12 +281,16 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                         grant=scope
             )
         
-                # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
-
+                
+        #retrieve record
         record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
 
-        print(f"nwc record out: {record_out}")
+        # send the recipient nauth message
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+
+        
+
+        print(f"nwc record out for {label} {record_kind}: {record_out}")
         #TODO This error handling can be improved
         try:
             nembed = create_nembed_compressed(record_out)
@@ -296,7 +300,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         print(f"nembed: {nembed}")
         print("sleep for 5 seconds")
-        # await asyncio.sleep(5)
+        await asyncio.sleep(5)
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
         print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
     elif instruction_obj['method'] == 'offer_record':
