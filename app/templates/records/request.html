@@ -40,12 +40,14 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
           }
          //  alert(`Present ${grant_kind} ${nfc_token}` );
          qr_img_func.src = "/img/nfc-check.png";
-         consoleLog(`NFC card read successfully!`);
+        consoleLog(`NFC card read successfully!`);
 
          
 
          submitProof(nfc_token, record_label, grant_kind, nauth);
-          
+         // alert("submitted"); 
+         // qr_img_func.src = "/img/hourglass.png";
+         qr_img_func.src = "/img/circle-256.gif";
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
           
@@ -73,7 +75,7 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   })
   .then((response) => response.json())   
   .then((data) => {   consoleLog(`${data.status} ${data.detail}`);
-                      qr_img_func.src = "/img/check.png";
+                      // qr_img_func.src = "/img/check.png";
 
                   });
   
@@ -129,26 +131,9 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
     qr_img_func.src = "/safebox/qr/"+ global_nauth;
 
   }
-     
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);   
+   
+  listenForRecord(global_nauth);
 
-  ws.onopen = () => console.log("WebSocket connected");
-  ws.onmessage = (event) => {
-    console.log("Message received for qr code:", event.data);
-
-    const response = JSON.parse(event.data);  
-    global_transmit_nauth = response.nauth;
-    client_name = response.name;
-    client_transmittal_kind = response.transmittal_kind;
-    client_transmittal_relays = response.transmittal_relays;
-    if (global_transmit_nauth) {
-    } else {
-    qr_img_func.src="/img/safebox.png";
-    }
-    ws.close();
-    listenForRecord(response.nauth);
-    };
-  ws.onclose = () => console.log("WebSocket closed");
 
 
 

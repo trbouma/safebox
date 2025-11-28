@@ -287,7 +287,8 @@ async def transmit_records(        request: Request,
 
                 record_obj = { "tag"   : [each_record['tag']],
                                 "type"  : str(transmit_consultation.final_kind),
-                                "payload": each_record['payload']
+                                "payload": each_record['payload'],
+                                "timestamp": int(datetime.now(timezone.utc).timestamp())
                             }
                 print(f"record obj: {record_obj}")
                 # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
@@ -681,8 +682,10 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
             # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
         record_name = f"{each_record['tag'][0][0]}" 
         record_value = each_record['payload']
+        record_timestamp = each_record.get("timestamp",0)
         print(f"record_name: {record_name} record value: {record_value} type: {type}")
-        await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type)
+        final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)}]"
+        await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=type)
 
     await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
    
