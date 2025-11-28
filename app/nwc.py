@@ -360,9 +360,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             record_name = f"{each_record['tag'][0][0]}" 
             record_type = int(each_record['type'])
             record_value = each_record['payload']
+            record_timestamp = each_record.get("timestamp",0)
+            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)}]"
             print(f'record name {record_name} record value {record_value} record type {record_type}' )
             if record_type == grant_kind:
-                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
+                await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=grant_kind)
     
     elif instruction_obj['method'] == 'pay_ecash':
         print("we gotta pay ecash!")
