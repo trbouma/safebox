@@ -81,6 +81,8 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   
   }
 
+
+
   async function createQRCode() {
   var data;
   var qr_img_func = document.getElementById("img_qr_display");
@@ -128,32 +130,25 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
   }
      
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
+  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);   
 
-   
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+    console.log("Message received for qr code:", event.data);
 
-ws.onopen = () => console.log("WebSocket connected");
-ws.onmessage = (event) => {
-console.log("Message received for qr code:", event.data);
-
-const response = JSON.parse(event.data);  
-global_transmit_nauth = response.nauth;
-client_name = response.name;
-client_transmittal_kind = response.transmittal_kind;
-client_transmittal_relays = response.transmittal_relays;
-// client_name = response.name;
-// alert(`Client is authenticated! Ready to transmit files.`); 
-if (global_transmit_nauth) {
-// alert(`Client is authenticated! Ready to transmit files.`); 
-// qr_img_func.src="/img/hourglass.png";
-} else {
-// alert(`Authentication has timed out! Please regenerate QR code`);  
-qr_img_func.src="/img/safebox.png";
-}
-ws.close();
-listenForRecord(response.nauth);
-};
-ws.onclose = () => console.log("WebSocket closed");
+    const response = JSON.parse(event.data);  
+    global_transmit_nauth = response.nauth;
+    client_name = response.name;
+    client_transmittal_kind = response.transmittal_kind;
+    client_transmittal_relays = response.transmittal_relays;
+    if (global_transmit_nauth) {
+    } else {
+    qr_img_func.src="/img/safebox.png";
+    }
+    ws.close();
+    listenForRecord(response.nauth);
+    };
+  ws.onclose = () => console.log("WebSocket closed");
 
 
 

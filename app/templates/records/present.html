@@ -18,7 +18,7 @@ var global_vrequest_nauth = "{{nauth}}";
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan/?wallet_name=authenticate&referer=my-credentials";
+window.location.href="/scanner/scan";
 
 }
 
@@ -154,7 +154,9 @@ async function selectRecordKind() {
   {% else %}
   <h1>Display My {{ record_label}}</h1>
   {% endif %}
-
+    
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br><br>
     <button onclick="gotoHome()">Home</button>
     <br><br>
     Click on the record you wish to {{"present" if record_select else "view"}}.

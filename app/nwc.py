@@ -299,10 +299,12 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             nembed = create_nembed_compressed(record_out)
 
         print(f"nembed: {nembed}")
-        print("sleep for 5 seconds")
-        await asyncio.sleep(5)
+        t_sleep = 1
+        print(f"sleep for {t_sleep} seconds")
+        await asyncio.sleep(t_sleep)
+        print(f"done sleep for {t_sleep} seconds")
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
-        print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+        print(f"msg outx: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']

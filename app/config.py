@@ -143,7 +143,8 @@ class Settings(BaseSettings):
                             [34024, "Insurance"],
                             [34026, "Recipe"],
                             [34032, "Voucher"],
-                            [34034, "Letter"] 
+                            [34034, "Letter"],
+                            [37375, "Personal Note"] 
                             
                         ] 
 
