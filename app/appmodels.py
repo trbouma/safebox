@@ -154,6 +154,7 @@ class proofByToken(BaseModel):
     nauth: str
     label: str|None=None
     kind: int|None=None
+    pin: str|None=None
 
 class OfferToken(BaseModel):
     offer_token: str|None = None
@@ -194,6 +195,7 @@ class proofVault(BaseModel):
     nauth: str
     label: str|None = None
     kind: int|None = None
+    pin: str|None = None
     pubkey:str|None= None
     sig: str|None = None  
 class offerVault(BaseModel):    

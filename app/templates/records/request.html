@@ -19,12 +19,13 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
-async function requestbyNFC(grant_kind, record_label, nauth) {
+async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
    
     var qr_img_func = document.getElementById("img_qr_display");
     // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
-    consoleLog(`Requesting by NFC. ${grant_kind} ${maskedNauth}. \n Please wait...`);
+    consoleLog(`Requesting by NFC. ${grant_kind} ${nfc_pin} ${maskedNauth}. \n Please wait...`);
+    
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
     
@@ -44,7 +45,7 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
          
 
-         submitProof(nfc_token, record_label, grant_kind, nauth);
+         submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
          // alert("submitted"); 
          // qr_img_func.src = "/img/hourglass.png";
          qr_img_func.src = "/img/circle-256.gif";
@@ -62,11 +63,15 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
   }
 
-  async function submitProof(nfc_token, record_label, record_kind, nauth) {
+  async function submitProof(nfc_token, record_label, record_kind, nauth, nfc_pin) {
 
     // alert(`submit proof ${record_label}`);
     var qr_img_func = document.getElementById("img_qr_display");
-    const submit_data = {"proof_token": nfc_token, "nauth": nauth, "label":record_label, "kind":record_kind };
+    const submit_data =   { "proof_token": nfc_token, 
+                            "nauth": nauth, 
+                            "label":record_label, 
+                            "kind":record_kind,
+                            "pin": nfc_pin };
     consoleLog(JSON.stringify(submit_data));
     await fetch('/records/acceptprooftoken', {
     method: "POST",
@@ -120,8 +125,9 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   if (nfc_request.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       // alert("Please tap NFC card!");
+      const nfc_pin = prompt("Please enter PIN");
       
-      await requestbyNFC(grant_kind, record_label, global_nauth);
+      await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
                      
   } else {
 

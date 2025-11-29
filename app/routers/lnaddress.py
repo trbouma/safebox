@@ -344,7 +344,7 @@ async def get_settings(request: Request):
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"
-    detail = None
+    detail = "No error"
 
    # First, check to see if signature checks out
     if verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey):
@@ -356,9 +356,16 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
     token_key = token_secret.split(":")[0]
-    print(f"token secret {token_secret} token key {token_key}")
+    token_pin = token_secret.split(":")[1]
+    print(f"token secret {token_secret} token key {token_key} acquired pin: {proof_vault.pin} token pin {token_pin}")
     k_nwc = Keys(token_key)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
+    if token_pin == proof_vault.pin:
+        status = "OK"
+        detail = "Valid PIN"
+    else:
+        status = "ERROR"
+        detail = "Invalid PIN"
 
     wallet_instruction = {
     "method": "present_record",

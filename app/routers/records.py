@@ -1578,7 +1578,7 @@ async def accept_proof_token( request: Request,
     vault_url = f"https://{host}/.well-known/proof"
     proof_token_to_use = parsed_nembed["k"]
 
-    print(f"proof token: {token_to_use}")
+    print(f"proof token: {token_to_use} acquired pin: {proof_token.pin}")
 
 
     
@@ -1590,6 +1590,7 @@ async def accept_proof_token( request: Request,
                     "token": proof_token_to_use,
                     "label": proof_token.label,
                     "kind": proof_token.kind,
+                    "pin": proof_token.pin,
                     "pubkey": pubkey,
                     "sig": sig
 
@@ -1601,12 +1602,13 @@ async def accept_proof_token( request: Request,
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
     
     print(response.json())
+    vault_response = response.json()
 
     # add in the polling task here
    
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    return {"status": status, "detail": detail}  
+    return {"status": vault_response['status'], "detail": vault_response['detail']}  
 
 @router.post("/acceptoffertoken", tags=["records", "protected"])
 async def accept_offer_token( request: Request, 
