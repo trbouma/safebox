@@ -14,6 +14,7 @@ var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
 var global_offer_card = "{{card}}";
 
+
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
 
@@ -76,8 +77,8 @@ async function editOffer() {
     window.location.href=`/records/manageoffer?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
     
 
-    const submit_data = {"title": "{{card}}",
-                          "content": "{{content}}",
+    const submit_data = {"title": {{card|tojson}},
+                          "content": {{content|tojson}},
                           "kind": global_offer_kind,
                           "final_kind":global_grant_kind };
 
