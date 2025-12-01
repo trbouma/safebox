@@ -102,6 +102,7 @@ async def get_scan_result(  request: Request,
         # This handles the different lnurl types
         try:
             url = decode_lnurl(qr_code)
+            print(f"lnurl {url}")
             if "lnurlp" in url:
                 ln_parts = urlparse(url)
                 action_data = ln_parts.path.split('/')[-1]+ "@" + ln_parts.netloc
@@ -182,7 +183,9 @@ async def get_scan_result(  request: Request,
         nevent = qr_code[6:].lower()
         print(f"we have a nevent: {nevent}")
         
-               
+
+
+    
     elif qr_code[:5].lower() == 'https':
         return RedirectResponse(qr_code)
        

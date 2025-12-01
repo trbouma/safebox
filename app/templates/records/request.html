@@ -125,7 +125,8 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
   if (nfc_request.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       // alert("Please tap NFC card!");
-      const nfc_pin = prompt("Please enter PIN");
+      // const nfc_pin = prompt("Please enter PIN");
+      const nfc_pin = "9140"
       
       await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
                      
@@ -155,43 +156,91 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
   <h1>Request Record</h1>
   <span id="span_msg_status">Select Record Type:</span>   
 
- 
   <br><br>
+
   <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
-   {% for entry in grant_kinds %}
-   <option value="{{entry[0]}}">{{entry[1]}}</option>         
-   {% endfor %}
-   </select>
-   <br><br>
-   Label: 
-   <br><br>
-   
-   <input
-  type="text"
-  id="record_label"
-  name="record_label"
-  list="labels"
-  style="width:60%;"
-  value="default"
+    {% for entry in grant_kinds %}
+      <option value="{{ entry[0] }}">{{ entry[1] }}</option>
+    {% endfor %}
+  </select>
+
+  <br><br>
+  Label:
+  <br><br>
+
+  <input
+    type="text"
+    id="record_label"
+    name="record_label"
+    list="subtypes"
+    style="width:60%;"
+    placeholder="default"
   />
 
-  <datalist id="labels">
-  <option value="default"></option>
-
+  <datalist id="subtypes">
+    <!-- will be filled dynamically -->
   </datalist>
-  
-  <br><br>  
-  <label>
-  <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
-  Request by NFC
-  <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
-  Compact QR Code
-  <br><br>
-  </label>
- 
-   <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
 
+  <br><br>
+  <label>
+    <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
+    Request by NFC
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
+    Compact QR Code
+    <br><br>
+  </label>
+
+  <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
 </div>
+
+<script>
+  // Turn the Jinja grant_kinds into a JS array
+  const grantKinds = {{ grant_kinds | tojson }};
+
+  // Build a map: code -> { label, subtypes[] }
+  const grantKindMap = {};
+  grantKinds.forEach(entry => {
+    const [code, label, subtypes] = entry;
+    grantKindMap[code] = {
+      label: label,
+      subtypes: subtypes || []
+    };
+  });
+
+  const selectEl = document.getElementById('grant_kind');
+  const datalistEl = document.getElementById('subtypes');
+  const labelInput = document.getElementById('record_label');
+
+function updateSubtypes() {
+  const code = selectEl.value;
+  const info = grantKindMap[code] || { subtypes: [] };
+  const subtypes = info.subtypes;
+
+  // CLEAR the input whenever a new grant kind is selected
+  labelInput.value = "";  
+
+  // Clear existing datalist options
+  datalistEl.innerHTML = '';
+
+  if (!subtypes.length) {
+    labelInput.placeholder = 'label';
+    return;
+  }
+
+  // Optional: use first subtype as placeholder
+  labelInput.placeholder = subtypes[0];
+
+  subtypes.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st;
+    datalistEl.appendChild(opt);
+  });
+}
+
+  // Update on change + once on load
+  selectEl.addEventListener('change', updateSubtypes);
+  window.addEventListener('DOMContentLoaded', updateSubtypes);
+</script>
 
 <script>
 
@@ -230,7 +279,7 @@ async function listenForRecord(nauth) {
         
         // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Record has been received!";
-        addCard(response.detail.tag,`Verification: ${response.result}`,response.detail.payload);
+        addCard(response.detail.tag, `${response.result}`,response.detail.payload);
         var qr_img_func = document.getElementById("img_qr_display");
       
         qr_img_func.src = "/img/check.png";
@@ -326,7 +375,7 @@ async function listenForRecord(nauth) {
     
 
     card.addEventListener('click', () => {
-        alert(`You clicked on: ${title} with: ${content}`);
+        alert(`Verified ${title} ${content}`);
         // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
       });
 

@@ -213,6 +213,7 @@ async def record_request(      request: Request,
                                             "client_nauth": response_nauth,
                                             "nauth": nauth,
                                             "grant_kinds": settings.GRANT_KINDS
+                                            
 
                                         })
 @router.get("/verificationrequest", tags=["records", "protected"])

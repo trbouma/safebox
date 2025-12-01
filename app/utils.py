@@ -17,6 +17,8 @@ import secp256k1
 import re, idna
 
 
+
+
 from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
 from monstr.event.event import Event
@@ -1350,5 +1352,6 @@ def verify_payload(payload: str, signature_hex: str, public_key_hex: str) -> boo
     pubkey.deserialize(bytes.fromhex('02'+public_key_hex))
     signature = bytes.fromhex(signature_hex)
     return pubkey.schnorr_verify(digest, signature, bip340tag='', raw=True)
+
 
 

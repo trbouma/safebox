@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     OFFER_KINDS: List =     [  
                             
                             [34037, "Receipt"],
-                            [34001, "Badge"],
+                            [34001, "Badge", ["Access", "ID"]],
                             [34035, "Contact"],
                             [34101, "Business Card"],                            
                             [34029,"Pass"],
@@ -118,16 +118,17 @@ class Settings(BaseSettings):
                             [34023, "Insurance"],
                             [34025, "Recipe"],
                             [34031, "Voucher"],  
-                            [34033, "Letter"]                         
+                            [34033, "Letter"],
+                            [34035, "Emergency"]                          
                             
                         ]  
  
     GRANT_KINDS: List =     [  
                             [34038, "Receipt"],
-                            [34002, "Badge"],
+                            [34002, "Badge", ["Access", "ID"]],
                             [34036, "Contact"],
                             [34102, "Business Card"],                            
-                            [34030,"Pass"],
+                            [34030,"Pass", ["Admission","Boarding"]],
                             [32226,"Health"], 
                             [32230, "Prescription"],  
                             [32232, "Immunization"],    
@@ -144,7 +145,8 @@ class Settings(BaseSettings):
                             [34026, "Recipe"],
                             [34032, "Voucher"],
                             [34034, "Letter"],
-                            [37375, "Personal Note"] 
+                            [34036, "Emergency", ["medical","contact"]], 
+                            [37375, "Personal Note", ["share"]] 
                             
                         ] 
 
