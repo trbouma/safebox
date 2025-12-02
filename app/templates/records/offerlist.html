@@ -213,24 +213,23 @@ async function offerKind() {
 
 
 <div class="center-text">
-    <h1>Offer {{offer_kind_label}} </h1>
-    Create offer for: {{offer_kind_label}} 
-    <br>(Offer Kind: {{record_kind}})
+    <h1>Offer {{offer_kind_label}} Record </h1>    
    
-      <br><br>
-  <select id="offer_kind" name="offer_kind" onchange="offerKind()" style="width:60%;">
+      
+  <select id="offer_kind" name="offer_kind" onchange="offerKind()" style="width:40%;" class="form-field" >
    {% for entry in offer_kinds %}
    <option value="{{entry[0]}}" {{"selected" if record_kind == entry[0] else " "}}>{{entry[1]}}</option>         
    {% endfor %}
    </select>
    <br><br>
      <input
-    type="text"
+    
     id="record_label"
     name="record_label"
     list="subtypes"
     style="width:60%;"
     placeholder="default"
+    class="form-field"
   />
 
   <datalist id="subtypes">
@@ -238,7 +237,7 @@ async function offerKind() {
   </datalist>
   <br><br>
 
-    <button onclick="addOffer()">Add {{offer_kind_label}} Offer</button>
+    <button onclick="addOffer()">Add Offer for {{offer_kind_label}} Record</button>
     <br><br>
     Click on an existing {{offer_kind_label}} offer.
 
