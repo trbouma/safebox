@@ -365,7 +365,9 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             record_type = int(each_record['type'])
             record_value = each_record['payload']
             record_timestamp = each_record.get("timestamp",0)
-            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)}]"
+            record_endorsement = each_record.get("endorsement","")
+            endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
+            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]"
             print(f'record name {record_name} record value {record_value} record type {record_type}' )
             if record_type == grant_kind:
                 await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=grant_kind)

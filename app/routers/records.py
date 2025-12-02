@@ -239,7 +239,7 @@ async def records_verfication_request(      request: Request,
 @router.post("/transmit", tags=["records", "protected"])
 async def transmit_records(        request: Request, 
                                         transmit_consultation: transmitConsultation,
-                                        acorn_obj = Depends(get_acorn)
+                                        acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
 
@@ -289,7 +289,8 @@ async def transmit_records(        request: Request,
                 record_obj = { "tag"   : [each_record['tag']],
                                 "type"  : str(transmit_consultation.final_kind),
                                 "payload": each_record['payload'],
-                                "timestamp": int(datetime.now(timezone.utc).timestamp())
+                                "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                                "endorsement": acorn_obj.pubkey_bech32
                             }
                 print(f"record obj: {record_obj}")
                 # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
@@ -684,8 +685,11 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         record_name = f"{each_record['tag'][0][0]}" 
         record_value = each_record['payload']
         record_timestamp = each_record.get("timestamp",0)
-        print(f"record_name: {record_name} record value: {record_value} type: {type}")
-        final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)}]"
+        record_endorsement = each_record.get("endorsement","")
+        endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
+        final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]" 
+        print(f"record_name: {record_name} record value: {final_record} type: {type}")
+        
         await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=type)
 
     await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
