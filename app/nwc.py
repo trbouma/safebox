@@ -339,13 +339,17 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
         
-        await asyncio.sleep(5)
+        # await asyncio.sleep(5)
 
         print("listen for records")
 
         # single_record = await acorn_obj.listen_for_record(record_kind=transmittal_kind, relays=transmittal_relays)
+        user_records = []
+        while user_records == []:
+            user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
+            await asyncio.sleep(1)
 
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
+
         # print(f"user records: {user_records}")
         offer_kind = int(scope.replace("offer:",""))
         grant_kind = int(grant.replace("record:",""))
@@ -366,6 +370,10 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             if record_type == grant_kind:
                 await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=grant_kind)
     
+        print(f"records finished added")
+
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+
     elif instruction_obj['method'] == 'pay_ecash':
         print("we gotta pay ecash!")
         recipient_pubkey = instruction_obj['params']['recipient_pubkey']

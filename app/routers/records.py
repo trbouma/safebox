@@ -957,7 +957,7 @@ async def display_offer(     request: Request,
 
     record = await acorn_obj.get_record(record_name=card, record_kind=kind)
     label_hash = await acorn_obj.get_label_hash(label=card)
-    template_to_use = "records/displayoffer.html"
+    template_to_use = "records/offer.html"
 
     try:
         content = record["payload"]
@@ -997,6 +997,7 @@ async def display_offer(     request: Request,
 async def manage_offer(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
+                            label: str = "default",
                             action_mode: str = None,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
@@ -1028,7 +1029,7 @@ async def manage_offer(     request: Request,
             content = record    
     
     elif action_mode =='add':
-        card = ""
+        card = label
         content =""
     
     credential_record = {"card":card, "content": content}

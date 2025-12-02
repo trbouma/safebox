@@ -98,6 +98,7 @@ class Settings(BaseSettings):
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
                             
+                            [34039, "Community", ["Name", "Family", "Membership", "Training", "Committee"]], 
                             [34037, "Receipt"],
                             [34001, "Badge", ["Access", "ID"]],
                             [34035, "Contact"],
@@ -119,11 +120,13 @@ class Settings(BaseSettings):
                             [34025, "Recipe"],
                             [34031, "Voucher"],  
                             [34033, "Letter"],
-                            [34035, "Emergency"]                          
+                            [34035, "Emergency"],
+                                                      
                             
                         ]  
  
     GRANT_KINDS: List =     [  
+                            [34040, "Community",["Name", "Family", "Membership", "Training", "Committee"]],
                             [34038, "Receipt"],
                             [34002, "Badge", ["Access", "ID"]],
                             [34036, "Contact"],
@@ -145,7 +148,7 @@ class Settings(BaseSettings):
                             [34026, "Recipe"],
                             [34032, "Voucher"],
                             [34034, "Letter"],
-                            [34036, "Emergency", ["medical","contact"]], 
+                            [34036, "Emergency", ["medical","contact"]],                            
                             [37375, "Personal Note", ["share"]] 
                             
                         ] 

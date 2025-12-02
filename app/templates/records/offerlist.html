@@ -218,12 +218,25 @@ async function offerKind() {
     <br>(Offer Kind: {{record_kind}})
    
       <br><br>
-  <select id="offer_kind" name="offer_kind" onchange="offerKind()">
+  <select id="offer_kind" name="offer_kind" onchange="offerKind()" style="width:60%;">
    {% for entry in offer_kinds %}
    <option value="{{entry[0]}}" {{"selected" if record_kind == entry[0] else " "}}>{{entry[1]}}</option>         
    {% endfor %}
    </select>
    <br><br>
+     <input
+    type="text"
+    id="record_label"
+    name="record_label"
+    list="subtypes"
+    style="width:60%;"
+    placeholder="default"
+  />
+
+  <datalist id="subtypes">
+    <!-- will be filled dynamically -->
+  </datalist>
+  <br><br>
 
     <button onclick="addOffer()">Add {{offer_kind_label}} Offer</button>
     <br><br>
@@ -235,6 +248,55 @@ async function offerKind() {
 </div>
 
 <div id="card-container"></div>
+
+<script>
+  // Turn the Jinja grant_kinds into a JS array
+  const offerKinds = {{ offer_kinds | tojson }};
+
+  // Build a map: code -> { label, subtypes[] }
+  const offerKindMap = {};
+  offerKinds.forEach(entry => {
+    const [code, label, subtypes] = entry;
+    offerKindMap[code] = {
+      label: label,
+      subtypes: subtypes || []
+    };
+  });
+
+  const selectEl = document.getElementById('offer_kind');
+  const datalistEl = document.getElementById('subtypes');
+  const labelInput = document.getElementById('record_label');
+
+function updateSubtypes() {
+  const code = selectEl.value;
+  const info = offerKindMap[code] || { subtypes: [] };
+  const subtypes = info.subtypes;
+
+  // CLEAR the input whenever a new grant kind is selected
+  labelInput.value = "";  
+
+  // Clear existing datalist options
+  datalistEl.innerHTML = '';
+
+  if (!subtypes.length) {
+    labelInput.placeholder = 'label';
+    return;
+  }
+
+  // Optional: use first subtype as placeholder
+  labelInput.placeholder = subtypes[0];
+
+  subtypes.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st;
+    datalistEl.appendChild(opt);
+  });
+}
+
+  // Update on change + once on load
+  selectEl.addEventListener('change', updateSubtypes);
+  window.addEventListener('DOMContentLoaded', updateSubtypes);
+</script>
 
 <script>
 
@@ -340,7 +402,9 @@ async function offerKind() {
 
 async function addOffer() {
 // alert(`add card ${record_kind}`);
-window.location.href=`/records/manageoffer?action_mode=add&kind=${record_kind}`;
+
+var record_label = document.getElementById('record_label').value;
+window.location.href=`/records/manageoffer?action_mode=add&kind=${record_kind}&label=${record_label}`;
 
 
 }
