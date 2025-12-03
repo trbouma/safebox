@@ -1304,8 +1304,11 @@ class Acorn:
 
         return label_hash
 
-    async def get_wallet_info(self, label:str=None, record_kind:int=37375, record_by_hash: str = None):
+    async def get_wallet_info(self, label:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None):
         my_enc = NIP44Encrypt(self.k)
+
+        if record_origin:
+            label = ':'.join([record_origin,label])
 
         if record_by_hash:
             label_hash = record_by_hash
@@ -1459,7 +1462,7 @@ class Acorn:
         pass  
 
         
-    async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None):
+    async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None, record_origin:str = None):
         #FIXME - not sure if this function is used
         record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
         try:
@@ -1609,7 +1612,13 @@ class Acorn:
             
             return events[0]
 
-    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375):
+    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None):
+
+        if record_origin:
+            record_name = ':'.join([record_origin,record_name])
+
+
+
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("careful this is a reserved record.")

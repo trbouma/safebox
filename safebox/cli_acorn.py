@@ -351,7 +351,8 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('label', default='default')
 @click.argument('label_info', default='hello')
 @click.option('--kind','-k', default=37375)
-def put(label, label_info, kind):
+@click.option('--origin','-o', default=None)
+def put(label, label_info, kind, origin):
     jsons=None
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
@@ -359,19 +360,20 @@ def put(label, label_info, kind):
     
 
     if click.confirm('Do you want to continue?'):    
-     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind))
+     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind, record_origin=origin))
 
 @click.command("get", help='get a private wallet record')
 @click.argument('label', default = "default")
 @click.option('--kind','-k', default=37375)
-def get(label,kind):
+@click.option('--origin','-o', default=None)
+def get(label,kind,origin):
     
     out_info = "None"
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = asyncio.run(acorn_obj.get_wallet_info(label,record_kind=kind))
+        out_info = asyncio.run(acorn_obj.get_wallet_info(label,record_kind=kind,record_origin=origin))
         # safebox_info = wallet_obj.get_record(label)
         pass
 
@@ -427,10 +429,11 @@ def get_records(kind, since, relays):
     
     out_info = "None"
     relay_array = None
+    relay_array_wss = []
     if relays != None:
         
         relay_array = str(relays).replace(" ","").split(',')
-        relay_array_wss = []
+        
         for each in relay_array:
             if each.startswith("ws://"):
                 continue
