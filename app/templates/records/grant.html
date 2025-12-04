@@ -113,7 +113,7 @@ async function deleteGrant() {
 <div class="center-text">
     <h1> {{grant_label}}  </h1>  
     <div class="card">
-      <div class="card-title">{{ card }}</div>
+      <div class="card-title">{{ card.split(':')[1] if ':' in card else card }}</div>
       <div class="card-content">{{ content }}</div>
     </div>
   

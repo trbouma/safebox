@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Union, Any
 from enum import Enum
 from datetime import datetime
 
@@ -25,6 +25,10 @@ class RegisteredSafebox(SQLModel, table=True):
     emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
     currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
     
+class SafeboxRecord(BaseModel):
+    tag: list[str]                     # e.g. ["my_record"]
+    type: str                          # e.g. "offer"
+    payload: Any                       # can hold any JSON-serializable value
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

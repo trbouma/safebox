@@ -335,6 +335,11 @@ class TokenV3(BaseModel):
         ).decode()
         return tokenv3_serialized
 
+class SafeboxRecord(BaseModel):
+    tag: list[str]                     # e.g. ["my_record"]
+    type: str                          # e.g. "offer"
+    payload: Any                       # can hold any JSON-serializable value
+
 
 class TokenV4DLEQ(BaseModel):
     """

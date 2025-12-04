@@ -49,7 +49,7 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory
+from safebox.models import TxHistory, SafeboxRecord
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
@@ -1625,11 +1625,11 @@ class Acorn:
             await self.set_wallet_info(record_name,record_value,record_kind=record_kind)
             return record_name
         else:
-            record_obj = { "tag"   : [record_name],
-                            "type"  : record_type,
-                            "payload": record_value
-                          }
-            record_json_str = json.dumps(record_obj)
+
+
+            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value)
+            record_json_str = record_obj.model_dump_json()
+
             await self.update_tags([["user_record",record_name,record_type]])
 
             await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)

@@ -690,7 +690,7 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]" 
         print(f"record_name: {record_name} record value: {final_record} type: {type}")
         
-        await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=type)
+        await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=type, record_origin=npub_initiator)
 
     await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
    

@@ -176,6 +176,12 @@ async function selectRecordKind() {
   <script>
     const jsonUserData = {{ user_records | tojson }}; 
 
+  function getRightSide(str) {
+    const idx = str.indexOf(':');
+    if (idx === -1) return str;        // No delimiter → return original
+    return str.substring(idx + 1);     // Return everything after the colon
+  }
+
     // Function to create and add a card
     function addCard(title, content) {
       // Create a card element
@@ -185,7 +191,10 @@ async function selectRecordKind() {
       // Create and add the title element
       const cardTitle = document.createElement('div');
       cardTitle.className = 'card-title';
-      cardTitle.textContent = title;
+
+      
+      cardTitle.textContent = getRightSide(title[0]);
+      console.log(getRightSide(title[0]));
 
       // Create and add the content element
       const cardContent = document.createElement('div');
