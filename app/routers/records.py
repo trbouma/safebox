@@ -1457,16 +1457,20 @@ async def ws_record_listen( websocket: WebSocket,
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
                 record_json = parse_nembed_compressed(incoming_record)
+                print(f"parse record json: {record_json}")
                 #### Do the verification here... ####
                 verify_result = "Done"
                 #### Finish verification ####
 
+
+
                 msg_out =   {   "status": "VERIFIED",
-                                "detail": record_json, 
+                                "detail": None, 
+                                "records": record_json,
                                 "result": verify_result
                                
                                }
-                print(f"send {incoming_record}") 
+                print(f"send {incoming_record} {record_json}") 
                 await websocket.send_json(msg_out)
                 incoming_record_old = incoming_record
                 print("incoming record  successful!")

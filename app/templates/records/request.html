@@ -279,7 +279,13 @@ async function listenForRecord(nauth) {
         
         // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Record has been received!";
-        addCard(response.detail.tag, `${response.result}`,response.detail.payload);
+        
+        for (const rec of response.records) {
+          //console.log(rec);
+          addCard(rec.tag, `${response.result}`,rec.payload);
+        }
+
+        // addCard(response.detail.tag, `${response.result}`,response.detail.payload);
         var qr_img_func = document.getElementById("img_qr_display");
       
         qr_img_func.src = "/img/check.png";
@@ -319,7 +325,11 @@ async function listenForRecord(nauth) {
 
 <script>
 
-
+  function getRightSide(str) {
+      const idx = str.indexOf(':');
+      if (idx === -1) return str;        // No delimiter → return original
+      return str.substring(idx + 1);     // Return everything after the colon
+    }
 
 
   // Function to create and add a card
@@ -331,7 +341,7 @@ async function listenForRecord(nauth) {
     // Create and add the title element
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
+    cardTitle.textContent = getRightSide(title[0]);
 
     // Create and add the created_at element
     const cardCreatedAt = document.createElement('div');

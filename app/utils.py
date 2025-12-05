@@ -1045,8 +1045,10 @@ def create_nembed(json_obj):
 def create_nembed_compressed(json_obj):
     buffer = io.BytesIO()
     encoded_data = []
-    if type(json_obj) != dict:
-        raise ValueError("not a json objecte")
+
+    if not isinstance(json_obj, (dict, list)):
+        raise ValueError("Expected a JSON object (dict) or JSON array (list)")
+    
     json_obj_str = json.dumps(json_obj)
 
     with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:

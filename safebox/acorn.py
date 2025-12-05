@@ -551,7 +551,7 @@ class Acorn:
         print(f"startt listening for incoming record kind {record_kind} at: {url}")
         return
 
-    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
+    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None)->List[Any]:
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)

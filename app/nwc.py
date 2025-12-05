@@ -283,19 +283,42 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         
                 
         #retrieve record
-        record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
+        # record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind,record_origin=npub_initiator)
+
+        records_out = await acorn_obj.get_user_records(record_kind=record_kind)
+
+        filtered_records_out = []
+        if label:
+            print(f"need to filter out for label: {label} for {records_out}")
+            for each in records_out:
+                tag = each["tag"][0]
+                tag_filter = tag.split(":", 1)[1] if ":" in tag else tag
+                print(f"tag filter {tag_filter}")
+                if tag_filter == label:
+                    filtered_records_out.append(each)
+        else:
+            print("just add all the records")
+            filtered_records_out = records_out
+
+        if isinstance(records_out, list):
+            print(f"This is a JSON list. {scope}")
+            record_out = records_out[0]
+        else:            
+            record_out = records_out
 
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
-        
+        print(f"filtered records out: {filtered_records_out}")
+        nembed_records = create_nembed_compressed(filtered_records_out)
+        # print(f"nembed records: {nembed_records}")
 
-        print(f"nwc record out for {label} {record_kind}: {record_out}")
+        print(f"nwc record out for {label} {record_kind}: {filtered_records_out}")
         #TODO This error handling can be improved
         try:
-            nembed = create_nembed_compressed(record_out)
+            nembed = create_nembed_compressed(records_out)
         except:
-            record_out = {'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}
+            record_out = [{'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}]
             nembed = create_nembed_compressed(record_out)
 
         print(f"nembed: {nembed}")
@@ -303,8 +326,10 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         print(f"sleep for {t_sleep} seconds")
         await asyncio.sleep(t_sleep)
         print(f"done sleep for {t_sleep} seconds")
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed_records, dm_relays=transmittal_relays,kind=transmittal_kind)
         print(f"msg outx: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+
+
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']
