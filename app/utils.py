@@ -1355,5 +1355,12 @@ def verify_payload(payload: str, signature_hex: str, public_key_hex: str) -> boo
     signature = bytes.fromhex(signature_hex)
     return pubkey.schnorr_verify(digest, signature, bip340tag='', raw=True)
 
-
+def starts_with(test: str, target: str) -> bool:
+    """
+    Case-insensitive check: return True if 'target' starts with 'test'.
+    """
+    if not isinstance(test, str) or not isinstance(target, str):
+        raise TypeError("Both arguments must be strings.")
+    
+    return target.lower().startswith(test.lower())
 

@@ -6,7 +6,7 @@ from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
-from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id
+from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id, starts_with
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
 from datetime import datetime, timezone, timedelta
@@ -294,17 +294,14 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 tag = each["tag"][0]
                 tag_filter = tag.split(":", 1)[1] if ":" in tag else tag
                 print(f"tag filter {tag_filter}")
-                if tag_filter == label:
+                # if tag_filter == label:
+                if starts_with(test=label, target=tag_filter):
                     filtered_records_out.append(each)
         else:
             print("just add all the records")
             filtered_records_out = records_out
 
-        if isinstance(records_out, list):
-            print(f"This is a JSON list. {scope}")
-            record_out = records_out[0]
-        else:            
-            record_out = records_out
+
 
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
