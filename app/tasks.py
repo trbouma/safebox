@@ -482,7 +482,7 @@ async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, 
         if websocket:
             #FIXME - may not need this refernce
             try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
             except:
                 pass
     
