@@ -23,6 +23,7 @@ from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest, nfc
 from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
+from app.rates import get_currency_rate
 
 import time
 
@@ -352,17 +353,18 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
 
     return success
 
-async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None ):
+async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None, nonce:str=None ):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
     duration = 60  # 1 minutes in seconds
-    
+    #FIXME Need to add in a nonce so it is listening for the right ecash payment
     while time.time() - start_time < duration:
         print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
-        ecash_out = await acorn_obj.get_ecash_latest(relays=relays) 
+        ecash_out = await acorn_obj.get_ecash_latest(relays=relays, nonce=nonce) 
         if ecash_out != []:
-            print(f"ecash out: {ecash_out}")
+            print(f"nonce: {nonce} ecash out: {ecash_out}")
+            
             if websocket:
                 for each in ecash_out: 
                     print(f"each for websocket: {each}") 
@@ -374,6 +376,7 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
                 break
+            break
 
          
     
@@ -420,11 +423,18 @@ async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     pass  
 
 async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:str, tendered_amount: float, tendered_currency: str, websocket: WebSocket|None=None):
+    fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+    currency_code  = fiat_currency.currency_code
+    currency_rate = fiat_currency.currency_rate
+    currency_symbol = fiat_currency.currency_symbol
+    fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"   
 
     if websocket:
             #FIXME - may not need this refernce
-            try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+            try: 
+
+            
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
             except:
                 pass
 
@@ -440,16 +450,21 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
         if websocket:
             #FIXME - may not need this refernce
             try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
             except:
                 pass
    
 async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, websocket: WebSocket|None=None):
+    fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+    currency_code  = fiat_currency.currency_code
+    currency_rate = fiat_currency.currency_rate
+    currency_symbol = fiat_currency.currency_symbol
+    fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"   
 
     if websocket:
             #FIXME - may not need this refernce
             try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
             except:
                 pass
 

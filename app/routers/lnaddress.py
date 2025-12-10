@@ -9,7 +9,7 @@ import string
 import asyncio
 from datetime import timedelta
 import qrcode, io, urllib, json
-import hashlib
+import hashlib, secrets
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select, update
 from argon2 import PasswordHasher
@@ -91,6 +91,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
     currency = None
     min_sendable = 1000
     max_sendable = 210000000
+    nonce = secrets.token_urlsafe(16)
    
 
 
@@ -157,6 +158,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
                         "commentAllowed": 256,                        
                         "allowsNostr" :True,
                         "safebox": True,
+                        "nonce": nonce,
                         "nostrPubkey" :     service_key_obj.public_key_hex(),
                         "tag": "payRequest"
 
@@ -164,7 +166,7 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
 
     }
 
-    print(request.base_url) 
+    print(f"{request.base_url} nonce: {nonce}") 
 
     return ln_response
 
@@ -179,6 +181,7 @@ async def ln_pay( amount: float,
             __n: str | None = None,
             lninvoice: bool = False,
             safebox: bool = False
+            
 
             
             ):
@@ -235,9 +238,10 @@ async def ln_pay( amount: float,
     # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
     if safebox:
         pass
-        print("don't bother creating an invoice because ecash")
+        
+        print(f"don't bother creating an invoice because ecash and use nonce: {nonce}")
         pr = None
-        task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS) ) 
+        task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS,nonce=nonce) ) 
     else:    
         cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT) 
         pr = cli_quote.invoice 

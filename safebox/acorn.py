@@ -1480,7 +1480,7 @@ class Acorn:
         
         return self.proofs
     
-    async def get_ecash_latest(self,since: int|None = None, relays: List[str]|None=None):
+    async def get_ecash_latest(self,since: int|None = None, relays: List[str]|None=None, nonce:str = None):
         ecash_out = []
         ecash_record = {}
         latest_dm = 0
@@ -1508,7 +1508,13 @@ class Acorn:
                 try:
                     ecash_nembed = parse_nembed_compressed(each["payload"])                    
                     token_to_redeem = ecash_nembed["token"]
-                    print(f"token to redeem: {token_to_redeem}")
+                    receive_nonce = ecash_nembed.get("nonce", None)
+                    print(f"token to redeem: {token_to_redeem} and nonces: {receive_nonce} {nonce}")
+                    if nonce and receive_nonce == nonce:
+                        print("this is the corresponding payment transaction")
+                    else:
+                        print("this is another payment transaction")
+
                     msg_out, token_amount = await  self.accept_token(cashu_token=token_to_redeem, comment=ecash_nembed["comment"])
 
                     if token_to_redeem == "nsf":
@@ -1527,7 +1533,7 @@ class Acorn:
                         
                         print("add to tx history")
                         # await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
-                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK"))
+                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK", nonce))
                     
                     
                 except:
@@ -2217,7 +2223,8 @@ class Acorn:
                     lnaddress: str, 
                     comment: str = "Paid!",
                     tendered_amount: float = None,
-                    tendered_currency: str = "SAT"): 
+                    tendered_currency: str = "SAT"
+                    ): 
                     
         
         # print("pay from multiple mints")
@@ -2232,12 +2239,12 @@ class Acorn:
 
         try:
             # await self.acquire_lock()
-            callback, safebox = lightning_address_pay(amount, lnaddress,comment=comment)         
+            callback, safebox, nonce = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
-            print(f"safebox: {safebox}") 
+            print(f"safebox: {safebox} ") 
 
             if safebox:
-                print(f"pay ecash directly to safebox")
+                print(f"pay ecash directly to safebox using nonce: {nonce}")
                 ln_parts = lnaddress.split('@')
                 local_part = ln_parts[0]
                 safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
@@ -2253,7 +2260,8 @@ class Acorn:
                              "amount": amount, 
                              "comment": comment,
                              "tendered_amount": tendered_amount,
-                             "tendered_currency": tendered_currency}
+                             "tendered_currency": tendered_currency,
+                             "nonce": nonce}
                 nembed_to_send = create_nembed_compressed(pay_obj)
                 print(f"acorn nembed to send: {nembed_to_send}")
                 

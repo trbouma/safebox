@@ -1263,11 +1263,11 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 if new_balance > starting_balance:
                     fiat_received = f"{currency_symbol}{(currency_rate * (new_balance-starting_balance) / 1e8):.2f} {acorn_obj.local_currency}"
 
-                    message = f"Payment received: {fiat_received}!"
+                    message = f"Transaction successful!"
                     status = "RECD"
 
                 elif new_balance < starting_balance:
-                    message = f"Payment sent! {starting_balance-new_balance} sats."
+                    message = f"Transaction successful!"
                     status = "SENT"
 
                 elif new_balance == starting_balance:
