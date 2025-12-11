@@ -346,10 +346,18 @@ async def fetch_balance(id: int):
 
         return safebox_found.balance
 
-async def db_state_change(id: int=0):
-    # print(f"db state change for {id}")
+async def db_state_change(id: int=0, acorn_obj:Acorn=None):
+    print(f"db state change for {id} {acorn_obj.handle}")
     await asyncio.sleep(3)
-    return
+    if acorn_obj:
+        with Session(engine) as session:
+
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            print(f"safebox balance: {safebox_found.balance}")
+    
+    return safebox_found.balance
 
 
 
