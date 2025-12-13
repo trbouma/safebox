@@ -523,6 +523,14 @@ class Acorn:
         pass
         return "this is the instance"
     
+    def get_balance(self):
+        
+        balance_tally = 0
+        for each in self.proofs:                
+            balance_tally += each.amount
+            self.balance = balance_tally
+        return self.balance
+    
 
     async def listen_for_record(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
         # Listen for a record and return it
@@ -1551,6 +1559,7 @@ class Acorn:
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
         # print(f"total messages: {len(ecash_out)} received for {self.handle}")
         
+
         return ecash_out
 
         
@@ -4123,7 +4132,8 @@ class Acorn:
             pass
             
             await self.release_lock()  
-
+        self.balance+=token_amount
+        # print(f"accept token new balance is: {self.balance}")
         await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
         return f'Successfully accepted {token_amount} sats!', token_amount
 
@@ -4232,6 +4242,7 @@ class Acorn:
         finally:
             await self.release_lock()
 
+        self.balance -= amount
         await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
         
         return v3_token.serialize()   

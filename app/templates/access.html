@@ -360,6 +360,8 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
    
     userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     consoleLog(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
+    document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}`;
+    document.getElementById("img_qr_display").src = "/img/circle-256.gif";
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
    
@@ -410,7 +412,7 @@ body: JSON.stringify(submit_data)
 })   
 .then((data) => {consoleLog(`done ${data}`)});
 
-window.location.href="/safebox/access?action_comment=Payment+requested.+Please+wait..." ;
+// window.location.href="/safebox/access" ;
 
 
 
@@ -420,11 +422,14 @@ async function submitNFCPayment(nfc_amount,nfc_currency, nfc_token, nfc_comment)
 
 paytoMessage(`Pay to Token ${nfc_amount} ${nfc_currency}${nfc_comment} ${nfc_token} `);
 
+document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}. Please wait...`;
+
 const submit_data =   { "nembed": nfc_token, 
                         "currency": nfc_currency,
                         "amount": nfc_amount, 
                         "comment": nfc_comment};
 
+                        
 await fetch('/safebox/paytonfctag', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
@@ -432,7 +437,8 @@ body: JSON.stringify(submit_data)
 }) 
 .then((response) => response.json())
 .then((data) => { paytoMessage(`done ${data}`);
-                  alert(`${data.detail}`);
+                  consoleLog(`${data.detail}`);
+                  window.location.href="/safebox/access?action_comment=Complete" ;
 
 
 });
@@ -776,14 +782,15 @@ function getInvoiceStatus(ln_invoice_status) {
       userMessage(message, status)
 
       if (status == "RECD") {
-      document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
-      document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
-      document.getElementById("payment_notification").innerText = `${message}`;
-      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-      // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
-      // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
-      // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
-      document.getElementById("img_qr_display").src = "/img/green-check.png";
+        
+        document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
+        document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
+        document.getElementById("payment_notification").innerText = `${message}`;
+        document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+        // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
+        // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
+        // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
+        document.getElementById("img_qr_display").src = "/img/green-check.png";
       
       } else if (status == "SENT" || status == "PENDING") {
 

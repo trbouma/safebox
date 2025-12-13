@@ -215,12 +215,7 @@ def set(nsec, home, relays, mints,xrelays, logging: int):
     with open(file_path, 'w') as file:        
         yaml.dump(config_obj, file)
 
-@click.command("balance", help="get balance")
-def get_balance():
-    
-    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
 
-    click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
 
 @click.command("profile", help="get profile")
 @click.option('--name', '-n', default="wallet", help=HOME_RELAY_HELP)
@@ -470,7 +465,7 @@ def balance():
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
 
-    click.echo(f"{acorn_obj.balance} sats in {len(acorn_obj.proofs)} proofs.")
+    click.echo(f"{acorn_obj.get_balance()} sats in {len(acorn_obj.proofs)} proofs.")
 
 @click.command("zap", help="Zap amount to event or to recipient")
 @click.argument('amount', default=1)
@@ -637,7 +632,7 @@ def release_lock():
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
-cli.add_command(get_balance)
+
 cli.add_command(check_lock)
 cli.add_command(acquire_lock)
 cli.add_command(release_lock)

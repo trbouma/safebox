@@ -405,7 +405,7 @@ async def protected_route(    request: Request,
                         action_amount: int = None,
                         action_comment: str = None,
                         amount: float = 0,
-                        currency: str = None,
+                        currency: str = 'SAT',
                         acorn_obj = Depends(get_acorn)
                     ):
 
@@ -1229,12 +1229,13 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
 
     # starting_balance = safebox_found.balance
     await acorn_obj.load_data()
-    starting_balance = acorn_obj.balance
+    starting_balance = acorn_obj.get_balance()
     # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"
+    print(f"the local currency is {acorn_obj.local_currency}")
 
-    test_balance = acorn_obj.balance
+   
     since_now = int(datetime.now(timezone.utc).timestamp())
     
     
@@ -1248,12 +1249,7 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         while time.time() - start_time < duration:
             try:
                 latest_balance = await db_state_change(acorn_obj=acorn_obj)
-                # print(f"db state change with latest balance {latest_balance}")
-                
-                # new_balance = await fetch_balance(safebox_found.id)
-                
-                # await acorn_obj.load_data()
-                # new_balance = acorn_obj.balance
+
                 new_balance = latest_balance
                 # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
@@ -1264,21 +1260,22 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 if new_balance > starting_balance:
                     # fiat_received = f"{currency_symbol}{(currency_rate * (new_balance-starting_balance) / 1e8):.2f} {acorn_obj.local_currency}"
 
-                    message = f"Transaction successful!"
+                    message = f"Transaction successful! Received."
                     status = "RECD"
 
                 elif new_balance < starting_balance:
-                    message = f"Transaction successful!"
+                    message = f"Transaction successful! Sent."
                     status = "SENT"
 
                 elif new_balance == starting_balance:
-                    message = f"Ready."
-                    status = "OK"
+                    continue
+                    # message = f"Ready."
+                    # status = "OK"
 
                 
-                fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * new_balance / 1e8)} {currency_code}"
+                # fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * new_balance / 1e8)} {currency_code}"
                 
-                # print(f"new_balance: {new_balance} status: {status} fiat balance: {fiat_balance}")
+                print(f"new_balance: {new_balance} status: {status} fiat balance: {fiat_balance}")
                 await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
                 starting_balance = new_balance
 

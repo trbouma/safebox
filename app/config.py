@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30
     LOGGING_LEVEL: int = 10
-    SUPPORTED_CURRENCIES: List =['CAD','USD','EUR','GBP','JPY','INR']
+    SUPPORTED_CURRENCIES: List =['SAT','CAD','USD','EUR','GBP','JPY','INR']
     BRANDING: str = "Get SafeBox"
     BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"

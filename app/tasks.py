@@ -362,6 +362,17 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
     while time.time() - start_time < duration:
         print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
         ecash_out = await acorn_obj.get_ecash_latest(relays=relays, nonce=nonce) 
+
+        # Update local cache balance
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_update = safeboxes.first()
+            safebox_update.balance = acorn_obj.balance
+            session.add(safebox_update)
+            session.commit()
+
+
         if ecash_out != []:
             print(f"nonce: {nonce} ecash out: {ecash_out}")
             
@@ -380,7 +391,8 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
 
          
     
-    print("done getting ecash")
+    print(f"done getting ecash. The balance is: {acorn_obj.balance}")
+
 
     # if websocket:
     #     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})
@@ -412,6 +424,13 @@ async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
     print(f"response: {response.json()}")
     pass
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = acorn_obj.get_balance()
+        session.add(safebox_update)
+        session.commit()
 
 async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
@@ -460,7 +479,7 @@ async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, 
     currency_rate = fiat_currency.currency_rate
     currency_symbol = fiat_currency.currency_symbol
     fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"   
-
+    
     if websocket:
             #FIXME - may not need this refernce
             try:

@@ -346,17 +346,23 @@ async def fetch_balance(id: int):
 
         return safebox_found.balance
 
-async def db_state_change(id: int=0, acorn_obj:Acorn=None):
-    print(f"db state change for {id} {acorn_obj.handle}")
-    await asyncio.sleep(3)
-    if acorn_obj:
-        with Session(engine) as session:
-
-            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-            safeboxes = session.exec(statement)
-            safebox_found = safeboxes.first()
-            print(f"safebox balance: {safebox_found.balance}")
+async def db_state_change(acorn_obj:Acorn=None ):
+    print(f"db state change for {acorn_obj.handle}")
+    same_state = True
     
+    if acorn_obj:
+        while same_state:
+            await asyncio.sleep(3)
+            with Session(engine) as session:
+
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()
+            balance = acorn_obj.get_balance()    
+            if safebox_found.balance != balance:
+                    print(f"we have a db state change: safebox balance: {safebox_found.balance} acorn balance: {balance}")
+                    same_state = False
+            
     return safebox_found.balance
 
 
