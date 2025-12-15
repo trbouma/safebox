@@ -253,7 +253,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'present_record':
         nauth = instruction_obj['params']['nauth']
         label = instruction_obj['params']['label']
-        record_kind = instruction_obj['params']['kind']
+        record_kind = int(instruction_obj['params']['kind'])
         print(f"we are going to present a record! label: {label} kind: {record_kind}")
 
         parsed_result = parse_nauth(nauth)
@@ -266,7 +266,9 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
         print(f"present_record scope: {scope} label: {label}")
-        record_kind = int(scope.split(":")[1])
+
+        #FIXME Need to determine which record kind should be used - in nauth or what is passed explicity
+        # record_kind = int(scope.split(":")[1])
         
         
         nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -319,7 +321,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             nembed = create_nembed_compressed(record_out)
 
         print(f"nembed: {nembed}")
-        t_sleep = 1
+        t_sleep = 0.1
         print(f"sleep for {t_sleep} seconds")
         await asyncio.sleep(t_sleep)
         print(f"done sleep for {t_sleep} seconds")
@@ -369,7 +371,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         user_records = []
         while user_records == []:
             user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
+            print("done sleep")
 
 
         # print(f"user records: {user_records}")

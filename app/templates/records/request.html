@@ -159,6 +159,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
   <br><br>
 
   <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
+    <option value="99999">Holder</option>
     {% for entry in grant_kinds %}
       <option value="{{ entry[0] }}">{{ entry[1] }}</option>
     {% endfor %}
@@ -214,10 +215,15 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 function updateSubtypes() {
   const code = selectEl.value;
   const info = grantKindMap[code] || { subtypes: [] };
-  const subtypes = info.subtypes;
+
+  // Make a copy so you don't mutate the original map
+  const subtypes = [...info.subtypes];
+
+  // ALWAYS add "default" as the first subtype
+  subtypes.unshift("default");
 
   // CLEAR the input whenever a new grant kind is selected
-  labelInput.value = "";  
+  labelInput.value = "";
 
   // Clear existing datalist options
   datalistEl.innerHTML = '';
@@ -227,7 +233,7 @@ function updateSubtypes() {
     return;
   }
 
-  // Optional: use first subtype as placeholder
+  // Use first subtype as placeholder ("default")
   labelInput.placeholder = subtypes[0];
 
   subtypes.forEach(st => {

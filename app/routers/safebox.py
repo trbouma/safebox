@@ -277,8 +277,9 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
         decrypted_key = decrypted_payload.split(':')[0]
         decrypted_secure_pin = decrypted_payload.split(':')[1]
+        nfc = parsed_data.get("n",["",""])
 
-        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin}")
+        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin} nfc: {nfc}")
         if host != request.url.hostname:
             print(f"This is the wrong host - need to go to https://{host}")
             return RedirectResponse(url=f"https://{host}",status_code=301)
@@ -1094,8 +1095,8 @@ async def issue_card(       request: Request,
     plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
   
     encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
-   
-    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21}
+    nfc_default = settings.NFC_DEFAULT
+    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21, "n": nfc_default}
     nembed = create_nembed_compressed(token_obj)
     print(f"nembed length {len(nembed)} {nembed}")
     payment_token=nembed
@@ -1260,11 +1261,11 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
                 if new_balance > starting_balance:
                     # fiat_received = f"{currency_symbol}{(currency_rate * (new_balance-starting_balance) / 1e8):.2f} {acorn_obj.local_currency}"
 
-                    message = f"Transaction successful! Received."
+                    message = f"Transaction successful!"
                     status = "RECD"
 
                 elif new_balance < starting_balance:
-                    message = f"Transaction successful! Sent."
+                    message = f"Transaction successful!"
                     status = "SENT"
 
                 elif new_balance == starting_balance:

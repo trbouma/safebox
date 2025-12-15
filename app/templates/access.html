@@ -361,7 +361,7 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
     userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     consoleLog(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}`;
-    document.getElementById("img_qr_display").src = "/img/circle-256.gif";
+    
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
    
@@ -378,8 +378,8 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
           // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
         
           
-          
-          submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
+          document.getElementById("img_qr_display").src = "/img/circle-256.gif";
+          submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment);
           
         }
       } catch(error) {
@@ -411,6 +411,7 @@ headers: {"Content-Type": "application/json"},
 body: JSON.stringify(submit_data)         
 })   
 .then((data) => {consoleLog(`done ${data}`)});
+window.scrollTo(0, 0);
 
 // window.location.href="/safebox/access" ;
 
@@ -438,7 +439,8 @@ body: JSON.stringify(submit_data)
 .then((response) => response.json())
 .then((data) => { paytoMessage(`done ${data}`);
                   consoleLog(`${data.detail}`);
-                  window.location.href="/safebox/access?action_comment=Complete" ;
+                  window.scrollTo(0, 0);
+                  // window.location.href="/safebox/access?action_comment=Complete" ;
 
 
 });

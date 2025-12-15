@@ -1462,7 +1462,10 @@ async def ws_record_listen( websocket: WebSocket,
                 verify_result = "Done"
                 #### Finish verification ####
 
-
+                #FIXME Record coming via QR code is single from NFC is a List
+                if not isinstance(record_json, list):
+                    record_json = [record_json]
+                    
 
                 msg_out =   {   "status": "VERIFIED",
                                 "detail": None, 
@@ -1587,10 +1590,16 @@ async def accept_proof_token( request: Request,
     host = parsed_nembed["h"]
     vault_url = f"https://{host}/.well-known/proof"
     proof_token_to_use = parsed_nembed["k"]
+    nfc_default = parsed_nembed.get("n",["Holder","default"])
 
-    print(f"proof token: {token_to_use} acquired pin: {proof_token.pin}")
+    print(f"proof token: {token_to_use} acquired pin: {proof_token.pin} record kind {record_kind_to_use} label to use: {label_to_use} nfc default: {nfc_default}")
 
-
+    # If Holder is specified using kind 9999 then look up default
+    if record_kind_to_use == 99999:
+        record_kind_to_use = get_id_by_label(settings.GRANT_KINDS, nfc_default[0])
+        label_to_use = nfc_default[1]
+        
+    print(f"record kind to use: {record_kind_to_use} {type(record_kind_to_use)} {label_to_use} {type(label_to_use)}")
     
     sig = sign_payload(proof_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
@@ -1598,14 +1607,14 @@ async def accept_proof_token( request: Request,
     # need to send off to the vault for processing
     submit_data = { "nauth": proof_token.nauth, 
                     "token": proof_token_to_use,
-                    "label": proof_token.label,
-                    "kind": proof_token.kind,
+                    "label": label_to_use,
+                    "kind": record_kind_to_use,
                     "pin": proof_token.pin,
                     "pubkey": pubkey,
                     "sig": sig
 
                     }
-   
+    
     headers = { "Content-Type": "application/json"}
     print(f"vault url: {vault_url} submit data: {submit_data}")
 

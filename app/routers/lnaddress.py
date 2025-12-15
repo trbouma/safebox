@@ -380,7 +380,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
 
             }
         }
-    
+    print(f"proof {proof_vault} wallet instruction: {wallet_instruction}")
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(wallet_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:
