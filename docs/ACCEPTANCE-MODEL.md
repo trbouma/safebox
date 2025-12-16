@@ -1,6 +1,8 @@
 # The Acceptance Model  
 *A generic framework for how statements become facts*
 
+
+
 ---
 
 ## Overview
@@ -89,6 +91,14 @@ The Acceptance Model structures those questions into clear layers, separating:
 | — | **Acceptance** | Chain | System recognition | Court or system treats it as fact |
 
 ---
+The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
+- an **Assertion** is a signed event about a **State**
+- an **Attestation** is a signed event about an **Assertion** (another signed event)
+- an **Endorsement** is a signed event about another **Npub**
+
+For simplicity, the diagram does not illustrate **nth Order Assertions**.
+
+![Acceptance Mode](./img/acceptance-model.png)
 
 ## States: Facts and Views
 
@@ -211,6 +221,9 @@ Acceptance is:
 - **Acceptance** → what counts  
 
 ---
+## Acceptance Logic
+
+TBD once the model is validated. It likely will be a recursive resolution model that arrives at a first order Assertion.
 
 ## Synthesis
 
