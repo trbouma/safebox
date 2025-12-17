@@ -51,43 +51,44 @@ The Acceptance Model structures those questions into clear layers, separating:
 
 ---
 
-## Core Concepts (Plain Definitions)
+## Definitions of Core Concepts
 
 - **State**  
-  A state (or state of affairs) is a condition or configuration of reality at a given moment. A state may be a **Fact** or a **View**
+  A state is a condition or configuration of reality at a given moment. A state may be a **Fact** or a **View**
 
-- **Fact**
-  A fact is a state of affairs that is defined in verifiable terms and is capable of being accepted as true by a system.
+- **Fact**   
+  A fact is a state that is defined in verifiable terms and is capable of being accepted as true by a system.
 
-- **View**
-  A view is an evaluative interpretation of a state of affairs that depends on judgment, perspective, or normative criteria rather than verifiable conditions alone.
+- **View**   
+  A view is an evaluative interpretation of a state that depends on judgment, perspective, or normative criteria rather than verifiable conditions alone.
 
 - **Assertion**  
-  A statement put forward as true by an actor, taking responsibility for its truth.
+  A fact or view put forward as true by an actor, taking responsibility for its truth.
 
 - **Attestation**  
   A signed assertion that affirms the truth or validity of another assertion.
 
 - **Endorsement**  
-  A signed statement affirming the reliability or credibility of an actor.
+  A signed statement affirming the reliability or credibility of an entity.
 
 - **Acceptance**  
   A system-level act that treats a statement (or chain of statements) as determinative.
 
 ---
 
-## The Acceptance Model (Expanded)
+## The Acceptance Model
 
 ### States, Assertions, Attestations, and Endorsements
 
 | Level | Layer | Refers To | What It Is | Example |
 |---|---|---|---|---|
-| 0a | **State (Factual)** | Reality | Verifiable condition | The light is on |
-| 0b | **State (Evaluative)** | Reality + judgment | Interpreted condition | The light is too bright |
-| 1 | **Assertion** | State (0a or 0b) | Claim that a state obtains | Alice: “The light is on” |
-| 2 | **Attestation (2nd Order Assertion)** | Assertion | Truth of a specific assertion | Bob: “Alice’s claim is true” |
-| 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of prior attestation | Carol: “Bob’s attestation is valid” |
-| — | **Endorsement** | **Actor** | Reliability / credibility of actor | Bob: “Alice is reliable” |
+| 0 | **State** | Reality | Observable reality | There is a light |
+| 1a | **Fact (State)** | Reality | Verifiable state | The light is on |
+| 1b | **View (State)** | Reality + judgment | Interpreted state | The light is too bright |
+| 2 | **Assertion** | State (1 or 2) | Expression of a fact or view by an entity | Alice: “The light is on” |
+| 3 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion by an entity | Bob: “Alice’s claim is true” |
+| 4 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation by an entity | Carol: “Bob’s attestation is valid” |
+| — | **Endorsement** | **Actor/Entity** | Reliability / credibility of actor | Bob: “Alice is reliable” |
 | — | **Acceptance** | Chain | System recognition | Court or system treats it as fact |
 
 ---
@@ -96,9 +97,27 @@ The following diagram is a logical graphical rendition of the above. It is inten
 - an **Attestation** is a signed event about an **Assertion** (another signed event)
 - an **Endorsement** is a signed event about another **Npub**
 
-For simplicity, the diagram does not illustrate **nth Order Assertions**.
+```mermaid
+flowchart TD
+    L0[0 - State <br> Observable reality]
+    L1a[1a - Fact <br> Verifiable state]
+    L1b[1b - View <br> Interpreted state]
+    L2[2 - Assertion <br> Expression of a fact or view by an entity]
+    L3[3 - Attestation <br>  Validity of an assertion by an entity]
+    L4[4 - Attestation^n <br> Validity of an attestation by an entity]
+    E[TBD - Endorsement <br> Reliability or credibility of an entity]
+    A[TBD - Acceptance <br> Systemic recognition of facts or views]
 
-![Acceptance Mode](./img/acceptance-model.png)
+    L0 --> L1a
+    L0 --> L1b
+    L1a --> L2
+    L1b --> L2
+    L2 --> L3
+    L3 --> L4
+
+    A -. over sum of .- L4
+    A -. over sum of .-L3
+```
 
 ## States: Facts and Views
 
