@@ -86,7 +86,7 @@ The Acceptance Model structures those questions into clear layers, separating:
 | 1a | **Fact (State)** | Reality | Verifiable staet | The light is on |
 | 1b | **View (State)** | Reality + judgment | Interpreted state | The light is too bright |
 | 2 | **Assertion** | State (1 or 2) | Expression of a given fact or view by an specific entity | Alice: “The light is on” |
-| 3 | **Attestation (2nd Order Assertion)** | Assertion | Truth of a specific assertion | Bob: “Alice’s claim is true” |
+| 3 | **Attestation (2nd Order Assertion)** | Assertion | Validity of a specific assertion by given entity | Bob: “Alice’s claim is true” |
 | 4 | **Attestation (nth Order Assertion)** | Attestation | Validity of prior attestation | Carol: “Bob’s attestation is valid” |
 | — | **Endorsement** | **Actor** | Reliability / credibility of actor | Bob: “Alice is reliable” |
 | — | **Acceptance** | Chain | System recognition | Court or system treats it as fact |
