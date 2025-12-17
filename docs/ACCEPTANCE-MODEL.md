@@ -97,9 +97,26 @@ The following diagram is a logical graphical rendition of the above. It is inten
 - an **Attestation** is a signed event about an **Assertion** (another signed event)
 - an **Endorsement** is a signed event about another **Npub**
 
-For simplicity, the diagram does not illustrate **nth Order Assertions**.
+```mermaid
+flowchart TD
+    L0[0 - State <br> Observable reality]
+    L1a[1a - Fact <br> Verifiable state]
+    L1b[1b - View <br> Interpreted state]
+    L2[2 - Assertion <br> Expression of a given fact or view by a specific entity]
+    L3[3 - Attestation <br>  Validity of an assertion by a specific entity]
+    L4[4 - Attestation^n <br> Validity of prior attestation]
+    E[TBD - Endorsement <br> Reliability or credibility of actor]
+    A[TBD - Acceptance <br> Systemic recognition of facts or views]
 
-![Acceptance Mode](./img/acceptance-model.png)
+    L0 --> L1a
+    L0 --> L1b
+    L1a --> L2
+    L1b --> L2
+    L2 --> L3
+    L3 --> L4
+
+    A -. over sum of .- L4
+```
 
 ## States: Facts and Views
 
