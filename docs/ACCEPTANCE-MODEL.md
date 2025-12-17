@@ -69,7 +69,7 @@ The Acceptance Model structures those questions into clear layers, separating:
   A signed assertion that affirms the truth or validity of another assertion.
 
 - **Endorsement**  
-  A signed statement affirming the reliability or credibility of an actor.
+  A signed statement affirming the reliability or credibility of an entity.
 
 - **Acceptance**  
   A system-level act that treats a statement (or chain of statements) as determinative.
@@ -83,12 +83,12 @@ The Acceptance Model structures those questions into clear layers, separating:
 | Level | Layer | Refers To | What It Is | Example |
 |---|---|---|---|---|
 | 0 | **State** | Reality | Observable reality | There is a light |
-| 1a | **Fact (State)** | Reality | Verifiable staet | The light is on |
+| 1a | **Fact (State)** | Reality | Verifiable state | The light is on |
 | 1b | **View (State)** | Reality + judgment | Interpreted state | The light is too bright |
-| 2 | **Assertion** | State (1 or 2) | Expression of a given fact or view by an specific entity | Alice: “The light is on” |
-| 3 | **Attestation (2nd Order Assertion)** | Assertion | Validity of a specific assertion by given entity | Bob: “Alice’s claim is true” |
-| 4 | **Attestation (nth Order Assertion)** | Attestation | Validity of prior attestation | Carol: “Bob’s attestation is valid” |
-| — | **Endorsement** | **Actor** | Reliability / credibility of actor | Bob: “Alice is reliable” |
+| 2 | **Assertion** | State (1 or 2) | Expression of a fact or view by an entity | Alice: “The light is on” |
+| 3 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion by an entity | Bob: “Alice’s claim is true” |
+| 4 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation by an entity | Carol: “Bob’s attestation is valid” |
+| — | **Endorsement** | **Actor/Entity** | Reliability / credibility of actor | Bob: “Alice is reliable” |
 | — | **Acceptance** | Chain | System recognition | Court or system treats it as fact |
 
 ---
@@ -102,10 +102,10 @@ flowchart TD
     L0[0 - State <br> Observable reality]
     L1a[1a - Fact <br> Verifiable state]
     L1b[1b - View <br> Interpreted state]
-    L2[2 - Assertion <br> Expression of a given fact or view by a specific entity]
-    L3[3 - Attestation <br>  Validity of an assertion by a specific entity]
-    L4[4 - Attestation^n <br> Validity of prior attestation]
-    E[TBD - Endorsement <br> Reliability or credibility of actor]
+    L2[2 - Assertion <br> Expression of a fact or view by an entity]
+    L3[3 - Attestation <br>  Validity of an assertion by an entity]
+    L4[4 - Attestation^n <br> Validity of an attestation by an entity]
+    E[TBD - Endorsement <br> Reliability or credibility of an entity]
     A[TBD - Acceptance <br> Systemic recognition of facts or views]
 
     L0 --> L1a
@@ -116,6 +116,7 @@ flowchart TD
     L3 --> L4
 
     A -. over sum of .- L4
+    A -. over sum of .-L3
 ```
 
 ## States: Facts and Views
