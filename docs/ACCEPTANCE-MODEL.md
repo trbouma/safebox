@@ -83,8 +83,8 @@ The Acceptance Model structures those questions into clear layers, separating:
 | Level | Layer | Refers To | What It Is | Example |
 |---|---|---|---|---|
 | 0 | **State** | Reality | Observable reality | There is a light |
-| 1a | **Fact (State)** | Reality | Verifiable condition | The light is on |
-| 1b | **View (State)** | Reality + judgment | Interpreted condition | The light is too bright |
+| 1a | **Fact (State)** | Reality | Verifiable staet | The light is on |
+| 1b | **View (State)** | Reality + judgment | Interpreted state | The light is too bright |
 | 2 | **Assertion** | State (1 or 2) | Claim that a state obtains | Alice: “The light is on” |
 | 3 | **Attestation (2nd Order Assertion)** | Assertion | Truth of a specific assertion | Bob: “Alice’s claim is true” |
 | 4 | **Attestation (nth Order Assertion)** | Attestation | Validity of prior attestation | Carol: “Bob’s attestation is valid” |
