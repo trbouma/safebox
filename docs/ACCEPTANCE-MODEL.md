@@ -86,14 +86,14 @@ The Acceptance Model structures those questions into clear layers, separating:
 | 1 | **Assertion** | State (0a or 0b) | A claim regarding a statement | Alice: “The light is on” |
 | 2 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion | Bob: “Alice’s claim is true” |
 | 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation | Carol: “Bob’s attestation is valid” |
-| — | **Designation** | **Actor** | Designation of another actor | Bob: “Alice can do something on behalf of me” |
+| — | **Delegation** | **Actor** | Delegation to another actor | Bob: “Alice can do something on behalf of me” |
 | — | **Acceptance** | Chain | System recognition | Condition of when system reaches a conclusion regarding a statement |
 
 ---
 The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
 - an **Assertion** is a signed event about a **Statement**
 - an **Attestation** is a signed event about an **Assertion** (another signed event)
-- an **Designation** is a signed event about another **Npub** conferring a status and/or authority.
+- an **Delegation** is a signed event about another **Npub** conferring a status and/or authority.
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
@@ -166,7 +166,7 @@ Multiple attestations can increase 'truthiness', but is not truth itself.
 
 ---
 
-## Designation (Orthogonal to Attestation)
+## Delegation (Orthogonal to Attestation)
 
 A **delegation** does not vouch for a statement. It vouches for another **actor**.
 
@@ -219,7 +219,7 @@ Acceptance is:
 - **Statement** → what is said about reality (fact or view)  
 - **Assertion** → what is claimed by an actor
 - **Attestation** → what is vouched for another actor  
-- **Designation** → what is said by one actor of another actor 
+- **Delegation** → what is said by one actor of another actor 
 - **Acceptance** → what counts as reliably according to the system
 
 ---
