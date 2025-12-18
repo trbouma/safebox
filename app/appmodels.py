@@ -26,9 +26,9 @@ class RegisteredSafebox(SQLModel, table=True):
     currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
     
 class SafeboxRecord(BaseModel):
-    tag: list[str]                     # e.g. ["my_record"]
-    type: str                          # e.g. "offer"
-    payload: Any                       # can hold any JSON-serializable value
+    tag: list[str]      = None                  # e.g. ["my_record"]
+    type: str           = None                  # e.g. "offer"
+    payload: Any        = None                  # can hold any JSON-serializable value
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

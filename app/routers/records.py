@@ -8,6 +8,7 @@ import asyncio,qrcode, io, urllib
 
 from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
+from app.appmodels import SafeboxRecord
 from time import sleep
 import json
 from monstr.util import util_funcs
@@ -768,6 +769,7 @@ async def display_record(     request: Request,
     if action_mode == 'edit':
 
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        print(f"display record: {record}")
         label_hash = await acorn_obj.get_label_hash(label=card)
 
         try:
@@ -829,6 +831,8 @@ async def display_grant(     request: Request,
     label_hash = None
     template_to_use = "records/grant.html"
     content = ""
+    
+    
 
     if not kind:
         kind = settings.GRANT_KINDS[0][0]
@@ -837,6 +841,8 @@ async def display_grant(     request: Request,
 
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
         label_hash = await acorn_obj.get_label_hash(label=card)
+        safebox_record = SafeboxRecord(**record)
+        print(f"safebox record: {record} {safebox_record}")
 
         try:
             content = record["payload"]
@@ -880,70 +886,7 @@ async def display_grant(     request: Request,
                                             
                                         })
 
-@router.get("/displaygrant", tags=["records", "protected"])
-async def display_grant(     request: Request, 
-                            card: str = None,
-                            kind: int = 34002,
-                            action_mode: str = None,
-                            acorn_obj: Acorn = Depends(get_acorn)
-                    ):
-    """Protected access to updating the card"""
 
-    label_hash = None
-    template_to_use = "records/record.html"
-    content = ""
-    
-    if action_mode == 'edit':
-
-        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
-        label_hash = await acorn_obj.get_label_hash(label=card)
-
-        try:
-            content = record["payload"]
-        except:
-            content = record
-        
-    elif action_mode == 'offer':
-
-        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
-        label_hash = await acorn_obj.get_label_hash(label=card)
-        template_to_use = "records/recordoffer.html"
-
-        try:
-            content = record["payload"]
-        except:
-            content = record    
-    
-    elif action_mode =='add':
-        card = ""
-        content =""
-    
-    credential_record = {"card":card, "content": content}
-
-    select_kinds = settings.OFFER_KINDS
-    select_kind = get_label_by_id(select_kinds, kind)
-
-    offer_kinds = settings.OFFER_KINDS
-    offer_label = get_label_by_id(offer_kinds, kind)
-    referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
-   
-
-    return templates.TemplateResponse(  template_to_use, 
-                                        {   "request": request,
-                                            
-                                            "card": card,
-                                            "record_kind": kind,
-                                            "offer_kind": kind,
-                                            "grant_kind": kind+1,
-                                            "offer_label": offer_label,
-                                            "select_kind": select_kind,
-                                            "referer": referer,
-                                            "label_hash": label_hash,
-                                            "action_mode":action_mode,
-                                            "content": content,
-                                            "credential_record": credential_record
-                                            
-                                        })
 
 @router.get("/displayoffer", tags=["records", "protected"])
 async def display_offer(     request: Request, 

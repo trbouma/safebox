@@ -67,9 +67,9 @@ The Acceptance Model structures those questions into clear layers, separating:
 
 - **Assertion** A statement put forward as true by an actor, taking responsibility for its truth.
 
-- **Attestation** A assertion that affirms the truth or validity of another assertion.
+- **Attestation** An assertion that affirms the truth or validity of another assertion.
 
-- **Delegation** A assertion of one **actor** about another **actor**.
+- **Delegation** An assertion about another **Npub** conferring a status and/or authority.
 
 - **Acceptance**  A system-level act that treats a statement (or chain of statements) as a fact.
 
@@ -86,14 +86,14 @@ The Acceptance Model structures those questions into clear layers, separating:
 | 1 | **Assertion** | State (0a or 0b) | A claim regarding a statement | Alice: “The light is on” |
 | 2 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion | Bob: “Alice’s claim is true” |
 | 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation | Carol: “Bob’s attestation is valid” |
-| — | **Delegation** | **Actor** | Delegation to another actor | Bob: “Alice can do something on behalf of me” |
+| — | **Delegation** | **Actor** | Conferring a status and/or authority to another actor | Bob: “Alice is competent and can do something on behalf of me” |
 | — | **Acceptance** | Chain | System recognition | Condition of when system reaches a conclusion regarding a statement |
 
 ---
 The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
-- an **Assertion** is a signed event about a **Statement**
-- an **Attestation** is a signed event about an **Assertion** (another signed event)
-- an **Delegation** is a signed event about another **Npub** conferring a status and/or authority.
+- an **Assertion** is an assertion (signed event) about a **Statement**
+- an **Attestation** is an assertiona (signed event) about an **Assertion** (another signed event)
+- an **Delegation** is an assertion (signed event) about another **Npub** conferring a status and/or authority.
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
@@ -131,7 +131,7 @@ An **assertion** is the first step where responsibility enters.
 - Signing an event regard a **statement** becomes an **assertion**:
   - Binds it to an identity
   - Creates accountability regarding the **statement**
-  - The act of signing does not itself create a fact; it creates another point to reach a conclusion.
+  - The act of signing an event does not itself create a fact; it creates another point to reach a conclusion.
 
 Example:
 - Alice signs: *“The light is on”*
