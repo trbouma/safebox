@@ -69,7 +69,7 @@ The Acceptance Model structures those questions into clear layers, separating:
 
 - **Attestation** A assertion that affirms the truth or validity of another assertion.
 
-- **Designation** A assertion of one **actor** about another **actor**.
+- **Delegation** A assertion of one **actor** about another **actor**.
 
 - **Acceptance**  A system-level act that treats a statement (or chain of statements) as a fact.
 
@@ -97,7 +97,7 @@ The following diagram is a logical graphical rendition of the above. It is inten
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
-![Acceptance Mode](./img/acceptance-2.jpg)
+![Acceptance Mode](./img/acceptance-3.jpg)
 
 ## Statement: Facts and Views
 
@@ -168,8 +168,7 @@ Multiple attestations can increase 'truthiness', but is not truth itself.
 
 ## Designation (Orthogonal to Attestation)
 
-An **designation** does not vouch for a statement.  
-It vouches for another **actor**.
+A **delegation** does not vouch for a statement. It vouches for another **actor**.
 
 - Actor-directed, not claim-directed
 - Generalizes trust across future assertions
@@ -178,7 +177,7 @@ It vouches for another **actor**.
 Example:
 - Bob signs: *“Alice is reliable”*
 
-A designation is a type of assertion that references an **actor** versus a **fact** or **view**.
+A **delegation** is a type of assertion that references another **actor** versus a **fact** or **view**.
 
 ---
 
@@ -226,13 +225,15 @@ Acceptance is:
 ---
 ## Acceptance Logic
 
-TBD once the model is validated. 
-
 The acceptance logic likely will be a recursive resolution model that arrives at a first order Assertion.
+
+Below is an initial resolution model
+
+![Delegation](./img/delegation-1.jpg)
 
 ## Synthesis
 
-> **The Acceptance Model explains how statements become assertions, assertions attract attestations, designations of actors by other actors, and systems ultimately decide which claims count as facts.**
+> **The Acceptance Model explains how statements become assertions, assertions attract attestations, delegations of actors by other actors, and systems ultimately decide which claims count as facts.**
 
 Or more sharply:
 

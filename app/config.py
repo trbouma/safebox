@@ -122,6 +122,7 @@ class Settings(BaseSettings):
                             [34031, "Voucher"],  
                             [34033, "Letter"],
                             [34035, "Emergency"],
+                            [34037, "Negotiable Cargo Document",["Bill of Lading","Warehouse Receipt"]],
                                                       
                             
                         ]  
@@ -149,7 +150,8 @@ class Settings(BaseSettings):
                             [34026, "Recipe"],
                             [34032, "Voucher"],
                             [34034, "Letter"],
-                            [34036, "Emergency", ["medical","contact"]],                            
+                            [34036, "Emergency", ["medical","contact"]],    
+                            [34038, "Negotiable Cargo Document"],                        
                             [37375, "Personal Note", ["share"]] 
                             
                         ] 
