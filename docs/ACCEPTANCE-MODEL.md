@@ -97,7 +97,7 @@ The following diagram is a logical graphical rendition of the above. It is inten
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
-![Acceptance Mode](./img/acceptance-3.jpg)
+![Acceptance Mode](./img/acceptance-4.png)
 
 ## Statement: Facts and Views
 
