@@ -1443,16 +1443,47 @@ async def ws_record_listen( websocket: WebSocket,
                 #### Do the verification here... ####
                 verify_result = "Done"
                 #### Finish verification ####
+                
 
                 #FIXME Record coming via QR code is single from NFC is a List
                 if not isinstance(record_json, list):
                     record_json = [record_json]
-                    
+
+                # Check each record payload and decide how to validate
+                # Payload is either plain text or dict.
+                # If payload is dict, then it is a signed nostr event embedded in the payload
+                # determine content to display and verification result
+
+                out_records =[]
+                for each in record_json:
+                    is_valid = "Cannot Validate"
+                    if isinstance(each["payload"], dict):
+                        event_to_validate: Event = Event().load(each["payload"])
+                        
+                        tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
+                        tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+                        type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
+                        # Need to check signature too
+                        print("let's check signature")  
+                        print(f"event to validate: {event_to_validate.data()}")
+                
+                        if event_to_validate.is_valid():
+                            is_valid = "True"
+
+                        content = f"{event_to_validate.content}"
+                        each["content"] = content
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {is_valid} | Trusted: {True} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+                    else:
+                        each["content"] = each["payload"] 
+                        each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
+
+                    out_records.append(each)
+
 
                 msg_out =   {   "status": "VERIFIED",
                                 "detail": None, 
-                                "records": record_json,
-                                "result": verify_result
+                                "records": out_records,
+                                "result": is_valid
                                
                                }
                 print(f"send {incoming_record} {record_json}") 

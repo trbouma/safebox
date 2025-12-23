@@ -288,7 +288,9 @@ async function listenForRecord(nauth) {
         
         for (const rec of response.records) {
           //console.log(rec);
-          addCard(rec.tag, `${response.result}`,rec.payload);
+          // addCard(rec.tag, `${response.result}`,rec.payload);
+          addCard(rec.tag,rec.content, rec.verification);
+          
         }
 
         // addCard(response.detail.tag, `${response.result}`,response.detail.payload);
@@ -339,7 +341,7 @@ async function listenForRecord(nauth) {
 
 
   // Function to create and add a card
-  function addCard(title, created_at, content) {
+  function addCard(title, content, verification) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -348,19 +350,24 @@ async function listenForRecord(nauth) {
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
     cardTitle.textContent = getRightSide(title[0]);
+    card.appendChild(cardTitle);
 
-    // Create and add the created_at element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = `${created_at}`;
+
 
     // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
-    cardContent.textContent = content;
-   
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
+    cardContent.textContent = content;  
+    card.appendChild(cardContent); 
+
+        // Create and add the content element
+    const cardVerification = document.createElement('div');
+    cardVerification.className = 'card-content';
+    cardVerification.textContent = verification;  
+    cardVerification.style.textAlign = 'center';
+    card.appendChild(cardVerification); 
+    
+  
 
 
     // figure out what to do with the card conte
@@ -386,7 +393,7 @@ async function listenForRecord(nauth) {
     }
 
 
-    card.appendChild(cardContent);
+    
 
     
 
