@@ -693,7 +693,7 @@ class Acorn:
             else:
                 
                 #Inspect Payload and decide what to show
-                print(f"get parsed record payload: {type(parsed_record["payload"])} {parsed_record["payload"]}")
+                print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
                 if isinstance(parsed_record["payload"], dict):
                     # private event so just show context
                     parsed_record["content"] = parsed_record["payload"]["content"]
