@@ -15,17 +15,35 @@
 
 
 <div class="center-text">
-    <h1>Accept Records</h1>  
+    <h1>Please Wait...</h1>  
    
     <br><br>
 
   
-    Click on the record offer that you wish to accept.
+    Your records will appear momentarily. If they do not, please click Refresh Records.
    
     
 </div>
 
 <div id="card-container"></div>
+
+<script>
+  const ws = new WebSocket("wss://{{request.url.hostname}}/records/ws/accept?nauth={{nauth}}");
+
+  ws.onopen = () => console.log("WebSocket connected");
+  ws.onmessage = (event) => {
+      var grant_kind = JSON.parse(event.data).grant_kind;
+      console.log("Message received:", event.data);
+      
+     window.location.href=`/records/grantlist?record_kind=${grant_kind}`;
+      // refreshRecords();
+     
+
+  };
+  ws.onclose = () => console.log("WebSocket closed");
+
+
+</script>
 
 <script>
   const jsonUserData = {{ user_records | tojson }};
@@ -144,11 +162,11 @@ setDarkMode();
 <div class="center-text">
       
  
-
+  <br><br>
+  <button onclick="refreshRecords()">Refresh Records</button>
   <br><br>
   <button onclick="backToProfile()">Home</button>
-    <br><br>
-  <button onclick="refreshRecords()">Refresh Records</button>
+
   <hr>
   <br><br>
   Record Kind: {{transmittal_kind}}

@@ -19,7 +19,7 @@ from hotel_names import hotel_names
 from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
-from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 
 
 
@@ -36,6 +36,7 @@ from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
 from safebox.monstrmore import KindOtherGiftWrap, ExtendedNIP44Encrypt
+from safebox.func_utils import npub_to_hex
 
 
 tail = util_funcs.str_tails
@@ -49,7 +50,7 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory
+from safebox.models import TxHistory, SafeboxRecord, ParseRecord
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
@@ -280,7 +281,7 @@ class Acorn:
                 #TODO need to decide if to keep 24 seed phrase option.
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")                
 
@@ -296,7 +297,7 @@ class Acorn:
                 
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")
                 
@@ -386,7 +387,7 @@ class Acorn:
                 #TODO need to decide if to keep 24 seed phrase option.
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")                
 
@@ -403,7 +404,7 @@ class Acorn:
                 
                 seed_phrase = mnemo.generate(strength=128)
                 seed = Bip39SeedGenerator(seed_phrase).Generate()
-                bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+                bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
                 seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
                 self.logger.debug(f"seed private key: {seed_private_key_hex}")
                 
@@ -489,6 +490,7 @@ class Acorn:
 
             out_string = f"""   \nnpub: {self.pubkey_bech32}
                                 \nnsec: {self.privkey_bech32} 
+                                \nnsechex: {self.privkey_hex} 
                                 \npubhex: {self.pubkey_hex}  
                                 \nhandle: {self.handle}   
                                 \naccess key: {self.access_key}  
@@ -521,8 +523,44 @@ class Acorn:
     def get_instance(self):
         pass
         return "this is the instance"
+    
+    def get_balance(self):
+        
+        balance_tally = 0
+        for each in self.proofs:                
+            balance_tally += each.amount
+            self.balance = balance_tally
+        return self.balance
+    
 
-    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
+    async def listen_for_record(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
+        # Listen for a record and return it
+        print("listening for incoming record...")
+
+        def incoming_handler(the_client: Client, sub_id: str, evt: Event):
+            print(f"handle event {sub_id} {evt.id}")
+            return
+
+        url = relays[0]
+        c = Client(url)
+        asyncio.create_task(c.run())
+   
+        await c.wait_connect()
+
+        c.subscribe(
+        handlers=incoming_handler,
+        filters={
+            'limit': 1024,
+            'kinds': [record_kind],
+            '#p': self.pubkey_hex,
+            
+        }
+        )
+
+        print(f"startt listening for incoming record kind {record_kind} at: {url}")
+        return
+
+    async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None)->List[Any]:
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
@@ -582,7 +620,7 @@ class Acorn:
         events.sort(reverse=reverse)
 
         for each in events:
-            # print("x:", each.tags, each.kind, each.created_at)
+            
 
             if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
                 (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
@@ -611,6 +649,7 @@ class Acorn:
                                             "id": unwrapped_event.id,
                                             "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
+                        
 
 
                 except Exception as e:
@@ -652,7 +691,21 @@ class Acorn:
             if isinstance(parsed_record,list):
                 pass
             else:
+                
+                #Inspect Payload and decide what to show
+                print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
+                if isinstance(parsed_record["payload"], dict):
+                    # private event so just show context
+                    parsed_record["content"] = parsed_record["payload"]["content"]
+                    
+                else:
+                    # string so just show string
+                    parsed_record["content"] = parsed_record["payload"]
+                    
+
+                
                 events_out.append(parsed_record)
+              
         
         return events_out
 
@@ -1275,8 +1328,11 @@ class Acorn:
 
         return label_hash
 
-    async def get_wallet_info(self, label:str=None, record_kind:int=37375, record_by_hash: str = None):
+    async def get_wallet_info(self, label:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None):
         my_enc = NIP44Encrypt(self.k)
+
+        if record_origin:
+            label = ':'.join([record_origin,label])
 
         if record_by_hash:
             label_hash = record_by_hash
@@ -1317,7 +1373,7 @@ class Acorn:
 
         return decrypt_content
     
-    async def delete_wallet_info(self, label:str=None, record_kind:int=37375):
+    async def delete_record(self, label:str=None, record_kind:int=37375):
         my_enc = NIP44Encrypt(self.k)
 
         m = hashlib.sha256()
@@ -1430,7 +1486,7 @@ class Acorn:
         pass  
 
         
-    async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None):
+    async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None, record_origin:str = None):
         #FIXME - not sure if this function is used
         record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
         try:
@@ -1448,7 +1504,7 @@ class Acorn:
         
         return self.proofs
     
-    async def get_ecash_latest(self,since: int|None = None, relays: List[str]|None=None):
+    async def get_ecash_latest(self,since: int|None = None, relays: List[str]|None=None, nonce:str = None):
         ecash_out = []
         ecash_record = {}
         latest_dm = 0
@@ -1459,7 +1515,7 @@ class Acorn:
         try:
             ecash_latest = int(await self.get_wallet_info("ecash_latest", record_kind=37376))
             
-            print(f"ecash latest: {ecash_latest}")
+            print(f"ecash latest: {ecash_latest}, {relays}")
            
             
             user_records = await self.get_user_records(record_kind=21401, relays=relays, since=ecash_latest+1, reverse=True)
@@ -1476,8 +1532,14 @@ class Acorn:
                 try:
                     ecash_nembed = parse_nembed_compressed(each["payload"])                    
                     token_to_redeem = ecash_nembed["token"]
-                    print(f"token to redeem: {token_to_redeem}")
-                    msg_out, token_amount = await  self.accept_token(token_to_redeem)
+                    receive_nonce = ecash_nembed.get("nonce", None)
+                    print(f"token to redeem: {token_to_redeem} and nonces: {receive_nonce} {nonce}")
+                    if nonce and receive_nonce == nonce:
+                        print("this is the corresponding payment transaction")
+                    else:
+                        print("this is another payment transaction")
+
+                    msg_out, token_amount = await  self.accept_token(cashu_token=token_to_redeem, comment=ecash_nembed["comment"])
 
                     if token_to_redeem == "nsf":
                         pass
@@ -1494,8 +1556,8 @@ class Acorn:
                         tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
                         
                         print("add to tx history")
-                        await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
-                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK"))
+                        # await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
+                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK", nonce))
                     
                     
                 except:
@@ -1513,6 +1575,7 @@ class Acorn:
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
         # print(f"total messages: {len(ecash_out)} received for {self.handle}")
         
+
         return ecash_out
 
         
@@ -1580,18 +1643,24 @@ class Acorn:
             
             return events[0]
 
-    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375):
+    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None):
+
+        if record_origin:
+            record_name = ':'.join([record_origin,record_name])
+
+
+
         print("reserved records:", self.RESERVED_RECORDS)
         if record_name in self.RESERVED_RECORDS:
             print("careful this is a reserved record.")
             await self.set_wallet_info(record_name,record_value,record_kind=record_kind)
             return record_name
         else:
-            record_obj = { "tag"   : [record_name],
-                            "type"  : record_type,
-                            "payload": record_value
-                          }
-            record_json_str = json.dumps(record_obj)
+
+
+            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value)
+            record_json_str = record_obj.model_dump_json()
+
             await self.update_tags([["user_record",record_name,record_type]])
 
             await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)
@@ -2179,7 +2248,8 @@ class Acorn:
                     lnaddress: str, 
                     comment: str = "Paid!",
                     tendered_amount: float = None,
-                    tendered_currency: str = "SAT"): 
+                    tendered_currency: str = "SAT"
+                    ): 
                     
         
         # print("pay from multiple mints")
@@ -2194,12 +2264,12 @@ class Acorn:
 
         try:
             # await self.acquire_lock()
-            callback, safebox = lightning_address_pay(amount, lnaddress,comment=comment)         
+            callback, safebox, nonce = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
-            print(f"safebox: {safebox}") 
+            print(f"safebox: {safebox} ") 
 
             if safebox:
-                
+                print(f"pay ecash directly to safebox using nonce: {nonce}")
                 ln_parts = lnaddress.split('@')
                 local_part = ln_parts[0]
                 safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
@@ -2208,19 +2278,24 @@ class Acorn:
                 pubkey = response.get("pubkey",None)
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
-                cashu_token = await self.issue_token(amount)
+                ecash_relays = response.get("ecash_relays", relays)
+                print(f"transmit ecash directly to ecash relays: {ecash_relays}")
+                cashu_token = await self.issue_token(amount=amount, comment=comment)
                 pay_obj =   {"token": cashu_token,
                              "amount": amount, 
                              "comment": comment,
                              "tendered_amount": tendered_amount,
-                             "tendered_currency": tendered_currency}
+                             "tendered_currency": tendered_currency,
+                             "nonce": nonce}
                 nembed_to_send = create_nembed_compressed(pay_obj)
-                print(f"nembed to send: {nembed_to_send}")
+                print(f"acorn nembed to send: {nembed_to_send}")
                 
                 
 
-                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=relays,kind=21401)
+                await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=ecash_relays,kind=21401)
                 await self.release_lock()
+                # await self.add_tx_history(tx_type='D', amount=amount, comment=comment,
+                # tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
             else: #     return f"Payment in ecash of {amount} sats", 0
 
 
@@ -2598,11 +2673,15 @@ class Acorn:
     async def pay_multi_invoice(  self, 
                      
                     lninvoice: str, 
-                    comment: str = "Paid!"): 
+                    comment: str = "Paid!",
+                    tendered_amount: float=None,
+                    tendered_currency: str = "SAT",
+                    fees: int =0,                             
+                    payment_preimage: str = None,
+                    payment_hash: str = None,
+                    description_hash: str = None): 
                     
-        payment_hash = None
-        payment_preimage = None
-        description_hash = None
+
         # decode amount from invoice
         try:
             await self.acquire_lock()
@@ -2800,7 +2879,12 @@ class Acorn:
             await self.release_lock()
             print("all done pay_multi_invoice!")
            
-        
+        await self.add_tx_history( tx_type='D',
+                                        amount=ln_amount,
+                                        comment=comment,
+                                        tendered_amount=tendered_amount,
+                                        tendered_currency=tendered_currency,
+                                        fees=final_fees)
         
         return msg_out, final_fees, payment_hash,payment_preimage, description_hash
 
@@ -2820,7 +2904,8 @@ class Acorn:
 
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER) 
-
+        
+        print(f"events to delete: {len(events)} {FILTER}")
         for each in events:
             print(each.id)
         
@@ -2848,7 +2933,7 @@ class Acorn:
         except:
             raise Exception("error deleting proof events")  
         
-        return f"events of kind {record_kind} deleted" 
+        return f"events of kind {record_kind} deleted on {self.home_relay}" 
 
 
     async def _async_delete_proof_events(self):
@@ -3245,7 +3330,7 @@ class Acorn:
         return f"multi swap ok  {len(self.proofs)} proofs in {self.events} proof events"
 
     async def swap_multi_each(self):
-        #TODO this is used before consolidate to throw out any dups or doublespend. Fix events
+        #FIXME this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
@@ -3984,84 +4069,9 @@ class Acorn:
 
         return "test"
     
-    async def accept_ecash(self,cashu_token: str):
-        print("accept ecash")
-        try:
-
-            
-            headers = { "Content-Type": "application/json"}
-            token_amount =0
-            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
-            old_balance = self.balance
-
-            if cashu_token[:6] == "cashuA":
-
-                
-                token_obj = TokenV3.deserialize(cashu_token)
-                
-                
-                        # need to inspect if a new mint
-
-                proofs=[]
-                proof_obj_list: List[Proof] = []
-                for each in token_obj.token: 
-                    # print(each.mint)
-                    for each_proof in each.proofs:
-                        
-                        proofs.append(each_proof.model_dump())
-                        proof_obj_list.append(each_proof)
-                        id = each_proof.id
-                        self.known_mints[id]=each.mint
-                        token_amount += each_proof.amount
-                        # print(id, each.mint)
-
-            
 
 
-            elif cashu_token[:6] == "cashuB":
-                    token_obj = TokenV4.deserialize(cashu_token)
-                    # print(token_obj)
-                    proofs=[]
-                    proof_obj_list: List[Proof] = []
-                    for each_proof in token_obj.proofs:
-                        proofs.append(each_proof.model_dump())
-                        proof_obj_list.append(each_proof)
-                        id = each_proof.id
-                        token_amount += each_proof.amount
-                    self.known_mints[id]=token_obj.mint
-            else:
-                return "not a valid token", 0
-              
-            swap_proofs = await self.swap_proofs(proof_obj_list)
-
-            print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
-            
-            # await self.acquire_lock()
-           
-
-        
-            
-            self.logger.debug(f"Proofs of {token_amount} are added! ")
-        except Exception as e:
-            self.logger.error(f"ecash accept error {e}")  
-            # await self.release_lock()
-            raise Exception(f"Is token already spent? {e}")
-            
-        
-        finally:
-            pass
-            
-        await self.add_proofs_obj(swap_proofs)
-            
-
-        return f'Successfully accepted {token_amount} sats!', token_amount
-       
-
-        
-        
-        return f'Not implemented', 0
-
-    async def accept_token(self,cashu_token: str):
+    async def accept_token(self,cashu_token: str, comment:str = "ecash deposit"):
         print("accept token")
         # asyncio.run(self.nip17_accept(cashu_token))
         # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
@@ -4138,7 +4148,9 @@ class Acorn:
             pass
             
             await self.release_lock()  
-
+        self.balance+=token_amount
+        # print(f"accept token new balance is: {self.balance}")
+        await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 
@@ -4147,7 +4159,7 @@ class Acorn:
         
 
 
-    async def issue_token(self, amount:int):
+    async def issue_token(self, amount:int, comment:str = "ecash withdrawal"):
 
         try:
             await self.acquire_lock()
@@ -4225,10 +4237,11 @@ class Acorn:
             self.proofs = post_payment_proofs
             await self._async_delete_proof_events()
             
-            #TODO change this to write_proogs
-            await self.add_proofs_obj(post_payment_proofs)
+            #TODO change this to write_proof
+            await self.write_proofs()
+            # await self.add_proofs_obj(post_payment_proofs)
             
-            await self._load_proofs()
+            # await self._load_proofs()
 
 
             
@@ -4244,6 +4257,9 @@ class Acorn:
             raise Exception(f"Error {e}")
         finally:
             await self.release_lock()
+
+        self.balance -= amount
+        await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
         
         return v3_token.serialize()   
 
@@ -4909,7 +4925,17 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
+    async def issue_private_record(self, content:str, kind:int =34002, tags: List =[])->Event:
+        """Issue private record"""
         
+        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)]]
+        issued_record = Event(  pub_key=self.pubkey_hex,
+                                kind=kind,
+                                tags = tags,
+                                content=content)
+        issued_record.sign(self.privkey_hex)
+
+        return issued_record
 
             
 

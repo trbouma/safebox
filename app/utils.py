@@ -14,6 +14,9 @@ from fastapi import Depends, Cookie, HTTPException
 from hashlib import sha256
 import base64
 import secp256k1
+import re, idna
+
+
 
 
 from bech32 import bech32_decode, convertbits, bech32_encode
@@ -23,7 +26,7 @@ from monstr.encrypt import Keys, NIP44Encrypt
 from monstr.client.client import Client, ClientPool
 
 from mnemonic import Mnemonic
-from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519
+from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 from safebox.acorn import Acorn
 from typing import Optional, List
 
@@ -31,6 +34,8 @@ from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.config import Settings, ConfigWithFallback
+
+
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -41,6 +46,21 @@ engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
+
+Tag = List[str]
+Tags = List[Tag]
+
+def get_tag_value(tags: Tags, key: str) -> Optional[str]:
+    """
+    Retrieve the value for a given key from a tag list.
+
+    Example tags:
+    [["key1", "value1"], ["key2", "value2"]]
+    """
+    for k, v in tags:
+        if k == key:
+            return v
+    return None
 
 def generate_secure_pin():
     while True:
@@ -343,10 +363,24 @@ async def fetch_balance(id: int):
 
         return safebox_found.balance
 
-async def db_state_change(id: int=0):
-    # print(f"db state change for {id}")
-    await asyncio.sleep(3)
-    return
+async def db_state_change(acorn_obj:Acorn=None ):
+    print(f"db state change for {acorn_obj.handle}")
+    same_state = True
+    
+    if acorn_obj:
+        while same_state:
+            await asyncio.sleep(3)
+            with Session(engine) as session:
+
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first()
+            balance = acorn_obj.get_balance()    
+            if safebox_found.balance != balance:
+                    print(f"we have a db state change: safebox balance: {safebox_found.balance} acorn balance: {balance}")
+                    same_state = False
+            
+    return safebox_found.balance
 
 
 
@@ -388,7 +422,85 @@ def decode_lnurl(lnurl: str) -> str:
         return url
     except Exception as e:
         raise ValueError(f"Error decoding LNURL: {e}")
+
+
+
+def build_lnurlp_url(address: str, prefer_well_known: bool = True) -> str:
+    """
+    Convert a Lightning Address (name@domain) to its HTTPS LNURL-pay URL.
+    Tries /.well-known/lnurlp/<name> (preferred) and can fall back to /lnurlp/<name>.
+
+    Args:
+        address: Lightning Address, e.g., "alice@example.com"
+        prefer_well_known: If False, build /lnurlp/<name> instead.
+
+    Returns:
+        HTTPS URL string.
+    """
+    if not isinstance(address, str):
+        raise ValueError("address must be a string")
+
+    addr = address.strip()
+    if "@" not in addr:
+        raise ValueError("Invalid Lightning Address (missing @)")
+
+    # Split into local-part and domain
+    local, domain = addr.split("@", 1)
+    if not local or not domain:
+        raise ValueError("Invalid Lightning Address")
+
+    # Basic local-part sanity (allow common email chars, incl. '+', '.', '-', '_')
+    if not re.fullmatch(r"[A-Za-z0-9._%+\-~]+", local):
+        raise ValueError("Local part contains unsupported characters")
+
+    # IDNA (punycode) encode the domain to be safe with unicode domains
+    try:
+        ascii_domain = idna.encode(domain.strip().lower()).decode("ascii")
+    except idna.IDNAError as e:
+        raise ValueError(f"Invalid domain in Lightning Address: {e}")
+
+    path = f"/.well-known/lnurlp/{local}" if prefer_well_known else f"/lnurlp/{local}"
+    return f"https://{ascii_domain}{path}"
+
+
+def encode_lnurl(url: str) -> str:
+    """
+    Encodes a URL into a Bech32-encoded LNURL string (HRP='lnurl').
+    Requires a module exposing bech32_encode and convertbits akin to the 'bech32' package.
+    """
+    # If you're using the 'bech32' pip package, import its helpers:
+    # from bech32 import bech32_encode, convertbits
+
+    # ---- Minimal inline adaptors; replace with your bech32 helpers if already available ----
+    from bech32 import bech32_encode, convertbits  # noqa: F401
+
+    url_bytes = url.encode("utf-8")
+    data = convertbits(list(url_bytes), 8, 5, True)
+    if data is None:
+        raise ValueError("Failed to convert URL bytes to Bech32 data")
+    return bech32_encode("lnurl", data).upper()
+
+
+def lightning_address_to_lnurl(address: str, prefer_well_known: bool = True) -> tuple[str, str]:
+    """
+    Convenience: take a Lightning Address, produce (pay_url, LNURL1...).
+    """
+    url = build_lnurlp_url(address, prefer_well_known=prefer_well_known)
+    lnurl = encode_lnurl(url)
+    return url, lnurl
+
+
+# ---- Examples ----
+# url, lnurl = lightning_address_to_lnurl("coffee@example.com")
+# print(url)   # https://example.com/.well-known/lnurlp/coffee
+# print(lnurl) # LNURL1...
+#
+# # If you need the /lnurlp/<name> style instead of well-known:
+# url2, lnurl2 = lightning_address_to_lnurl("coffee@example.com", prefer_well_known=False)
+
     
+
+
 def extract_leading_numbers(input_string: str) -> str:
     """
     Extracts the leading numbers from a string.
@@ -964,8 +1076,10 @@ def create_nembed(json_obj):
 def create_nembed_compressed(json_obj):
     buffer = io.BytesIO()
     encoded_data = []
-    if type(json_obj) != dict:
-        raise ValueError("not a json objecte")
+
+    if not isinstance(json_obj, (dict, list)):
+        raise ValueError("Expected a JSON object (dict) or JSON array (list)")
+    
     json_obj_str = json.dumps(json_obj)
 
     with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
@@ -1070,8 +1184,8 @@ def validate_local_part(local_part: str) -> bool:
 
     return bool(re.fullmatch(local_part_regex, local_part))
 
-def generate_nonce():
-    return os.urandom(16).hex()
+def generate_nonce(length:int = 16):
+    return os.urandom(length).hex()
 
 
 async def send_zap_receipt(nostr:str, lninvoice:str=None):
@@ -1138,10 +1252,15 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
 
     return
 
-def recover_nsec_from_seed(seed_phrase: str):
+def recover_nsec_from_seed(seed_phrase: str, legacy: bool = False):
     mnemo = Mnemonic("english")
+    print(f"legacy: {legacy}")
     seed = Bip39SeedGenerator(seed_phrase).Generate()
-    bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+    if legacy:
+        bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)
+    else:
+        bip32_ctx = Bip32Slip10Secp256k1.FromSeed(seed)
+    
     seed_private_key_hex = bip32_ctx.PrivateKey().Raw().ToBytes().hex()
    
 
@@ -1267,4 +1386,12 @@ def verify_payload(payload: str, signature_hex: str, public_key_hex: str) -> boo
     signature = bytes.fromhex(signature_hex)
     return pubkey.schnorr_verify(digest, signature, bip340tag='', raw=True)
 
+def starts_with(test: str, target: str) -> bool:
+    """
+    Case-insensitive check: return True if 'target' starts with 'test'.
+    """
+    if not isinstance(test, str) or not isinstance(target, str):
+        raise TypeError("Both arguments must be strings.")
+    
+    return target.lower().startswith(test.lower())
 

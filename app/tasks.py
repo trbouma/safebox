@@ -23,6 +23,7 @@ from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest, nfc
 from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
+from app.rates import get_currency_rate
 
 import time
 
@@ -254,6 +255,12 @@ async def safe_handle_payment(*args, **kwargs):
     except Exception as e:
         # Log or handle the exception properly
         print(f"Error in handle_payment: {e}")
+
+async def send_payment_message( nrecipient: str, acorn_obj: Acorn, message: str):
+    print(f"send payment message {message}")
+    await acorn_obj.secure_transmittal(nrecipient=nrecipient, message=message, dm_relays=settings.RELAYS, kind=1059)
+            
+    pass        
        
 async def handle_payment(   acorn_obj: Acorn,
                             cli_quote: cliQuote, 
@@ -346,17 +353,29 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
 
     return success
 
-async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
+async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None, nonce:str=None ):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
     duration = 60  # 1 minutes in seconds
-    
+    #FIXME Need to add in a nonce so it is listening for the right ecash payment
     while time.time() - start_time < duration:
-        print(f"listen for ecash payment for {acorn_obj.handle}") 
-        ecash_out = await acorn_obj.get_ecash_latest() 
+        print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
+        ecash_out = await acorn_obj.get_ecash_latest(relays=relays, nonce=nonce) 
+
+        # Update local cache balance
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_update = safeboxes.first()
+            safebox_update.balance = acorn_obj.balance
+            session.add(safebox_update)
+            session.commit()
+
+
         if ecash_out != []:
-            print(f"ecash out: {ecash_out}")
+            print(f"nonce: {nonce} ecash out: {ecash_out}")
+            
             if websocket:
                 for each in ecash_out: 
                     print(f"each for websocket: {each}") 
@@ -368,10 +387,12 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None ):
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
                 break
+            break
 
          
     
-    print("done getting ecash")
+    print(f"done getting ecash. The balance is: {acorn_obj.balance}")
+
 
     # if websocket:
     #     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})
@@ -394,7 +415,7 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
      
 async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data: object, headers: object):
-    cashu_token = await acorn_obj.issue_token(submit_data["amount"])
+    cashu_token = await acorn_obj.issue_token(amount=submit_data["amount"], comment=submit_data["comment"])
     submit_data["cashu_token"] = cashu_token
     
     print(f"submit data: {submit_data}")
@@ -403,27 +424,43 @@ async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data
     response = requests.post(url=vault_url, json=submit_data, headers=headers)
     print(f"response: {response.json()}")
     pass
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        safebox_update.balance = acorn_obj.get_balance()
+        session.add(safebox_update)
+        session.commit()
 
 async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
     print(f"cashu_token: {nfc_pay_out.cashu_token}")
-    msg_out = await acorn_obj.accept_token(nfc_pay_out.cashu_token)
-    await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
+    msg_out = await acorn_obj.accept_token(cashu_token=nfc_pay_out.cashu_token,comment=nfc_pay_out.comment)
+
+    # await acorn_obj.add_tx_history(tx_type='C', amount=nfc_pay_out.amount, comment=comment_to_log,tendered_amount=nfc_pay_out.tendered_amount,tendered_currency=nfc_pay_out.tendered_currency,fees=0)
 
     pass  
 
 async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:str, tendered_amount: float, tendered_currency: str, websocket: WebSocket|None=None):
+    fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+    currency_code  = fiat_currency.currency_code
+    currency_rate = fiat_currency.currency_rate
+    currency_symbol = fiat_currency.currency_symbol
+    fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"   
 
     if websocket:
             #FIXME - may not need this refernce
-            try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": "Payment in progress", "status": "PENDING"})
+            try: 
+
+            
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
             except:
                 pass
 
     status = "SENT"
     try:
         msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
+
     except Exception as e:
         msg_out =f"{e}"
         status = "ERROR"
@@ -432,11 +469,41 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
         if websocket:
             #FIXME - may not need this refernce
             try:
-                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":acorn_obj.balance, "message": msg_out, "status": status})
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
             except:
                 pass
    
+async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, websocket: WebSocket|None=None):
+    fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+    currency_code  = fiat_currency.currency_code
+    currency_rate = fiat_currency.currency_rate
+    currency_symbol = fiat_currency.currency_symbol
+    fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"   
+    
+    if websocket:
+            #FIXME - may not need this refernce
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
+            except:
+                pass
 
+    status = "SENT"
+    try:
+        # msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
+
+        msg_out, final_fees,_,_,_ = await  acorn_obj.pay_multi_invoice(lninvoice=lninvoice, comment=comment)
+
+    except Exception as e:
+        msg_out =f"{e}"
+        status = "ERROR"
+        print(msg_out, status)
+    finally:
+        if websocket:
+            #FIXME - may not need this refernce
+            try:
+                await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
+            except:
+                pass
     
 
     

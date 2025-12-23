@@ -6,7 +6,7 @@ from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
-from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id
+from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id, starts_with
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
 from datetime import datetime, timezone, timedelta
@@ -93,6 +93,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
     await acorn_obj.load_data()
+    print(f"nwc watch: {acorn_obj.handle} {instruction_obj['method']}")
 
     if instruction_obj['method'] == 'pay_invoice':
         invoice = instruction_obj['params']['invoice']
@@ -100,25 +101,29 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         invoice_amount = invoice_decoded.amount_msat//1000
         
 
-        comment = instruction_obj['params'].get("comment", "nwc pay")
+        comment = instruction_obj['params'].get("comment", "Paid!")
+        metadata = instruction_obj['params'].get("metadata", {})
+        zap_comment = metadata.get("nostr", {}).get("content", comment)
         tendered_amount = instruction_obj['params'].get("tendered_amount", None)
         tendered_currency = instruction_obj['params'].get("tendered_currency", "SAT")
-        print(f"this is the invoice to pay: {invoice}")
+        nwc_msg = f"Zap: {zap_comment} "
+        print(f"this is the invoice to pay: {invoice} and metadata: {nwc_msg}")
         
         print(f"balance {acorn_obj.balance}")
         try:
-            msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice)
-            nfc_msg = f"💳 {comment} "
+            msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice, comment=nwc_msg, tendered_amount=tendered_amount,tendered_currency=tendered_currency)
+            
            
-            await acorn_obj.add_tx_history(     tx_type="D", 
-                                                amount=invoice_amount, 
-                                                tendered_amount=tendered_amount,
-                                                tendered_currency=tendered_currency,
-                                                comment=nfc_msg, 
-                                                fees=final_fees,
-                                                invoice=invoice,
-                                                payment_hash=payment_hash,
-                                                payment_preimage=payment_preimage)
+            #FIXME - need to add these parameters to pay_multi_invoice
+            # await acorn_obj.add_tx_history(     tx_type="D", 
+            #                                   amount=invoice_amount, 
+            #                                    tendered_amount=tendered_amount,
+            #                                    tendered_currency=tendered_currency,
+            #                                    comment=nfc_msg, 
+            #                                    fees=final_fees,
+            #                                    invoice=invoice,
+            #                                    payment_hash=payment_hash,
+            #                                    payment_preimage=payment_preimage)
             
         except Exception as e:
             # raise Exception(f"Error {e}")
@@ -189,7 +194,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             each_transaction = {
                "type": tx_type, 
               
-               "invoice": each.get("invoice", None), 
+               "invoice": each.get("invoice", "None"), 
                "description": each["comment"],
                "description_hash": each.get("description_hash", None), 
                "preimage": each.get("preimage", None), 
@@ -198,11 +203,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                "fees_paid": each['fees'] * 1000,
                "created_at": int(datetime.strptime(each['create_time'], '%Y-%m-%d %H:%M:%S').timestamp()), 
 
-               "metadata": {} 
+               "metadata": {"description": "test"} 
             }
             tx_nwc_history.append(each_transaction)
         
-
+        # print(tx_nwc_history)
         
         response_json = {
                                 "result_type": "list_transactions",
@@ -223,7 +228,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                             "balance": int(acorn_obj.balance * 1000), 
                                 }
                             }
-        print(response_json)
+        # print(response_json)
 
         nwc_reply = True
 
@@ -248,19 +253,22 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'present_record':
         nauth = instruction_obj['params']['nauth']
         label = instruction_obj['params']['label']
-        print(f"we are going to present a proof! {nauth}")
+        record_kind = int(instruction_obj['params']['kind'])
+        print(f"we are going to present a record! label: {label} kind: {record_kind}")
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
         print(f"present_record scope: {scope} label: {label}")
-        record_kind = int(scope.split(":")[1])
+
+        #FIXME Need to determine which record kind should be used - in nauth or what is passed explicity
+        # record_kind = int(scope.split(":")[1])
         
         
         nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -275,39 +283,67 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                         grant=scope
             )
         
-                # send the recipient nauth message
+                
+        #retrieve record
+        # record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind,record_origin=npub_initiator)
+
+        records_out = await acorn_obj.get_user_records(record_kind=record_kind)
+
+        filtered_records_out = []
+        if label:
+            print(f"need to filter out for label: {label} for {records_out}")
+            for each in records_out:
+                tag = each["tag"][0]
+                tag_filter = tag.split(":", 1)[1] if ":" in tag else tag
+                print(f"tag filter {tag_filter}")
+                # if tag_filter == label:
+                if starts_with(test=label, target=tag_filter):
+                    filtered_records_out.append(each)
+        else:
+            print("just add all the records")
+            filtered_records_out = records_out
+
+
+
+        # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
-        record_out = await acorn_obj.get_record(record_name=label, record_kind=record_kind)
+        print(f"filtered records out: {filtered_records_out}")
+        nembed_records = create_nembed_compressed(filtered_records_out)
+        # print(f"nembed records: {nembed_records}")
 
-        print(f"record out: {record_out}")
+        print(f"nwc record out for {label} {record_kind}: {filtered_records_out}")
         #TODO This error handling can be improved
         try:
-            nembed = create_nembed_compressed(record_out)
+            nembed = create_nembed_compressed(records_out)
         except:
-            record_out = {'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}
+            record_out = [{'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}]
             nembed = create_nembed_compressed(record_out)
 
         print(f"nembed: {nembed}")
-        print("sleep for 5 seconds")
-        await asyncio.sleep(5)
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
-        print(f"msg out: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+        t_sleep = 0.1
+        print(f"sleep for {t_sleep} seconds")
+        await asyncio.sleep(t_sleep)
+        print(f"done sleep for {t_sleep} seconds")
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed_records, dm_relays=transmittal_relays,kind=transmittal_kind)
+        print(f"msg outx: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+
+
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values']['nonce']
-        auth_kind = parsed_result['values'].get("auth_kind")
-        auth_relays = parsed_result['values'].get("auth_relays")
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind")
-        transmittal_relays = parsed_result['values'].get("transmittal_relays")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
-        print(f"present_record scope: {scope} grant: {grant}")
+        print(f"offer_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
 
         response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -323,11 +359,22 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         )
         print(f"response nauth: {response_nauth}")
 
+        since_now = int(datetime.now(timezone.utc).timestamp())
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-        since_now = int(datetime.now(timezone.utc).timestamp())
-        await asyncio.sleep(5)
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays )
+        
+        # await asyncio.sleep(5)
+
+        print("listen for records")
+
+        # single_record = await acorn_obj.listen_for_record(record_kind=transmittal_kind, relays=transmittal_relays)
+        user_records = []
+        while user_records == []:
+            user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
+            await asyncio.sleep(0.1)
+            print("done sleep")
+
+
         # print(f"user records: {user_records}")
         offer_kind = int(scope.replace("offer:",""))
         grant_kind = int(grant.replace("record:",""))
@@ -342,10 +389,18 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             record_name = f"{each_record['tag'][0][0]}" 
             record_type = int(each_record['type'])
             record_value = each_record['payload']
+            record_timestamp = each_record.get("timestamp",0)
+            record_endorsement = each_record.get("endorsement","")
+            endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
+            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]"
             print(f'record name {record_name} record value {record_value} record type {record_type}' )
             if record_type == grant_kind:
-                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
+                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind, record_origin=npub_initiator)
     
+        print(f"records finished added")
+
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+
     elif instruction_obj['method'] == 'pay_ecash':
         print("we gotta pay ecash!")
         recipient_pubkey = instruction_obj['params']['recipient_pubkey']
@@ -368,7 +423,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                             "tendered_currency": tendered_currency}
         
         nembed_to_send = create_nembed_compressed(pay_obj)
-        print(f"nembed to send: {nembed_to_send}")
+        print(f"nwc nembed to send: {nembed_to_send} using {relays}")
+        
                
 
         await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=21401)

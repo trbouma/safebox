@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}Record Request{% endblock %}
+{% block title %}Request Record{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -19,12 +19,13 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
-async function requestbyNFC(grant_kind, record_label, nauth) {
+async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
    
     var qr_img_func = document.getElementById("img_qr_display");
     // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
-    consoleLog(`Requesting by NFC. ${grant_kind} ${maskedNauth}. \n Please wait...`);
+    consoleLog(`Requesting by NFC. ${grant_kind} ${nfc_pin} ${maskedNauth}. \n Please wait...`);
+    
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
     
@@ -40,12 +41,14 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
           }
          //  alert(`Present ${grant_kind} ${nfc_token}` );
          qr_img_func.src = "/img/nfc-check.png";
-         consoleLog(`NFC card read successfully!`);
+        consoleLog(`NFC card read successfully!`);
 
          
 
-         submitProof(nfc_token, record_label, nauth);
-          
+         submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         // alert("submitted"); 
+         // qr_img_func.src = "/img/hourglass.png";
+         qr_img_func.src = "/img/circle-256.gif";
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
           
@@ -60,21 +63,32 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
 
   }
 
-  async function submitProof(nfc_token, record_label, nauth) {
+  async function submitProof(nfc_token, record_label, record_kind, nauth, nfc_pin) {
 
     // alert(`submit proof ${record_label}`);
-    const submit_data = {"proof_token": nfc_token, "nauth": nauth, "label":record_label };
+    var qr_img_func = document.getElementById("img_qr_display");
+    const submit_data =   { "proof_token": nfc_token, 
+                            "nauth": nauth, 
+                            "label":record_label, 
+                            "kind":record_kind,
+                            "pin": nfc_pin };
+    consoleLog(JSON.stringify(submit_data));
     await fetch('/records/acceptprooftoken', {
     method: "POST",
     headers: {"Content-Type": "application/json"},        
     body: JSON.stringify(submit_data)         
   })
   .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
+  .then((data) => {   consoleLog(`${data.status} ${data.detail}`);
+                      // qr_img_func.src = "/img/check.png";
+
+                  });
   
   
   
   }
+
+
 
   async function createQRCode() {
   var data;
@@ -82,11 +96,14 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   var grant_kind = document.getElementById("grant_kind").value;
   var record_label = document.getElementById("record_label").value;
   const nfc_request = document.getElementById("nfc_request_checkbox");
+  const compact_qr = document.getElementById("compact_qr_checkbox");
 
 
 
     var scope = `verifier:${grant_kind}`;
-    const submit_data = {"scope": scope  };
+    const submit_data = {"scope": scope, "compact": compact_qr.checked  };
+    
+    console.log(JSON.stringify(submit_data));
 
     await fetch(`/records/nauth`, {
       method: "POST",
@@ -108,8 +125,10 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
   if (nfc_request.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       // alert("Please tap NFC card!");
+      // const nfc_pin = prompt("Please enter PIN");
+      const nfc_pin = "9140"
       
-      await requestbyNFC(grant_kind, record_label, global_nauth);
+      await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
                      
   } else {
 
@@ -119,33 +138,9 @@ async function requestbyNFC(grant_kind, record_label, nauth) {
     qr_img_func.src = "/safebox/qr/"+ global_nauth;
 
   }
-     
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wsrequesttransmittal/${global_nauth}`);
-
    
+  listenForRecord(global_nauth);
 
-ws.onopen = () => console.log("WebSocket connected");
-ws.onmessage = (event) => {
-console.log("Message received for qr code:", event.data);
-
-const response = JSON.parse(event.data);  
-global_transmit_nauth = response.nauth;
-client_name = response.name;
-client_transmittal_kind = response.transmittal_kind;
-client_transmittal_relays = response.transmittal_relays;
-// client_name = response.name;
-// alert(`Client is authenticated! Ready to transmit files.`); 
-if (global_transmit_nauth) {
-// alert(`Client is authenticated! Ready to transmit files.`); 
-qr_img_func.src="/img/hourglass.png";
-} else {
-// alert(`Authentication has timed out! Please regenerate QR code`);  
-qr_img_func.src="/img/safebox.png";
-}
-ws.close();
-listenForRecord(response.nauth);
-};
-ws.onclose = () => console.log("WebSocket closed");
 
 
 
@@ -161,35 +156,97 @@ ws.onclose = () => console.log("WebSocket closed");
   <h1>Request Record</h1>
   <span id="span_msg_status">Select Record Type:</span>   
 
- 
   <br><br>
-  <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
-   {% for entry in grant_kinds %}
-   <option value="{{entry[0]}}">{{entry[1]}}</option>         
-   {% endfor %}
-   </select>
-   <br><br>
-   Label: 
-   <br><br>
-   
-    <input style="width:60%;" type="text" list= "labels"   id="record_label" name="record_label" value="default" >
-    <datalist id="labels" >
-              <option value="default"></option>
-              <option value="home"></option>
-              <option value="business"></option>
-              <option value="school"></option>
-    </datalist>
-  
-  <br><br>  
-  <label>
-  <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
-  Request by NFC
-  <br><br>
-  </label>
- 
-   <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
 
+  <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
+    <option value="99999">Holder</option>
+    {% for entry in grant_kinds %}
+      <option value="{{ entry[0] }}">{{ entry[1] }}</option>
+    {% endfor %}
+  </select>
+
+  <br><br>
+  Label:
+  <br><br>
+
+  <input
+    type="text"
+    id="record_label"
+    name="record_label"
+    list="subtypes"
+    style="width:60%;"
+    placeholder="default"
+  />
+
+  <datalist id="subtypes">
+    <!-- will be filled dynamically -->
+  </datalist>
+
+  <br><br>
+  <label>
+    <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
+    Request by NFC
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
+    Compact QR Code
+    <br><br>
+  </label>
+
+  <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
 </div>
+
+<script>
+  // Turn the Jinja grant_kinds into a JS array
+  const grantKinds = {{ grant_kinds | tojson }};
+
+  // Build a map: code -> { label, subtypes[] }
+  const grantKindMap = {};
+  grantKinds.forEach(entry => {
+    const [code, label, subtypes] = entry;
+    grantKindMap[code] = {
+      label: label,
+      subtypes: subtypes || []
+    };
+  });
+
+  const selectEl = document.getElementById('grant_kind');
+  const datalistEl = document.getElementById('subtypes');
+  const labelInput = document.getElementById('record_label');
+
+function updateSubtypes() {
+  const code = selectEl.value;
+  const info = grantKindMap[code] || { subtypes: [] };
+
+  // Make a copy so you don't mutate the original map
+  const subtypes = [...info.subtypes];
+
+  // ALWAYS add "default" as the first subtype
+  subtypes.unshift("default");
+
+  // CLEAR the input whenever a new grant kind is selected
+  labelInput.value = "";
+
+  // Clear existing datalist options
+  datalistEl.innerHTML = '';
+
+  if (!subtypes.length) {
+    labelInput.placeholder = 'label';
+    return;
+  }
+
+  // Use first subtype as placeholder ("default")
+  labelInput.placeholder = subtypes[0];
+
+  subtypes.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st;
+    datalistEl.appendChild(opt);
+  });
+}
+
+  // Update on change + once on load
+  selectEl.addEventListener('change', updateSubtypes);
+  window.addEventListener('DOMContentLoaded', updateSubtypes);
+</script>
 
 <script>
 
@@ -204,12 +261,12 @@ window.location.href="/safebox/access" ;
 
 async function listenForRecord(nauth) {
     
-  console.log(`listen for credential presentation ${nauth}`);
+  console.log(`listen for record presentation ${nauth}`);
     
     const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforrecord/${nauth}`);  
     
        
-      // alert("listen for credential");
+      // alert("listen for records");
       // alert(span_msg_status.textContent)
       span_msg_status.textContent = "Listening for record...";
       ws.onopen = () => console.log("WebSocket connected");
@@ -226,9 +283,17 @@ async function listenForRecord(nauth) {
       if (response.status == "VERIFIED")
       {
         
-        // alert(`Credential has been received! ${JSON.stringify(response.detail)}`);
+        // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Record has been received!";
-        addCard(response.detail.tag,`Verification: ${response.result}`,response.detail.payload);
+        
+        for (const rec of response.records) {
+          //console.log(rec);
+          // addCard(rec.tag, `${response.result}`,rec.payload);
+          addCard(rec.tag,rec.content, rec.verification);
+          
+        }
+
+        // addCard(response.detail.tag, `${response.result}`,response.detail.payload);
         var qr_img_func = document.getElementById("img_qr_display");
       
         qr_img_func.src = "/img/check.png";
@@ -268,11 +333,15 @@ async function listenForRecord(nauth) {
 
 <script>
 
-
+  function getRightSide(str) {
+      const idx = str.indexOf(':');
+      if (idx === -1) return str;        // No delimiter → return original
+      return str.substring(idx + 1);     // Return everything after the colon
+    }
 
 
   // Function to create and add a card
-  function addCard(title, created_at, content) {
+  function addCard(title, content, verification) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -280,20 +349,25 @@ async function listenForRecord(nauth) {
     // Create and add the title element
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
+    cardTitle.textContent = getRightSide(title[0]);
+    card.appendChild(cardTitle);
 
-    // Create and add the created_at element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = `${created_at}`;
+
 
     // Create and add the content element
     const cardContent = document.createElement('div');
     cardContent.className = 'card-content';
-    cardContent.textContent = content;
-   
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
+    cardContent.textContent = content;  
+    card.appendChild(cardContent); 
+
+        // Create and add the content element
+    const cardVerification = document.createElement('div');
+    cardVerification.className = 'card-content';
+    cardVerification.textContent = verification;  
+    cardVerification.style.textAlign = 'center';
+    card.appendChild(cardVerification); 
+    
+  
 
 
     // figure out what to do with the card conte
@@ -319,12 +393,12 @@ async function listenForRecord(nauth) {
     }
 
 
-    card.appendChild(cardContent);
+    
 
     
 
     card.addEventListener('click', () => {
-        alert(`You clicked on: ${title} with: ${content}`);
+        alert(`Verified ${title} ${content}`);
         // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
       });
 
@@ -335,12 +409,7 @@ async function listenForRecord(nauth) {
 
 
 
-async function addCredentialOffer() {
-// alert(`add card ${record_kind}`);
-window.location.href=`/safebox/displaycard?action_mode=add&kind=${record_kind}`;
 
-
-}
 
 async function getStatus(return_result) {
 

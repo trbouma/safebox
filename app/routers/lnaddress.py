@@ -9,7 +9,7 @@ import string
 import asyncio
 from datetime import timedelta
 import qrcode, io, urllib, json
-import hashlib
+import hashlib, secrets
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select, update
 from argon2 import PasswordHasher
@@ -22,7 +22,7 @@ from safebox.acorn import Acorn
 
 from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
 from safebox.models import cliQuote
-from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash
+from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
                         send_zap_receipt, 
                         recover_nsec_from_seed, 
@@ -35,6 +35,7 @@ from app.utils import ( create_jwt_token,
                         verify_payload)
 
 from app.config import Settings, ConfigWithFallback
+from app.rates import get_currency_rate
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -71,11 +72,56 @@ def get_info(request: Request):
 
         
 
-    return {"detail": request.url.hostname}
+    return HTMLResponse(request.url.hostname)
+
+@router.post("/info", tags=["lnaddress"], response_class=HTMLResponse)
+def get_info_post(request: Request):
+    
+
+        
+
+    # return {"detail": request.url.hostname}
+    return HTMLResponse(request.url.hostname)
 
 @router.get("/.well-known/lnurlp/{name}")
-def ln_resolve(request: Request, name: str = None, amount: int = None):
+async def ln_resolve(request: Request, name: str = None, amount: int = None):
     match = False
+    ln_payment_request = False
+    amount = None
+    currency = None
+    min_sendable = 1000
+    max_sendable = 210000000
+    nonce = secrets.token_urlsafe(16)
+   
+
+
+    name_parts = name.split("__")
+
+    name = name_parts[0]
+    request_comment = "pay request"
+    if len(name_parts) >= 2:
+        ln_payment_request = True
+        amount = float(name_parts[1])
+
+        if len(name_parts) >= 3:
+            currency = name_parts[2].upper()
+            if currency == "SAT":
+                min_sendable = int(amount)*1000
+                max_sendable = int(amount)*1000
+            else:
+                local_currency = await get_currency_rate(currency.upper())
+                print(local_currency.currency_rate)
+                min_sendable= max_sendable = int(amount* 1e8 // local_currency.currency_rate)*1000
+
+            if len(name_parts) == 4:
+                request_comment = name_parts[3]
+        else:
+            min_sendable = int(amount) * 1000
+            max_sendable = int(amount) * 1000
+
+    
+
+
     ln_callback = f"https://{request.url.hostname}/lnpay/{name}"
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
@@ -94,14 +140,25 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
                 match = True
             if not match:
                 raise HTTPException(status_code=404, detail=f"{name} not found")
+    if safebox_found.custom_handle:
+        out_name = safebox_found.custom_handle
+    else:
+        out_name = safebox_found.handle
+    
+    if ln_payment_request:
+
+        metadata = f"[[\"text/plain\", \"Payment Request {amount} {currency} / {max_sendable//1000} sats for {request_comment}\"],[\"text/long-desc\", \"Payment Request {amount} {currency} / {max_sendable//1000} sats for {request_comment}\"]]"
+    else:        
+        metadata = f"[[\"text/plain\", \"Send Payment to: {out_name}\"]]"
 
     ln_response = {     "callback": ln_callback,
-                        "minSendable": 1000,
-                        "maxSendable": 210000000,
-                        "metadata": f"[[\"text/plain\", \"Send Payment to: {name}\"]]",
-                        "commentAllowed": 60,                        
+                        "minSendable": min_sendable,
+                        "maxSendable": max_sendable,
+                        "metadata": metadata,
+                        "commentAllowed": 256,                        
                         "allowsNostr" :True,
                         "safebox": True,
+                        "nonce": nonce,
                         "nostrPubkey" :     service_key_obj.public_key_hex(),
                         "tag": "payRequest"
 
@@ -109,7 +166,7 @@ def ln_resolve(request: Request, name: str = None, amount: int = None):
 
     }
 
-    print(request.base_url) 
+    print(f"{request.base_url} nonce: {nonce}") 
 
     return ln_response
 
@@ -124,6 +181,7 @@ async def ln_pay( amount: float,
             __n: str | None = None,
             lninvoice: bool = False,
             safebox: bool = False
+            
 
             
             ):
@@ -177,18 +235,26 @@ async def ln_pay( amount: float,
         message = f"Payment being sent to {name}@{request.url.hostname}"
     
     
-
+    # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
     if safebox:
         pass
-        print("don't bother creating an invoice because ecash")
+        
+        print(f"don't bother creating an invoice because ecash and use nonce: {nonce}")
         pr = None
-        task1 = asyncio.create_task(handle_ecash(acorn_obj) ) 
+        task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS,nonce=nonce) ) 
     else:    
         cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT) 
         pr = cli_quote.invoice 
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
+
+
+    if safebox_found.owner:
+        pass
+        print("safebox has an owner!")
+        message = f"You just received {sat_amount} sats! Comment: {comment}"
+        task = asyncio.create_task(send_payment_message(nrecipient=safebox_found.owner, acorn_obj=acorn_obj, message=message))
 
    
 
@@ -227,12 +293,13 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     k_nwc = Keys(token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
+    #FIXME determine right relays
     if nwc_vault.nfc_ecash_clearing:
         pay_instruction = {
         "method": "pay_ecash",
         "params": { 
             "recipient_pubkey": nwc_vault.recipient_pubkey,
-            "relays": nwc_vault.relays,
+            "relays": settings.ECASH_RELAYS,
             "amount": nwc_vault.amount,
             "tendered_amount": nwc_vault.tendered_amount,
             "tendered_currency": nwc_vault.tendered_currency, 
@@ -272,10 +339,16 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
 
     return {"status": status, "detail": detail}
 
+@router.get("/.well-known/settings",tags=["public"])
+async def get_settings(request: Request):
+    
+    return {"relays": settings.RELAYS,
+            "ecash_relays": settings.ECASH_RELAYS}
+
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"
-    detail = None
+    detail = "No error"
 
    # First, check to see if signature checks out
     if verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey):
@@ -286,19 +359,28 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
-    print(f"token secret {token_secret}")
-    k_nwc = Keys(token_secret)
+    token_key = token_secret.split(":")[0]
+    token_pin = token_secret.split(":")[1]
+    print(f"token secret {token_secret} token key {token_key} acquired pin: {proof_vault.pin} token pin {token_pin}")
+    k_nwc = Keys(token_key)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
+    if token_pin == proof_vault.pin:
+        status = "OK"
+        detail = "Valid PIN"
+    else:
+        status = "ERROR"
+        detail = "Invalid PIN"
 
     wallet_instruction = {
     "method": "present_record",
     "params": { 
         "nauth": proof_vault.nauth,
-        "label": proof_vault.label
+        "label": proof_vault.label,
+        "kind": proof_vault.kind
 
             }
         }
-    
+    print(f"proof {proof_vault} wallet instruction: {wallet_instruction}")
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(wallet_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:
@@ -401,6 +483,8 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
 
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"
 
+    print(f"nfc_payout:  {nfc_pay_out}")
+
     if nfc_pay_out.nfc_ecash_clearing:
         ln_invoice = None
         detail = f"Paid in ecash to {acorn_obj.handle}"
@@ -450,7 +534,8 @@ async def onboard_safebox(  request: Request,
 
     medical_emergency_info = settings.EMERGENCY_INFO
     
-    await acorn_obj.put_record("medical emergency card", medical_emergency_info)
+    #FIXME Make medical emergency kind a configurable type
+    await acorn_obj.put_record("medical emergency card", medical_emergency_info, record_kind=32226)
     profile_info = acorn_obj.get_profile()
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()

@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}Record Offer{% endblock %}
+{% block title %}Offer Record{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -8,59 +8,131 @@
 
 <script>
 
-  const jsonUserData = {{ user_records | tojson }};
-  const record_kind = parseInt("{{ record_kind }}");
-  //There are two ways to receive client nauth 1) from scan, 2) from websockets
-  var client_nauth = "{{client_nauth}}";
-  
-
-  
-
-</script>
-
-<script>
-
 var global_naddr = "";
 var global_transmit_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
+var global_offer_card = "{{card}}";
+
+
+var record_kind = parseInt("{{record_kind}}");
+var referer = "{{referer}}";
+
+
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
 
 async function backToProfile() {
 
-
 window.location.href="/safebox/access" ;
+
+}
+
+async function goBack() {
+    window.history.back();
+}
+
+async function privateData() {
+
+window.location.href="/safebox/privatedata";
+}
+
+async function getStatus(return_result) {
+
+
+parsedResult = JSON.parse(JSON.stringify(return_result));
+alert(`${parsedResult.status} ${parsedResult.detail}`);
+
+ 
 
 }
 
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan?referer=credential-offer";
+window.location.href="/scanner/scan";
 
 }
 
 
+async function shareCard() {
 
-async function getQRStatus(return_result) {
-
-var qr_img_func = document.getElementById("img_qr_display");
-
-parsedResult = JSON.parse(JSON.stringify(return_result));
-
-
- global_nauth = parsedResult.detail;
-
-qr_img_func.src = "/safebox/qr/"+ global_nauth;
-// qr_img_func.addEventListener("click", copytoClipboard);
-
-
-
+  alert("Coming!");
+  
 }
 
-function consoleLog(data) {
-    var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
-  };
+async function editOffer() {
+    
+     
+
+
+   
+    user_confirm = confirm(`Are you sure you want to proceed with updating {{card}}`) ;
+    if (user_confirm == false) {return;}
+
+    // window.location.href=`/records/displayrecord?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
+
+    window.location.href=`/records/manageoffer?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
+    
+
+    const submit_data = {"title": {{card|tojson}},
+                          "content": {{content|tojson}},
+                          "kind": global_offer_kind,
+                          "final_kind":global_grant_kind };
+
+    
+
+   await fetch('/records/updaterecord', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
+
+    
+    window.location.href=referer;
+      }
+
+async function deleteOffer() {
+  var offer_card = document.getElementById("offer_card");
+  console.log(`${offer_card}`)
+  user_confirm = confirm(`Are you sure you want to proceed with deleting {{card}}?`) ;
+
+  const submit_data = {"title": "{{card}}", "kind": record_kind};
+
+    
+
+   await fetch('/records/deleterecord', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => data);
+
+    window.location.href=referer ;
+
+}  
+
+  async function submitOffer(nfc_token, nauth) {
+
+    consoleLog(`submit nfc_token ${nfc_token} ${nauth}`);
+    const submit_data = {"offer_token": nfc_token, "nauth": nauth };
+    await fetch('/records/acceptoffertoken', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},        
+    body: JSON.stringify(submit_data)         
+  })
+  .then((response) => response.json())   
+  .then((data) => { consoleLog(`done ${data.detail}`)});
+  
+  
+  
+  }  
+
 
 async function requestbyNFC(offer_kind, nauth) {
    
@@ -103,35 +175,23 @@ async function requestbyNFC(offer_kind, nauth) {
 
   }
 
-  async function submitOffer(nfc_token, nauth) {
-
-    // alert(`submit proof ${record_label}`);
-    const submit_data = {"offer_token": nfc_token, "nauth": nauth };
-    await fetch('/records/acceptoffertoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
-  
-  
-  
-  }  
 async function createQRCode() {
     
     var data;
     var qr_img_func = document.getElementById("img_qr_display");
-    const nfc_request = document.getElementById("nfc_request_checkbox");
-    var offer_kind = document.getElementById("offer_kind").value;
+    const nfc_offer = document.getElementById("nfc_offer_checkbox");
+    var offer_kind =  {{offer_kind}};
     var scope = "offer:{{offer_kind}}";
     var grant = "record:{{grant_kind}}";
+    const compact_qr = document.getElementById("compact_qr_checkbox");
    
     // alert(scope);
+    consoleLog(`Create QR code with scope: ${scope}`);
 
     qr_img_func.src="/img/circle-256.gif";   
     
-    const submit_data = {"scope": scope, "grant": grant };
+    const submit_data = {"scope": scope, "grant": grant, "compact": compact_qr.checked };
+    console.log(`scope: ${scope} grant: ${grant}`);
 
     await fetch(`/records/nauth`, {
       method: "POST",
@@ -144,13 +204,14 @@ async function createQRCode() {
                     global_nauth = data.detail;
                     // var qr_img_func = document.getElementById("img_qr_display");
                     // qr_img_func.src = "/safebox/qr/"+ global_nauth;
+                    console.log(`nauth: ${global_nauth}`);
 
                 }
  
                  // getQRStatus(data)
  );
 
-   if (nfc_request.checked == true) {  
+   if (nfc_offer.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       consoleLog("Tap NFC card!");
       
@@ -165,7 +226,7 @@ async function createQRCode() {
 
   }
 
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wsrequesttransmittal/${global_nauth}`);
+ const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
 
    
 
@@ -186,170 +247,13 @@ async function createQRCode() {
     // alert(`Authentication has timed out! Please regenerate QR code`);  
       qr_img_func.src="/img/safebox.png";
     }
-    ws.close()
+    // ws.close()
     offerRecord();
     
     
   };
   ws.onclose = () => console.log("WebSocket closed");
   
-
-}
-
-async function offerKind() {
-
-  var offer_kind_value = document.getElementById("offer_kind").value
-  // alert(`select kind ${offer_kind_value}`);
-  window.location.href=`/records/offer?kind=${offer_kind_value}`;
-}
-</script>
-
-{% endblock %}
-
-{% block page_content %}
-
-
-
-<div class="center-text">
-    <h1>Offer {{offer_kind_label}} </h1>
-    Create offer for: {{record_kind}} {{offer_kind_label}} {{grant_kind}}
-   
-      <br><br>
-  <select id="offer_kind" name="offer_kind" onchange="offerKind()">
-   {% for entry in offer_kinds %}
-   <option value="{{entry[0]}}" {{"selected" if record_kind == entry[0] else " "}}>{{entry[1]}}</option>         
-   {% endfor %}
-   </select>
-   <br><br>
-
-    <button onclick="addRecordOffer()">Add {{offer_kind_label}} Offer</button>
-    <br><br>
-    Click on an existing {{offer_kind_label}} offer to modify or delete.
-
-
-   
-    
-</div>
-
-<div id="card-container"></div>
-
-<script>
-
-  function renderJSONObject(data) {
-    // render json object
-    // return "json object";
-    let content = document.createElement('div');
-    content.className = 'json-content';
-    // Loop through the JSON object and display key-value pairs
-        for (let key in data) {
-            if (key !== 'title') {
-                let row = document.createElement('p');
-                row.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
-                content.appendChild(row);
-            }
-        }
-    return content;
-
-  }
-
-
-  // Function to create and add a card
-  function addCard(title, created_at, content) {
-    // Create a card element
-    const card = document.createElement('div');
-    card.className = 'card';
-
-    // Create and add the title element
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
-
-    // Create and add the created_at element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = `${created_at}`;
-
-    // Create and add the content element
-    const cardContent = document.createElement('div');
-    cardContent.className = 'card-content';
-    cardContent.textContent = content;
-   
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
-
-
-    // figure out what to do with the card conte
-
-    // Append title and content to the card
-
-    try {
-
-        if (typeof cardContent == 'object' ) {
-        console.log(cardContent);
-
-
-
-        } else {
-          console.log("string");
-        }
-
-
-
-
-      } catch (error) {
-        console.error("Invalid JSON:", error.message);
-    }
-
-
-    card.appendChild(cardContent);
-
-    
-
-    card.addEventListener('click', () => {
-        // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/records/displayrecord?card=${title}&action_mode=edit&kind={{record_kind}}`;
-      });
-
-    // Append the card to the container
-    const container = document.getElementById('card-container');
-    container.appendChild(card);
-  }
-
-  // Example usage
-  // alert("hello"+ JSON.stringify(jsonUserData)); 
-  var render_payload = "";
-  for (let record of jsonUserData)
-  {
-    if (record.hasOwnProperty("tag")) {
-        console.log(`Name: ${record.tag} ${typeof record.payload}`);
-        // check to see if payload is json
-       
-
-        addCard(record.tag, record.created_at,record.payload);
-
-
-    } else {
-        console.log("This record does not have a 'name' property.");
-    }
-    // addCard('Private Data 1', JSON.stringify(record));
-
-  }
-
-async function addRecordOffer() {
-// alert(`add card ${record_kind}`);
-window.location.href=`/records/displayrecord?action_mode=add&kind=${record_kind}`;
-
-
-}
-
-async function getStatus(return_result) {
-
-
-parsedResult = JSON.parse(JSON.stringify(return_result));
-// alert(`${parsedResult.status} ${parsedResult.detail}`);
-alert("Done!");
-
- 
 
 }
 
@@ -378,10 +282,11 @@ async function offerRecord() {
 
   const submit_data = { "nauth": nauth_to_transmit,
                         "originating_kind": global_offer_kind,
-                        "final_kind": global_grant_kind
+                        "final_kind": global_grant_kind,
+                        "record_name": global_offer_card
    };
 
-  console.log(`data to submit: ${submit_data.nauth}`) ;
+  console.log(`data to submit: ${submit_data.nauth} ${submit_data.final_kind}`) ;
 
   await fetch('/records/transmit', {
        method: "POST",
@@ -389,7 +294,7 @@ async function offerRecord() {
        body: JSON.stringify(submit_data)         
       })
    .then((response) => response.json())
-   .then((data) => { alert(`Done! ${data.status}`)}
+   .then((data) => { console.log(`Done! ${data.status} ${data.detail}`)}
    
    // getStatus(data)
    );
@@ -399,53 +304,78 @@ async function offerRecord() {
 
 
 
-
-setDarkMode();
-
-
 </script>
+
+{% endblock %}
+
+{% block page_content %}
+
+
+
+<div class="center-text">
+    <h1>Offer {{offer_label}} Record </h1>
+
+   
+<div 
+  id="offer_card" 
+  onclick="createQRCode()" 
+  style="
+    width: 80%;
+    border-radius: 12px;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    margin: 20px auto;
+    cursor: pointer;
+    background-color: rgb(136, 33, 225);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  "
+  onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
+  onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
+>
+  <h3 style="margin-top: 0;">{{ card }}</h3>
+  <p style="white-space: pre-wrap;">{{ content }}</p>
+</div>
+    <h2>Offer {{offer_label}} Record to Recipient?</h2>
+    Click below to authenticate with {{offer_kind_label}} recipient. 
+    <br>Please ask them to scan the generated QR code.
+    <br><br>
+    <label>
+    <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
+    Offer by NFC
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
+    Compact QR Code
+  <br><br>
+    <br><br>
+    </label>
+    
+    <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
+    <br><br>
+
+    <button onclick= "editOffer()">Edit {{offer_label}} Record Offer</button>
+    <br><br>
+    <button onclick="deleteOffer()">Delete {{offer_label}} Record Offer</button>
+    <br><br>
+    <button onclick="goBack()">Back</button>
+    <br><br>
+    <button onclick="backToProfile()">Home</button>
+    
+</div>
+
+
    
 
-<div class="center-text">
-  You need to authenticate your {{offer_kind_label}} recipient before you can offer a record.
-  <br><br>
-
-      
-  <button onclick="offerRecord()">Offer to {{offer_kind_label}} Recipient</button>  
-  <br><br>
-  <button onclick="backToProfile()">Home</button>
-  <br>
- <hr> 
- <h2>Offer to {{offer_kind_label}} Recipient?</h2>
- Click below to authenticate with {{offer_kind_label}} recipient. 
- <br>Please ask them to scan the generated QR code.
- <br><br>
-  <label>
-  <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
-  Request by NFC
-  <br><br>
-  </label>
-    
- <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
- <br><br>
- <button id="ln_scan_button" onclick="scanCode()">Authenticate {{offer_kind_label}} Recipient</button>
- <br><br>
+<div class="center-text">    
+    <hr>
+    {{action_mode}} {{record_kind}}  {{referer}}   
+    <hr>
+    <pre id="log"></pre>  
+</div>
 
      
-        
-</div>
-     
-<div class="center-text">
-  <hr>
-  <pre id="log"></pre>  
-   <br><br>
-
-
-  {% if client_nauth %}
-  {{client_nauth[:20] }}...{{ client_nauth[-15:]}} 
-  {% endif %}    
-  <br>Kind: {{record_kind}}
-</div>
+<script>
+  setDarkMode();
+</script>
 
 
 {% endblock %}

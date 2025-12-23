@@ -9,7 +9,6 @@
 <script>
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
-console.log(referer)
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -96,7 +95,8 @@ async function deleteOffer() {
     .then((response) => response.json())
     .then((data) => data);
 
-    window.location.href=referer ;
+    // window.location.href=referer ;
+    window.location.href="/records/offerlist?kind={{record_kind}}";
 
 }      
 
@@ -111,16 +111,16 @@ async function deleteOffer() {
 
 
 <div class="center-text">
-    <h1>Update {{offer_label}} Offer </h1>
+    <h1>Update Offer for {{offer_label}} Record </h1>
     {{card}} {{referer}} {{record_kind}}
    
     <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
     <br><br>
     <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
     <br><br>
-    <button onclick="updateOffer()">Update Offer</button>
+    <button onclick="updateOffer()">Update Offer for {{offer_label}} Record</button>
     <br><br>
-    <button onclick="deleteOffer()">Delete Offer</button>
+    <button onclick="deleteOffer()">Delete Offer for {{offer_label}} Record</button>
     <br><br>
     <button onclick="goBack()">Back</button>
     <br><br>

@@ -158,11 +158,13 @@ window.location.href="/safebox/facerec/";
   async function writeTag() {
     var nfc_text_area = document.getElementById("nfc_text");
     var nfc_text = nfc_text_area.value
-    
+    consoleLog("Trying to write...");
     if ("NDEFReader" in window) {
       const ndef = new NDEFReader();
+      consoleLog("Created Reader...");
       try {
         await ndef.write(nfc_text);
+        
         alert("NDEF message written!");
         consoleLog("NDEF message written: " + nfc_text);
       } catch(error) {
@@ -277,10 +279,12 @@ window.location.href="/safebox/facerec/";
   <br><br>
   <button onclick="writeTag()">Card Write</button>
   <br><br>
+  <pre id="log">Ready</pre>
   <hr>
   <br><br>
   <button onclick="backToHome()">Home</button> 
   <br><br>
+  <pre id="log"></pre>
  
 </div>
 

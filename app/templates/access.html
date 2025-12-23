@@ -176,10 +176,14 @@ window.location.href="/safebox/personalmessages";
 
 async function myRecords() {
 
-window.location.href="/records/display";
+
+window.location.href="/records/grantlist";
+
 }
 
-async function presentRecord() {
+
+
+async function requestRecord() {
 
 window.location.href="/records/request";
 }
@@ -195,11 +199,7 @@ window.location.href="/credentials/present";
 
 }
 
-async function myRecords() {
 
-window.location.href="/records/display";
-
-}
 
 async function doHealthConsult() {
 
@@ -207,15 +207,12 @@ window.location.href="/safebox/healthconsult";
 
 }
 
-async function doOfferCredential() {
 
-window.location.href="/credentials/offer";
 
-}
 
 async function doOfferRecord() {
 
-window.location.href="/records/offer";
+window.location.href="/records/offerlist";
 
 }
 
@@ -227,7 +224,7 @@ async function payOrPass() {
 
 async function doVerifyCredential() {
 // alert('Coming soon!');
-window.location.href="/credentials/verificationrequest";
+window.location.href="/records/verificationrequest";
 
 }
 
@@ -296,12 +293,14 @@ alert("Lightning invoice copied to clipboard!");
     var data;
    
    
+    var owner_currency = document.getElementById("select_currency").value;
 
-    owner_currency = select_currency.value;
+    console.log(`owner currency: ${owner_currency}`);
 
     
 
     const submit_data = {"npub": null, "local_currency": owner_currency};
+    
 
    await fetch('/safebox/setownerdata', {
         method: "POST",
@@ -361,6 +360,8 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
    
     userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     consoleLog(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
+    document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}`;
+    
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
    
@@ -377,8 +378,8 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
           // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
         
           
-          
-          submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
+          document.getElementById("img_qr_display").src = "/img/circle-256.gif";
+          submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment);
           
         }
       } catch(error) {
@@ -410,8 +411,9 @@ headers: {"Content-Type": "application/json"},
 body: JSON.stringify(submit_data)         
 })   
 .then((data) => {consoleLog(`done ${data}`)});
+window.scrollTo(0, 0);
 
-window.location.href="/safebox/access?action_comment=Payment+requested.+Please+wait..." ;
+// window.location.href="/safebox/access" ;
 
 
 
@@ -421,11 +423,14 @@ async function submitNFCPayment(nfc_amount,nfc_currency, nfc_token, nfc_comment)
 
 paytoMessage(`Pay to Token ${nfc_amount} ${nfc_currency}${nfc_comment} ${nfc_token} `);
 
+document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}. Please wait...`;
+
 const submit_data =   { "nembed": nfc_token, 
                         "currency": nfc_currency,
                         "amount": nfc_amount, 
                         "comment": nfc_comment};
 
+                        
 await fetch('/safebox/paytonfctag', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
@@ -433,14 +438,16 @@ body: JSON.stringify(submit_data)
 }) 
 .then((response) => response.json())
 .then((data) => { paytoMessage(`done ${data}`);
-                  alert(`${data.detail}`);
+                  consoleLog(`${data.detail}`);
+                  window.scrollTo(0, 0);
+                  // window.location.href="/safebox/access?action_comment=Complete" ;
 
 
 });
 
 
 
-window.location.href=`/safebox/access?action_comment=Payment+sent.` 
+// window.location.href=`/safebox/access?action_comment=Payment+sent.` 
 
 
 }
@@ -579,7 +586,7 @@ function checkBalance(balance) {
   if (ux_mode == "init") {
         
       //do a check here so it doesn't load the image everytime    
-      img_qr_display_pic.src = "/safebox/qr/{{lightning_address}}";
+      img_qr_display_pic.src = "/safebox/qr/{{lnurl}}";
 
               
       } 
@@ -777,14 +784,15 @@ function getInvoiceStatus(ln_invoice_status) {
       userMessage(message, status)
 
       if (status == "RECD") {
-      document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
-      document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
-      document.getElementById("payment_notification").innerText = `${message}`;
-      document.getElementById("img_qr_display").src = "/safebox/qr/{{lightning_address}}";
-      // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
-      // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
-      // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
-      document.getElementById("img_qr_display").src = "/img/green-check.png";
+        
+        document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
+        document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
+        document.getElementById("payment_notification").innerText = `${message}`;
+        document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+        // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
+        // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
+        // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
+        document.getElementById("img_qr_display").src = "/img/green-check.png";
       
       } else if (status == "SENT" || status == "PENDING") {
 
@@ -859,15 +867,15 @@ function getInvoiceStatus(ln_invoice_status) {
     {% else %}
     <h2 style="margin: 0;">Receive a Payment</h2>
       <br>
-      <img id="img_qr_display"  src="/safebox/qr/{{lightning_address}}">
+      <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
-      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="0" size="24" style="width:30%">
+      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="{{amount}}" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
-      <option value="SAT" selected>SAT</option>            
+      <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
       {% for each in currencies %}     
-       <option value="{{each}}" >{{each}}</option>        
+       <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>   
       <br><br>
@@ -896,11 +904,12 @@ function getInvoiceStatus(ln_invoice_status) {
     </datalist>
     <br>
    
-    <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
+    <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%" value="{{amount}}">
+    
     <select id="ln_select_currency" name="ln_select_currency"> 
-      <option value="SAT" selected>SAT</option>            
+      <option value="SAT" >SAT</option>            
       {% for each in currencies %}     
-       <option value="{{each}}" >{{each}}</option>        
+       <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>
     <br><br>
@@ -920,33 +929,77 @@ function getInvoiceStatus(ln_invoice_status) {
   
   <hr>
 
-  <h2>Personal</h2>
+  <h2>My Records</h2>
   <button id="my_personal_messages_button" onclick="personalMessages()" >Private Messages</button>
   <br><br>
-  <button id="my_private_data_button" onclick="privateData()" >Personal Notes</button>
+  <button id="my_private_data_button" onclick="privateData()" >My Notes</button>
   <br><br>
-  <button id="my_personal_records_button" onclick="myRecords()" >Personal Records</button>
+  <button id="my_personal_records_button" onclick="myRecords()" >My Records</button>
+
   
   <hr>
-  <h2>Official</h2>
-  <button id="my_credentials_button" onclick="presentRecord()" >Present a Record</button> 
-
-
-  <hr>
-  <h2>Professional</h2>   
-
+  <h2>Community</h2>
   <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Record</button>  
   <br>
   <br>
-  <button id="do_verify_credential" onclick="doVerifyCredential()" >Verify Record</button> 
+  <button id="my_credentials_button" onclick="requestRecord()" >Request a Record</button> 
   <br>
   <br>
-  <button id="do_verify_credential" onclick="doRequestRecord()" >Request Record</button> 
-  <br>
-  <hr>
-  <h2>Community</h2>
   <button id="onboard_button" onclick="onboardFriend()" >Onboard a Member</button>
+
+
+  <hr>
+
+  
+
   <br>
+  <div class="center-text">
+  
+ 
+    <h2> Reusable Payment Request </h2> 
+  
+    <form fx-action="/safebox/requestqr" 
+        fx-method="get" 
+        fx-target="#request_qr" 
+        fx-swap="innerHTML" 
+        >
+        <label for="amount">Amount:</label>
+      <input 
+        type="number" 
+        id="amount" 
+        name="amount" 
+        step="0.01" 
+        min="0" 
+        required
+        >
+        <select id="select_currency" name="select_currency">
+          <option >SAT</option> 
+          {% for entry in currencies %}
+          <option >{{entry}}</option>         
+          {% endfor %}
+        </select>
+        <br><br>
+        <label for="desc">Description:</label>
+        <input 
+          type="text" 
+          id="description" 
+          name="description" 
+          maxlength="25" 
+          placeholder="Enter text (optional)"
+        >
+        <br><br>
+
+        <button type="submit">Generate Payment Request</button></form>
+    <br>   
+  
+    <div id="request_qr" class="center-text"></div>
+        
+
+    
+
+  
+  
+  </div>
   <hr>
   <h2>My Account</h2>
   <p>My access_key: </b></p>
@@ -988,6 +1041,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
             
 </div>
+
 
 <script>
 setActions(action_mode,action_data);

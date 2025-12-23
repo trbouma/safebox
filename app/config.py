@@ -65,15 +65,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
+    ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']
     IP_INFO_TOKEN: str = "notset"
     NFC_ECASH_CLEARING: bool = True
+    NFC_DEFAULT: List = ["Badge","Member"]
     LOCAL_RELAY_PORT: int = 8735
     TOKEN_EXPIRES_WEEKS: int = 4
     TOKEN_EXPIRES_HOURS: int = 8
     SESSION_AGE_DAYS: int = 30
     LOGGING_LEVEL: int = 10
-    SUPPORTED_CURRENCIES: List =['CAD','USD','EUR','GBP','JPY','INR']
+    SUPPORTED_CURRENCIES: List =['SAT','CAD','USD','EUR','GBP','JPY','INR']
     BRANDING: str = "Get SafeBox"
     BRANDING_MESSAGE: str = "Control your personal funds and data."
     BRANDING_RETRY: str = "Whoops! Let's try that again!"
@@ -91,69 +93,69 @@ class Settings(BaseSettings):
     RECORD_TRANSMITTAL_KIND: int = 21062
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
-    SELECT_KINDS: List = [  
-                            [340028, "ID"],
-                            [34016,"Boarding Passes"],
-                            [32225,"Health Records"],
-                            [37375, "Personal Notes"],
-                            [34002, "Credentials"],
-                            [34003, "Payment Cards"],
-                            [34004, "Travel Documents"],
-                            [34005, "Memberships"],
-                            [34006, "Gift Cards"],
-                            [34007, "Coupons"],
-                            [34008, "Event Tickets"],
-                            [34009, "Health Passes"],
-                            [34010, "Transit Cards"],
-                            [34011, "Immunization Records"],
-                            [34012, "Educational Diplomas"],
-                            [34013, "Official Documentation"],
-                            [34014, "Insurance"],
-                            [34015, "Recipes"]
 
-
-                        ]
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
-                            [340027, "ID"],
-                            [34001, "Badges"],
-                            [34029,"Passes"],
-                            [32225,"Health Records"], 
-                            [32229, "Prescriptions"],  
-                            [32231, "Immunization Records"],    
-                            [34003, "Payment Cards"],
-                            [34005, "Travel Documents"],
-                            [34007, "Memberships"],
-                            [34009, "Gift Cards"],
-                            [34011, "Coupons"],
-                            [34013, "Event Tickets"],                            
-                            [34017, "Transit Cards"],                            
-                            [34019, "Educational Diplomas"],
+                            
+                            [34039, "Community", ["Name", "Family", "Membership","Library Card","Training", "Committee", "Qualification","Title", "Honorific"]], 
+                            [34037, "Receipt"],
+                            [34001, "Badge", ["Access", "ID"]],
+                            [34035, "Contact"],
+                            [34101, "Business Card"],                            
+                            [34029,"Pass"],
+                            [32225,"Health"], 
+                            [32229, "Prescription"],  
+                            [32231, "Immunization"],    
+                            [34003, "Payment Card"],
+                            [34005, "Travel Document"],
+                            [34007, "Membership"],
+                            [34009, "Gift Card"],
+                            [34011, "Coupon"],
+                            [34013, "Event Ticket"],                            
+                            [34017, "Transit Card"],                            
+                            [34019, "Educational Diploma"],
                             [34021, "Official Documentation"],
                             [34023, "Insurance"],
-                            [34025, "Recipes"]
+                            [34025, "Recipe"],
+                            [34031, "Voucher"],  
+                            [34033, "Letter"],
+                            [34035, "Emergency"],
+                            [34037, "Negotiable Cargo Document",["Bill of Lading","Warehouse Receipt"]],
+                            [34041, "Skilled Trade",["Electrician","Plumber", "Welder"]]
+                                                      
+                            
                         ]  
  
     GRANT_KINDS: List =     [  
-                            [34028, "ID"],
-                            [34002, "Badges"],
-                            [34030,"Passes"],
-                            [32226,"Health Records"], 
-                            [32230, "Prescriptions"],  
-                            [32232, "Immunization Records"],    
-                            [34004, "Payment Cards"],
-                            [34006, "Travel Documents"],
-                            [34008, "Memberships"],
-                            [34010, "Gift Cards"],
-                            [34012, "Coupons"],
-                            [34014, "Event Tickets"],                            
-                            [34018, "Transit Cards"],                            
-                            [34020, "Educational Diplomas"],
+                            [34040, "Community",["Name", "Family", "Membership", "Library Card", "Training", "Committee", "Qualification", "Title", "Honorific"]],
+                            [34038, "Receipt"],
+                            [34002, "Badge", ["Access", "ID"]],
+                            [34036, "Contact"],
+                            [34102, "Business Card"],                            
+                            [34030,"Pass", ["Admission","Boarding"]],
+                            [32226,"Health"], 
+                            [32230, "Prescription"],  
+                            [32232, "Immunization"],    
+                            [34004, "Payment Card"],
+                            [34006, "Travel Document"],
+                            [34008, "Membership"],
+                            [34010, "Gift Card"],
+                            [34012, "Coupon"],
+                            [34014, "Event Ticket"],                            
+                            [34018, "Transit Card"],                            
+                            [34020, "Educational Diploma"],
                             [34022, "Official Documentation"],
                             [34024, "Insurance"],
-                            [34026, "Recipes"]
+                            [34026, "Recipe"],
+                            [34032, "Voucher"],
+                            [34034, "Letter"],
+                            [34036, "Emergency", ["medical","contact"]],    
+                            [34038, "Negotiable Cargo Document"], 
+                            [34042, "Skilled Trade"],                        
+                            [37375, "Personal Note", ["share"]] 
+                            
                         ] 
 
     WALLET_SWAP_MODE: bool = False

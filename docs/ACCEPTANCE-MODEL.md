@@ -1,0 +1,247 @@
+# The Acceptance Model  
+*A generic framework for how statements become facts*
+
+
+
+---
+
+## Overview
+
+The **Acceptance Model** expresses a simple idea:
+
+> **Facts and views are not established by the system; they are resolved by the disposition of statements about them.**
+
+Across law, governance, science, and technical systems, disputes rarely hinge on *what might be true in some ultimate sense*. Instead, they hinge on **what a system is prepared to treat as settled and binding**.
+
+The Acceptance Model provides a **generic vocabulary** for understanding how that settlement happens.
+
+It is useful whenever:
+- Multiple actors make claims about reality
+- Disagreement or uncertainty exists
+- Decisions must be made despite incomplete knowledge
+- A system must eventually **stop asking questions**
+
+This applies equally to:
+- Courts determining legal facts
+- Administrations making binding decisions
+- Technical systems validating states
+- Registries recording ownership or control
+- Cryptographic systems finalizing transactions
+
+The model deliberately avoids metaphysics.  
+It does not ask *what is ultimately true*, but rather:
+
+> **What must be accepted in order for action to proceed?**
+
+---
+
+## The Core Insight
+
+In this context: 
+
+- the **system** is the nostr protocol including its artifacts of **npubs** and **signed events**.
+- by contrast, the **world** is everything out there that exists independently of nostr.
+
+
+Every **system** that operates at scale (i.e., nostr protocol and its artifacts)  must answer three questions:
+
+1. **What is being claimed?**
+2. **Who vouches for it (and how)?**
+3. **When does the system stop pursuing the question?** (what is the halting condition?)
+
+The Acceptance Model structures those questions into clear layers, separating:
+- Reality from language
+- Claims from validation
+- Trust in statements from trust in speakers
+- Truth from recognition
+
+---
+
+## Core Concepts (Plain Definitions)
+
+- **Statement** A statement is an declaration of a condition or configuration of reality at a given moment. A state may be a **Fact** or a **View**
+
+- **Fact** A fact is a state of affairs that is defined in verifiable terms and is capable of being accepted as true by a system.
+
+- **View** A view is an evaluative interpretation of a state of affairs that depends on judgment, perspective, or normative criteria rather than verifiable conditions alone.
+
+- **Assertion** A statement put forward as true by an actor, taking responsibility for its truth.
+
+- **Attestation** An assertion that affirms the truth or validity of another assertion.
+
+- **Recognition** An assertion about another **Npub** that produces a standing which may result in authorization or delegation.
+
+- **Acceptance**  A system-level act that treats a statement (or chain of statements) as a fact.
+
+---
+## Recogition, Authority and Delegation
+
+Recognition, delegation, and authority are often conflated, but the Acceptance Model treats them as distinct. Authority does not arise from delegation alone; it exists only where it is recognized. Delegation is an act by which one actor purports to transfer or confer authority, but that act has no effect unless a system accepts it. Recognition is the system’s determination that an asserted authority will be treated as operative. Authority, in turn, is not a substance that flows from one actor to another, but a condition that stabilizes once recognition occurs. In this sense, delegation proposes authority, recognition produces standing which makes it effective. Authority exists only to the extent of the standing of an actors that makes it effective.
+
+**In the Acceptance Model, assertions introduce claims about facts and views, attestations qualify them, and recognition produces standing which is the precondition authority and delegation.**
+
+## The Acceptance Model
+
+### States, Assertions, Attestations, and Recognitions
+
+| Level | Layer | Refers To | What It Is | Example |
+|---|---|---|---|---|
+| 0a | **Statement (Factual)** | Reality | Verifiable condition | The light is on |
+| 0b | **Statement (Evaluative)** | Reality + judgment | Interpreted condition | The light is too bright |
+| 1 | **Assertion** | State (0a or 0b) | A claim regarding a statement | Alice: “The light is on” |
+| 2 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion | Bob: “Alice’s claim is true” |
+| 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation | Carol: “Bob’s attestation is valid” |
+| — | **Recognition** | **Actor** | Recognizing another actor which may result in an authorization or delegation | Bob: “I recognize that Alice is competent and can do something on behalf of me” |
+| — | **Acceptance** | Chain | System recognition/authorization | Condition of when system reaches a conclusion regarding a statement |
+
+---
+The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
+- an **Assertion** is an assertion (signed event) about a **Statement**
+- an **Attestation** is an assertiona (signed event) about an **Assertion** (another signed event)
+- an **Recognition** is an assertion (signed event) recognizing another **Npub** which may result in an authorized or delegation.
+
+For simplicity, the diagram does not illustrate **nth Order Assertions**.
+
+![Acceptance Mode](./img/acceptance-final.png)
+
+## Statement: Facts and Views
+
+A **statement** is simply an expression of condition of affairs. It is **not automatically a fact**.
+
+### Factual states
+- Defined in verifiable terms
+- Binary or measurable
+- Capable of being true or false
+
+Example:
+- *The light is on*
+
+### Evaluative statements (views)
+- Incorporate judgment or perspective
+- Depend on purpose, comfort, or norms
+- Not verifiable without a standard
+
+Example:
+- *The light is too bright*
+
+> **Facts require conditions; views require interpretation.**
+
+---
+
+## Assertions
+
+An **assertion** is the first step where responsibility enters.
+
+- Assertions may concern factual statements or evaluative statements
+- Signing an event regard a **statement** becomes an **assertion**:
+  - Binds it to an identity
+  - Creates accountability regarding the **statement**
+  - The act of signing an event does not itself create a fact; it creates another point to reach a conclusion.
+
+Example:
+- Alice signs: *“The light is on”*
+
+This is an **assertion** (signed event), not itself a **fact**, though the system might lead to this conclusion.
+
+---
+
+## Attestations (Nth-Order)
+
+An **attestation** is an assertion **about another assertion**.
+
+- It is referential within the system.
+- It affirms truth or validity.
+- It can recurse until it reaches an **assertion**
+- The result of the recursion may lead to the conclusion of a **fact**
+
+Example recursion:
+1. Alice asserts: *“The light is on”*
+2. Bob attests: *“Alice’s assertion is true”*
+3. Carol attests: *“Bob’s attestation is valid”*
+4. It can be conclude that *“The light is on”* is a **fact** because it was signed by Alice, attested by Bob, in turn, attested by Carol.
+
+
+Important limitation:
+
+> **Attestations increase confidence, not truth.**
+
+'Truth' or **fact** is anchored to an assertion which is a **statement** about a state.
+
+Multiple attestations can increase 'truthiness', but is not truth itself.
+
+---
+
+## Recognition (Orthogonal to Attestation)
+
+A **recognition** produces **standing** of another **actor** which is the start of authority and/or delegation.
+
+**Standing** is the condition created when the system recognizes an actor as one whose assertions or actions will be treated as effective.
+
+- Actor-directed, not claim-directed
+- Generalizes trust across future assertions
+- Operates independently of specific facts
+
+Example:
+- Bob signs: *“Alice is reliable”*
+
+A **recognition** is a type of assertion that produces standing of another **actor** for the purposes of **authorization** or **delegation**.
+
+---
+
+## Standards: Turning Views into Facts
+
+Evaluative states become fact-capable only when a **standard** is applied.
+
+Example:
+- View: *“The light is too bright”*
+- Standard: *Maximum brightness is 500 lux*
+- Fact-capable claim: *“The light exceeds 500 lux”*
+
+> **Standards convert judgment into testable conditions.**
+
+This is how law, engineering, and governance discipline opinion.
+
+---
+
+## Acceptance and Legal Fact
+
+A **fact (legal or system-level)** emerges when:
+
+- A system accepts an assertion or attestation chain
+- Further inquiry is procedurally closed
+- The outcome becomes binding for action
+
+Acceptance is:
+- Decisive
+- Context-specific
+- Independent of metaphysical certainty
+
+> **A legal fact is reality as recognized by the system, not reality itself.**
+
+---
+
+## Key Distinctions (Summary)
+
+- **State** → what is actually reality
+- **Statement** → what is said about reality (fact or view)  
+- **Assertion** → what is claimed by an actor
+- **Attestation** → what is vouched for another actor  
+- **Recognition** → what is said by one actor of another actor 
+- **Acceptance** → what counts as reliably according to the system
+
+---
+## Acceptance Logic
+
+The acceptance logic likely will be a recursive resolution model that arrives at a first order Assertion.
+
+Below is an initial resolution model
+
+![Recognitin](./img/recognition-final.png)
+
+## Synthesis
+
+> **The Acceptance Model explains how statements become assertions, assertions attract attestations, delegations of actors by other actors, and systems ultimately decide which claims count as facts.**
+
+Or more sharply:
+
+> **Facts in the system emerge when the system stops asking questions.**

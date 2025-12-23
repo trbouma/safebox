@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Union, Any
 from enum import Enum
 from datetime import datetime
 
@@ -25,6 +25,10 @@ class RegisteredSafebox(SQLModel, table=True):
     emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
     currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
     
+class SafeboxRecord(BaseModel):
+    tag: list[str]      = None                  # e.g. ["my_record"]
+    type: str           = None                  # e.g. "offer"
+    payload: Any        = None                  # can hold any JSON-serializable value
 
 class PaymentQuote(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -94,6 +98,7 @@ class nauthRequest(BaseModel):
     scope: str|None = None
     grant: str|None = None
     transmittal_kind: int|None = None
+    compact: bool = False
 
     
 
@@ -121,6 +126,7 @@ class transmitConsultation(BaseModel):
     nauth: str
     originating_kind: int = 32227
     final_kind: int = 32225
+    record_name: str = None
 
 class incomingRecord(BaseModel):
     id: str
@@ -131,6 +137,7 @@ class recoverIdentity(BaseModel):
     seed_phrase: str
     home_relay: Union[None,str]=None
     new_identity: bool = False
+    legacy: bool = False
 
 class sendCredentialParms(BaseModel):
     nauth: str
@@ -150,6 +157,8 @@ class proofByToken(BaseModel):
     proof_token: str|None = None
     nauth: str
     label: str|None=None
+    kind: int|None=None
+    pin: str|None=None
 
 class OfferToken(BaseModel):
     offer_token: str|None = None
@@ -189,6 +198,8 @@ class proofVault(BaseModel):
     token: str 
     nauth: str
     label: str|None = None
+    kind: int|None = None
+    pin: str|None = None
     pubkey:str|None= None
     sig: str|None = None  
 class offerVault(BaseModel):    

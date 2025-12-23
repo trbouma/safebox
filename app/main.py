@@ -18,7 +18,7 @@ from app.routers import     (   lnaddress,
                                 emergency, 
                                 pos, 
                                 public, 
-                                credentials,
+                                
                                 records )
 
 from app.tasks import periodic_task
@@ -101,7 +101,8 @@ async def lifespan(app: FastAPI):
     
     # The single event handling is now done in nwc.py, so all listeners can be running
     print(f"[PID {os.getpid()}] Starting nwc listener.")
-    url = "wss://relay.getsafebox.app"
+    # url = "wss://relay.getsafebox.app"
+    url = SETTINGS.NWC_RELAYS[0]
     listener_task = asyncio.create_task(listen_notes_periodic(url))
     
     yield
@@ -143,7 +144,7 @@ app.include_router(prescriptions.router, prefix="/prescriptions")
 app.include_router(emergency.router) 
 app.include_router(pos.router, prefix="/pos")
 app.include_router(public.router, prefix="/public")
-app.include_router(credentials.router, prefix="/credentials")
+# app.include_router(credentials.router, prefix="/credentials")
 app.include_router(records.router, prefix="/records")
 
 templates = Jinja2Templates(directory="app/templates")
@@ -263,7 +264,9 @@ async def get_safebox_pubhex(request: Request, name: str, ):
             "_": npub_hex
         },
         "relays":
-                     { f"{npub_hex}": SETTINGS.RELAYS}  }
+                     { f"{npub_hex}": SETTINGS.RELAYS},
+        "ecash_relays":
+                     { f"{npub_hex}": SETTINGS.ECASH_RELAYS}                  }
     else:
         pass
         with Session(engine) as session:
@@ -289,7 +292,8 @@ async def get_safebox_pubhex(request: Request, name: str, ):
 
     safebox_json = {
                     "pubkey": npub_hex,                       
-                     "relays": SETTINGS.RELAYS   
+                     "relays": SETTINGS.RELAYS,
+                    "ecash_relays": SETTINGS.ECASH_RELAYS     
                     
                     }
 

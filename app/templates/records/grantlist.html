@@ -93,7 +93,7 @@ async function selectRecordKind() {
   var select_record_kind = document.getElementById("select_record_kind");
 
  // alert(`record kind ${select_record_kind.value}`);
-  window.location.href=`/records/display?record_kind=${select_record_kind.value}`;
+  window.location.href=`/records/grantlist?record_kind=${select_record_kind.value}`;
 
 }
 
@@ -103,8 +103,8 @@ async function selectRecordKind() {
   var qr_img_func = document.getElementById("img_qr_display");
 
   qr_img_func.src="/img/circle-256.gif";
-   await fetch('/records/nauth?scope=vissue', {
-        method: "GET",
+   await fetch('/records/nauth?scope=vgrant', {
+        method: "POST",
         headers: {"Content-Type": "application/json"}        
               
        })
@@ -152,12 +152,12 @@ async function selectRecordKind() {
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
   {% else %}
-  <h1>Display My {{ record_label}}</h1>
+  <h1>My {{ record_label}} Records</h1>
   {% endif %}
 
     <button onclick="gotoHome()">Home</button>
     <br><br>
-    Click on the record you wish to {{"present" if record_select else "view"}}.
+    Click on the record you wish to view.
    
     <br><br>
     <select id="select_record_kind" onchange="selectRecordKind()"">
@@ -174,7 +174,13 @@ async function selectRecordKind() {
 <div id="card-container"></div>
 
   <script>
-    const jsonUserData = {{ credential_records | tojson }}; 
+    const jsonUserData = {{ user_records | tojson }}; 
+
+  function getRightSide(str) {
+    const idx = str.indexOf(':');
+    if (idx === -1) return str;        // No delimiter → return original
+    return str.substring(idx + 1);     // Return everything after the colon
+  }
 
     // Function to create and add a card
     function addCard(title, content) {
@@ -185,7 +191,10 @@ async function selectRecordKind() {
       // Create and add the title element
       const cardTitle = document.createElement('div');
       cardTitle.className = 'card-title';
-      cardTitle.textContent = title;
+
+      
+      cardTitle.textContent = getRightSide(title[0]);
+      console.log(getRightSide(title[0]));
 
       // Create and add the content element
       const cardContent = document.createElement('div');
@@ -206,7 +215,7 @@ async function selectRecordKind() {
 
         {% else %}
 
-          window.location.href=`/records/displayrecord?card=${title}&kind={{record_kind}}&action_mode=edit`;
+          window.location.href=`/records/displaygrant?card=${title}&kind={{record_kind}}&action_mode=edit`;
         {% endif %}
        
       });
@@ -224,7 +233,7 @@ async function selectRecordKind() {
     {
       if (record.hasOwnProperty("tag")) {
           // console.log(`Name: ${record.name}`);
-          addCard(record.tag, record.payload);
+          addCard(record.tag, record.content);
       } else {
           console.log("This record does not have a 'name' property.");
       }
@@ -254,7 +263,7 @@ await fetch(`/records/sendrecord`, {
        })
     .then((response) => response.json())
     .then((data) => {
-    alert(`Verification Done! ${data.status} ${data.detail}`);
+    alert(`{{record_label}} sent!`);
 });
 
 }
@@ -271,28 +280,16 @@ await fetch(`/records/sendrecord`, {
 
 {% else %}
   <div class="center-text">
-    <hr>
-      <h2>Need More {{record_label}}?</h2>
-      Click on image below to authenticate.
-      <br><br>
-      <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
-      <br><br>
-      If your credential issuer can't scan your QR code, you can scan their QR code instead by clicking on the button below.
-      <br><br>
-      <button id="ln_scan_button" onclick="scanCode()">Authenticate Credential Issuer</button> 
-      <br><br>
-      Once you've authenticated, you can accept your credential offers.  
-      <br><br>
-      <button id="my_inbox_button" onclick="myInbox()" >Accept Credential Offers</button>
-      <br><br>
-      <button onclick="gotoHome()">Home</button>
+    <hr><br>
+
+    <button onclick="gotoHome()">Home</button>
       
   </div>
   <hr>
 {% endif %}
 <div class="center-text">
   <br><br>
- Info: {{request.url.hostname}}   
+ Info: {{request.url.hostname}}  grantlist.html 
  <br><br>Record Select: {{record_select}}
 
     

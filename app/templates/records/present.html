@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}My Records Data{% endblock %}
+{% block title %}My Records{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -18,7 +18,7 @@ var global_vrequest_nauth = "{{nauth}}";
 async function scanCode() {
 // alert("scan!");
 
-window.location.href="/scanner/scan/?wallet_name=authenticate&referer=my-credentials";
+window.location.href="/scanner/scan";
 
 }
 
@@ -58,18 +58,7 @@ else {
 }
 </script>
 
-<script>
 
-
-  
-
-
-
-
-
-
-
-</script>
 
 <script>
 
@@ -104,7 +93,7 @@ async function selectRecordKind() {
   var select_record_kind = document.getElementById("select_record_kind");
 
  // alert(`record kind ${select_record_kind.value}`);
-  window.location.href=`/records/retrieve?record_kind=${select_record_kind.value}`;
+  window.location.href=`/records/display?record_kind=${select_record_kind.value}`;
 
 }
 
@@ -114,8 +103,8 @@ async function selectRecordKind() {
   var qr_img_func = document.getElementById("img_qr_display");
 
   qr_img_func.src="/img/circle-256.gif";
-   await fetch('/records/nauth?scope=vissue', {
-        method: "GET",
+   await fetch('/records/nauth?scope=vgrant', {
+        method: "POST",
         headers: {"Content-Type": "application/json"}        
               
        })
@@ -163,9 +152,11 @@ async function selectRecordKind() {
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
   {% else %}
-  <h1>My {{ record_label}}</h1>
+  <h1>Display My {{ record_label}}</h1>
   {% endif %}
-
+    
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br><br>
     <button onclick="gotoHome()">Home</button>
     <br><br>
     Click on the record you wish to {{"present" if record_select else "view"}}.
@@ -185,7 +176,13 @@ async function selectRecordKind() {
 <div id="card-container"></div>
 
   <script>
-    const jsonUserData = {{ credential_records | tojson }}; 
+
+    function getRightSide(str) {
+      const idx = str.indexOf(':');
+      if (idx === -1) return str;        // No delimiter → return original
+      return str.substring(idx + 1);     // Return everything after the colon
+    }
+    const jsonUserData = {{ user_records | tojson }}; 
 
     // Function to create and add a card
     function addCard(title, content) {
@@ -196,8 +193,8 @@ async function selectRecordKind() {
       // Create and add the title element
       const cardTitle = document.createElement('div');
       cardTitle.className = 'card-title';
-      cardTitle.textContent = title;
-
+      cardTitle.textContent = getRightSide(title[0]);
+      
       // Create and add the content element
       const cardContent = document.createElement('div');
       cardContent.className = 'card-content';
@@ -210,7 +207,7 @@ async function selectRecordKind() {
       card.addEventListener('click', () => {
 
         {% if record_select %}
-          if (confirm(`Present this credential ${title}`)) {
+          if (confirm(`Present this record ${title}?`)) {
             
             sendRecord(title); 
           }
@@ -251,7 +248,7 @@ async function sendRecord(title) {
 console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
-// send credential to verfier
+// send record to verfier
 submit_data = { "nauth": global_vrequest_nauth,
                 "grant": `${title}`
               };
@@ -265,7 +262,7 @@ await fetch(`/records/sendrecord`, {
        })
     .then((response) => response.json())
     .then((data) => {
-    alert(`Verification Done! ${data.status} ${data.detail}`);
+    alert(`{{record_label}} sent!`);
 });
 
 }

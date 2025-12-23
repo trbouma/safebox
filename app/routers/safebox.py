@@ -1,5 +1,5 @@
 import urllib.parse
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ from monstr.util import util_funcs
 import requests
 import time
 
+
 from monstr.relay.relay import Relay
 
 from monstr.client.client import Client
@@ -28,13 +29,14 @@ from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt
 from monstr.event.event import Event
 from safebox.models import cliQuote
+from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest
 from app.config import Settings, ConfigWithFallback
-from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi
+from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 
 import logging, jwt
@@ -143,6 +145,77 @@ async def login(request: Request, access_key: str = Form()):
     )
     return response
 
+@router.post("/loginwithkey", tags=["safebox"])
+async def login_withkey(request: Request, access_key: str):
+
+
+    access_key=access_key.strip().lower()
+    match = False
+    # Authenticate user
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key==access_key)
+        print(statement)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        if safebox_found:
+            out_name = safebox_found.handle
+        else:
+            pass
+            # Try to find withouy hypens
+            leading_num = extract_leading_numbers(access_key)
+            if not leading_num:
+                return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": settings.BRANDING_RETRY})
+                # raise HTTPException(status_code=404, detail=f"{access_key} not found")
+            
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
+            safeboxes = session.exec(statement)
+            for each_safebox in safeboxes:
+                access_key_on_record = each_safebox.access_key
+                split_key= access_key_on_record.split("-")
+                if split_key[1] in access_key and split_key[2] in access_key:
+                    print("match!")
+                    # set the access key to the one of record
+                    access_key = access_key_on_record
+                    match=True
+                    break
+                
+                print(each_safebox)
+            
+            if not match:
+                
+                return templates.TemplateResponse(  "welcome.html", 
+                                        {   "request": request, 
+                                            "title": "Welcome Page", 
+                                            "branding": settings.BRANDING,
+                                            "branding_message": settings.BRANDING_RETRY})
+                # raise HTTPException(status_code=404, detail=f"{access_key} not found")
+
+
+    # Create JWT token
+    settings.TOKEN_EXPIRES_HOURS
+    access_token = create_jwt_token({"sub": access_key}, expires_delta=timedelta(hours=settings.TOKEN_EXPIRES_HOURS,weeks=settings.TOKEN_EXPIRES_WEEKS))
+    
+
+    
+
+    # Create response with JWT as HttpOnly cookie
+    response = RedirectResponse(url="/safebox/access", status_code=302)
+    # response = JSONResponse({"message": "Login successful"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevent JavaScript access
+        max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
+        secure=False,  # Set to True in production to enforce HTTPS
+        samesite="Lax",  # Protect against CSRF
+    )
+    return response
+
+
 @router.post("/accesstoken", tags=["safebox"])
 async def access_token(request: Request, access_key: str):
 
@@ -204,8 +277,9 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
         decrypted_key = decrypted_payload.split(':')[0]
         decrypted_secure_pin = decrypted_payload.split(':')[1]
+        nfc = parsed_data.get("n",["",""])
 
-        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin}")
+        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin} nfc: {nfc}")
         if host != request.url.hostname:
             print(f"This is the wrong host - need to go to https://{host}")
             return RedirectResponse(url=f"https://{host}",status_code=301)
@@ -295,7 +369,7 @@ async def create_nwc_qr(request: Request,
 
     handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
 
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # &lud16={handle}@{request.url.hostname}
     encoded_qr_text = urllib.parse.quote(qr_text)
@@ -324,18 +398,30 @@ async def create_nwc_qr(request: Request,
     buf.seek(0) # important here!
     return StreamingResponse(buf, media_type="image/jpeg")
 
-@router.get("/access", tags=["safebox", "protected"])
+@router.api_route("/access", tags=["safebox", "protected"], methods=["GET","POST"])
 async def protected_route(    request: Request, 
                         onboard: bool = False, 
                         action_mode:str=None, 
                         action_data: str = None,
                         action_amount: int = None,
                         action_comment: str = None,
+                        amount: float = 0,
+                        currency: str = 'SAT',
                         acorn_obj = Depends(get_acorn)
                     ):
 
     if not acorn_obj:
         return RedirectResponse(url="/")
+
+    if request.method == "POST":
+        data = await request.json()
+        print(f"data from post {data}")
+        action_data = data.get("data", None)
+        
+    if action_data:    
+        # action_data = action_data.replace(' ', '+')
+        action_data = unquote(action_data)
+
 
 
     with Session(engine) as session:
@@ -371,6 +457,8 @@ async def protected_route(    request: Request,
 
     currencies = settings.SUPPORTED_CURRENCIES
     # Token is valid, proceed
+
+    final_url, final_lnurl= lightning_address_to_lnurl(lightning_address)
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
@@ -382,11 +470,14 @@ async def protected_route(    request: Request,
                                             "currency_symbol": currency_symbol,
                                             "currencies" : currencies,
                                             "lightning_address": lightning_address,
+                                            "lnurl": final_lnurl,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
                                             "action_mode": action_mode,
                                             "action_data": action_data,
                                             "action_amount": action_amount,
+                                            "amount": amount,
+                                            "currency": currency,
                                             "action_comment": action_comment
 
                                         })
@@ -453,7 +544,7 @@ async def ln_pay_address(   request: Request,
     except Exception as e:
         return {"status": "ERROR", f"detail": f"error {e}"}
 
-    msg_out = "Payment sent!"
+    msg_out = "Payment sent!!"
 
     return {"status": "OK", "detail": msg_out}
 
@@ -482,17 +573,16 @@ async def ln_pay_invoice(   request: Request,
     try:
 
 
-        msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
-        decoded_invoice = bolt11.decode(ln_invoice.invoice)
+        task2 = asyncio.create_task(task_pay_multi_invoice(acorn_obj=acorn_obj,lninvoice=ln_invoice.invoice,comment=ln_invoice.comment, websocket=global_websocket)) 
+        msg_out = "Payment sent"
+        # msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
+        # decoded_invoice = bolt11.decode(ln_invoice.invoice)
        
-        print(f"decoded invoice: {decoded_invoice}")
-        amount = decoded_invoice.amount_msat//1000
-        description = decoded_invoice.description
+        # print(f"decoded invoice: {decoded_invoice}")
+        # amount = decoded_invoice.amount_msat//1000
+        # description = decoded_invoice.description
 
-        await acorn_obj.add_tx_history( tx_type='D',
-                                        amount=amount,
-                                        comment=description,
-                                        fees=final_fees)
+
        
 
     except Exception as e:
@@ -514,7 +604,7 @@ async def issue_ecash(   request: Request,
 
         # msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         msg_out = await acorn_obj.issue_token(ecash_request.amount)
-        await acorn_obj.add_tx_history(tx_type='D',amount=ecash_request.amount,comment='ecash withdrawal')
+        # await acorn_obj.add_tx_history(tx_type='D',amount=ecash_request.amount,comment='ecash withdrawal')
     except Exception as e:
         return {    "status": "ERROR",
                     f"detail": "error {e}"}
@@ -534,8 +624,8 @@ async def accept_ecash(   request: Request,
     try:
      
         
-        msg_out, token_accepted_amount = await acorn_obj.accept_ecash(ecash_accept.ecash_token)
-        await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
+        msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token, comment="test")
+        # await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
         pass
     except Exception as e:
         return {    "status": "ERROR",
@@ -799,6 +889,7 @@ async def my_health_data(       request: Request,
                                 access_token: str = Cookie(None)
                     ):
     """Protected access to private data stored in home relay"""
+    #FIXME Remove this function
     nauth_response = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
@@ -923,7 +1014,7 @@ async def my_danger_zone(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
@@ -980,7 +1071,7 @@ async def issue_card(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
@@ -1004,8 +1095,8 @@ async def issue_card(       request: Request,
     plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
   
     encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
-   
-    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21}
+    nfc_default = settings.NFC_DEFAULT
+    token_obj = {"h": request.url.hostname, "k": encrypt_token, "a": 21, "n": nfc_default}
     nembed = create_nembed_compressed(token_obj)
     print(f"nembed length {len(nembed)} {nembed}")
     payment_token=nembed
@@ -1138,12 +1229,14 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
 
 
     # starting_balance = safebox_found.balance
-    starting_balance = acorn_obj.balance
+    await acorn_obj.load_data()
+    starting_balance = acorn_obj.get_balance()
     # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"
+    print(f"the local currency is {acorn_obj.local_currency}")
 
-    test_balance = acorn_obj.balance
+   
     since_now = int(datetime.now(timezone.utc).timestamp())
     
     
@@ -1156,33 +1249,34 @@ async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(g
         
         while time.time() - start_time < duration:
             try:
-                await db_state_change()
-                
-                # new_balance = await fetch_balance(safebox_found.id)
-                
-                await acorn_obj.load_data()
-                new_balance = acorn_obj.balance
+                latest_balance = await db_state_change(acorn_obj=acorn_obj)
+
+                new_balance = latest_balance
                 # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
 
-
+                # print(f"acorn local currency {acorn_obj.local_currency}")
                 fiat_balance = f"{currency_symbol}{(currency_rate * new_balance / 1e8):.2f} {acorn_obj.local_currency}"
 
 
                 if new_balance > starting_balance:
-                    message = f"Payment received! {new_balance-starting_balance} sats."
+                    # fiat_received = f"{currency_symbol}{(currency_rate * (new_balance-starting_balance) / 1e8):.2f} {acorn_obj.local_currency}"
+
+                    message = f"Transaction successful!"
                     status = "RECD"
 
                 elif new_balance < starting_balance:
-                    message = f"Payment sent! {starting_balance-new_balance} sats."
+                    message = f"Transaction successful!"
                     status = "SENT"
 
                 elif new_balance == starting_balance:
-                    message = f"Ready."
-                    status = "OK"
+                    continue
+                    # message = f"Ready."
+                    # status = "OK"
 
                 
-                fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * new_balance / 1e8)} {currency_code}"
-
+                # fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * new_balance / 1e8)} {currency_code}"
+                
+                print(f"new_balance: {new_balance} status: {status} fiat balance: {fiat_balance}")
                 await websocket.send_json({"balance":new_balance,"fiat_balance":fiat_balance, "message": message, "status": status})
                 starting_balance = new_balance
 
@@ -1250,8 +1344,8 @@ async def websocket_requesttransmittal( websocket: WebSocket,
 
             if client_nauth != nauth_old: 
                 parsed_nauth = parse_nauth(client_nauth)
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind',settings.TRANSMITTAL_KIND)
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays',settings.TRANSMITTAL_RELAYS)
                 nprofile = {'nauth': client_nauth, 'name': 'safebox user', 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
@@ -1363,7 +1457,7 @@ async def delete_card(         request: Request,
     try:
         acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         await acorn_obj.load_data()
-        msg_out = await acorn_obj.delete_wallet_info(label=delete_card.title, record_kind=delete_card.kind)
+        msg_out = await acorn_obj.delete_record(label=delete_card.title, record_kind=delete_card.kind)
         detail = f"Success! {msg_out}"
     except Exception as e:
         status = "ERROR"
@@ -1732,8 +1826,14 @@ async def request_nfc_payment( request: Request,
                         "sig": sig, 
                         "comment": payment_token.comment  
                         }
-        
-        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj))
+        #FIXME Need to get relays to listen
+        pass
+        settings_url = f"https://{host}/.well-known/settings"
+        response = requests.get(url=settings_url)
+        print(response.json())
+        ecash_relays = response.json().get("ecash_relays", settings.ECASH_RELAYS)
+        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
+
     else:
         print("do lightning clearing")
         
@@ -1849,12 +1949,50 @@ async def pay_to_nfc_tag( request: Request,
 
 
     ###
-    await acorn_obj.add_tx_history( tx_type='D', 
-                                    amount=final_amount,
-                                    tendered_amount=nfc_pay_out_request.amount,
-                                    tendered_currency=nfc_pay_out_request.currency,
-                                    comment= nfc_pay_out_request.comment            ) 
+
 
     detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
 
     return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 
+
+
+@router.get("/balance", tags=["public", "hx"])
+async def hx_balance(request: Request,
+                        acorn_obj: Acorn= Depends(get_acorn)):
+    
+            await acorn_obj.load_data()
+            
+            return HTMLResponse(f"Balance: {acorn_obj.balance}")
+
+@router.get("/requestqr", tags=["public", "hx"])
+async def hx_request_qr(    request: Request,
+                            amount: float = Query(...), 
+                            select_currency: str = Query(...), 
+                            description: str = Query(...),
+                            acorn_obj: Acorn = Depends(get_acorn)):
+            await acorn_obj.load_data()
+
+            with Session(engine) as session:  
+                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+                safeboxes = session.exec(statement)
+                safebox_found = safeboxes.first() 
+
+            if safebox_found.custom_handle:
+                final_handle = safebox_found.custom_handle
+            else:
+                final_handle = safebox_found.handle
+    
+            final_address = f"{final_handle}__{amount}__{select_currency}__{description}@{request.url.hostname}"
+            final_url, final_lnurl= lightning_address_to_lnurl(final_address)
+            # final_qr = final_address
+            final_qr = f"lightning:{final_lnurl}"
+
+
+
+            final_txt = f"""<img id=\"request\" src=\"/safebox/qr/{final_qr}\"> <br><br>
+                        Request for {amount} {select_currency} for {final_handle}@{request.url.hostname}
+                        <br> {final_lnurl} {final_url}
+                        """
+           
+            
+            return HTMLResponse(final_txt)

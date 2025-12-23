@@ -20,6 +20,7 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
         allows_nostr    = lnparms_obj.get("allowsNostr", False)
         nostr_pubkey    = lnparms_obj.get("nostrPubkey", None)
         safebox         = lnparms_obj.get("safebox", False)
+        nonce            = lnparms_obj.get("nonce", None)
            
         
         # print("ln_parms", ln_parms.json())
@@ -35,12 +36,13 @@ def lightning_address_pay(amount: int, lnaddress: str, comment:str="Payment made
     data_to_send = {    "wallet_name": ln_parts[0],
                         "amount": amount*1000,
                         "comment": comment,
-                        "safebox": safebox
+                        "safebox": safebox,
+                        "nonce":    nonce
                         
                         }
 
     ln_return = requests.get(ln_parms.json()['callback'],params=data_to_send)
-    return ln_return.json(), safebox
+    return ln_return.json(), safebox, nonce
 
 def lnaddress_to_lnurl(lnaddress):
     domain = lnaddress.split('@')[1]

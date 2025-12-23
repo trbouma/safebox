@@ -79,12 +79,12 @@ async function updateOffer() {
     // console.log(referer);
       }
 
-async function deleteOffer() {
-  var input_card_title = document.getElementById("input_card_title");
+async function deleteGrant() {
+  
 
-  user_confirm = confirm(`Are you sure you want to proceed with deleting ${input_card_title.value}?`) ;
+  user_confirm = confirm(`Are you sure you want to proceed with deleting {{ card }}?`) ;
 
-  const submit_data = {"title": input_card_title.value, "kind": record_kind};
+  const submit_data = {"title": "{{ card }}", "kind": record_kind};
 
     
 
@@ -111,16 +111,14 @@ async function deleteOffer() {
 
 
 <div class="center-text">
-    <h1>Update {{offer_label}} Offer </h1>
-    {{card}} {{referer}} {{record_kind}}
-   
-    <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
+    <h1> {{grant_label}}  Record</h1>  
+    <div class="card">
+      <div class="card-title">{{ card.split(':')[1] if ':' in card else card }}</div>
+      <div class="card-content">{{ content }}</div>
+    </div>
+  
     <br><br>
-    <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
-    <br><br>
-    <button onclick="updateOffer()">Update Offer</button>
-    <br><br>
-    <button onclick="deleteOffer()">Delete Offer</button>
+    <button onclick="deleteGrant()">Delete</button>
     <br><br>
     <button onclick="goBack()">Back</button>
     <br><br>
@@ -133,7 +131,7 @@ async function deleteOffer() {
 
 <div class="center-text">    
     <hr>
-    {{action_mode}} {{record_kind}}  {{referer}}   
+    {{action_mode}} {{record_kind}}  {{referer}} grant.html   
 </div>
 
      
