@@ -5,8 +5,9 @@ from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.util import util_funcs
 from safebox.acorn import Acorn
-from safebox.models import nostrProfile, SafeboxItem
+from safebox.models import nostrProfile, SafeboxItem, SafeboxRecord
 from datetime import datetime, timedelta
+import json
 
 from safebox.lightning import lightning_address_pay
 from time import sleep, time
@@ -629,6 +630,41 @@ def release_lock():
     asyncio.run(acorn_obj.load_data()) 
     asyncio.run(acorn_obj.release_lock()) 
 
+@click.command("issue", help="Issue private record")
+@click.argument('content', default="hello")
+@click.option('--tags','-t', default=[])
+@click.option('--kind','-k', default=34002, help="kind for record")
+
+def issue( content:str, tags, kind:int):
+  
+    
+    click.echo(f"Issue content: {content}")
+    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,mints=MINTS)
+    asyncio.run(acorn_obj.load_data()) 
+    tags = ["p", acorn_obj.pubkey_hex]
+    issued_record = asyncio.run(acorn_obj.issue_private_record(content=content, tags=tags, kind=kind))
+    issued_str = json.dumps(issued_record.data())
+    asyncio.run(acorn_obj.put_record(record_name="test credential", record_value=issued_str,record_type="private_record", record_kind=kind)) 
+   
+    retrieved_record =    asyncio.run(acorn_obj.get_record(record_name="test credential", record_kind=kind)) 
+    safebox_record = SafeboxRecord(**retrieved_record)
+    click.echo(f"-"*80)
+    click.echo(f"Event data string: {issued_str} : ")
+    click.echo(f"-"*80)
+    click.echo(f"Is Valid: {issued_record.is_valid()} Is parameter replaceable {issued_record.is_parameter_replacable()} Is ephemeral {issued_record.is_ephemeral()} tags: {issued_record.tags}")
+    click.echo(f"-"*80)
+    
+    click.echo(f"Retrieve Record: {retrieved_record} Safebox Record:{safebox_record}")
+    payload_json = json.loads(retrieved_record["payload"])
+    click.echo(f"Payload in json {payload_json}")
+    event_from_record = Event.load(payload_json)
+    click.echo(f"Even from Record: {event_from_record}")
+
+
+    
+
+    
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -658,6 +694,7 @@ cli.add_command(set_owner)
 cli.add_command(dm_recipient)
 cli.add_command(stx_recipient)
 cli.add_command(run)
+cli.add_command(issue)
 
 
 if __name__ == "__main__":

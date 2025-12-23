@@ -36,6 +36,7 @@ from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
 from safebox.monstrmore import KindOtherGiftWrap, ExtendedNIP44Encrypt
+from safebox.func_utils import npub_to_hex
 
 
 tail = util_funcs.str_tails
@@ -49,7 +50,7 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory, SafeboxRecord
+from safebox.models import TxHistory, SafeboxRecord, ParseRecord
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
@@ -619,7 +620,7 @@ class Acorn:
         events.sort(reverse=reverse)
 
         for each in events:
-            # print("x:", each.tags, each.kind, each.created_at)
+            
 
             if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
                 (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
@@ -648,6 +649,7 @@ class Acorn:
                                             "id": unwrapped_event.id,
                                             "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
+                        
 
 
                 except Exception as e:
@@ -689,7 +691,21 @@ class Acorn:
             if isinstance(parsed_record,list):
                 pass
             else:
+                
+                #Inspect Payload and decide what to show
+                print(f"get parsed record payload: {type(parsed_record["payload"])} {parsed_record["payload"]}")
+                if isinstance(parsed_record["payload"], dict):
+                    # private event so just show context
+                    parsed_record["content"] = parsed_record["payload"]["content"]
+                    
+                else:
+                    # string so just show string
+                    parsed_record["content"] = parsed_record["payload"]
+                    
+
+                
                 events_out.append(parsed_record)
+              
         
         return events_out
 
@@ -4909,7 +4925,17 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
+    async def issue_private_record(self, content:str, kind:int =34002, tags: List =[])->Event:
+        """Issue private record"""
         
+        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)]]
+        issued_record = Event(  pub_key=self.pubkey_hex,
+                                kind=kind,
+                                tags = tags,
+                                content=content)
+        issued_record.sign(self.privkey_hex)
+
+        return issued_record
 
             
 

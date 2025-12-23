@@ -8,16 +8,17 @@ import asyncio,qrcode, io, urllib
 
 from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
-from app.appmodels import SafeboxRecord
+from safebox.models import GrantRecord, OfferRecord
 from time import sleep
 import json
 from monstr.util import util_funcs
 from monstr.encrypt import Keys
+from monstr.event.event import Event
 import ipinfo
 import requests
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken
@@ -283,13 +284,20 @@ async def transmit_records(        request: Request,
 
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
         for each_record in records_to_transmit:
+
+            # Issue record here:
+            
+            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind)
+            
+            issued_record_str = json.dumps(issued_record.data())
+            print(f"issued record here before transmitting: {issued_record_str}")
             
             if each_record['tag'][0] == transmit_consultation.record_name:
                 print(f"transmitting: {each_record['tag'][0]} {each_record['payload']}")
 
                 record_obj = { "tag"   : [each_record['tag']],
                                 "type"  : str(transmit_consultation.final_kind),
-                                "payload": each_record['payload'],
+                                "payload": issued_record_str,
                                 "timestamp": int(datetime.now(timezone.utc).timestamp()),
                                 "endorsement": acorn_obj.pubkey_bech32
                             }
@@ -551,8 +559,13 @@ async def retrieve_grant_list(       request: Request,
         user_records = None
     
     #FIXME don't need the grant kinds
+   
     
     grant_kinds = settings.GRANT_KINDS
+
+    # Inspect the user records and see what we can do with them
+    
+
   
     record_label = get_label_by_id(grant_kinds, record_kind)
     
@@ -662,6 +675,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     # await asyncio.sleep(10)
     #FIXME - add in an ack here using auth relays
 
+    # This is the same acceptance code that has to go into NWC relay offer_record
+
     while user_records == []:
         user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays,since=since_now)
         await asyncio.sleep(1)
@@ -690,8 +705,9 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
         final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]" 
         print(f"record_name: {record_name} record value: {final_record} type: {type}")
+        # Just add in record_value instead of final value
         
-        await acorn_obj.put_record(record_name=record_name, record_value=final_record, record_kind=type, record_origin=npub_initiator)
+        await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
 
     await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
    
@@ -740,6 +756,8 @@ async def accept_incoming_record(       request: Request,
                 # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
                 record_name = f"{each_record['tag'][0][0]}" 
                 record_value = each_record['payload']
+                grant_record = GrantRecord(tag=[record_name], type="generic",payload=record_value)
+                print(f"grant record: {grant_record}")
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
                 
                 detail = f"Matched record {incoming_record.id} accepted!"
@@ -841,11 +859,31 @@ async def display_grant(     request: Request,
 
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
         label_hash = await acorn_obj.get_label_hash(label=card)
-        safebox_record = SafeboxRecord(**record)
-        print(f"safebox record: {record} {safebox_record}")
+        grant_record = GrantRecord(**record)
+        print(f"safebox record: {record} {grant_record}")
 
         try:
-            content = record["payload"]
+            grant_record = GrantRecord(**record)
+            # content = record["payload"]
+            # content=grant_record.payload
+            private_record = record["payload"]
+            event_to_validate: Event = Event().load(private_record)
+            
+            
+            # tag_owner = get_tag_value(private_record["tags"], "safebox_owner")
+            # tag_safebox = get_tag_value(private_record["tags"], "safebox")
+            tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
+            tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+            type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
+            # Need to check signature too
+            print("let's check signature")
+           
+            
+            print(f"event to validate: {event_to_validate.data()}")
+            
+            event_is_valid = event_to_validate.is_valid()
+
+            content = f"{event_to_validate.content} \n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {True} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
         except:
             content = record
         
@@ -856,7 +894,8 @@ async def display_grant(     request: Request,
         template_to_use = "records/recordoffer.html"
 
         try:
-            content = record["payload"]
+            #content = record["payload"]
+            content = record["payload"]["content"]
         except:
             content = record    
     

@@ -340,6 +340,25 @@ class SafeboxRecord(BaseModel):
     type: str                          # e.g. "offer"
     payload: Any                       # can hold any JSON-serializable value
 
+class ParseRecord(BaseModel):
+    tag: List[str]                     # e.g. ["my_record"]
+    type: str  
+    created_at: str                        # e.g. "offer"
+    payload: Any                       # can hold any JSON-serializable value
+    id: str
+    timestamp: int
+
+
+class GrantRecord(BaseModel):
+    tag: list[str]  = None                   # e.g. ["my_record"]
+    type: str       = None                       # e.g. "offer"
+    payload: Any    = None                    # can hold any JSON-serializable value
+
+class OfferRecord(BaseModel):
+    tag: list[str]  = None                   # e.g. ["my_record"]
+    type: str       = None                       # e.g. "offer"
+    payload: Any    = None                    # can hold any JSON-serializable value
+
 
 class TokenV4DLEQ(BaseModel):
     """

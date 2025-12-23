@@ -233,7 +233,7 @@ async function selectRecordKind() {
     {
       if (record.hasOwnProperty("tag")) {
           // console.log(`Name: ${record.name}`);
-          addCard(record.tag, record.payload);
+          addCard(record.tag, record.content);
       } else {
           console.log("This record does not have a 'name' property.");
       }

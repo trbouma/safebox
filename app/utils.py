@@ -35,6 +35,8 @@ from app.appmodels import RegisteredSafebox
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.config import Settings, ConfigWithFallback
 
+
+
 settings = Settings()
 config = ConfigWithFallback()
 # Secret key for signing JWT
@@ -44,6 +46,21 @@ engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token
+
+Tag = List[str]
+Tags = List[Tag]
+
+def get_tag_value(tags: Tags, key: str) -> Optional[str]:
+    """
+    Retrieve the value for a given key from a tag list.
+
+    Example tags:
+    [["key1", "value1"], ["key2", "value2"]]
+    """
+    for k, v in tags:
+        if k == key:
+            return v
+    return None
 
 def generate_secure_pin():
     while True:

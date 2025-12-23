@@ -9,7 +9,7 @@
 
 The **Acceptance Model** expresses a simple idea:
 
-> **Facts are not merely discovered; they are recognized by the system.**
+> **Facts and views are not established by the system; they are resolved by the disposition of statements about them.**
 
 Across law, governance, science, and technical systems, disputes rarely hinge on *what might be true in some ultimate sense*. Instead, they hinge on **what a system is prepared to treat as settled and binding**.
 
@@ -53,7 +53,7 @@ The Acceptance Model structures those questions into clear layers, separating:
 - Reality from language
 - Claims from validation
 - Trust in statements from trust in speakers
-- Truth from institutional recognition
+- Truth from recognition
 
 ---
 
@@ -69,15 +69,20 @@ The Acceptance Model structures those questions into clear layers, separating:
 
 - **Attestation** An assertion that affirms the truth or validity of another assertion.
 
-- **Delegation** An assertion about another **Npub** conferring a recognition and/or authorization.
+- **Recognition** An assertion about another **Npub** that produces a standing which may result in authorization or delegation.
 
 - **Acceptance**  A system-level act that treats a statement (or chain of statements) as a fact.
 
 ---
+## Recogition, Authority and Delegation
 
-## The Acceptance Model (Expanded)
+Recognition, delegation, and authority are often conflated, but the Acceptance Model treats them as distinct. Authority does not arise from delegation alone; it exists only where it is recognized. Delegation is an act by which one actor purports to transfer or confer authority, but that act has no effect unless a system accepts it. Recognition is the system’s determination that an asserted authority will be treated as operative. Authority, in turn, is not a substance that flows from one actor to another, but a condition that stabilizes once recognition occurs. In this sense, delegation proposes authority, recognition produces standing which makes it effective. Authority exists only to the extent of the standing of an actors that makes it effective.
 
-### States, Assertions, Attestations, and Endorsements
+**In the Acceptance Model, assertions introduce claims about facts and views, attestations qualify them, and recognition produces standing which is the precondition authority and delegation.**
+
+## The Acceptance Model
+
+### States, Assertions, Attestations, and Recognitions
 
 | Level | Layer | Refers To | What It Is | Example |
 |---|---|---|---|---|
@@ -86,18 +91,18 @@ The Acceptance Model structures those questions into clear layers, separating:
 | 1 | **Assertion** | State (0a or 0b) | A claim regarding a statement | Alice: “The light is on” |
 | 2 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion | Bob: “Alice’s claim is true” |
 | 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation | Carol: “Bob’s attestation is valid” |
-| — | **Delegation** | **Actor** | Conferring a recognition and/or authorization to another actor | Bob: “Alice is competent and can do something on behalf of me” |
+| — | **Recognition** | **Actor** | Recognizing another actor which may result in an authorization or delegation | Bob: “I recognize that Alice is competent and can do something on behalf of me” |
 | — | **Acceptance** | Chain | System recognition/authorization | Condition of when system reaches a conclusion regarding a statement |
 
 ---
 The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
 - an **Assertion** is an assertion (signed event) about a **Statement**
 - an **Attestation** is an assertiona (signed event) about an **Assertion** (another signed event)
-- an **Delegation** is an assertion (signed event) about another **Npub** conferring a recognition and/or authorization.
+- an **Recognition** is an assertion (signed event) recognizing another **Npub** which may result in an authorized or delegation.
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
-![Acceptance Mode](./img/acceptance-4.png)
+![Acceptance Mode](./img/acceptance-final.png)
 
 ## Statement: Facts and Views
 
@@ -166,9 +171,11 @@ Multiple attestations can increase 'truthiness', but is not truth itself.
 
 ---
 
-## Delegation (Orthogonal to Attestation)
+## Recognition (Orthogonal to Attestation)
 
-A **delegation** does not vouch for a statement. It vouches for another **actor**.
+A **recognition** produces **standing** of another **actor** which is the start of authority and/or delegation.
+
+**Standing** is the condition created when the system recognizes an actor as one whose assertions or actions will be treated as effective.
 
 - Actor-directed, not claim-directed
 - Generalizes trust across future assertions
@@ -177,7 +184,7 @@ A **delegation** does not vouch for a statement. It vouches for another **actor*
 Example:
 - Bob signs: *“Alice is reliable”*
 
-A **delegation** is a type of assertion that references another **actor** versus a **fact** or **view**.
+A **recognition** is a type of assertion that produces standing of another **actor** for the purposes of **authorization** or **delegation**.
 
 ---
 
@@ -219,7 +226,7 @@ Acceptance is:
 - **Statement** → what is said about reality (fact or view)  
 - **Assertion** → what is claimed by an actor
 - **Attestation** → what is vouched for another actor  
-- **Delegation** → what is said by one actor of another actor 
+- **Recognition** → what is said by one actor of another actor 
 - **Acceptance** → what counts as reliably according to the system
 
 ---
@@ -229,7 +236,7 @@ The acceptance logic likely will be a recursive resolution model that arrives at
 
 Below is an initial resolution model
 
-![Delegation](./img/delegation-1.jpg)
+![Recognitin](./img/recognition-final.png)
 
 ## Synthesis
 
