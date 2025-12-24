@@ -16,6 +16,7 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 import ipinfo
 import requests
+from safebox.func_utils import get_profile_for_pub_hex
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
@@ -388,14 +389,48 @@ async def my_present_records(       request: Request,
     #FIXME don't need the grant kinds
     
     grant_kinds = settings.GRANT_KINDS
-  
+
+    # Need to determine what to present
+    out_records = []
+    is_valid = "Cannot Validate"
+    for each in user_records:        
+
+        if isinstance(each["payload"], dict):
+                        
+            event_to_validate: Event = Event().load(each["payload"])
+            print(f"event to validate tags: {event_to_validate.tags}")
+            tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
+            tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+            type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
+            # owner_name = tag_owner
+            owner_info = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
+            print(f"safebox owner: {tag_owner} {owner_info}")
+            # Need to check signature too
+            print("let's check signature")  
+            print(f"event to validate: {event_to_validate.data()}")
+    
+            if event_to_validate.is_valid():
+                is_valid = "True"
+
+            is_trusted = "TBD"
+            content = f"{event_to_validate.content}"
+            each["content"] = content
+            each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+        else:
+            each["content"] = each["payload"] 
+            each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
+        
+        
+        out_records.append(each)
+
+    print("present records")
     record_label = get_label_by_id(grant_kinds, record_kind)
     
     return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
                                             
                                             
-                                            "user_records": user_records ,
+                                            "user_records": out_records ,
                                             "nauth": nauth_response,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
@@ -471,6 +506,38 @@ async def my_retrieve_records(       request: Request,
     except:
         user_records = None
     
+    print(f"present records: {user_records}")
+    present_records = []
+    for record in user_records: 
+
+        try:
+            
+            content = record["payload"]
+            
+            private_record = record["payload"]
+            event_to_validate: Event = Event().load(private_record)
+            
+            
+            # tag_owner = get_tag_value(private_record["tags"], "safebox_owner")
+            # tag_safebox = get_tag_value(private_record["tags"], "safebox")
+            tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
+            tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+            type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
+            # Need to check signature too
+            print("let's check signature")
+           
+            
+            print(f"event to validate: {event_to_validate.data()}")
+            
+            event_is_valid = event_to_validate.is_valid()
+            is_trusted = "TBD"
+
+            content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+            record["content"] = content
+        except:
+            record["content"] = record
+        present_records = record
+    
     #FIXME don't need the grant kinds
     
     grant_kinds = settings.GRANT_KINDS
@@ -481,7 +548,7 @@ async def my_retrieve_records(       request: Request,
                                         {   "request": request,
                                             
                                             
-                                            "user_records": user_records ,
+                                            "user_records": present_records ,
                                             "nauth": nauth_response,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
@@ -882,8 +949,9 @@ async def display_grant(     request: Request,
             print(f"event to validate: {event_to_validate.data()}")
             
             event_is_valid = event_to_validate.is_valid()
+            is_trusted = "TBD"
 
-            content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {True} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+            content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
         except:
             content = record
         
@@ -1455,14 +1523,20 @@ async def ws_record_listen( websocket: WebSocket,
                 # determine content to display and verification result
 
                 out_records =[]
+                is_valid = "Cannot Validate"
                 for each in record_json:
+                    print(f"each to present {each}, payload type: {type(each["payload"])}")
                     is_valid = "Cannot Validate"
                     if isinstance(each["payload"], dict):
-                        event_to_validate: Event = Event().load(each["payload"])
                         
+                        event_to_validate: Event = Event().load(each["payload"])
+                        print(f"event to validate tags: {event_to_validate.tags}")
                         tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
                         tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
                         type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
+                        # owner_name = tag_owner
+                        owner_name = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
+                        print(f"safebox owner: {tag_owner} {owner_name}")
                         # Need to check signature too
                         print("let's check signature")  
                         print(f"event to validate: {event_to_validate.data()}")
@@ -1470,14 +1544,16 @@ async def ws_record_listen( websocket: WebSocket,
                         if event_to_validate.is_valid():
                             is_valid = "True"
 
+                        is_trusted = "TBD"
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {is_valid} | Trusted: {True} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_name} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
                     else:
                         each["content"] = each["payload"] 
                         each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
 
                     out_records.append(each)
+                    print(f"out records: {out_records}")
 
 
                 msg_out =   {   "status": "VERIFIED",
@@ -1486,7 +1562,8 @@ async def ws_record_listen( websocket: WebSocket,
                                 "result": is_valid
                                
                                }
-                print(f"send {incoming_record} {record_json}") 
+                # print(f"send {incoming_record} {record_json}") 
+                # print(f"msg out: {msg_out}") 
                 await websocket.send_json(msg_out)
                 incoming_record_old = incoming_record
                 print("incoming record  successful!")

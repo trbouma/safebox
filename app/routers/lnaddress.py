@@ -358,6 +358,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
+    pin_ok = False
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
     token_key = token_secret.split(":")[0]
     token_pin = token_secret.split(":")[1]
@@ -367,16 +368,19 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     if token_pin == proof_vault.pin:
         status = "OK"
         detail = "Valid PIN"
+        pin_ok = True
     else:
-        status = "ERROR"
+        status = "WARNING"
         detail = "Invalid PIN"
+        pin_ok = False
 
     wallet_instruction = {
     "method": "present_record",
     "params": { 
         "nauth": proof_vault.nauth,
         "label": proof_vault.label,
-        "kind": proof_vault.kind
+        "kind": proof_vault.kind,
+        "pin_ok": pin_ok
 
             }
         }

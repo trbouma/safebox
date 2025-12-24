@@ -12,6 +12,9 @@ import bech32
 
 from safebox.models import NIP60Proofs
 
+from monstr.client.client import Client, ClientPool
+from monstr.event.event import Event
+
 def generate_name_from_hex(hex_string):
     # Ensure the input is a valid 32-byte hex string
     if len(hex_string) != 64:
@@ -165,3 +168,24 @@ def npub_to_hex(npub: str) -> str:
 
     # Convert bytes to hex string
     return bytes(decoded_bytes).hex()
+
+async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
+   
+    owner = 'No Owner Found'
+    events = None
+
+    FILTER = [{
+                'limit': 1,
+                'authors': [pub_hex],
+                'kinds': [0] }]
+    
+    async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)   
+
+    if events:
+        print(f"kind 0{events[0].content}")
+        json_obj = json.loads(events[0].content)
+        owner = f"{json_obj.get("name", "")} {json_obj.get("nip05", "")} "
+    else:
+        owner = pub_hex
+    return owner

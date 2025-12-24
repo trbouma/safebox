@@ -185,7 +185,7 @@ async function selectRecordKind() {
     const jsonUserData = {{ user_records | tojson }}; 
 
     // Function to create and add a card
-    function addCard(title, content) {
+    function addCard(title, content, verification) {
       // Create a card element
       const card = document.createElement('div');
       card.className = 'card';
@@ -200,9 +200,15 @@ async function selectRecordKind() {
       cardContent.className = 'card-content';
       cardContent.textContent = content;
 
+      // Create and add the content element
+      const cardVerification = document.createElement('div');
+      cardVerification.className = 'card-content';
+      cardVerification.textContent = verification;
+
       // Append title and content to the card
       card.appendChild(cardTitle);
       card.appendChild(cardContent);
+      card.appendChild(cardVerification);
 
       card.addEventListener('click', () => {
 
@@ -232,7 +238,7 @@ async function selectRecordKind() {
     {
       if (record.hasOwnProperty("tag")) {
           // console.log(`Name: ${record.name}`);
-          addCard(record.tag, record.payload);
+          addCard(record.tag, record.content, record.verification);
       } else {
           console.log("This record does not have a 'name' property.");
       }
