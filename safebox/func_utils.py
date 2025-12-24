@@ -185,7 +185,7 @@ async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
     if events:
         print(f"kind 0{events[0].content}")
         json_obj = json.loads(events[0].content)
-        owner = f"{json_obj.get("name", "")} {json_obj.get("nip05", "")} "
+        owner = f"{json_obj.get('name', '')} {json_obj.get('nip05', '')} "
     else:
         owner = pub_hex
     return owner
