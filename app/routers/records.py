@@ -1525,7 +1525,7 @@ async def ws_record_listen( websocket: WebSocket,
                 out_records =[]
                 is_valid = "Cannot Validate"
                 for each in record_json:
-                    print(f"each to present {each}, payload type: {type(each["payload"])}")
+                    print(f"each to present {each}, payload type: {type(each['payload'])}")
                     is_valid = "Cannot Validate"
                     if isinstance(each["payload"], dict):
                         
