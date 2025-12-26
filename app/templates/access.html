@@ -57,6 +57,11 @@
     }
 
 
+  async function attest() {
+
+  window.location.href="/safebox/attest/";
+
+  } 
 
   async function logout() {
   var data; 
@@ -1020,6 +1025,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
   <br><br>
   <button id="issue_card" onclick="issueCard()" >Issue Card</button>
+  <br><br>
+  <button onclick="attest()">Attest</button> 
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <br>

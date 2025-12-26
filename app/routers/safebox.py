@@ -997,13 +997,27 @@ async def my_ecash(       request: Request,
                                         })
 
 
+@router.get("/attest", tags=["safebox", "protected"])
+async def my_attest(       request: Request, 
+                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    
+    print(f"{acorn_obj.pubkey_bech32}")
+    return templates.TemplateResponse(      "attest/attest.html", 
+                                        {   "request": request,
+                                            "acorn_obj": acorn_obj
+
+
+                                        })  
+
+
 @router.get("/dangerzone", tags=["safebox", "protected"])
 async def my_danger_zone(       request: Request, 
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to danger zone"""
 
-    
+ 
 
 
     with Session(engine) as session:
