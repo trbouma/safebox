@@ -218,4 +218,8 @@ class nfcPayOutVault(BaseModel):
     nfc_ecash_clearing: bool = False
     pubkey: str|None = None
     sig: str|None=None
+
+class attestationOwner(BaseModel):
+    safebox_npub: str 
+    owner_nsec: str
     

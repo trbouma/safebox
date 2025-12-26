@@ -16,7 +16,7 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 import ipinfo
 import requests
-from safebox.func_utils import get_profile_for_pub_hex
+from safebox.func_utils import get_profile_for_pub_hex, get_attestation
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
@@ -403,7 +403,7 @@ async def my_present_records(       request: Request,
             tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
             type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
             # owner_name = tag_owner
-            owner_info = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
+            owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
             print(f"safebox owner: {tag_owner} {owner_info}")
             # Need to check signature too
             print("let's check signature")  
@@ -416,9 +416,11 @@ async def my_present_records(       request: Request,
             content = f"{event_to_validate.content}"
             each["content"] = content
             each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+            each["picture"]=picture
         else:
             each["content"] = each["payload"] 
             each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
+            each["picture"]=None
         
         
         out_records.append(each)
@@ -1535,8 +1537,8 @@ async def ws_record_listen( websocket: WebSocket,
                         tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
                         type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
                         # owner_name = tag_owner
-                        owner_name = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
-                        print(f"safebox owner: {tag_owner} {owner_name}")
+                        owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
+                        print(f"safebox owner: {tag_owner} {owner_info}")
                         # Need to check signature too
                         print("let's check signature")  
                         print(f"event to validate: {event_to_validate.data()}")
@@ -1544,13 +1546,21 @@ async def ws_record_listen( websocket: WebSocket,
                         if event_to_validate.is_valid():
                             is_valid = "True"
 
+                        
+                        is_attested = await get_attestation(owner_npub=tag_owner,safebox_npub=acorn_obj.pubkey_bech32, relays=settings.RELAYS)
                         is_trusted = "TBD"
+                        print(f"is attested: {is_attested}")
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_name} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid:{is_valid}| Attested:{is_attested}|Trusted:{is_trusted}\nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+                        each["picture"] = picture
+                        each["is_attested"] = is_attested
+
                     else:
                         each["content"] = each["payload"] 
                         each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
+                        each["picture"] = None
+                        each["is_attested"] = False
 
                     out_records.append(each)
                     print(f"out records: {out_records}")

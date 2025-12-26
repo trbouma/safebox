@@ -255,6 +255,15 @@ alert(backup_message);
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
 
 }
+async function copyNpub() {
+
+await navigator.clipboard.writeText("{{acorn.pubkey_bech32}}");
+alert("Npub copied to clipboard!");
+
+
+
+
+}
 
 async function useClipboard() {
 
@@ -1026,6 +1035,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
   <br>Mode: {{action_mode}} Data: {{action_data}}
   <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+  <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
   <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
   <br>home relay: {{acorn.home_relay}}
   <br><br>
@@ -1038,6 +1048,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+ 
 
             
 </div>

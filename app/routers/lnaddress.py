@@ -20,7 +20,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
@@ -792,5 +792,39 @@ async def access_safebox(request: Request, access_key:str):
             }
            
           
-            
+@router.post("/attestationowner", tags=["public"])
+async def access_safebox(request: Request, attestation_owner:attestationOwner): 
      
+     
+
+    try:
+        owner_k = Keys(priv_k=attestation_owner.owner_nsec)
+        safebox_k = Keys(pub_k=attestation_owner.safebox_npub)
+        detail = f"{attestation_owner.safebox_npub} {owner_k.public_key_bech32()}"
+    except Exception as e:
+        status = "ERROR"
+        detail = "Cannot create key"
+        return {"status": status, "detail": detail}
+
+    content = f"Npub holder: {owner_k.public_key_bech32()} has attested ownership of safebox: {safebox_k.public_key_bech32()}"
+
+    tags = [    ["d", f"{safebox_k.public_key_bech32()}:safebox-under-control"],
+                ["p", f"{safebox_k.public_key_hex()}"],
+                ["v", "valid"]
+
+        ]
+    async with ClientPool(settings.RELAYS) as c:  
+      
+
+        n_msg = Event(kind=31871,
+                      tags=tags,
+                    content=content,
+                    pub_key=owner_k.public_key_hex())
+        n_msg.sign(owner_k.private_key_hex())
+
+        c.publish(n_msg)
+
+    status = "Ok"    
+    detail = f"{content}"
+    
+    return {"status": status, "detail": detail}
