@@ -219,7 +219,10 @@ class nfcPayOutVault(BaseModel):
     pubkey: str|None = None
     sig: str|None=None
 
-class attestationOwner(BaseModel):
-    safebox_npub: str 
+class attestationOwner(BaseModel):    
     owner_nsec: str
+
+class signedEvent(BaseModel):
+    signed_event: dict
+   
     

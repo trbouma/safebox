@@ -367,22 +367,32 @@ async function listenForRecord(nauth) {
     cardVerification.style.textAlign = 'center';
     card.appendChild(cardVerification); 
 
-            // Create and add the content element
-    const cardPicture = document.createElement('div');
-    cardPicture.className = 'card-content';    
-    cardPicture.style.textAlign = 'center';
+    // Create and add the ownerprofile element
+
+    const cardOwnerProfile = document.createElement('div');
+    cardOwnerProfile.className = 'card-content';    
+    cardOwnerProfile.style.textAlign = 'center';
+    
+
     // Create the image element
-    const img = document.createElement('img');
-    img.src = picture;          // picture is the image URL
-    img.alt = 'Card image';
-    img.style.maxWidth = '100%'; // keep it responsive
-    img.style.height = 'auto';
-    // Add image to the container
-    cardPicture.appendChild(img);
+    if (picture) {
+
+      const img = document.createElement('img');
+      img.src = picture;          // picture is the image URL
+      img.alt = 'Card image';
+      img.style.maxWidth = '100%'; // keep it responsive
+      img.style.height = 'auto';
+      // Add image to the container
+      cardOwnerProfile.appendChild(img);
+      
+      // Add container to the card
+       
+    } else {
     
-    // Add container to the card
-    card.appendChild(cardPicture); 
-    
+      cardOwnerProfile.textContent = "No Owner Profile Found";
+    }
+
+    card.appendChild(cardOwnerProfile);
   
 
 

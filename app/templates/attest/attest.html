@@ -24,14 +24,59 @@ async function attest() {
 // alert("scan!");
 
 const npub_safebox = "{{acorn_obj.pubkey_bech32}}"
-if ("nostr" in window) {
+var use_signer = document.getElementById("use_signer")
+if ("nostr" in window && use_signer.checked) {
   var public_key = await window.nostr.getPublicKey();
-  alert(public_key);
+
+  // alert(public_key);
+  var tags = [  ["d", "{{acorn_obj.pubkey_bech32}}:safebox-under-control"],
+            ["p", "{{acorn_obj.pubkey_hex}}"],
+            ["v", "valid"]
+          ];
+  var content = `Npub holder: ${public_key} has attested ownership of safebox: {{acorn_obj.pubkey_hex}}`
+  event_to_sign = {   "created_at": Math.floor(Date.now() / 1000),
+                      "kind": 31871,
+                      "tags": tags,
+                      "content": content
+
+
+  };
+
+  
+  var signed_event = await window.nostr.signEvent(event_to_sign);
+  alert(JSON.stringify(signed_event));
+
+  submit_data = {"signed_event": signed_event};
+
+  await fetch('/safebox/publishsignedevent', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => {data});
+
+  
 } else
 {
-  alert("you need the browser extension!");
+  //alert("you need the browser extension!");
+  var owner_nsec = prompt("Enter the owner nsec to use");
+
+  submit_data = {"owner_nsec": owner_nsec};
+
+  await fetch('/safebox/attestationowner', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => { data;
+                      alert(JSON.stringify(data));
+
+    });
+
 }
-// window.location.href="/safebox/attest/";
+
 
 }
 </script>
@@ -88,6 +133,8 @@ if ("nostr" in window) {
   <br><br>
   <button onclick="attest()">Attest</button> 
   <br><br>
+  <input type="checkbox" id="use_signer" name="use_signer" checked>
+  Use Signer, if available
 
   
 

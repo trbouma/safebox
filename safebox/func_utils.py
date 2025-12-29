@@ -187,7 +187,7 @@ def npub_to_hex(npub: str) -> str:
 
 async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
    
-    owner = 'No Owner Found'
+    owner = 'No Owner Profle Found'
     events = None
     picture = None
 
@@ -207,9 +207,9 @@ async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
             owner = f"{json_obj.get('name', '')} {json_obj.get('nip05', '')} website:{json_obj.get('website', '')}\n"
             picture = json_obj.get('picture', None)
         else:
-            owner = pub_hex
+            pass
     else:
-        owner = pub_hex
+        pass
     return owner,picture
 
 async def get_attestation(owner_npub:str, safebox_npub:str, relays:List=None):

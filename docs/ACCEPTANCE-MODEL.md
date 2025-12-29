@@ -245,3 +245,46 @@ Below is an initial resolution model
 Or more sharply:
 
 > **Facts in the system emerge when the system stops asking questions.**
+
+## Safebox Implementation of the Acceptance Model
+
+Safebox provides an implementation of the acceptance model.
+
+## Acceptance
+
+`Acceptance` is the more generalized notion of `verification` and is performed in three discrete steps:
+
+|No.|Step|Confirmation|Success Criteria|
+|---|---|---|---|
+|1.|Validated|The record is cryptographically correct|Successful signature validity check|
+|2.|Attested|An attestion record signed by the owner referred to by the safebox|Valid owner attestation event|
+|3.|Authorized|Member of list for authorization/recognition|Membership in List|
+|4.|Trusted|Web of Trust |Score|
+
+`Acceptance` is based on the evaluation of the above steps and is solely in the eyes of the verifier if one or several of the above steps are successful.
+
+
+### Private Record Format
+
+A **private record** is a signed event as per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) that is embedded in a safebox record. This embedded record or payload can be considered a **private record** because it is not published to any relay; rather it stored as a safebox record payload and stored as a NIP-44 encrypted event.
+
+### Attribution and Ownership
+For attribution and ownership, two tags are added to each private record: `["safebox", "<pubhex of safebox>"]` and `["safebox_ower", <pubhex of purported safebox owner ]`
+
+The `["safebox", , "<pubhex of safebox>"]` tag is easily validated because it should be the same as the `pubhex` that has signed the event. While this data might be considered redundant, the `["safebox"]` tag indicates that the the signed event should be considered and handled as a **private record** according to this specification.
+
+The `["safebox_ower", <pubhex of purported owner ]` must be verified independently, because the safebox could add any owner to the private record. This independent verification is done using the [Attestations NIP](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qy28wumn8ghj7un9d3shjtnyv9kh2uewd9hsqrrpw36x2um5v96xjmmwwvuhdk8z) where the owner, using their `nsec' must sign a `31871' event attesting that they 'own' or control the safebox in question. 
+
+This is done by creating a `d-tag` of the format: `"<safebox npub>:safebox-under-control"` to indicate which safebox instance is under the control of the owner (they may have many safeboxes under their control). The p-tag is populated as: `["p", f"<safebox pubhex"]` (note the pubhex format, instead of npub).
+
+For additional context info, the `content` field may be populated as such: `"Npub holder: <npub owner> has attested ownership of safebox: <npub safebox> "`
+
+This attestation event must be signed and published by the `<npub owner>`. During a verification process, there is step to retrieve this event to confirm that the safebox is indeed controlled by the owner that it claims.
+
+### Trustworthiness
+
+It is up to the verifier to decide the trustworthiness of a npub. This should be under the sole discretion of the verifier: they may use a scoring algorithm and threshold value to determine trustworthiness, or, referencing a list of which a npub is a member.
+
+
+
+- An **offer** is provided

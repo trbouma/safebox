@@ -1526,6 +1526,7 @@ async def ws_record_listen( websocket: WebSocket,
 
                 out_records =[]
                 is_valid = "Cannot Validate"
+                #TODO This needs to be refactored into a verification function
                 for each in record_json:
                     print(f"each to present {each}, payload type: {type(each['payload'])}")
                     is_valid = "Cannot Validate"
@@ -1548,11 +1549,18 @@ async def ws_record_listen( websocket: WebSocket,
 
                         
                         is_attested = await get_attestation(owner_npub=tag_owner,safebox_npub=acorn_obj.pubkey_bech32, relays=settings.RELAYS)
-                        is_trusted = "TBD"
+                        
+                        authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
+                        print(f"authorities: {authorities} tag owner {tag_owner}")
+                        if tag_owner in authorities:
+                            is_trusted = True
+                        else:
+                            is_trusted = False
+
                         print(f"is attested: {is_attested}")
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid:{is_valid}| Attested:{is_attested}|Trusted:{is_trusted}\nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_safebox[:6]}:{tag_safebox[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\nValid:{is_valid}|Attested:{is_attested}|Trusted:{is_trusted}"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
 

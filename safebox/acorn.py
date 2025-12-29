@@ -4936,8 +4936,20 @@ class Acorn:
         issued_record.sign(self.privkey_hex)
 
         return issued_record
+    
+    async def get_authorities(self,kind:int):
 
-            
+        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
+        authorities = npub_list
+        return authorities
+
+
+    async def set_authorities(self,kind:int, pub_hex_list: List[str]):
+
+        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
+        authorities = npub_list
+        return authorities
+        
 
        
         
