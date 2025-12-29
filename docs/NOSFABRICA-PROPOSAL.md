@@ -1,6 +1,6 @@
 # Nosfabrica Hackathon Proposal
 
-## Project Name: Acceptance Model
+## Project Name: Acceptance Model - Extending the Web of Trust
 
 The **Acceptance Model** expresses a simple idea:
 
