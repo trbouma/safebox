@@ -1342,10 +1342,8 @@ def generate_pnr(length=6):
     return ''.join(secrets.choice(characters) for _ in range(length))
 
 async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
-   """List for transfer"""
-   #TODO change this to listen_for_transfer
-    
-    
+    """This should be records transfer"""
+   
 
     records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
     print(f"listen for request {records_out}")
