@@ -288,7 +288,7 @@ async def transmit_records(        request: Request,
 
             # Issue record here:
             
-            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind, holder_npub=transmittal_npub)
+            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind)
             
             issued_record_str = json.dumps(issued_record.data())
             print(f"issued record here before transmitting: {issued_record_str}")
