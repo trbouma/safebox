@@ -649,7 +649,8 @@ class Acorn:
                                             "id": unwrapped_event.id,
                                             "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
-                        
+
+                    
                     parsed_record['presenter'] = unwrapped_event.pub_key
 
                 except Exception as e:
@@ -4927,10 +4928,18 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
-    async def issue_private_record(self, content:str, kind:int =34002, tags: List =[])->Event:
+    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002)->Event:
         """Issue private record"""
+        holder_pubhex = ""
+        if holder:
+            try:
+                holder_key = Keys(pub_k=holder)
+                holder_pubhex = holder_key.public_key_hex()
+            except:
+                pass
+            
         
-        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)]]
+        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)],["safebox_holder", holder_pubhex]]
         issued_record = Event(  pub_key=self.pubkey_hex,
                                 kind=kind,
                                 tags = tags,

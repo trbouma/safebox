@@ -288,7 +288,7 @@ async def transmit_records(        request: Request,
 
             # Issue record here:
             
-            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind)
+            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],holder=transmittal_npub, kind=transmit_consultation.final_kind)
             
             issued_record_str = json.dumps(issued_record.data())
             print(f"issued record here before transmitting: {issued_record_str}")
@@ -1560,6 +1560,8 @@ async def ws_record_listen( websocket: WebSocket,
                             is_trusted = True
                         else:
                             is_trusted = False
+
+                        print(f"test for presenter: {presenter} tag holder: {tag_holder}")
                         if presenter == tag_holder:
                             is_presenter = True
 
