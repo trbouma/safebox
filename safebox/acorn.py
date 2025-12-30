@@ -621,7 +621,7 @@ class Acorn:
 
         for each in events:
             
-
+            # check to see if record originates from elsewhere
             if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
                 (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
                 # print(f"need to  unwrap {type(each.content)} {each.content} ")
@@ -650,14 +650,14 @@ class Acorn:
                                             "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
                         
-
+                    parsed_record['presenter'] = unwrapped_event.pub_key
 
                 except Exception as e:
                     print(f"error: {e}")
             
 
 
-            else:
+            else: # otherwise record is self-originating
                 try:
                     decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
                 except:
@@ -672,10 +672,12 @@ class Acorn:
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
+                    #FIXME not sure if in a list
                     pass
                 else:
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
+                    parsed_record['presenter'] = self.pubkey_hex
 
             # Convert payload to json
             # See if payload is in stringifed json and convert

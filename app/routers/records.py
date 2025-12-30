@@ -288,7 +288,7 @@ async def transmit_records(        request: Request,
 
             # Issue record here:
             
-            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind)
+            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],kind=transmit_consultation.final_kind, holder_npub=transmittal_npub)
             
             issued_record_str = json.dumps(issued_record.data())
             print(f"issued record here before transmitting: {issued_record_str}")
@@ -400,7 +400,7 @@ async def my_present_records(       request: Request,
             event_to_validate: Event = Event().load(each["payload"])
             print(f"event to validate tags: {event_to_validate.tags}")
             tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
-            tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+            tag_safebox = get_tag_value(event_to_validate.tags, "safebox_issuer")
             type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
             # owner_name = tag_owner
             owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
@@ -415,6 +415,7 @@ async def my_present_records(       request: Request,
             is_trusted = "TBD"
             content = f"{event_to_validate.content}"
             each["content"] = content
+            print(f"line 418 {content}")
             each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
             each["picture"]=picture
         else:
@@ -1285,7 +1286,7 @@ async def post_send_record(      request: Request,
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
 
-        print(record_out)
+        print(f"This is the record to be sent for verification:{record_out}")
         try:
             nembed = create_nembed_compressed(record_out)
         except:
@@ -1361,7 +1362,7 @@ async def ws_record_offer( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth, presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
                 client_nauth=None
             
@@ -1431,7 +1432,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             # Error handling
             
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth, presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
                 client_nauth=None
             
@@ -1498,7 +1499,7 @@ async def ws_record_listen( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                incoming_record = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
+                incoming_record,presenter = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
             except Exception as e:
                 incoming_record=None
             
@@ -1526,20 +1527,23 @@ async def ws_record_listen( websocket: WebSocket,
 
                 out_records =[]
                 is_valid = "Cannot Validate"
+                is_presenter = False
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
-                    print(f"each to present {each}, payload type: {type(each['payload'])}")
+                    print(f"each to present: {each} {presenter}")
                     is_valid = "Cannot Validate"
                     if isinstance(each["payload"], dict):
                         
                         event_to_validate: Event = Event().load(each["payload"])
                         print(f"event to validate tags: {event_to_validate.tags}")
                         tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
-                        tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
+                        tag_issuer = get_tag_value(event_to_validate.tags, "safebox_issuer")
+                        tag_holder = get_tag_value(event_to_validate.tags, "safebox_holder")
+                        
                         type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
                         # owner_name = tag_owner
                         owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
-                        print(f"safebox owner: {tag_owner} {owner_info}")
+                        print(f"safebox issuer: {tag_owner} {owner_info}")
                         # Need to check signature too
                         print("let's check signature")  
                         print(f"event to validate: {event_to_validate.data()}")
@@ -1556,11 +1560,13 @@ async def ws_record_listen( websocket: WebSocket,
                             is_trusted = True
                         else:
                             is_trusted = False
+                        if presenter == tag_holder:
+                            is_presenter = True
 
                         print(f"is attested: {is_attested}")
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_safebox[:6]}:{tag_safebox[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\nValid:{is_valid}|Attested:{is_attested}|Trusted:{is_trusted}"
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_issuer[:6]}:{tag_issuer[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\nValid:{is_valid}|Attested:{is_attested}|Presenter:{is_presenter}|Trusted:{is_trusted}"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
 
@@ -1628,7 +1634,7 @@ async def ws_listen( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth,presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
             except:
                 client_nauth=None
             

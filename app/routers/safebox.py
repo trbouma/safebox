@@ -61,20 +61,7 @@ engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 
 
-##########################
-# Functions that need be part part of the module
-async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
-   
-    
-    
 
-    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
-    
-    
-    return records_out[0]["payload"]
-
-
-#################################
 
 @router.post("/login", tags=["safebox"])
 async def login(request: Request, access_key: str = Form()):
