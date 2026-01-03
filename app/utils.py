@@ -60,7 +60,7 @@ def get_tag_value(tags: Tags, key: str) -> Optional[str]:
     for k, v in tags:
         if k == key:
             return v
-    return None
+    return ""
 
 def generate_secure_pin():
     while True:
@@ -1342,14 +1342,13 @@ def generate_pnr(length=6):
     return ''.join(secrets.choice(characters) for _ in range(length))
 
 async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
+    """This should be records transfer"""
    
-    
-    
 
     records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
+    print(f"listen for request {records_out}")
     
-    
-    return records_out[0]["payload"]
+    return records_out[0]["payload"], records_out[0]["presenter"],
 
 def lnaddress_to_safebox_npub(lnaddress: str):
     relays = []
@@ -1395,3 +1394,5 @@ def starts_with(test: str, target: str) -> bool:
     
     return target.lower().startswith(test.lower())
 
+
+    

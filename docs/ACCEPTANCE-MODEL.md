@@ -9,29 +9,28 @@
 
 The **Acceptance Model** expresses a simple idea:
 
-> **Facts and views are not established by the system; they are resolved by the disposition of statements about them.**
+> **Facts and views are not established by the system; they exist outside in the world, and are known and resolved to be true about assertions made about them.**
 
 Across law, governance, science, and technical systems, disputes rarely hinge on *what might be true in some ultimate sense*. Instead, they hinge on **what a system is prepared to treat as settled and binding**.
 
-The Acceptance Model provides a **generic vocabulary** for understanding how that settlement happens.
+The Acceptance Model provides a **generic vocabulary** for understanding how that settlement and binding happens using a decentralized protocol like Nostr.
 
-It is useful whenever:
-- Multiple actors make claims about reality
+The Acceptance Model is useful whenever:
+- Multiple actors make competing or complementary claims about reality (i.e., the world)
 - Disagreement or uncertainty exists
 - Decisions must be made despite incomplete knowledge
-- A system must eventually **stop asking questions**
+- A system must eventually **stop asking questions** about the world, but in a way that is resolvable, transparent, deterministic and binding.
 
-This applies equally to:
+This model can apply to many different situations and use cases:
 - Courts determining legal facts
 - Administrations making binding decisions
 - Technical systems validating states
 - Registries recording ownership or control
 - Cryptographic systems finalizing transactions
 
-The model deliberately avoids metaphysics.  
-It does not ask *what is ultimately true*, but rather:
+The Acceptanc Model deliberately avoids metaphysics or morality; it does not ask *what is ultimately true*, but rather:
 
-> **What must be accepted in order for action to proceed?**
+> **What must be accepted in order for a decision to be made and action to proceed?**
 
 ---
 
@@ -39,39 +38,37 @@ It does not ask *what is ultimately true*, but rather:
 
 In this context: 
 
-- the **system** is the nostr protocol including its artifacts of **npubs** and **signed events**.
-- by contrast, the **world** is everything out there that exists independently of nostr.
+- The **system** is the nostr protocol including its artifacts of **npubs** and **signed events**.
+- By comparision (or contrast), the **world** is everything out there that exists independently of nostr.
 
 
 Every **system** that operates at scale (i.e., nostr protocol and its artifacts)  must answer three questions:
 
 1. **What is being claimed?**
-2. **Who vouches for it (and how)?**
-3. **When does the system stop pursuing the question?** (what is the halting condition?)
+2. **Who vouches for this claim (and how)?**
+3. **When does the system stop pursuing the question of system uncertainty regarding this claim?** 
 
 The Acceptance Model structures those questions into clear layers, separating:
 - Reality from language
 - Claims from validation
-- Trust in statements from trust in speakers
+- Trust in statements from trust in action
 - Truth from recognition
 
 ---
 
 ## Core Concepts (Plain Definitions)
 
-- **Statement** A statement is an declaration of a condition or configuration of reality at a given moment. A state may be a **Fact** or a **View**
+- **Claim** A claim is a declaration of a condition or configuration of reality at a given moment. A claim may be a **Fact** or a **View**
 
-- **Fact** A fact is a state of affairs that is defined in verifiable terms and is capable of being accepted as true by a system.
+- **Fact** A fact is a claim related to a state of affairs that is defined in verifiable terms and is capable of being accepted as true by a system.
 
-- **View** A view is an evaluative interpretation of a state of affairs that depends on judgment, perspective, or normative criteria rather than verifiable conditions alone.
+- **View** A view is a claim that is an evaluative interpretation of a state of affairs that depends on judgment, perspective, or normative criteria (standar) rather than the fact alone alone.
 
-- **Assertion** A statement put forward as true by an actor, taking responsibility for its truth.
+- **Assertion** A claim put forward as true by an actor, taking responsibility for its truth.
 
-- **Attestation** An assertion that affirms the truth or validity of another assertion.
+- **Attestation** An assertion that affirms the truth or validity of another assertion (event) or an actor (npub).
 
-- **Recognition** An assertion about another **Npub** that produces a standing which may result in authorization or delegation.
-
-- **Acceptance**  A system-level act that treats a statement (or chain of statements) as a fact.
+- **Acceptance**  A decision based on the evalution of system-level artefacts that concludes that a fact or view can be accepted.
 
 ---
 ## Recogition, Authority and Delegation
@@ -102,7 +99,7 @@ The following diagram is a logical graphical rendition of the above. It is inten
 
 For simplicity, the diagram does not illustrate **nth Order Assertions**.
 
-![Acceptance Mode](./img/acceptance-final.png)
+![Acceptance Mode](./img/acceptance-model.png)
 
 ## Statement: Facts and Views
 
@@ -222,21 +219,20 @@ Acceptance is:
 
 ## Key Distinctions (Summary)
 
-- **State** → what is actually reality
+- **State** → what is actually reality - in the form of a **Fact** or **View**
 - **Statement** → what is said about reality (fact or view)  
-- **Assertion** → what is claimed by an actor
-- **Attestation** → what is vouched for another actor  
-- **Recognition** → what is said by one actor of another actor 
-- **Acceptance** → what counts as reliably according to the system
+- **Assertion** → what is claimed of the world by an actor
+- **Attestation** → what is vouched for in the system.  
+- **Acceptance** → what can be deterministically and reliably resolved by the system
 
 ---
-## Acceptance Logic
+## Acceptance Steps
 
-The acceptance logic likely will be a recursive resolution model that arrives at a first order Assertion.
+The acceptance steps is a (recursive) resolution model that halts at a first order assertion.
 
 Below is an initial resolution model
 
-![Recognitin](./img/recognition-final.png)
+![Acceptance Steps](./img/acceptance-steps.png)
 
 ## Synthesis
 
@@ -245,3 +241,46 @@ Below is an initial resolution model
 Or more sharply:
 
 > **Facts in the system emerge when the system stops asking questions.**
+
+## Safebox Implementation of the Acceptance Model
+
+Safebox provides an implementation of the acceptance model.
+
+## Acceptance
+
+`Acceptance` is the more generalized notion of `verification` and is performed in three discrete steps:
+
+|No.|Step|Confirmation|Success Criteria|
+|---|---|---|---|
+|1.|Validated|The record is cryptographically correct|Successful signature validity check|
+|2.|Attested|An attestion record signed by the owner referred to by the safebox|Valid owner attestation event|
+|3.|Authorized|Member of list for authorization/recognition|Membership in List|
+|4.|Trusted|Web of Trust |Score|
+
+`Acceptance` is based on the evaluation of the above steps and is solely in the eyes of the verifier if one or several of the above steps are successful.
+
+
+### Private Record Format
+
+A **private record** is a signed event as per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) that is embedded in a safebox record. This embedded record or payload can be considered a **private record** because it is not published to any relay; rather it stored as a safebox record payload and stored as a NIP-44 encrypted event.
+
+### Attribution and Ownership
+For attribution and ownership, two tags are added to each private record: `["safebox", "<pubhex of safebox>"]` and `["safebox_ower", <pubhex of purported safebox owner ]`
+
+The `["safebox", , "<pubhex of safebox>"]` tag is easily validated because it should be the same as the `pubhex` that has signed the event. While this data might be considered redundant, the `["safebox"]` tag indicates that the the signed event should be considered and handled as a **private record** according to this specification.
+
+The `["safebox_ower", <pubhex of purported owner ]` must be verified independently, because the safebox could add any owner to the private record. This independent verification is done using the [Attestations NIP](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qy28wumn8ghj7un9d3shjtnyv9kh2uewd9hsqrrpw36x2um5v96xjmmwwvuhdk8z) where the owner, using their `nsec' must sign a `31871' event attesting that they 'own' or control the safebox in question. 
+
+This is done by creating a `d-tag` of the format: `"<safebox npub>:safebox-under-control"` to indicate which safebox instance is under the control of the owner (they may have many safeboxes under their control). The p-tag is populated as: `["p", f"<safebox pubhex"]` (note the pubhex format, instead of npub).
+
+For additional context info, the `content` field may be populated as such: `"Npub holder: <npub owner> has attested ownership of safebox: <npub safebox> "`
+
+This attestation event must be signed and published by the `<npub owner>`. During a verification process, there is step to retrieve this event to confirm that the safebox is indeed controlled by the owner that it claims.
+
+### Trustworthiness
+
+It is up to the verifier to decide the trustworthiness of a npub. This should be under the sole discretion of the verifier: they may use a scoring algorithm and threshold value to determine trustworthiness, or, referencing a list of which a npub is a member.
+
+
+
+- An **offer** is provided

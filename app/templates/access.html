@@ -57,6 +57,11 @@
     }
 
 
+  async function attest() {
+
+  window.location.href="/safebox/attest/";
+
+  } 
 
   async function logout() {
   var data; 
@@ -253,6 +258,15 @@ alert(backup_message);
 
 
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
+
+}
+async function copyNpub() {
+
+await navigator.clipboard.writeText("{{acorn.pubkey_bech32}}");
+alert("Npub copied to clipboard!");
+
+
+
 
 }
 
@@ -1012,6 +1026,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <br><br>
   <button id="issue_card" onclick="issueCard()" >Issue Card</button>
   <br><br>
+  <button onclick="attest()">Attest</button> 
+  <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <br>
   <hr>
@@ -1026,7 +1042,9 @@ function getInvoiceStatus(ln_invoice_status) {
 
   <br>Mode: {{action_mode}} Data: {{action_data}}
   <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+  <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
   <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
+  <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
   <br>home relay: {{acorn.home_relay}}
   <br><br>
   <a href="/public/rates">Exchange Rates</a>
@@ -1038,6 +1056,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+ 
 
             
 </div>

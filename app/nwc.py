@@ -254,7 +254,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         nauth = instruction_obj['params']['nauth']
         label = instruction_obj['params']['label']
         record_kind = int(instruction_obj['params']['kind'])
-        print(f"we are going to present a record! label: {label} kind: {record_kind}")
+        pin_ok = instruction_obj['params'].get("pin_ok", False)
+        print(f"we are going to present a record! label: {label} kind: {record_kind} pin ok: {pin_ok}")
 
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])

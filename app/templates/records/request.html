@@ -125,8 +125,8 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
   if (nfc_request.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
       // alert("Please tap NFC card!");
-      // const nfc_pin = prompt("Please enter PIN");
-      const nfc_pin = "9140"
+      const nfc_pin = prompt("Please enter PIN") || "0000";
+      // const nfc_pin = "9140"
       
       await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
                      
@@ -289,7 +289,7 @@ async function listenForRecord(nauth) {
         for (const rec of response.records) {
           //console.log(rec);
           // addCard(rec.tag, `${response.result}`,rec.payload);
-          addCard(rec.tag,rec.content, rec.verification);
+          addCard(rec.tag,rec.content, rec.verification, rec.picture, rec.is_attested);
           
         }
 
@@ -341,7 +341,7 @@ async function listenForRecord(nauth) {
 
 
   // Function to create and add a card
-  function addCard(title, content, verification) {
+  function addCard(title, content, verification, picture, is_attested) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -366,7 +366,33 @@ async function listenForRecord(nauth) {
     cardVerification.textContent = verification;  
     cardVerification.style.textAlign = 'center';
     card.appendChild(cardVerification); 
+
+    // Create and add the ownerprofile element
+
+    const cardOwnerProfile = document.createElement('div');
+    cardOwnerProfile.className = 'card-content';    
+    cardOwnerProfile.style.textAlign = 'center';
     
+
+    // Create the image element
+    if (picture) {
+
+      const img = document.createElement('img');
+      img.src = picture;          // picture is the image URL
+      img.alt = 'Card image';
+      img.style.maxWidth = '100%'; // keep it responsive
+      img.style.height = 'auto';
+      // Add image to the container
+      cardOwnerProfile.appendChild(img);
+      
+      // Add container to the card
+       
+    } else {
+    
+      cardOwnerProfile.textContent = "No Owner Profile Found";
+    }
+
+    card.appendChild(cardOwnerProfile);
   
 
 

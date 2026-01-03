@@ -5,12 +5,31 @@ import datetime, hashlib, urllib, uuid
 import binascii
 import os
 from bech32 import bech32_encode, convertbits
-from typing import List
+from typing import List, Optional
 from mnemonic import Mnemonic
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 import bech32
 
 from safebox.models import NIP60Proofs
+
+from monstr.client.client import Client, ClientPool
+from monstr.event.event import Event
+from monstr.encrypt import Keys
+
+Tag = List[str]
+Tags = List[Tag]
+
+def get_tag_value(tags: Tags, key: str) -> Optional[str]:
+    """
+    Retrieve the value for a given key from a tag list.
+
+    Example tags:
+    [["key1", "value1"], ["key2", "value2"]]
+    """
+    for k, v in tags:
+        if k == key:
+            return v
+    return None
 
 def generate_name_from_hex(hex_string):
     # Ensure the input is a valid 32-byte hex string
@@ -165,3 +184,67 @@ def npub_to_hex(npub: str) -> str:
 
     # Convert bytes to hex string
     return bytes(decoded_bytes).hex()
+
+async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
+   
+    owner = 'No Owner Profle Found'
+    events = None
+    picture = None
+
+    FILTER = [{
+                'limit': 1,
+                'authors': [pub_hex],
+                'kinds': [0] }]
+    
+    async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)   
+
+    if events:
+        profile_event: Event = events[0]
+        if profile_event.is_valid():
+            print(f"kind 0{events[0].content}")
+            json_obj = json.loads(events[0].content)
+            owner = f"{json_obj.get('name', '')} {json_obj.get('nip05', '')} website:{json_obj.get('website', '')}\n"
+            picture = json_obj.get('picture', None)
+        else:
+            pass
+    else:
+        pass
+    return owner,picture
+
+async def get_attestation(owner_npub:str, safebox_npub:str, relays:List=None):
+   
+    owner = 'No Owner Found'
+    try:
+        owner_k     = Keys(pub_k=owner_npub)
+        safebox_k   = Keys(pub_k=safebox_npub)
+    except:
+        return False
+    events = None
+    picture = None
+
+    d_tag = f"{safebox_k.public_key_bech32()}:safebox-under-control"
+
+    FILTER = [{
+                'limit': 1,
+                'authors': [owner_k.public_key_hex()],
+                '#d': [d_tag],
+                'kinds': [31871] }]
+    
+    async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)   
+
+    if events:
+        pass
+        att_event: Event = events[0]
+        safebox_npub = get_tag_value(att_event.tags, "p")
+        print(f"attestation event: {safebox_npub} safebox pub hex {safebox_k.public_key_hex()}" )
+
+        if att_event.is_valid() and safebox_npub == safebox_k.public_key_hex() :
+            print("attestation is true!")
+            return True
+        
+        return False
+    else:
+        return False
+    

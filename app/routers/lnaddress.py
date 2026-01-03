@@ -20,7 +20,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
@@ -358,6 +358,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     k  = Keys(config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k)
     my_enc_NIP4 = NIP4Encrypt(k)
+    pin_ok = False
     token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
     token_key = token_secret.split(":")[0]
     token_pin = token_secret.split(":")[1]
@@ -367,16 +368,19 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     if token_pin == proof_vault.pin:
         status = "OK"
         detail = "Valid PIN"
+        pin_ok = True
     else:
-        status = "ERROR"
+        status = "WARNING"
         detail = "Invalid PIN"
+        pin_ok = False
 
     wallet_instruction = {
     "method": "present_record",
     "params": { 
         "nauth": proof_vault.nauth,
         "label": proof_vault.label,
-        "kind": proof_vault.kind
+        "kind": proof_vault.kind,
+        "pin_ok": pin_ok
 
             }
         }
@@ -788,5 +792,3 @@ async def access_safebox(request: Request, access_key:str):
             }
            
           
-            
-     

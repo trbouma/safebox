@@ -218,4 +218,11 @@ class nfcPayOutVault(BaseModel):
     nfc_ecash_clearing: bool = False
     pubkey: str|None = None
     sig: str|None=None
+
+class attestationOwner(BaseModel):    
+    owner_nsec: str
+
+class signedEvent(BaseModel):
+    signed_event: dict
+   
     

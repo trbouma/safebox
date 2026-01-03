@@ -621,7 +621,7 @@ class Acorn:
 
         for each in events:
             
-
+            # check to see if record originates from elsewhere
             if record_kind in [1059,1060,1061,1062,1063,21059,21060,21061,21062,21063] or \
                 (1400 <= record_kind <= 1499) or (21400 <= record_kind <= 21499):
                 # print(f"need to  unwrap {type(each.content)} {each.content} ")
@@ -649,15 +649,16 @@ class Acorn:
                                             "id": unwrapped_event.id,
                                             "timestamp": int(unwrapped_event.created_at.timestamp())
                                             }
-                        
 
+                    
+                    parsed_record['presenter'] = unwrapped_event.pub_key
 
                 except Exception as e:
                     print(f"error: {e}")
             
 
 
-            else:
+            else: # otherwise record is self-originating
                 try:
                     decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
                 except:
@@ -672,10 +673,12 @@ class Acorn:
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
+                    #FIXME not sure if in a list
                     pass
                 else:
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
+                    parsed_record['presenter'] = self.pubkey_hex
 
             # Convert payload to json
             # See if payload is in stringifed json and convert
@@ -4925,10 +4928,18 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
-    async def issue_private_record(self, content:str, kind:int =34002, tags: List =[])->Event:
+    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002)->Event:
         """Issue private record"""
+        holder_pubhex = ""
+        if holder:
+            try:
+                holder_key = Keys(pub_k=holder)
+                holder_pubhex = holder_key.public_key_hex()
+            except:
+                pass
+            
         
-        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)]]
+        tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)],["safebox_holder", holder_pubhex]]
         issued_record = Event(  pub_key=self.pubkey_hex,
                                 kind=kind,
                                 tags = tags,
@@ -4936,8 +4947,20 @@ class Acorn:
         issued_record.sign(self.privkey_hex)
 
         return issued_record
+    
+    async def get_authorities(self,kind:int):
 
-            
+        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
+        authorities = npub_list
+        return authorities
+
+
+    async def set_authorities(self,kind:int, pub_hex_list: List[str]):
+
+        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
+        authorities = npub_list
+        return authorities
+        
 
        
         
