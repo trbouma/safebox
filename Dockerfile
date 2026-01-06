@@ -45,14 +45,33 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    cat /etc/os-release; \
+    cat /etc/apt/sources.list || true; \
+    ls -la /etc/apt/sources.list.d || true; \
+    apt-get update
 
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
-ENV LD_LIBRARY_PATH="/usr/local/lib"
+# Install build tools + cmake
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    ca-certificates \
+    pkg-config \
+    openssl \
+    libssl-dev \
+ && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 COPY --from=liboqs-builder /usr/local /usr/local
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/liboqs.conf && ldconfig
+
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:$PATH"
+
+
+
 
 WORKDIR /app
 COPY . .
