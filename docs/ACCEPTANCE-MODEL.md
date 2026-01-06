@@ -34,15 +34,16 @@ The Acceptanc Model deliberately avoids metaphysics or morality; it does not ask
 
 ---
 
-## The Core Insight
+## Acceptance Model implemented using Nostr
 
-In this context: 
+The Acceptance Model is intended to be agnostic in its implementation, however, the simplicity of the Nostr Protocol enables exploration and demonstration of the model.
 
-- The **system** is the nostr protocol including its artifacts of **npubs** and **signed events**.
-- By comparision (or contrast), the **world** is everything out there that exists independently of nostr.
+In the context of Nostr: 
 
+- The **system** is the Nostr protocol consisting of its core primitives of **npubs** and **signed events**.
+- The **world** is everything out there that exists independently of nostr and which may, or may not be expressed using nostr.
 
-Every **system** that operates at scale (i.e., nostr protocol and its artifacts)  must answer three questions:
+zEvery **system** that operates at scale (i.e., nostr protocol and its artifacts)  must answer three questions:
 
 1. **What is being claimed?**
 2. **Who vouches for this claim (and how)?**
