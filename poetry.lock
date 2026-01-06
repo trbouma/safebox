@@ -2137,18 +2137,6 @@ files = [
 ]
 
 [[package]]
-name = "oqs"
-version = "0.10.2"
-description = "OQS (Open Quick Script) is a Python library for interpreting versatile expressions, supporting basic to advanced operations, custom functions, and performance monitoring. It efficiently handles fundamental types and operations, interprets expressions using variables from dictionaries or JSON, and adheres to robust error handling standards. OQS enhances Python's expression evaluation capabilities, making it ideal for diverse applications."
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "oqs-0.10.2-py3-none-any.whl", hash = "sha256:0275875da1774095108810a400249493d066499f982ec547a5e7aec381630ea7"},
-    {file = "oqs-0.10.2.tar.gz", hash = "sha256:5c2643ef1a04c1f22f5c34d629a289e50d041fae84dbf698c6bc151b879c636d"},
-]
-
-[[package]]
 name = "packaging"
 version = "24.2"
 description = "Core utilities for Python packages"
@@ -3886,4 +3874,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "69786db04227bf70cbf4ae0b73ac7bbcb69679b5289bec21b5dbefcb9dfde8eb"
+content-hash = "20a1d964d6e2f921f659e942f7da4736c602f9fefe9fe685c1001fe00b1128c5"
