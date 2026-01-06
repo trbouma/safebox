@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
+ENV LD_LIBRARY_PATH="/usr/local/lib"
 
 COPY --from=liboqs-builder /usr/local /usr/local
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/liboqs.conf && ldconfig
@@ -57,3 +58,6 @@ WORKDIR /app
 COPY . .
 RUN poetry config virtualenvs.create false
 RUN poetry install --only main --no-root
+
+
+
