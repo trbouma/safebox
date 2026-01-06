@@ -1,5 +1,5 @@
 # ---------- build stage: compile liboqs ----------
-FROM python:3.11-slim  AS liboqs-builder
+FROM tiangolo/uvicorn-gunicorn-fastapi AS liboqs-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -32,7 +32,7 @@ RUN git clone https://github.com/open-quantum-safe/liboqs.git \
  && cmake --build build \
  && cmake --install build
 
-FROM python:3.11-slim 
+FROM tiangolo/uvicorn-gunicorn-fastapi
 RUN apt-get update
 RUN apt-get install -y curl python3-dev autoconf g++
 RUN apt-get install -y libpq-dev
