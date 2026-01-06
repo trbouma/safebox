@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     SERVICE_RELAY_DB: str = "data/relay.db"
     TZ: str = "America/New_York"
     ALGORITHM: str = "HS256"
+    PQC_SIGALG: str = "ML-DSA-44"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
     ECASH_RELAYS: List = ['wss://relay.getsafebox.app']

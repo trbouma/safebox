@@ -8,6 +8,8 @@ import asyncio, os
 from contextlib import asynccontextmanager
 from filelock import FileLock, Timeout
 
+import oqs
+
 from monstr.encrypt import Keys
 
 from app.config import Settings, ConfigWithFallback
@@ -104,6 +106,13 @@ async def lifespan(app: FastAPI):
     # url = "wss://relay.getsafebox.app"
     url = SETTINGS.NWC_RELAYS[0]
     listener_task = asyncio.create_task(listen_notes_periodic(url))
+    print("Let's try to create a post quantum key")
+    
+    signer = oqs.Signature(SETTINGS.PQC_SIGALG)
+    signer_public_key = signer.generate_keypair()    
+    pq_pubkey = signer_public_key.hex()
+    secret_key = signer.export_secret_key()
+    print(f"secret key {secret_key.hex()}")
     
     yield
 

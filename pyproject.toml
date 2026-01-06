@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.14"
+python = ">=3.10,<3.14"
 monstr = "^0.1.9"
 asyncio = "^3.4.3"
 logging = "^0.4.9.6"
@@ -45,6 +45,8 @@ argon2-cffi = "^23.1.0"
 ipinfo = "^5.1.1"
 filelock = "^3.18.0"
 pyserial = "^3.5"
+oqs = "^0.10.2"
+liboqs-python = "^0.14.1"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"

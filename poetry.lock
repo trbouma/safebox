@@ -314,7 +314,7 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version <= \"3.10\""
+markers = "python_version == \"3.10\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -463,7 +463,6 @@ files = [
 [package.dependencies]
 cbor2 = ">=5.1.2,<6.0.0"
 coincurve = [
-    {version = ">=15.0.1", markers = "python_version > \"3.7\" and python_version < \"3.10\""},
     {version = ">=16.0.0", markers = "python_version == \"3.10\""},
     {version = ">=18.0.0", markers = "python_version == \"3.11\""},
     {version = ">=19.0.1", markers = "python_version >= \"3.12\""},
@@ -475,7 +474,6 @@ ed25519-blake2b = [
     {version = ">=1.4.1,<2.0.0", markers = "python_version >= \"3.12\""},
 ]
 py-sr25519-bindings = [
-    {version = ">=0.1.3,<2.0.0", markers = "python_version < \"3.10\""},
     {version = ">=0.1.4,<2.0.0", markers = "python_version == \"3.10\""},
     {version = ">=0.2.0,<2.0.0", markers = "python_version >= \"3.11\""},
 ]
@@ -1191,7 +1189,7 @@ description = "Backport of PEP 654 (exception groups)"
 optional = false
 python-versions = ">=3.7"
 groups = ["main", "dev"]
-markers = "python_version <= \"3.10\""
+markers = "python_version == \"3.10\""
 files = [
     {file = "exceptiongroup-1.2.2-py3-none-any.whl", hash = "sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b"},
     {file = "exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc"},
@@ -1675,31 +1673,6 @@ files = [
 all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2)"]
 
 [[package]]
-name = "importlib-metadata"
-version = "8.7.0"
-description = "Read metadata from Python packages"
-optional = false
-python-versions = ">=3.9"
-groups = ["dev"]
-markers = "python_version < \"3.10\""
-files = [
-    {file = "importlib_metadata-8.7.0-py3-none-any.whl", hash = "sha256:e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd"},
-    {file = "importlib_metadata-8.7.0.tar.gz", hash = "sha256:d13b81ad223b890aa16c5471f2ac3056cf76c5f10f82d6f9292f0b415f389000"},
-]
-
-[package.dependencies]
-zipp = ">=3.20"
-
-[package.extras]
-check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
-cover = ["pytest-cov"]
-doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-enabler = ["pytest-enabler (>=2.2)"]
-perf = ["ipython"]
-test = ["flufl.flake8", "importlib_resources (>=1.3) ; python_version < \"3.9\"", "jaraco.test (>=5.4)", "packaging", "pyfakefs", "pytest (>=6,!=8.1.*)", "pytest-perf (>=0.9.2)"]
-type = ["pytest-mypy"]
-
-[[package]]
 name = "ipinfo"
 version = "5.1.1"
 description = "Official Python library for IPInfo"
@@ -1773,7 +1746,6 @@ prompt-toolkit = ">=3.0.41,<3.1.0"
 pygments = ">=2.4.0"
 stack-data = "*"
 traitlets = ">=5"
-typing-extensions = {version = "*", markers = "python_version < \"3.10\""}
 
 [package.extras]
 all = ["black", "curio", "docrepr", "exceptiongroup", "ipykernel", "ipyparallel", "ipywidgets", "matplotlib", "matplotlib (!=3.2.0)", "nbconvert", "nbformat", "notebook", "numpy (>=1.22)", "pandas", "pickleshare", "pytest (<7)", "pytest (<7.1)", "pytest-asyncio (<0.22)", "qtconsole", "setuptools (>=18.5)", "sphinx (>=1.3)", "sphinx-rtd-theme", "stack-data", "testpath", "trio", "typing-extensions"]
@@ -1839,7 +1811,6 @@ files = [
 ]
 
 [package.dependencies]
-importlib-metadata = {version = ">=4.8.3", markers = "python_version < \"3.10\""}
 jupyter-core = ">=4.12,<5.0.dev0 || >=5.1.dev0"
 python-dateutil = ">=2.8.2"
 pyzmq = ">=23.0"
@@ -1870,6 +1841,24 @@ traitlets = ">=5.3"
 [package.extras]
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx-autodoc-typehints", "sphinxcontrib-github-alt", "sphinxcontrib-spelling", "traitlets"]
 test = ["ipykernel", "pre-commit", "pytest (<8)", "pytest-cov", "pytest-timeout"]
+
+[[package]]
+name = "liboqs-python"
+version = "0.14.1"
+description = "Python bindings for liboqs, providing post-quantum public key cryptography algorithms"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "liboqs_python-0.14.1-py3-none-any.whl", hash = "sha256:e3c81e632d02122dda3734edc4ba83bd457eefa3fdb266d33ea908a77a17642f"},
+]
+
+[package.dependencies]
+tomli = {version = ">=2", markers = "python_version < \"3.11\""}
+
+[package.extras]
+dev = ["isort (==5.13.2)", "nose2 (==0.15.1)", "pre-commit (==4.1.0)", "ruff (==0.9.4)"]
+lint = ["mypy (==1.14.1)", "types-pytz (==2024.2.0.20241221)"]
 
 [[package]]
 name = "lockfile"
@@ -2145,6 +2134,18 @@ groups = ["dev"]
 files = [
     {file = "nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c"},
     {file = "nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe"},
+]
+
+[[package]]
+name = "oqs"
+version = "0.10.2"
+description = "OQS (Open Quick Script) is a Python library for interpreting versatile expressions, supporting basic to advanced operations, custom functions, and performance monitoring. It efficiently handles fundamental types and operations, interprets expressions using variables from dictionaries or JSON, and adheres to robust error handling standards. OQS enhances Python's expression evaluation capabilities, making it ideal for diverse applications."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "oqs-0.10.2-py3-none-any.whl", hash = "sha256:0275875da1774095108810a400249493d066499f982ec547a5e7aec381630ea7"},
+    {file = "oqs-0.10.2.tar.gz", hash = "sha256:5c2643ef1a04c1f22f5c34d629a289e50d041fae84dbf698c6bc151b879c636d"},
 ]
 
 [[package]]
@@ -2783,7 +2784,6 @@ files = [
 
 [package.dependencies]
 altgraph = "*"
-importlib-metadata = {version = ">=4.6", markers = "python_version < \"3.10\""}
 macholib = {version = ">=1.8", markers = "sys_platform == \"darwin\""}
 packaging = ">=22.0"
 pefile = {version = ">=2022.5.30,<2024.8.26 || >2024.8.26", markers = "sys_platform == \"win32\""}
@@ -2808,7 +2808,6 @@ files = [
 ]
 
 [package.dependencies]
-importlib_metadata = {version = ">=4.6", markers = "python_version < \"3.10\""}
 packaging = ">=22.0"
 setuptools = ">=42.0.0"
 
@@ -3448,7 +3447,6 @@ files = [
 
 [package.dependencies]
 anyio = ">=3.4.0,<5"
-typing-extensions = {version = ">=3.10.0", markers = "python_version < \"3.10\""}
 
 [package.extras]
 full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.7)", "pyyaml"]
@@ -3460,7 +3458,7 @@ description = "backport of asyncio.TaskGroup, asyncio.Runner and asyncio.timeout
 optional = false
 python-versions = "*"
 groups = ["main"]
-markers = "python_version <= \"3.10\""
+markers = "python_version == \"3.10\""
 files = [
     {file = "taskgroup-0.2.2-py2.py3-none-any.whl", hash = "sha256:e2c53121609f4ae97303e9ea1524304b4de6faf9eb2c9280c7f87976479a52fb"},
     {file = "taskgroup-0.2.2.tar.gz", hash = "sha256:078483ac3e78f2e3f973e2edbf6941374fbea81b9c5d0a96f51d297717f4752d"},
@@ -3477,7 +3475,7 @@ description = "A lil' TOML parser"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version <= \"3.10\""
+markers = "python_version == \"3.10\""
 files = [
     {file = "tomli-2.2.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:678e4fa69e4575eb77d103de3df8a895e1591b48e740211bd1067378c69e8249"},
     {file = "tomli-2.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:023aa114dd824ade0100497eb2318602af309e5a55595f76b626d6d9f3b7b0a6"},
@@ -3556,12 +3554,11 @@ version = "4.12.2"
 description = "Backported and Experimental Type Hints for Python 3.8+"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "dev"]
+groups = ["main"]
 files = [
     {file = "typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"},
     {file = "typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"},
 ]
-markers = {dev = "python_version < \"3.10\""}
 
 [[package]]
 name = "urllib3"
@@ -3886,28 +3883,7 @@ idna = ">=2.0"
 multidict = ">=4.0"
 propcache = ">=0.2.0"
 
-[[package]]
-name = "zipp"
-version = "3.23.0"
-description = "Backport of pathlib-compatible object wrapper for zip files"
-optional = false
-python-versions = ">=3.9"
-groups = ["dev"]
-markers = "python_version < \"3.10\""
-files = [
-    {file = "zipp-3.23.0-py3-none-any.whl", hash = "sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e"},
-    {file = "zipp-3.23.0.tar.gz", hash = "sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166"},
-]
-
-[package.extras]
-check = ["pytest-checkdocs (>=2.4)", "pytest-ruff (>=0.2.1) ; sys_platform != \"cygwin\""]
-cover = ["pytest-cov"]
-doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-enabler = ["pytest-enabler (>=2.2)"]
-test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
-type = ["pytest-mypy"]
-
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.9,<3.14"
-content-hash = "2d3e73be6db628d9497269ba7214b0dd61722cb61015171a1fbe7f8e3f28890d"
+python-versions = ">=3.10,<3.14"
+content-hash = "69786db04227bf70cbf4ae0b73ac7bbcb69679b5289bec21b5dbefcb9dfde8eb"
