@@ -9,48 +9,12 @@ import os
 from pathlib import Path
 
 from monstr.encrypt import Keys
+import oqs
 
 # Project Directories
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-class ConfigWithFallback(BaseSettings):
-    SERVICE_NSEC: str
 
-
-    class Config:
-        case_sensitive = False
-
-    def __init__(self, **kwargs):
-        # Step 1: Ensure data/default.conf exists
-        default_conf_path = Path("data/default.conf")
-        default_conf_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not default_conf_path.exists():
-            k = Keys()
-            default_conf_path.write_text(
-                f"SERVICE_NSEC={k.private_key_bech32()}\n"
-  
-            )
-
-        # Step 2: Load values from default.conf if not in os.environ
-        fallback_values = {}
-        with open(default_conf_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key not in os.environ:
-                        fallback_values[key] = value
-
-        # Step 3: Merge fallback_values with any passed-in kwargs
-        merged_values = {**fallback_values, **kwargs}
-
-        # Step 4: Call super().__init__ with merged values
-        super().__init__(**merged_values)
 
 
 
@@ -217,6 +181,52 @@ class mapEventKind(BaseModel):
 
 
 settings = Settings()
+
+class ConfigWithFallback(BaseSettings):
+    SERVICE_NSEC: str = "notset"
+    PQC_SECRET_KEY: str = "notset"
+    
+    
+
+    class Config:
+        case_sensitive = False
+
+    def __init__(self, **kwargs):
+        # Step 1: Ensure data/default.conf exists
+        default_conf_path = Path("data/default.conf")
+        default_conf_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not default_conf_path.exists():
+            k = Keys()  
+            signer = oqs.Signature(settings.PQC_SIGALG)
+            signer_public_key = signer.generate_keypair()    
+            pq_pubkey = signer_public_key.hex()
+            secret_key = signer.export_secret_key()
+    
+            default_conf_path.write_text(
+                f"SERVICE_NSEC={k.private_key_bech32()}\nPQC_SECRET_KEY={secret_key.hex()}"
+  
+            )
+
+        # Step 2: Load values from default.conf if not in os.environ
+        fallback_values = {}
+        with open(default_conf_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key not in os.environ:
+                        fallback_values[key] = value
+
+        # Step 3: Merge fallback_values with any passed-in kwargs
+        merged_values = {**fallback_values, **kwargs}
+
+        # Step 4: Call super().__init__ with merged values
+        super().__init__(**merged_values)
 
 if __name__ == "__main__":
     
