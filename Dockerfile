@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /tmp
 
 # Pin to a known-good commit or tag for reproducibility (optional but recommended)
-ARG LIBOQS_REF=main
+ARG LIBOQS_REF=0.14.0
 
 RUN git clone https://github.com/open-quantum-safe/liboqs.git \
  && cd liboqs \
@@ -71,12 +71,11 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
 
-
-
 WORKDIR /app
 COPY . .
 RUN poetry config virtualenvs.create false
 RUN poetry install --only main --no-root
+
 
 
 
