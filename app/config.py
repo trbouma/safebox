@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     TZ: str = "America/New_York"
     ALGORITHM: str = "HS256"
     PQC_SIGALG: str = "ML-DSA-44"
+    PQC_KEMALG: str = "ML-KEM-512"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
     ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
@@ -184,7 +185,12 @@ settings = Settings()
 
 class ConfigWithFallback(BaseSettings):
     SERVICE_NSEC: str = "notset"
-    PQC_SECRET_KEY: str = "notset"
+    SERVICE_NPUB: str = "notset"
+    PQC_SIG_SECRET_KEY: str = "notset"
+    PQC_SIG_PUBLIC_KEY: str = "notset"
+    PQC_KEM_PUBLIC_KEY: str = "notset"
+    PQC_KEM_SECRET_KEY: str = "notset"
+
     
     
 
@@ -200,11 +206,15 @@ class ConfigWithFallback(BaseSettings):
             k = Keys()  
             signer = oqs.Signature(settings.PQC_SIGALG)
             signer_public_key = signer.generate_keypair()    
-            pq_pubkey = signer_public_key.hex()
-            secret_key = signer.export_secret_key()
+            pq_sig_pubkey = signer_public_key
+            sig_secret_key = signer.export_secret_key()
+
+            kem = oqs.KeyEncapsulation(settings.PQC_KEMALG)
+            kem_public_key = kem.generate_keypair()
+            kem_secret_key = kem.export_secret_key()
     
             default_conf_path.write_text(
-                f"SERVICE_NSEC={k.private_key_bech32()}\nPQC_SECRET_KEY={secret_key.hex()}"
+                f"""SERVICE_NSEC={k.private_key_bech32()}\nSERVICE_NPUB={k.public_key_bech32()}\nPQC_SIG_SECRET_KEY={sig_secret_key.hex()}\nPQC_SIG_PUBLIC_KEY={pq_sig_pubkey.hex()}\nPQC_KEM_SECRET_KEY={kem_secret_key.hex()}\nPQC_KEM_PUBLIC_KEY={kem_public_key.hex()}"""
   
             )
 

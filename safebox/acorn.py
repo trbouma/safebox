@@ -86,6 +86,7 @@ class Acorn:
     privkey_bech32: str 
     seed_phrase: str = ""  
     access_key: str =""
+    pqc_self_secret: str = None
     home_relay: str
     home_mint: str
     known_mints: dict = {}

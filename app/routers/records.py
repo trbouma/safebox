@@ -709,6 +709,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
 
     since_now = int(datetime.now(timezone.utc).timestamp())
 
+    kem_public_key = config.PQC_KEM_PUBLIC_KEY
+
     print("This is the records websocket")
     
     print("This is the records websocket after sleep")

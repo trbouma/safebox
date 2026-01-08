@@ -179,7 +179,23 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
 # Define a npub endpoint
 @app.get("/npub", tags=["public"])
 async def get_npub(request: Request): 
-    return {"npub": Keys(config.SERVICE_NSEC).public_key_bech32()}
+    return {"npub": config.SERVICE_NPUB}
+
+# Define a npub endpoint
+@app.get("/pqc", tags=["public"])
+async def get_pqc(request: Request): 
+
+    data_to_return = {  "sigpub": config.PQC_SIG_PUBLIC_KEY, 
+                        "sigalg": SETTINGS.PQC_SIGALG,
+                        "kempub": config.PQC_KEM_PUBLIC_KEY,
+                        "kemalg": SETTINGS.PQC_KEMALG                        
+                    },
+
+
+    
+
+    return data_to_return
+
 
 @app.get("/.well-known/nostr.json",tags=["public"])
 async def get_nostr_name(request: Request, name: str, ):
