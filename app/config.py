@@ -3,7 +3,7 @@ import pathlib
 from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Tuple
 
 import os
 from pathlib import Path
@@ -191,51 +191,123 @@ class ConfigWithFallback(BaseSettings):
     PQC_KEM_PUBLIC_KEY: str = "notset"
     PQC_KEM_SECRET_KEY: str = "notset"
 
-    
-    
-
     class Config:
         case_sensitive = False
 
+    # ---- key generation helpers ----
+
+    @staticmethod
+    def _gen_nostr_keys() -> Dict[str, str]:
+        k = Keys()
+        return {
+            "SERVICE_NSEC": k.private_key_bech32(),
+            "SERVICE_NPUB": k.public_key_bech32(),
+        }
+
+    @staticmethod
+    def _gen_pqc_sig_keys() -> Dict[str, str]:
+        signer = oqs.Signature(settings.PQC_SIGALG)
+        pq_sig_pubkey = signer.generate_keypair()
+        sig_secret_key = signer.export_secret_key()
+        return {
+            "PQC_SIG_SECRET_KEY": sig_secret_key.hex(),
+            "PQC_SIG_PUBLIC_KEY": pq_sig_pubkey.hex(),
+        }
+
+    @staticmethod
+    def _gen_pqc_kem_keys() -> Dict[str, str]:
+        kem = oqs.KeyEncapsulation(settings.PQC_KEMALG)
+        kem_public_key = kem.generate_keypair()
+        kem_secret_key = kem.export_secret_key()
+        return {
+            "PQC_KEM_SECRET_KEY": kem_secret_key.hex(),
+            "PQC_KEM_PUBLIC_KEY": kem_public_key.hex(),
+        }
+
+    @classmethod
+    def _gen_missing_values(cls, missing: set[str]) -> Dict[str, str]:
+        """
+        Generate only what is needed.
+        Note: for paired keys we generate the pair if either is missing.
+        """
+        generated: Dict[str, str] = {}
+
+        # Nostr pair
+        if {"SERVICE_NSEC", "SERVICE_NPUB"} & missing:
+            generated.update(cls._gen_nostr_keys())
+
+        # Signature pair
+        if {"PQC_SIG_SECRET_KEY", "PQC_SIG_PUBLIC_KEY"} & missing:
+            generated.update(cls._gen_pqc_sig_keys())
+
+        # KEM pair
+        if {"PQC_KEM_SECRET_KEY", "PQC_KEM_PUBLIC_KEY"} & missing:
+            generated.update(cls._gen_pqc_kem_keys())
+
+        # Return only the keys that were actually missing (to avoid overwriting existing file values)
+        return {k: v for k, v in generated.items() if k in missing}
+
+    # ---- .conf file helpers ----
+
+    @staticmethod
+    def _read_conf(path: Path) -> Dict[str, str]:
+        values: Dict[str, str] = {}
+        if not path.exists():
+            return values
+
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+        return values
+
+    @staticmethod
+    def _write_conf(path: Path, values: Dict[str, str]) -> None:
+        # Stable order makes diffs cleaner
+        order = [
+            "SERVICE_NSEC",
+            "SERVICE_NPUB",
+            "PQC_SIG_SECRET_KEY",
+            "PQC_SIG_PUBLIC_KEY",
+            "PQC_KEM_SECRET_KEY",
+            "PQC_KEM_PUBLIC_KEY",
+        ]
+        lines = [f"{k}={values[k]}" for k in order if k in values]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
     def __init__(self, **kwargs):
-        # Step 1: Ensure data/default.conf exists
         default_conf_path = Path("data/default.conf")
         default_conf_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if not default_conf_path.exists():
-            k = Keys()  
-            signer = oqs.Signature(settings.PQC_SIGALG)
-            signer_public_key = signer.generate_keypair()    
-            pq_sig_pubkey = signer_public_key
-            sig_secret_key = signer.export_secret_key()
+        # Load existing file values (or empty if none)
+        file_values = self._read_conf(default_conf_path)
 
-            kem = oqs.KeyEncapsulation(settings.PQC_KEMALG)
-            kem_public_key = kem.generate_keypair()
-            kem_secret_key = kem.export_secret_key()
-    
-            default_conf_path.write_text(
-                f"""SERVICE_NSEC={k.private_key_bech32()}\nSERVICE_NPUB={k.public_key_bech32()}\nPQC_SIG_SECRET_KEY={sig_secret_key.hex()}\nPQC_SIG_PUBLIC_KEY={pq_sig_pubkey.hex()}\nPQC_KEM_SECRET_KEY={kem_secret_key.hex()}\nPQC_KEM_PUBLIC_KEY={kem_public_key.hex()}"""
-  
-            )
+        required_keys = {
+            "SERVICE_NSEC",
+            "SERVICE_NPUB",
+            "PQC_SIG_SECRET_KEY",
+            "PQC_SIG_PUBLIC_KEY",
+            "PQC_KEM_PUBLIC_KEY",
+            "PQC_KEM_SECRET_KEY",
+        }
 
-        # Step 2: Load values from default.conf if not in os.environ
-        fallback_values = {}
-        with open(default_conf_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key not in os.environ:
-                        fallback_values[key] = value
+        # Treat "notset" as missing too (in case a stub got written previously)
+        missing = {k for k in required_keys if k not in file_values or file_values.get(k) in (None, "", "notset")}
 
-        # Step 3: Merge fallback_values with any passed-in kwargs
+        # If anything is missing, generate *only* the missing ones and persist
+        if missing:
+            generated = self._gen_missing_values(missing)
+            if generated:
+                file_values.update(generated)
+                self._write_conf(default_conf_path, file_values)
+
+        # Build fallback values: only those not already in environment
+        fallback_values = {k: v for k, v in file_values.items() if k not in os.environ}
+
+        # Merge precedence: file fallback < kwargs (explicit) ; env is handled by BaseSettings
         merged_values = {**fallback_values, **kwargs}
-
-        # Step 4: Call super().__init__ with merged values
         super().__init__(**merged_values)
 
 if __name__ == "__main__":

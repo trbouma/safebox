@@ -785,7 +785,7 @@ function getInvoiceStatus(ln_invoice_status) {
 <script>
   document.addEventListener("touchstart", handleInteraction); 
   //document.addEventListener("click", handleInteraction); 
-  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws");
+  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws/status");
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
@@ -807,6 +807,11 @@ function getInvoiceStatus(ln_invoice_status) {
         // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
         // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
         document.getElementById("img_qr_display").src = "/img/green-check.png";
+        setTimeout(() => {
+                          // code to run after 5 seconds
+                          console.log("5 seconds passed");
+                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+                        }, 5000);
       
       } else if (status == "SENT" || status == "PENDING") {
 
@@ -814,6 +819,13 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
       document.getElementById("img_qr_display").src = "/img/green-check.png";
+
+             
+      setTimeout(() => {
+                          // code to run after 5 seconds
+                          console.log("5 seconds passed");
+                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+                        }, 5000);
 
       }
 

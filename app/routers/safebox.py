@@ -1216,8 +1216,8 @@ async def root_get_user_profile(    request: Request,
                                             })
 
 
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
+@router.websocket("/ws/status")
+async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
 
  
     global global_websocket
