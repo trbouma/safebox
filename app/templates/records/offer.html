@@ -13,6 +13,8 @@ var global_transmit_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
 var global_offer_card = "{{card}}";
+var global_kem_public_key = "None";
+var global_kemalg = "None";
 
 
 var record_kind = parseInt("{{record_kind}}");
@@ -226,7 +228,7 @@ async function createQRCode() {
 
   }
 
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
+ const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
 
    
 
@@ -238,6 +240,8 @@ async function createQRCode() {
       client_name = response.name;
       client_transmittal_kind = response.transmittal_kind;
       client_transmittal_relays = response.transmittal_relays;
+      global_kem_public_key = response.kem_public_key;
+      global_kemalg = response.kemalg;
     // client_name = response.name;
     // alert(`Client is authenticated! Ready to transmit files.`); 
     if (global_transmit_nauth) {
@@ -283,7 +287,9 @@ async function offerRecord() {
   const submit_data = { "nauth": nauth_to_transmit,
                         "originating_kind": global_offer_kind,
                         "final_kind": global_grant_kind,
-                        "record_name": global_offer_card
+                        "record_name": global_offer_card,
+                        "kem_public_key": global_kem_public_key,
+                        "kemalg": global_kemalg
    };
 
   console.log(`data to submit: ${submit_data.nauth} ${submit_data.final_kind}`) ;

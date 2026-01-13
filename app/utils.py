@@ -1343,12 +1343,23 @@ def generate_pnr(length=6):
 
 async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
     """This should be records transfer"""
-   
-
+    print(f"listening for request on {kind}")
+    kem_public_key=None
+    #This is for Step 2
     records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
     print(f"listen for request {records_out}")
+
+    response_auth = records_out[0]["payload"]
+    response_auth_split = response_auth.split(':')
+    response_nauth = response_auth_split[0]
+    if len(response_auth_split) == 2:
+        response_kem = response_auth_split[1]
+    else:
+        response_kem = None
+
+    # return nauth, present, and we will add shared secret
     
-    return records_out[0]["payload"], records_out[0]["presenter"],
+    return response_nauth, records_out[0]["presenter"],response_kem
 
 def lnaddress_to_safebox_npub(lnaddress: str):
     relays = []

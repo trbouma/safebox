@@ -254,9 +254,11 @@ async function sendRecord(title) {
 console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
-// send record to verfier
+// send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,
-                "grant": `${title}`
+                "grant": `${title}`,
+                "kem_public_key": "{{kem_public_eky}}",
+                "kemalg": "{{kemalg}}"
               };
 
 console.log(submit_data) ;            

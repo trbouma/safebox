@@ -139,7 +139,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
   }
    
-  listenForRecord(global_nauth);
+  listenForPresentation(global_nauth);
 
 
 
@@ -259,32 +259,32 @@ window.location.href="/safebox/access" ;
 
 }
 
-async function listenForRecord(nauth) {
+async function listenForPresentation(nauth) {
     
-  console.log(`listen for record presentation ${nauth}`);
+  console.log(`listen for request presentation ${nauth}`);
     
-    const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforrecord/${nauth}`);  
+    const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforpresentation/${nauth}`);  
     
        
-      // alert("listen for records");
+      // alert("listen for request");
       // alert(span_msg_status.textContent)
-      span_msg_status.textContent = "Listening for record...";
+      span_msg_status.textContent = "Listening for request...";
       ws.onopen = () => console.log("WebSocket connected");
       ws.onmessage = (event) => {
-      console.log("Message received for listen record:", event.data);
+      console.log("Message received for listen for request:", event.data);
       const response = JSON.parse(event.data);  
     
       if (response.status == "TIMEOUT")
       {
         alert("Record presentation has timed out. Please retry.");
-        span_msg_status.textContent = "Record presentation has timed out. Please retry.";
+        span_msg_status.textContent = "Request presentation has timed out. Please retry.";
       }
     
       if (response.status == "VERIFIED")
       {
         
-        // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
-        span_msg_status.textContent = "Record has been received!";
+        // alert(`Request has been received! ${JSON.stringify(response.detail)}`);
+        span_msg_status.textContent = "Request has been received!";
         
         for (const rec of response.records) {
           //console.log(rec);

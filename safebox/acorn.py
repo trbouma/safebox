@@ -20,6 +20,7 @@ from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
+import contextlib
 
 
 
@@ -543,7 +544,7 @@ class Acorn:
             return
 
         url = relays[0]
-        c = Client(url)
+        c = ClientPool(url)
         asyncio.create_task(c.run())
    
         await c.wait_connect()
@@ -553,14 +554,69 @@ class Acorn:
         filters={
             'limit': 1024,
             'kinds': [record_kind],
-            '#p': self.pubkey_hex,
+            '#p': [self.pubkey_hex]
             
         }
         )
-
-        print(f"startt listening for incoming record kind {record_kind} at: {url}")
+        while True:
+            print(f"start listening for incoming record kind {record_kind} at: {url}")
+            await asyncio.sleep(3)
         return
 
+    async def listen_for_record_sub(
+    self,
+    record_kind: int = 37375,
+    since: int | None = None,
+    reverse: bool = False,
+    relays: List[str] | None = None,
+    ):
+        my_gift = GiftWrap(BasicKeySigner(self.k))
+        print("listening for incoming record...")
+
+        loop = asyncio.get_running_loop()
+        record_future = loop.create_future()
+
+        def incoming_handler(the_client: ClientPool, sub_id: str, evt: Event):
+            if not record_future.done():
+                print(f"received event {evt.id}")
+                record_future.set_result(evt)
+
+        # url = relays[0]
+        client = ClientPool(relays)
+
+        # Run client in background
+        client_task = asyncio.create_task(client.run())
+        sub_id = secrets.token_hex(4)
+        await client.wait_connect()
+
+        client.subscribe(
+            sub_id=sub_id,
+            handlers=incoming_handler,
+            filters={
+                "limit": 1,
+                "kinds": [record_kind],
+                "#p": [self.pubkey_hex],
+            },
+        )
+
+        try:
+            # Wait until first record arrives
+            evt = await asyncio.wait_for(record_future, timeout=30)
+            unwrapped_event = await my_gift.unwrap(evt)
+            nauth_split = unwrapped_event.content.split(':')
+            kem = parse_nembed_compressed(nauth_split[1])
+            return kem['kem_public_key'], kem['kemalg']
+        except:
+            return None
+
+        finally:
+            # Clean shutdown no matter what
+            print("shutting down listener")
+            # await client.unsubscribe(sub_id=sub_id)
+            client_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await client_task
+    
     async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None)->List[Any]:
 
         events_out = []
@@ -1086,7 +1142,11 @@ class Acorn:
             c.publish(wrapped_evt)
             await asyncio.sleep(0.2)
                 
-    async def secure_transmittal(self,nrecipient:str, message: str,  dm_relays: List[str],kind: int=1060):
+    async def secure_transmittal(   self,
+                                    nrecipient:str, 
+                                    message: str,  
+                                    dm_relays: List[str],
+                                    kind: int=1060, ):
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)

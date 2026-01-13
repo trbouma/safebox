@@ -127,6 +127,8 @@ class transmitConsultation(BaseModel):
     originating_kind: int = 32227
     final_kind: int = 32225
     record_name: str = None
+    kem_public_key: str = None
+    kemalg: str = None
 
 class incomingRecord(BaseModel):
     id: str
@@ -142,6 +144,8 @@ class recoverIdentity(BaseModel):
 class sendCredentialParms(BaseModel):
     nauth: str
     grant: str = None
+    kem_public_key: str = None
+    kemalg: str = None
 
 class sendRecordParms(BaseModel):
     nauth: str

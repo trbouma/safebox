@@ -7,6 +7,7 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 from monstr.util import util_funcs
 from monstr.encrypt import NIP44Encrypt
+import secp256k1
 
 import oqs
 
