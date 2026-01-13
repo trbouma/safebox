@@ -1590,7 +1590,7 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                     except:
                         payload_to_use = each['payload']
 
-                    print(f"each ciphertext {each.get("ciphertext","None")}")
+                    print(f"each ciphertext {each.get('ciphertext','None')}")
                     is_valid = "Cannot Validate"
                     if isinstance(payload_to_use, dict):
                         
