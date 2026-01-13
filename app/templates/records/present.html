@@ -13,6 +13,8 @@ var global_nauth = "";
 var global_client_nauth = "{{nauth}}";  
 var global_client_transmittal_kind = null;
 var global_vrequest_nauth = "{{nauth}}"; 
+var global_kem_public_key = null;
+var global_kemalg = null;
 
 
 async function scanCode() {
@@ -97,48 +99,21 @@ async function selectRecordKind() {
 
 }
 
-  async function createQRCode() {
-    
-  var data;
-  var qr_img_func = document.getElementById("img_qr_display");
-
-  qr_img_func.src="/img/circle-256.gif";
-   await fetch('/records/nauth?scope=vgrant', {
-        method: "POST",
-        headers: {"Content-Type": "application/json"}        
-              
-       })
-    .then((response) => response.json())
-    .then((data) => getStatus(data));
-
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}`);
-
-  ws.onopen = () => console.log("WebSocket connected");
-  ws.onmessage = (event) => {
-  console.log("Message received:", event.data);
-  const response = JSON.parse(event.data);  
-  global_client_nauth = response.nauth;
-  client_name = response.name;
-  global_client_transmittal_kind = response.transmittal_kind;
-  // client_name = response.name;
-  if (global_client_nauth) {
-    // alert(`Client is authenticated! Ready to transmit files.`); 
-    qr_img_func.src="/img/check.png";
-  } else {
-    // alert(`Authentication has timed out! Please regenerate QR code`);  
-    qr_img_func.src="/img/safebox.png";
-  }
- 
-  ws.close()
-  };
-  ws.onclose = () => console.log("WebSocket closed");
-
-
-
-
-  
+const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
+// alert(`we are here! nauth {{nauth}}`);
+ws_present.onopen = () => console.log("WebSocket connected");
+ws_present.onmessage = (event) => {
+  const response = JSON.parse(event.data);
+  global_kem_public_key = response.kem_public_key;
+  global_kemalg = response.kemalg;
+  console.log("Message received:", response.kem_public_key); 
+  document.getElementById('quantum_safe').innerHTML = 'Channel is now quantum safe';
 
 }
+
+ws_present.onclose = () => console.log("WebSocket closed");
+
+  
 </script>
 
 {% endblock %}
@@ -151,6 +126,7 @@ async function selectRecordKind() {
 
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
+    <pre id="quantum_safe">securing...</pre>
   {% else %}
   <h1>Display My {{ record_label}}</h1>
   {% endif %}
@@ -257,8 +233,8 @@ console.log(`Sending record... ${global_vrequest_nauth}`);
 // send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,
                 "grant": `${title}`,
-                "kem_public_key": "{{kem_public_eky}}",
-                "kemalg": "{{kemalg}}"
+                "kem_public_key": global_kem_public_key,
+                "kemalg": global_kemalg
               };
 
 console.log(submit_data) ;            

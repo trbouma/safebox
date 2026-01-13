@@ -150,6 +150,8 @@ class sendCredentialParms(BaseModel):
 class sendRecordParms(BaseModel):
     nauth: str
     grant: str = None
+    kem_public_key: str = None
+    kemalg: str = None
 
 class paymentByToken(BaseModel):
     payment_token: str

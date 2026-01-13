@@ -263,7 +263,7 @@ async function listenForPresentation(nauth) {
     
   console.log(`listen for request presentation ${nauth}`);
     
-    const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforpresentation/${nauth}`);  
+    const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
     
        
       // alert("listen for request");
@@ -309,12 +309,6 @@ async function listenForPresentation(nauth) {
     
     
     }
-
-
-
-
-
-
 
 
 

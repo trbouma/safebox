@@ -569,6 +569,7 @@ class Acorn:
     since: int | None = None,
     reverse: bool = False,
     relays: List[str] | None = None,
+    timeout: int = 60
     ):
         my_gift = GiftWrap(BasicKeySigner(self.k))
         print("listening for incoming record...")
@@ -601,13 +602,18 @@ class Acorn:
 
         try:
             # Wait until first record arrives
-            evt = await asyncio.wait_for(record_future, timeout=30)
+            evt = await asyncio.wait_for(record_future, timeout=timeout)
             unwrapped_event = await my_gift.unwrap(evt)
             nauth_split = unwrapped_event.content.split(':')
-            kem = parse_nembed_compressed(nauth_split[1])
-            return kem['kem_public_key'], kem['kemalg']
+            nauth = nauth_split[0]
+            if len(nauth_split)>1:
+                nembed = nauth_split[1]
+            else:
+                nembed = None  
+               
+            return nauth, nembed
         except:
-            return None
+            return None, None
 
         finally:
             # Clean shutdown no matter what

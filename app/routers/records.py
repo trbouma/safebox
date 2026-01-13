@@ -149,11 +149,9 @@ async def offer_list(      request: Request,
                                         })
 
 @router.get("/request", tags=["records", "protected"])
-async def record_request(      request: Request,
-                                    
-                                    kind:int = 34003,   
-                          
-                                    acorn_obj: Acorn = Depends(get_acorn)
+async def record_request(      request: Request,                                    
+                                kind:int = 34003,                          
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
@@ -161,18 +159,17 @@ async def record_request(      request: Request,
 
 
 
-    user_records = await acorn_obj.get_user_records(record_kind=kind)
+    # user_records = await acorn_obj.get_user_records(record_kind=kind)
     
 
     
 
     return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
-                                            "user_records": user_records,
+                                            
                                             "record_kind": kind,   
-                                            "grant_kinds": settings.GRANT_KINDS,
-                                            "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
-                                            "kemalg": settings.PQC_KEMALG
+                                            "grant_kinds": settings.GRANT_KINDS
+
 
                                         })
 @router.get("/verificationrequest", tags=["records", "protected"])
@@ -308,11 +305,14 @@ async def my_present_records(       request: Request,
                                 nauth: str = None,
                                 nonce: str = None,
                                 record_kind: int = None,
-                                acorn_obj = Depends(get_acorn)
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
     nauth_response = None
     record_select = False
+    
+    if not acorn_obj:
+        return RedirectResponse("/safebox/access")
     
     grant_kinds = settings.GRANT_KINDS
     if not record_kind:
@@ -341,12 +341,13 @@ async def my_present_records(       request: Request,
             nauth_response = nauth
         
         else:
+            pass
 
         
             # also need to set transmittal npub 
 
-
-            nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+            
+        nauth_presenter = create_nauth(  npub=acorn_obj.pubkey_bech32,
                                         nonce=nonce,
                                         auth_kind= auth_kind,
                                         auth_relays=auth_relays,
@@ -363,18 +364,10 @@ async def my_present_records(       request: Request,
         
         # send the recipient nauth message
         # need to add in the PQC Step 1
-        kemalg = settings.PQC_KEMALG
-    
 
+        
 
-        pqc_to_send = { "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
-                    "kemalg": settings.PQC_KEMALG
-        }
-        nembedpqc = create_nembed_compressed(pqc_to_send)
-        response_nauth_with_kem= f"{nauth_response}:{nembedpqc}"
-        print(f"response nauth with kem {response_nauth_with_kem}")
-
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_presenter,dm_relays=auth_relays,kind=auth_kind)
 
     else:
        pass
@@ -1277,15 +1270,15 @@ async def generate_nauth(    request: Request,
 
 @router.post("/sendrecord", tags=["records", "protected"])
 async def post_send_record(      request: Request, 
-                                credential_parms: sendCredentialParms,                                
+                                record_parms: sendCredentialParms,                                
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
-    """Select credential for verification"""
+    """Select record for verification"""
     nauth_response = None
-    print(f"send credential {credential_parms}")
+    print(f"send record {record_parms}")
 
-    if credential_parms.nauth:
-        parsed_nauth = parse_nauth(credential_parms.nauth)
+    if record_parms.nauth:
+        parsed_nauth = parse_nauth(record_parms.nauth)
 
         scope = parsed_nauth['values']['scope']
         grant = parsed_nauth['values'].get("grant")
@@ -1301,33 +1294,54 @@ async def post_send_record(      request: Request,
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
 
-        print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
+        print(f"send record to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
         # Need to inspect scope to determine what to do
         #TODO refactor this code
         if "prover" in scope:
             # this means the presentation has the corresponding record hash
             transmittal_npub = hex_to_npub(transmittal_pubhex)
-            print(f"grant: {credential_parms.grant}")
+            print(f"grant: {record_parms.grant}")
             # record_hash = scope.replace("prover:","")
             # print(f"need to select credential with record hash {record_hash}")
             # record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
-            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=34002)
+            record_out = await acorn_obj.get_record(record_name=record_parms.grant, record_kind=34002)
             
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
             verifier_kind = int(scope.split(":")[1])
-            print(f"grant: {credential_parms.grant}")
-            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=verifier_kind)
+            print(f"grant: {record_parms.grant}")
+            record_out = await acorn_obj.get_record(record_name=record_parms.grant, record_kind=verifier_kind)
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
 
-        print(f"This is the record to be sent for verification:{record_out}")
+        
 
         # Add in PQC stuff
-        
+        print(f"PQC Step 2a {record_parms.kem_public_key} {record_parms.kemalg}")
+        pqc = oqs.KeyEncapsulation(record_parms.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(record_parms.kem_public_key))
+        kem_shared_secret_hex = kem_shared_secret.hex()
+        kem_ciphertext_hex = kem_ciphertext.hex()
+
+        k_nip44 = Keys(priv_k=kem_shared_secret_hex)
+        print(f"kem shared secret: {kem_shared_secret_hex} ciphertext: {kem_ciphertext_hex}")
+        try:
+            pass
+            my_enc = ExtendedNIP44Encrypt(k_nip44)
+            print(f"my NIP44 enc: {my_enc}")
+        except:
+            pass
+        # Now add to record
+        record_out['ciphertext']    = kem_ciphertext_hex
+        record_out['kemalg']        = record_parms.kemalg
+
+        payload = record_out['payload']
+        record_out['pqc_encrypted_payload'] =  my_enc.encrypt(payload, to_pub_k=k_nip44.public_key_hex())
+
+        print(f"This is the record to be sent for verification:{record_out}")
 
         try:
             nembed = create_nembed_compressed(record_out)
@@ -1371,6 +1385,38 @@ async def ws_record_data( websocket: WebSocket,
     await websocket.accept()
     return
 
+@router.websocket("/ws/present/{nauth}")
+async def ws_record_present( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj: Acorn = Depends(get_acorn)
+                                        ):
+    print(f"websocket opened for /ws/present {nauth}")
+    since_now = int(datetime.now(timezone.utc).timestamp())
+    requester_nauth = None
+    requester_nembed = None
+    
+    if nauth:
+        parsed_nauth = parse_nauth(nauth) 
+        pubhex_initiator =   parsed_nauth['values'] ['pubhex'] 
+        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
+        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
+        print(f"npub initiator: {hex_to_npub(pubhex_initiator)}")
+    
+    await websocket.accept()
+    
+    print("start listening for requester data")
+    requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind,since=None,relays=auth_relays)
+    print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
+    if requester_nembed:
+        parsed_nembed = parse_nembed_compressed(requester_nembed)
+        kem_public_key = parsed_nembed['kem_public_key']
+        kemalg = parsed_nembed['kemalg']
+        print(f"From the requester provided to the presenter: kem public key: {kem_public_key} kemalg {kemalg}")
+        kem_material = {'kem_public_key': kem_public_key, 'kemalg': kemalg}
+        await websocket.send_json(kem_material)
+
+    
+
 @router.websocket("/ws/offer/{nauth}")
 async def ws_record_offer( websocket: WebSocket, 
                                         nauth:str=None, 
@@ -1383,15 +1429,15 @@ async def ws_record_offer( websocket: WebSocket,
     await websocket.accept()
 
     if nauth:
-        parsed_nauth = parse_nauth(nauth)   
+        parsed_nauth = parse_nauth(nauth) 
+        npub_initiator =   parsed_nauth['values'] ['npub'] 
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
-        print(f"ws auth relays: {auth_relays}")
+        print(f"npub initiator: {npub_initiator}")
 
 
 
-    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    # await acorn_obj.load_data()
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth,dm_relays=auth_relays,kind=auth_kind)
 
     naddr = acorn_obj.pubkey_bech32
     nauth_old = None
@@ -1508,7 +1554,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/listenforpresentation/{nauth}")
+@router.websocket("/ws/request/{nauth}")
 async def ws_listen_for_presentation( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj: Acorn = Depends(get_acorn)
@@ -1540,11 +1586,38 @@ async def ws_listen_for_presentation( websocket: WebSocket,
     naddr = acorn_obj.pubkey_bech32
     incoming_record_old = None
 
-    print(f"beeboop")
-    kem_public_key,kemalg = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays)
+    # Need to:
+    # 1. listen for nauth of presenting safebox
+    # 2. send kem public key and kemalg
+    # 3. listen for incoming records
 
-    print(f"kem public key {kem_public_key} kemalg {kemalg}")
+    
+    print(f"#1 listen for nauth ")
+    presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays)
+    parsed_nauth = parse_nauth(presenter_nauth)
 
+    
+    print(f"we've got presenter nauth {presenter_nauth}")
+    presenter_nauth_parsed = parse_nauth(presenter_nauth)
+    presenter_npub = hex_to_npub(presenter_nauth_parsed['values']['pubhex'])
+    presenter_auth_kind = presenter_nauth_parsed['values'].get('auth_kind', settings.AUTH_KIND)
+    presenter_auth_relays = presenter_nauth_parsed['values'].get('auth_relays', settings.AUTH_RELAYS)
+    
+    print("we can now send the kem public key and kemalg")
+
+    kem_material = {    'kem_public_key': config.PQC_KEM_PUBLIC_KEY,
+                        'kemalg': settings.PQC_KEMALG
+                        }
+    nembed_to_send = create_nembed_compressed(kem_material)
+    message = f"{nauth}:{nembed_to_send}"
+    print(f"send to presenter npub: {presenter_npub}")
+
+    msg_out = await acorn_obj.secure_transmittal(nrecipient=presenter_npub,message=message,kind=presenter_auth_kind,dm_relays=presenter_auth_relays)
+    print(f"msg out {msg_out}")
+    
+
+
+    print(f"now let's wait for the presenting records...")
     while True:
         if datetime.now() - start_time > timedelta(minutes=1):
             print("1 minute has passed. Exiting loop.")
