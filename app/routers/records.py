@@ -1340,7 +1340,7 @@ async def post_send_record(      request: Request,
 
         payload = record_out['payload']
         record_out['pqc_encrypted_payload'] =  my_enc.encrypt(payload, to_pub_k=k_nip44.public_key_hex())
-
+        record_out['payload'] = "This record is quantum-safe"
         print(f"This is the record to be sent for verification:{record_out}")
 
         try:
@@ -1657,6 +1657,23 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                 is_presenter = False
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
+                    # Add in PQC stuff here
+                    record_ciphertext = each.get("ciphertext", None)
+                    record_kemalg = each.get("kemalg", None) 
+                    pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                    kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                    kem_shared_secret_hex = kem_shared_secret.hex()
+                    print(f"This is the shared secret: {kem_shared_secret_hex}")
+                    k_pqc = Keys(priv_k=kem_shared_secret_hex)
+                    my_enc = ExtendedNIP44Encrypt(k_pqc)
+                    payload_to_decrypt = each.get("pqc_encrypted_payload", None)
+                    if payload_to_decrypt:            
+                        decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                        print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
+                        each['payload'] = decrypted_payload
+                        
+                    
+
                     print(f"each to present: {each} {presenter}")
                     try:
                         payload_to_use = json.loads(each['payload'])
@@ -1705,8 +1722,14 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                         each["picture"] = picture
                         each["is_attested"] = is_attested
 
+                        # PQC Stuff here
+
+            
+                       
+
+
                     else:
-                        each["content"] = each["payload"] 
+                        each["content"] = each["payload"]   
                         each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
                         each["picture"] = None
                         each["is_attested"] = False
