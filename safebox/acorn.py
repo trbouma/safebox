@@ -2562,7 +2562,7 @@ class Acorn:
                     
                     #FIXME this is the critical error!!!
                     try: 
-                        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+                        proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
                     except Exception as e:
                         raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
                         
@@ -2660,7 +2660,7 @@ class Acorn:
         
         return msg_out, final_fees
 
-    def _multi_melt(self, keysets_to_use):
+    async def _multi_melt(self, keysets_to_use):
 
         
         headers = { "Content-Type": "application/json"}
@@ -2683,7 +2683,7 @@ class Acorn:
                 proofs_to_use.append(pay_proof)
                 proof_amount += pay_proof.amount
             
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             # proofs_remaining = proofs_to_use
             sum_proofs =0
             spend_proofs = []
@@ -2866,7 +2866,7 @@ class Acorn:
             self.logger.debug(f"remaining: {proofs_from_keyset}")
             # Continue implementing from line 818 swap_for_payment may need a parameter
             # Now need to do the melt
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             
 
             self.logger.debug(f"proofs remaining: {proofs_remaining}")
@@ -3765,7 +3765,7 @@ class Acorn:
 
         return proofs
 
-    def swap_for_payment_multi(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
+    async def swap_for_payment_multi(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
 
         swap_amount =0
@@ -4272,7 +4272,7 @@ class Acorn:
             print("remaining", proofs_from_keyset)
             print("chosen keyset for payment", chosen_keyset)
             
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
             
 
             print("proofs remaining:", proofs_remaining)

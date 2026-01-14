@@ -1660,17 +1660,18 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                     # Add in PQC stuff here
                     record_ciphertext = each.get("ciphertext", None)
                     record_kemalg = each.get("kemalg", None) 
-                    pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-                    kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-                    kem_shared_secret_hex = kem_shared_secret.hex()
-                    print(f"This is the shared secret: {kem_shared_secret_hex}")
-                    k_pqc = Keys(priv_k=kem_shared_secret_hex)
-                    my_enc = ExtendedNIP44Encrypt(k_pqc)
-                    payload_to_decrypt = each.get("pqc_encrypted_payload", None)
-                    if payload_to_decrypt:            
-                        decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
-                        print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
-                        each['payload'] = decrypted_payload
+                    if record_ciphertext:
+                        pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                        kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                        kem_shared_secret_hex = kem_shared_secret.hex()
+                        print(f"This is the shared secret: {kem_shared_secret_hex}")
+                        k_pqc = Keys(priv_k=kem_shared_secret_hex)
+                        my_enc = ExtendedNIP44Encrypt(k_pqc)
+                        payload_to_decrypt = each.get("pqc_encrypted_payload", None)
+                        if payload_to_decrypt:            
+                            decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                            print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
+                            each['payload'] = decrypted_payload
                         
                     
 
@@ -1944,10 +1945,16 @@ async def accept_offer_token( request: Request,
     pubkey = k.public_key_hex()
 
     # need to send off to the vault for processing
+    # also need to send along kem_public_key and kemalg
+    kem_public_key = config.PQC_KEM_PUBLIC_KEY
+    kemalg = settings.PQC_KEMALG
+
     submit_data = { "nauth": offer_token.nauth, 
                     "token": offer_token_to_use,                    
                     "pubkey": pubkey,
-                    "sig": sig
+                    "sig": sig,
+                    "kem_public_key": kem_public_key,
+                    "kemalg": kemalg
 
                     }
     print(f"data: {submit_data}")
@@ -1956,7 +1963,10 @@ async def accept_offer_token( request: Request,
 
     response = requests.post(url=offer_url, json=submit_data, headers=headers)
     
-    print(response.json())
+    print(f"response from vault: {response.json()}")
+
+    print("Now need to issue the private records")
+
 
     # add in the polling task here
    

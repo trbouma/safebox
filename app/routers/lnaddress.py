@@ -408,7 +408,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
 @router.post("/.well-known/offer", tags=["public"])
 async def offer_vault(request: Request, offer_vault: offerVault):
     status = "OK"
-    detail = None
+    detail = "Waiting to send record..."
 
    # First, check to see if signature checks out
     if verify_payload(offer_vault.token, offer_vault.sig, offer_vault.pubkey):
@@ -429,12 +429,16 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     wallet_instruction = {
     "method": "offer_record",
     "params": { 
-        "nauth": offer_vault.nauth
+        "nauth": offer_vault.nauth,
+        "kem_public_key": offer_vault.kem_public_key,
+        "kemalg": offer_vault.kemalg
         
 
             }
         }
     
+    print(f"wallet instruction: {wallet_instruction}")
+
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(wallet_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:

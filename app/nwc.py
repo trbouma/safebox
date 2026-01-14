@@ -344,6 +344,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
+        kem_public_key = instruction_obj['params'].get('kem_public_key', None)
+        kemalg = instruction_obj['params'].get('kemalg', None)
+        if kem_public_key:
+            print(f"nwc kem public key {kem_public_key} kemalg: {kemalg}")
+
         print(f"offer_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
 

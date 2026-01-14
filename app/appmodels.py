@@ -213,6 +213,8 @@ class offerVault(BaseModel):
     nauth: str    
     pubkey:str|None= None
     sig: str|None = None  
+    kem_public_key:str|None = None
+    kemalg:str|None=None
 
 class nfcPayOutVault(BaseModel):
     token: str
