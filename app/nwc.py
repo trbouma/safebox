@@ -6,6 +6,7 @@ from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
+
 from app.utils import hex_to_npub, parse_nauth, create_nauth, create_nembed_compressed, get_label_by_id, starts_with
 from app.appmodels import RegisteredSafebox
 from filelock import FileLock, Timeout
@@ -13,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 
 from safebox.acorn import Acorn
 from safebox.models import TxHistory, cliQuote
+from safebox.monstrmore import ExtendedNIP44Encrypt
 import signal
 import json
 import bolt11
@@ -31,7 +33,7 @@ from aiohttp import ClientSession, ClientConnectionError
 import warnings
 warnings.filterwarnings("ignore", message="coroutine.*was never awaited", category=RuntimeWarning)
 
-
+import oqs
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -252,6 +254,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         
     
     elif instruction_obj['method'] == 'present_record':
+        print("we have a present record!")
         nauth = instruction_obj['params']['nauth']
         label = instruction_obj['params']['label']
         record_kind = int(instruction_obj['params']['kind'])
@@ -345,12 +348,10 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
-        # kem_public_key = instruction_obj['params'].get('kem_public_key', None)
-        # kemalg = instruction_obj['params'].get('kemalg', None)
+
         kem_public_key = config.PQC_KEM_PUBLIC_KEY
         kemalg = settings.PQC_KEMALG
-        if kem_public_key:
-            print(f"nwc kem public key {kem_public_key} kemalg: {kemalg}")
+
 
         print(f"nwc offer_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
@@ -398,6 +399,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         for each in user_records:
             each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
             user_records_with_label.append(each)
+        # This is the same as the accept
 
         for each_record in user_records_with_label:
             record_name = f"{each_record['tag'][0][0]}" 
@@ -405,6 +407,21 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             record_value = each_record['payload']
             record_timestamp = each_record.get("timestamp",0)
             record_endorsement = each_record.get("endorsement","")
+            # Do PQC stuff here
+            record_ciphertext = each_record.get("ciphertext", None)
+            record_kemalg = each_record.get("kemalg", None)
+            pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+            shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+            print(f"NWC PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+            k_pqc = Keys(shared_secret.hex())
+            my_enc = ExtendedNIP44Encrypt(k_pqc)
+            payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
+            if payload_to_decrypt:            
+                decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                print(f"decrypted payload: {decrypted_payload}")
+                record_value = decrypted_payload
+
+
             endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
             final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]"
             print(f'record name {record_name} record value {record_value} record type {record_type}' )

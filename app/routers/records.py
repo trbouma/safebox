@@ -275,7 +275,7 @@ async def transmit_records(        request: Request,
 
                 record_obj = { "tag"   : [each_record['tag']],
                                 "type"  : str(transmit_consultation.final_kind),
-                                "payload": issued_record_str,
+                                "payload": "This record is quantum-safe",
                                 "timestamp": int(datetime.now(timezone.utc).timestamp()),
                                 "endorsement": acorn_obj.pubkey_bech32,
                                 "ciphertext": kem_ciphertext_hex,
