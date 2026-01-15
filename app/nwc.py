@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from app.tasks import handle_payment, safe_handle_payment, handle_nwc_payment
 
 import os
-from app.config import Settings
+from app.config import Settings, ConfigWithFallback
 from aiohttp.client_exceptions import WSMessageTypeError
 from aiohttp import ClientSession, ClientConnectionError
 import warnings
@@ -34,6 +34,7 @@ warnings.filterwarnings("ignore", message="coroutine.*was never awaited", catego
 
 
 settings = Settings()
+config = ConfigWithFallback()
 
 RELAYS = settings.RELAYS
 TIMEDELTA_SECONDS = 60
@@ -344,12 +345,14 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
-        kem_public_key = instruction_obj['params'].get('kem_public_key', None)
-        kemalg = instruction_obj['params'].get('kemalg', None)
+        # kem_public_key = instruction_obj['params'].get('kem_public_key', None)
+        # kemalg = instruction_obj['params'].get('kemalg', None)
+        kem_public_key = config.PQC_KEM_PUBLIC_KEY
+        kemalg = settings.PQC_KEMALG
         if kem_public_key:
             print(f"nwc kem public key {kem_public_key} kemalg: {kemalg}")
 
-        print(f"offer_record scope: {scope} grant: {grant}")
+        print(f"nwc offer_record scope: {scope} grant: {grant}")
         # record_kind = int(scope.split(":")[1])
 
         response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -363,11 +366,16 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                     scope=scope,
                                     grant=grant
         )
-        print(f"response nauth: {response_nauth}")
+        print(f"nwc response send to : {npub_initiator}")
+        pqc_to_send = { "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+                    "kemalg": settings.PQC_KEMALG
+        }
+        nembedpqc = create_nembed_compressed(pqc_to_send)
+        response_nauth_with_kem= f"{response_nauth}:{nembedpqc}"
 
         since_now = int(datetime.now(timezone.utc).timestamp())
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
         
         # await asyncio.sleep(5)
 
