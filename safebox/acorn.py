@@ -731,14 +731,21 @@ class Acorn:
             
                 try:
                     parsed_record = json.loads(decrypt_content)
-                except:                
-                    parsed_record = {"payload": decrypt_content}
+                except: 
+                    #It's just a raw string stored - map into the fields    
+                    parsed_record = {}           
+                    parsed_record['payload'] = decrypt_content
+                    #add the extra fields
+                    parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    parsed_record['id'] = each.id
+                    parsed_record['presenter'] = self.pubkey_hex
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
                     #FIXME not sure if in a list
                     pass
                 else:
+                    #FIXME - I think this logic is in the wrong place
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
