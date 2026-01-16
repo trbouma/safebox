@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
-                            [37375, "Shared Note", ["share"]], 
+                            [34101, "Shared Note", ["share"]], 
                             [34039, "Community", ["Name", "Family", "Membership","Library Card","Training", "Committee", "Qualification","Title", "Honorific"]], 
                             [34037, "Receipt"],
                             [34001, "Badge", ["Access", "ID"]],
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
                         ]  
  
     GRANT_KINDS: List =     [  
-                            [37376, "Shared Note", ["share"]], 
+                            [34012, "Shared Note", ["share"]], 
                             [34040, "Community",["Name", "Family", "Membership", "Library Card", "Training", "Committee", "Qualification", "Title", "Honorific"]],
                             [34038, "Receipt"],
                             [34002, "Badge", ["Access", "ID"]],
