@@ -1,0 +1,127 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Danger Zone{% endblock %}
+{% block head %}
+{{ super() }}
+
+
+
+<script>
+
+
+
+async function backToHome() {
+
+window.location.href="/safebox/access" ;
+
+}
+
+
+
+
+
+async function setRootEntities() {
+
+var entities = document.getElementById('root_entities');
+
+
+
+if (!confirm("OK to proceed?"))  { return;}
+
+
+  submit_data = {"root_entities": entities.value};
+
+  await fetch('/safebox/setrootentities', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => {data});
+
+  window.location.reload();
+
+  
+
+
+
+}
+</script>
+
+
+<script>
+
+  
+
+  
+
+
+  function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+  
+  if (localStorage) {
+  
+      //alert("Local Storage!");
+      // localStorage.setItem("name", "Tim");
+  }
+
+
+
+
+  
+  </script>
+
+{% endblock %}
+
+{% block page_content %}
+
+<div class="center-text">
+<h1>Trusted Entities</h1>
+
+  Warning this is experimental!
+  <br><br> Enter the npubs of whom you trust as root authorities for issuers. Any npubs that these root authorities follow will be considered as trusted issuers.
+
+  <br><br>
+  <textarea id="root_entities"  rows="8" style="width:90%;">{{root_entities}}</textarea>
+  <br><br>
+  <br><br>
+  <button onclick="setRootEntities()">Set Root Entities</button> 
+  <br><br>
+  <hr>
+ 
+  
+</div>
+
+
+
+
+
+   
+
+<div class="center-text">
+ 
+        
+    <br><br>
+    <button onclick="backToHome()">Home</button>
+      
+ 
+
+        
+     
+        
+</div>
+     
+<script>
+  setDarkMode();
+</script>
+
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+
+
+{% endblock %}

@@ -96,6 +96,7 @@ class Acorn:
     emergency_contacts: List[str] = None
     authorities: List[str] = None
     providers: List[str] = None
+    trusted_entities: List[str] = None
     user_records = []
     relays: List[str]
     mints: List[str]
@@ -154,6 +155,7 @@ class Acorn:
             self.balance: int = 0
             self.proof_events = proofEvents()
             self.trusted_mints = {}
+            self.trusted_entities = []
             self.home_relay = home_relay
             self.replicate = replicate
             self.wallet_config = None
@@ -2906,8 +2908,7 @@ class Acorn:
             response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 
-            payment_preimage = payment_json.get('payment_preimage', None)
-           
+            payment_preimage = payment_json.get('payment_preimage', None)            
             if payment_json.get("paid",False):        
                     self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
             else:
@@ -5022,18 +5023,67 @@ class Acorn:
 
         return issued_record
     
-    async def get_authorities(self,kind:int):
+    async def get_trusted_entities(self,kind:int=37376, relays: List[str]=None):
 
-        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
-        authorities = npub_list
-        return authorities
+        pubhex_list_out = []    
+        record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
+        record_out_json = json.loads(record_out)
+        pubs_to_process = record_out_json['payload'].split(' ')
+       
+        for each in pubs_to_process:
+            try:
+                k_to_add = Keys(pub_k=each)
+                # Now we are going to get the followers
+                
+                pubhex_list_out.append(k_to_add.public_key_hex())
+            except:
+                pass
+        
+        print(f"pubhex list out {pubhex_list_out} use relays: {self.relays}")
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+            'authors': pubhex_list_out,
+            'kinds': [3]
+        }]
+        async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)
+            if events:
+                for each in events:
+                    print(f"follow list tags {each.tags}")
+                    for each_tag in each.tags:
+                        if each_tag[0] == "p":
+                            pubhex_list_out.append(each_tag[1])
+        pubhex_list_out = list(set(pubhex_list_out))
+        return pubhex_list_out
 
+    async def get_root_entities(self,kind:int=37376, relays: List[str]=None):
 
-    async def set_authorities(self,kind:int, pub_hex_list: List[str]):
+        pubhex_list_out = []
+        record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
+        try:
+            record_out_json = json.loads(record_out)
+            final_out = record_out_json['payload']
+        except:
+            final_out = None
+        return final_out
 
-        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
-        authorities = npub_list
-        return authorities
+    async def set_trusted_entities(self,kind:int=37376, pub_list_str: str=None):
+
+        pubs_to_validate = pub_list_str.split()
+        pubs_to_store = ''
+        for each in pubs_to_validate:
+            try:
+                k_to_validate = Keys(pub_k=each)
+                pubs_to_store += k_to_validate.public_key_bech32() + ' '
+            except:
+                pass
+
+        
+        
+        await self.put_record(record_name="trusted entities", record_value=pubs_to_store, record_kind=kind, record_type="internal")
+        
+        
+        return True
         
 
        

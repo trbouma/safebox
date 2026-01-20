@@ -1705,9 +1705,14 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                         
                         is_attested = await get_attestation(owner_npub=tag_owner,safebox_npub=acorn_obj.pubkey_bech32, relays=settings.RELAYS)
                         
-                        authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
-                        print(f"authorities: {authorities} tag owner {tag_owner}")
-                        if tag_owner in authorities:
+                        # authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
+                        # trust_list = "npub1vqddl2xav68jyyg669r8eqnv5akx6n5fgky698tfr3d4vy30enpse34f7m # npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5"
+                        # await acorn_obj.set_trusted_entities(pub_list_str=trust_list)
+                        # trusted_entities = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
+                        trusted_entities = ['06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c', '601adfa8dd668f22111ad1467c826ca76c6d4e894589a29d691c5b56122fccc3']
+
+                        print(f"trusted_entities: {trusted_entities} tag owner {tag_owner}")
+                        if tag_owner in trusted_entities:
                             is_trusted = True
                         else:
                             is_trusted = False
@@ -1719,7 +1724,7 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                         print(f"is attested: {is_attested}")
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_issuer[:6]}:{tag_issuer[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\nValid:{is_valid}|Attested:{is_attested}|Presenter:{is_presenter}|Trusted:{is_trusted}"
+                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_issuer[:6]}:{tag_issuer[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|Valid:{is_valid}|Attested:{is_attested}|\n|Presenter:{is_presenter}|Trusted:{is_attested and is_trusted}|"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
 

@@ -63,6 +63,12 @@
 
   } 
 
+    async function trust() {
+
+  window.location.href="/safebox/trust/";
+
+  } 
+
   async function logout() {
   var data; 
   //alert("log out");
@@ -1039,6 +1045,8 @@ function getInvoiceStatus(ln_invoice_status) {
   <button id="issue_card" onclick="issueCard()" >Issue Card</button>
   <br><br>
   <button onclick="attest()">Attest</button> 
+  <br><br>
+  <button onclick="trust()">Trust</button> 
   <br><br>
   <button id="logout_button"onclick="logout()" >Logout</button>
   <br>

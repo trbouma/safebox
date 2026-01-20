@@ -661,9 +661,35 @@ def issue( content:str, tags, kind:int):
     click.echo(f"Even from Record: {event_from_record}")
 
 
-    
+@click.command("set_trusted_entities", help='set trusted_entities')
+@click.argument('trusted_entities', default='default')
+def set_trusted_entities(trusted_entities):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
 
+    if click.confirm('Do you want to set trusted entities?'):    
+     asyncio.run(acorn_obj.set_trusted_entities(pub_list_str=trusted_entities))
     
+@click.command("get_trusted_entities", help='get trusted_entities')
+def get_trusted_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+      
+    record_out = asyncio.run(acorn_obj.get_trusted_entities(relays=RELAYS))
+    click.echo(record_out)
+
+@click.command("get_root_entities", help='get root entities')
+def get_root_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+      
+    record_out = asyncio.run(acorn_obj.get_root_entities(relays=RELAYS))
+    click.echo(record_out)   
 
 cli.add_command(info)
 cli.add_command(init)
@@ -695,6 +721,9 @@ cli.add_command(dm_recipient)
 cli.add_command(stx_recipient)
 cli.add_command(run)
 cli.add_command(issue)
+cli.add_command(set_trusted_entities)
+cli.add_command(get_trusted_entities)
+cli.add_command(get_root_entities)
 
 
 if __name__ == "__main__":
