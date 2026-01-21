@@ -5064,7 +5064,7 @@ class Acorn:
             record_out_json = json.loads(record_out)
             final_out = record_out_json['payload']
         except:
-            final_out = None
+            final_out = ""
         return final_out
 
     async def set_trusted_entities(self,kind:int=37376, pub_list_str: str=None):

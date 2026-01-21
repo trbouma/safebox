@@ -1031,6 +1031,30 @@ async def set_root_entities(            request: Request,
    
     return {"status": "OK", "detail": root_entities}
 
+@router.get("/gettrustlist", tags=["safebox", "protected"])
+async def get_trust_list(            request: Request, 
+                                        
+                                    acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    
+    trust_out = ''
+    trust_count = 1
+    await acorn_obj.load_data()
+   
+    try: 
+        trust_list = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
+        for each in trust_list:
+            try:
+                k_each = Keys(pub_k=each)            
+                trust_out += f"{k_each.public_key_bech32()} "
+                trust_count +=1
+            except:
+                pass
+    except:
+        trust_out = "Error"
+    
+   
+    return {"status": "OK", "detail": trust_out}
 
                                     
 

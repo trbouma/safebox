@@ -26,7 +26,7 @@ var entities = document.getElementById('root_entities');
 
 
 
-if (!confirm("OK to proceed?"))  { return;}
+// if (!confirm("OK to proceed?"))  { return;}
 
 
   submit_data = {"root_entities": entities.value};
@@ -39,13 +39,40 @@ if (!confirm("OK to proceed?"))  { return;}
     .then((response) => response.json())
     .then((data) => {data});
 
-  window.location.reload();
-
-  
-
-
+  alert("Root entities have been set. Refreshing page to see updated list.")
+  window.location.reload(); 
 
 }
+
+async function getTrustList() {
+
+
+
+
+
+// if (!confirm("OK to proceed?"))  { return;}
+
+
+
+
+  await fetch('/safebox/gettrustlist', {
+        method: "GET",
+        headers: {"Content-Type": "application/json"}       
+                
+       })
+    .then((response) => response.json())
+    .then((data) => { data;
+
+                    
+                    document.getElementById("trust_list").textContent = 'Result:\n ' + data.detail;
+
+                    });
+
+    
+  // window.location.reload(); 
+
+}
+
 </script>
 
 
@@ -89,27 +116,24 @@ if (!confirm("OK to proceed?"))  { return;}
   <br><br>
   <button onclick="setRootEntities()">Set Root Entities</button> 
   <br><br>
+    <button onclick="getTrustList()">Get Trust List</button> 
+  <br><br>
   <hr>
  
   
 </div>
 
-
-
-
-
-   
+ 
 
 <div class="center-text">
  
         
     <br><br>
     <button onclick="backToHome()">Home</button>
+    <hr>
+    <span id="trust_list" ></span>
       
- 
-
-        
-     
+    
         
 </div>
      
