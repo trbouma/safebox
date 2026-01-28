@@ -233,6 +233,9 @@ class attestationOwner(BaseModel):
 class rootEntity(BaseModel):    
     root_entities: str|None = None
 
+class wotEntity(BaseModel):    
+    wot_entities: str|None = None
+
 class signedEvent(BaseModel):
     signed_event: dict
    

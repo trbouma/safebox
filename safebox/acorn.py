@@ -5085,7 +5085,144 @@ class Acorn:
         
         return True
         
+    async def set_wot_entities(self,kind:int=37376, pub_list_str: str=None):
 
+        pubs_to_validate = pub_list_str.split()
+        print(f"pubs to validate: {pubs_to_validate}")
+        pubs_to_store = ''
+        for each in pubs_to_validate:
+            each_component = each.split(":")
+            print(f"each component {each_component}")
+            each_npub = each_component[0]
+            part_2 = ':'+ each_component[1] if len(each_component)>=2 else ''
+            part_3 = ':'+ each_component[2] if len(each_component)>=3 else ''
+           
+
+            try:
+                k_to_validate = Keys(pub_k=each_npub)
+                pubs_to_store += f"{k_to_validate.public_key_bech32()}{part_2}{part_3}" + ' '
+            except:
+                pass
+
+        
+        
+        await self.put_record(record_name="wot entities", record_value=pubs_to_store, record_kind=kind, record_type="internal")
+        
+        
+        return True
+    
+    async def get_wot_entities(self,kind:int=37376, relays: List[str]=None):
+
+        pubhex_list_out = []    
+        final_out = ""
+        try:
+            record_out = await self.get_wallet_info(label="wot entities",record_kind=kind)
+            record_out_json = json.loads(record_out)
+            pubs_to_process = record_out_json['payload'].split(' ')
+            print(f'pubs to process{pubs_to_process}')
+        
+            for each in pubs_to_process:
+                each_component = each.split(":")   
+                print(f"each component {each_component}")         
+                each_npub = each_component[0]
+                if len(each_component)>=2:
+                    part_2 = ':'+each_component[1] 
+                else: 
+                    part_2 = ''
+                if len(each_component)>=3:
+                    part_3 = ':'+each_component[2] 
+                else: 
+                    part_3 = ''
+
+
+                    
+                
+                try:
+                    k_to_add = Keys(pub_k=each_npub)
+                    final_entry = f"{k_to_add.public_key_bech32()}{part_2}{part_3}"
+                    print(f"final entry: {final_entry}")
+                    
+                    pubhex_list_out.append(final_entry)
+                   
+                except:
+                    pass
+        except:
+            pass
+        
+       
+
+        return pubhex_list_out
+    
+    async def get_wot_scores(self, pub_key_to_score: str, relays: List[str]=None):
+        rank = '0'
+        scores_out = []
+        try:
+            k_to_use = Keys(pub_k=pub_key_to_score)
+            pubhex = k_to_use.public_key_hex()
+        except:
+            return "invalid npub"
+        
+
+        
+        wot_entities = await self.get_wot_entities()
+        for each_wot in wot_entities:
+            each_wot_npub, each_wot_tag, each_wot_relay = (each_wot.split(':') + [None, None, None])[:3]
+            each_wot_relay = each_wot_relay if not each_wot_relay or each_wot_relay.startswith("wss://") else f"wss://{each_wot_relay}"
+            print(each_wot_npub,each_wot_tag, each_wot_relay)
+            FILTER = [{
+            'limit': RECORD_LIMIT,
+             '#d': [pubhex],                       
+            'authors': [Keys(pub_k=each_wot_npub).public_key_hex()],
+            'kinds': [30382]
+            }]
+            print(f"FILTER {FILTER}")
+            each_event: Event
+            async with ClientPool([each_wot_relay]) as c:  
+                events = await c.query(FILTER)
+                if events:
+                    print(f"total events: {len(events)}")
+                    for each_event  in events:
+                        print(f"tags from {each_event.pub_key} {each_event.tags}")
+                        for each_tag in each_event.tags:
+                            if each_tag[0] == each_wot_tag:
+                                score = 0
+                                score = each_tag[1]
+                                scores_out.append([each_wot_tag,score])
+
+        
+
+        return scores_out
+
+        try:
+            k_to_use = Keys(pub_k=pub_key_to_score)
+            pubhex = k_to_use.public_key_hex()
+        except:
+            pubhex = None
+
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+             '#d': [pubhex],                       
+            'authors': wot_entities,
+            'kinds': [30382]
+        }]
+
+        # print(f"FILTER {FILTER} with relays: {relays}")
+        each: Event
+        async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)
+            if events:
+                # print(f"total events: {len(events)}")
+                for each  in events:
+                    # print(f"tags from {each.pub_key} {each.tags}")
+                    for each_tag in each.tags:
+                        if each_tag[0] == 'rank':
+                            rank = each_tag[1]
+
+                        
+        
+
+
+        return rank
        
         
         

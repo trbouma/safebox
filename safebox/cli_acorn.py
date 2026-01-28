@@ -691,6 +691,41 @@ def get_root_entities():
     record_out = asyncio.run(acorn_obj.get_root_entities(relays=RELAYS))
     click.echo(record_out)   
 
+@click.command("set_wot_entities", help='set wot entities npub:tag:relay')
+@click.argument('wot_entities', default='default')
+def set_wot_entities(wot_entities):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    if click.confirm(f'Do you want to set wot entities? {wot_entities}'):    
+     asyncio.run(acorn_obj.set_wot_entities(pub_list_str=wot_entities))
+
+@click.command("get_wot_entities", help='get wot entities')
+def get_wot_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+      
+    record_out = asyncio.run(acorn_obj.get_wot_entities(relays=RELAYS))
+    click.echo(record_out) 
+
+@click.command("get_wot_scores", help='get wot score')
+@click.argument('pubkey', default="pubkey")
+@click.option('--relays','-r', default=[])
+def get_wot_scores(pubkey, relays):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info()) 
+    if relays:
+        relay_list = []
+        for each in relays.split(','):
+            
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each) 
+    click.echo(relay_list)  
+    record_out = asyncio.run(acorn_obj.get_wot_scores(pub_key_to_score=pubkey, relays=relay_list))
+    click.echo(record_out) 
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -724,6 +759,9 @@ cli.add_command(issue)
 cli.add_command(set_trusted_entities)
 cli.add_command(get_trusted_entities)
 cli.add_command(get_root_entities)
+cli.add_command(set_wot_entities)
+cli.add_command(get_wot_entities)
+cli.add_command(get_wot_scores)
 
 
 if __name__ == "__main__":

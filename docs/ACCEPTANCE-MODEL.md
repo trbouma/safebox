@@ -284,4 +284,89 @@ It is up to the verifier to decide the trustworthiness of a npub. This should be
 
 
 
-- An **offer** is provided
+## Nostr Safebox Implementation
+
+### Private Record Issuance
+Nostr Safebox can issue private records. Private records are issued using the NIP-01 format with the following
+
+Private record tags
+
+The following tags are added to the private record:
+
+`[["safebox", <pubkeyhex of safebox instance issuing the record>], ["safebox_owner", <pubkeyhex of safebox owner>],["safebox_holder", <pubkeyhex of safebox instance holding the private record]]`
+
+
+
+### Verification Stages
+
+This specification defines a staged verification model for records, progressing from technical integrity to social standing. Each stage answers a distinct question and may be evaluated independently. Failure at any stage does not imply failure at subsequent stages unless explicitly required by the relying party.
+
+#### 1. Validated
+
+A record is Validated if its internal integrity can be established.
+
+Validation MUST include, as applicable:
+	- Verification of cryptographic signatures
+	- Verification of hashes or content identifiers
+	- Conformance to required schemas or formats
+	- Consistency of metadata (e.g., identifiers, timestamps)
+
+Validation establishes that the record is technically sound.
+Validation alone DOES NOT establish identity, authorship, entitlement, or authority.
+
+⸻
+
+#### 2. Self-Presented
+
+A record is Self-Presented if it is presented by the same entity to whom the record was issued.
+
+Self-presentation MUST demonstrate continuity of control between issuance and presentation, typically through proof of control over the same cryptographic key, credential, or capability bound to the record at issuance.
+
+Self-presentation MUST NOT rely on delegation, proxy, or bearer transfer unless explicitly permitted by the record’s issuance policy.
+
+Self-presentation establishes agency: the record is not only valid, but presented by its rightful holder.
+
+⸻
+
+#### 3. Attested
+
+A record is Attested if one or more third parties have made explicit assertions regarding the record, its presenter, or associated attributes.
+
+Attestations:
+	- MAY assert facts, claims, or assessments
+	- MUST be independently verifiable
+	- MAY be additive and multiple
+
+Attestation DOES NOT imply acceptance or standing; it represents witnessed or asserted information only.
+
+⸻
+
+#### 4. Recognized
+
+A record is Recognized if one or more attestations are accepted as effective within a defined realm.
+
+Recognition is context-dependent and MAY vary across jurisdictions, institutions, platforms, or communities. Recognition MAY be time-limited or revocable.
+
+Recognition establishes standing: the record and its attestations are treated as meaningful for a given purpose within a specific realm.
+
+⸻
+
+#### 5. Reputation (Optional)
+
+A record, presenter, or attester MAY accrue Reputation through repeated recognition over time.
+
+Reputation:
+	•	Is derived from historical interactions, outcomes, or reliance
+	•	MAY influence future recognition decisions
+	•	MUST NOT substitute for validation, self-presentation, or attestation
+
+Reputation represents accumulated standing rather than a discrete verification event and is inherently non-portable across realms unless explicitly recognized.
+
+⸻
+
+Notes on Independence
+	•	Each stage addresses a distinct verification concern and MUST NOT be conflated.
+	•	A record MAY be validated but not self-presented.
+	•	A record MAY be attested but not recognized.
+	•	Reputation MUST be treated as advisory unless explicitly required by policy.
+

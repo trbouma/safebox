@@ -25,10 +25,6 @@ async function setRootEntities() {
 var entities = document.getElementById('root_entities');
 
 
-
-// if (!confirm("OK to proceed?"))  { return;}
-
-
   submit_data = {"root_entities": entities.value};
 
   await fetch('/safebox/setrootentities', {
@@ -40,6 +36,26 @@ var entities = document.getElementById('root_entities');
     .then((data) => {data});
 
   alert("Root entities have been set. Refreshing page to see updated list.")
+  window.location.reload(); 
+
+}
+
+async function setWOTEntities() {
+
+var wot_entities = document.getElementById('wot_entities');
+
+
+  submit_data = {"wot_entities": wot_entities.value};
+
+  await fetch('/safebox/setwotentities', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},        
+        body: JSON.stringify(submit_data)         
+       })
+    .then((response) => response.json())
+    .then((data) => {data});
+
+  alert("WoT entities have been set. Refreshing page to see updated list.")
   window.location.reload(); 
 
 }
@@ -105,20 +121,22 @@ async function getTrustList() {
 {% block page_content %}
 
 <div class="center-text">
-<h1>Trusted Entities</h1>
+<h1>Trust</h1>
 
   Warning this is experimental!
   <br><br> Enter the npubs of whom you trust as root authorities for issuers. Any npubs that these root authorities follow will be considered as trusted issuers.
-
-  <br><br>
+  <hr>
+  <h2>Root Authorities</h2>  
   <textarea id="root_entities"  rows="8" style="width:90%;">{{root_entities}}</textarea>
-  <br><br>
-  <br><br>
+  <br><br>  
   <button onclick="setRootEntities()">Set Root Entities</button> 
   <br><br>
-    <button onclick="getTrustList()">Get Trust List</button> 
-  <br><br>
+  <button onclick="getTrustList()">Get Root List</button>   
   <hr>
+  <h2>Trusted Assertion Providers</h2>  
+  <textarea id="wot_entities"  rows="8" style="width:90%;">{{wot_entities}}</textarea>
+  <br><br>  
+  <button onclick="setWOTEntities()">Set Web of Trust Entities</button> 
  
   
 </div>

@@ -204,7 +204,7 @@ async def get_profile_for_pub_hex(pub_hex:str, relays:List=None):
         if profile_event.is_valid():
             print(f"kind 0{events[0].content}")
             json_obj = json.loads(events[0].content)
-            owner = f"{json_obj.get('name', '')} {json_obj.get('nip05', '')} website:{json_obj.get('website', '')}\n"
+            owner = f"{json_obj.get('name', '')} {json_obj.get('nip05', '')}"
             picture = json_obj.get('picture', None)
         else:
             pass

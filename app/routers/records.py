@@ -1722,9 +1722,14 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                             is_presenter = True
 
                         print(f"is attested: {is_attested}")
+                        rating = "TBD"
+                        wot_scores = await acorn_obj.get_wot_scores(pub_key_to_score=tag_owner, relays=settings.WOT_RELAYS)
+                        # print(f"rating of owner is: {rating}")
+                        wot_scores_to_show = "\n".join(f"{label}: {value}" for label, value in wot_scores)
+
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_issuer[:6]}:{tag_issuer[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|Valid:{'✅' if is_valid else '❌'}|Presenter:{'✅' if is_presenter else '❌'}|\nAttested By Owner:{'✅' if is_attested else '❌'}||In Trust List:{'✅' if is_trusted else '❌'}|"
+                        each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_presenter else '❌'} Self-Presented|\n{'✅' if is_attested else '❌'} Attested By Issuer|{'✅' if is_trusted else '❌'} Recognized|\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
 
