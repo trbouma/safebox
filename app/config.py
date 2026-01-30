@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
     WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
+    LISTEN_TIMEOUT: int = 120
 
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant

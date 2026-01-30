@@ -28,7 +28,8 @@
 <div id="card-container"></div>
 
 <script>
-  const ws = new WebSocket("wss://{{request.url.hostname}}/records/ws/accept?nauth={{nauth}}");
+  console.log("{{ws_url}}")
+  const ws = new WebSocket("{{ws_url}}");
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {

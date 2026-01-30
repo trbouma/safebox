@@ -147,7 +147,7 @@ app.include_router(prescriptions.router, prefix="/prescriptions")
 app.include_router(emergency.router) 
 app.include_router(pos.router, prefix="/pos")
 app.include_router(public.router, prefix="/public")
-# app.include_router(credentials.router, prefix="/credentials")
+
 app.include_router(records.router, prefix="/records")
 
 templates = Jinja2Templates(directory="app/templates")

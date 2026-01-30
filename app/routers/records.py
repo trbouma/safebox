@@ -160,15 +160,22 @@ async def record_request(      request: Request,
 
 
     # user_records = await acorn_obj.get_user_records(record_kind=kind)
-    
 
+    # this is the replacement for records/request.html
+    # const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`); 
+    
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/request/"
     
 
     return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
                                             
                                             "record_kind": kind,   
-                                            "grant_kinds": settings.GRANT_KINDS
+                                            "grant_kinds": settings.GRANT_KINDS,
+                                            "ws_url": ws_url
 
 
                                         })
@@ -633,6 +640,14 @@ async def retrieve_grant_list(       request: Request,
 
   
     record_label = get_label_by_id(grant_kinds, record_kind)
+
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/offer/{nauth}"
+
+    # this is the hardcoded one from grantlist.html
+    # ws_url = "wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}"
     
     return templates.TemplateResponse(  "records/grantlist.html", 
                                         {   "request": request,
@@ -643,7 +658,8 @@ async def retrieve_grant_list(       request: Request,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
                                             "record_label": record_label,
-                                            "select_kinds": grant_kinds
+                                            "select_kinds": grant_kinds,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -676,6 +692,13 @@ async def accept_records(            request: Request,
     grant_kind_label = ""
     transmittal_kind = 0
 
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/accept?nauth={nauth}"
+
+    
+
     return templates.TemplateResponse(  "records/acceptrecord.html", 
                                         {   "request": request,
                                             
@@ -685,7 +708,8 @@ async def accept_records(            request: Request,
                                             "grant_kind": grant_kind,
                                             "grant_kind_label": grant_kind_label,
                                             "transmittal_kind": transmittal_kind,
-                                            "nauth": nauth
+                                            "nauth": nauth,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -1062,7 +1086,14 @@ async def display_offer(     request: Request,
     offer_kinds = settings.OFFER_KINDS
     offer_label = get_label_by_id(offer_kinds, kind)
     referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
-   
+
+    #FIXME hard-coded to replace in offer.html
+    # `wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
+    # need to add in global_nauth in the page
 
     return templates.TemplateResponse(  template_to_use, 
                                         {   "request": request,
@@ -1077,7 +1108,8 @@ async def display_offer(     request: Request,
                                             "label_hash": label_hash,
                                             "action_mode":action_mode,
                                             "content": content,
-                                            "credential_record": credential_record
+                                            "credential_record": credential_record,
+                                            "ws_url": ws_url
                                             
                                         })
 
@@ -1405,7 +1437,7 @@ async def ws_record_present( websocket: WebSocket,
     await websocket.accept()
     
     print("start listening for requester data")
-    requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind,since=None,relays=auth_relays)
+    requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind,since=None,relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
     print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
     if requester_nembed:
         parsed_nembed = parse_nembed_compressed(requester_nembed)
@@ -1515,7 +1547,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
     start_time = datetime.now()
 
     while True:
-        if datetime.now() - start_time > timedelta(minutes=1):
+        if datetime.now() - start_time > timedelta(seconds=settings.LISTEN_TIMEOUT):
             print("1 minute has passed. Exiting loop.")
             await websocket.send_json({"status":"TIMEOUT"})
             break
@@ -1593,7 +1625,7 @@ async def ws_listen_for_presentation( websocket: WebSocket,
 
     
     print(f"#1 listen for nauth ")
-    presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays)
+    presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
     parsed_nauth = parse_nauth(presenter_nauth)
 
     

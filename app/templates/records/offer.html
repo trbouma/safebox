@@ -228,8 +228,9 @@ async function createQRCode() {
 
   }
 
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
-
+ // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
+ const ws = new WebSocket(`{{ws_url}}${global_nauth}`);
+  console.log(`{{ws_url}}${global_nauth}`);
    
 
     ws.onopen = () => console.log("WebSocket connected");

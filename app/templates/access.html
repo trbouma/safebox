@@ -204,11 +204,7 @@ async function myEcash() {
 window.location.href="/safebox/ecash";
 }
 
-async function myCredentials() {
 
-window.location.href="/credentials/present";
-
-}
 
 
 
@@ -791,7 +787,7 @@ function getInvoiceStatus(ln_invoice_status) {
 <script>
   document.addEventListener("touchstart", handleInteraction); 
   //document.addEventListener("click", handleInteraction); 
-  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws/status");
+  const ws = new WebSocket("{{ws_url}}");
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {

@@ -447,6 +447,15 @@ async def protected_route(    request: Request,
     # Token is valid, proceed
 
     final_url, final_lnurl= lightning_address_to_lnurl(lightning_address)
+
+
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/safebox/ws/status"
+    
+    print(f"ws url {ws_url}")
+
     return templates.TemplateResponse(  "access.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
@@ -458,6 +467,7 @@ async def protected_route(    request: Request,
                                             "currency_symbol": currency_symbol,
                                             "currencies" : currencies,
                                             "lightning_address": lightning_address,
+                                            "ws_url": ws_url,
                                             "lnurl": final_lnurl,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
