@@ -99,7 +99,10 @@ async function selectRecordKind() {
 
 }
 
-const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
+// const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
+const ws_present = new WebSocket("{{ws_url}}");
+console.log("{{ws_url}}")
+
 // alert(`we are here! nauth {{nauth}}`);
 ws_present.onopen = () => console.log("WebSocket connected");
 ws_present.onmessage = (event) => {

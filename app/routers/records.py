@@ -428,6 +428,14 @@ async def my_present_records(       request: Request,
 
     print("present records")
     record_label = get_label_by_id(grant_kinds, record_kind)
+
+    # FIXME this is what is being replaced in present.html
+    # const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
+
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/present/{nauth}"
     
     return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
@@ -440,7 +448,8 @@ async def my_present_records(       request: Request,
                                             "record_label": record_label,
                                             "select_kinds": grant_kinds,
                                             "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
-                                            "kemalg": settings.PQC_KEMALG
+                                            "kemalg": settings.PQC_KEMALG,
+                                            "ws_url": ws_url
 
                                         })
 
