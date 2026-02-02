@@ -5189,18 +5189,20 @@ class Acorn:
             }]
             print(f"FILTER {FILTER}")
             each_event: Event
-            async with ClientPool([each_wot_relay]) as c:  
-                events = await c.query(FILTER)
-                if events:
-                    print(f"total events: {len(events)}")
-                    for each_event  in events:
-                        print(f"tags from {each_event.pub_key} {each_event.tags}")
-                        for each_tag in each_event.tags:
-                            if each_tag[0] == each_wot_tag:
-                                score = 0
-                                score = each_tag[1]
-                                scores_out.append([each_wot_tag,score])
-
+            try:
+                async with ClientPool(clients=[each_wot_relay],timeout=3) as c:  
+                    events = await c.query(FILTER)
+                    if events:
+                        print(f"total events: {len(events)}")
+                        for each_event  in events:
+                            print(f"tags from {each_event.pub_key} {each_event.tags}")
+                            for each_tag in each_event.tags:
+                                if each_tag[0] == each_wot_tag:
+                                    score = 0
+                                    score = each_tag[1]
+                                    scores_out.append([each_wot_tag,score])
+            except:
+                pass
         
 
         return scores_out
