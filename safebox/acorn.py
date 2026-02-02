@@ -678,12 +678,13 @@ class Acorn:
             }]
 
         # print(f"kind: {record_kind} relays to use: {relays_to_use}")
-        self.logger.debug(f"kind: {record_kind} relays to use: {relays_to_use}")
+        self.logger.debug(f"kind: {record_kind} relays to use: {relays_to_use} filter: {FILTER}")
         async with ClientPool(relays_to_use) as c:  
             events = await c.query(FILTER)           
         
         events.sort(reverse=reverse)
 
+        each: Event
         for each in events:
             
             # check to see if record originates from elsewhere
@@ -702,6 +703,7 @@ class Acorn:
                         parsed_record = json.loads(unwrapped_event.content)
                         parsed_record['created_at'] = unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         parsed_record['id']=unwrapped_event.id
+                        parsed_record['sender']=unwrapped_event.pub_key
                         
                         
 
@@ -717,10 +719,18 @@ class Acorn:
 
                     
                     parsed_record['presenter'] = unwrapped_event.pub_key
+                    parsed_record['sender'] = unwrapped_event.pub_key
+                    parsed_record['social_name'] = None
 
                 except Exception as e:
                     print(f"error: {e}")
             
+                #Add in sender detais
+                if record_kind in [1059]:
+                    social_profile = await self.get_social_profile(npub=unwrapped_event.pub_key,relays=relays_to_use)
+                    parsed_record['social_name'] = social_profile.get('display_name', None)
+                else:
+                    parsed_record['social_name'] = None
 
 
             else: # otherwise record is self-originating
@@ -741,6 +751,7 @@ class Acorn:
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
+                    parsed_record['sender'] = each.pub_key
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
@@ -751,6 +762,7 @@ class Acorn:
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
+                    parsed_record['sender'] = each.pub_key
 
             # Convert payload to json
             # See if payload is in stringifed json and convert
@@ -768,7 +780,7 @@ class Acorn:
             else:
                 
                 #Inspect Payload and decide what to show
-                print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
+                # print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
                 if isinstance(parsed_record["payload"], dict):
                     # private event so just show context
                     parsed_record["content"] = parsed_record["payload"]["content"]
@@ -5224,7 +5236,26 @@ class Acorn:
 
         return rank
        
+    async def get_social_profile(self,npub: str, relays: List[str]=None):
+        try:
+            pubhex = Keys(pub_k=npub).public_key_hex()
+        except:
+            raise ValueError("Invalid public key")
         
+        FILTER = [{
+                'limit': 1,                                
+                'authors': [pubhex],
+                'kinds': [0]
+                }]
+        
+        async with ClientPool(relays) as c:  
+                    event: Event
+                    events = await c.query(FILTER)
+                    if events:
+                        event = events[0]
+                        social_profile = json.loads(event.content)
+
+        return social_profile       
         
 if __name__ == "__main__":
     

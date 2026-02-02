@@ -1766,7 +1766,7 @@ async def ws_listen_for_presentation( websocket: WebSocket,
                         rating = "TBD"
                         wot_scores = await acorn_obj.get_wot_scores(pub_key_to_score=tag_owner, relays=settings.WOT_RELAYS)
                         # print(f"rating of owner is: {rating}")
-                        wot_scores_to_show = "\n".join(f"{label}: {value}" for label, value in wot_scores)
+                        wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
 
                         content = f"{event_to_validate.content}"
                         each["content"] = content

@@ -450,7 +450,7 @@ def get_records(kind, since, relays):
         out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted, relays=relay_array_wss))
         
         for each in out_info:
-            click.echo(f"RECORD: {each}")
+            click.echo(f"RECORD: {each['social_name']} {each['payload']}")
         click.echo(f"No. of RECORDS: {len(out_info)}" )
 
     except Exception as e:
@@ -726,6 +726,25 @@ def get_wot_scores(pubkey, relays):
     record_out = asyncio.run(acorn_obj.get_wot_scores(pub_key_to_score=pubkey, relays=relay_list))
     click.echo(record_out) 
 
+@click.command("get_social_profile", help='get wot score')
+@click.argument('npub', default="npub")
+@click.option('--relays','-r', default=[])
+def get_social_profile(npub, relays):   
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info()) 
+    if relays:
+        relay_list = []
+        for each in relays.split(','):
+            
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each) 
+    click.echo(relay_list)  
+    click.echo(f"npub: {npub} relay_list: {relay_list}") 
+    record_out = asyncio.run(acorn_obj.get_social_profile(npub, relay_list))
+    
+    click.echo(record_out) 
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -762,6 +781,7 @@ cli.add_command(get_root_entities)
 cli.add_command(set_wot_entities)
 cli.add_command(get_wot_entities)
 cli.add_command(get_wot_scores)
+cli.add_command(get_social_profile)
 
 
 if __name__ == "__main__":

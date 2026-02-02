@@ -720,17 +720,18 @@ async def my_personal_messages(      request: Request,
     """Protected access to private data stored in home relay"""
 
 
-    dm_relays = ['wss://relay.getsafebox.app']
+    dm_relays = settings.DM_RELAYS
     print(acorn_obj.pubkey_bech32)
+    since_last = (datetime.now() - timedelta(days=1)).timestamp()
 
-    user_records = await acorn_obj.get_user_records(record_kind=kind,relays=dm_relays)
+    user_records = await acorn_obj.get_user_records(record_kind=kind,relays=dm_relays, reverse=False)
    
-   
+    print(f"user_records: {user_records}")
     
     
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
 
-    return templates.TemplateResponse(  "messages/personalmessages.html", 
+    return templates.TemplateResponse(  "messages/privatemessages.html", 
                                         {   "request": request,                                            
                                             "user_records": user_records,                                          
                                             "referer": referer

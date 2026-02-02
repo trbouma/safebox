@@ -95,7 +95,7 @@ async function goBack() {
   {
     if (record.hasOwnProperty("tag")) {
         // console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.created_at, record.payload, record.id);
+        addCard(record.social_name, record.created_at, record.payload, record.id);
     } else {
         console.log("This record does not have a 'name' property.");
     }

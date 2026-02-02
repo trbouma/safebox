@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     NWC_NSEC: str = 'nsec1wml8qhq2qkmemlceg2fehvg2cefqrsp7ak47rdmc3qxum65wsxaqcvj7d6'
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
+    DM_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
     TRANSMITTAL_KIND: int = 21060
     AUTH_KIND: int = 21061
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
     CURRENCY_CSV: str = 'setup/currency.csv'
     WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
     LISTEN_TIMEOUT: int = 120
+    ECASH_LISTEN_TIMEOUT: int = 120
 
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant

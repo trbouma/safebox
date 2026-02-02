@@ -357,9 +357,10 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
-    duration = 60  # 1 minutes in seconds
+    # duration = 60  # 1 minutes in seconds
+    ecash_listen_timeout = settings.ECASH_LISTEN_TIMEOUT
     #FIXME Need to add in a nonce so it is listening for the right ecash payment
-    while time.time() - start_time < duration:
+    while time.time() - start_time < ecash_listen_timeout:
         print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
         ecash_out = await acorn_obj.get_ecash_latest(relays=relays, nonce=nonce) 
 
