@@ -340,6 +340,7 @@ class SafeboxRecord(BaseModel):
     type: str                          # e.g. "offer"
     payload: Any                       # can hold any JSON-serializable value
     blobref: str|None = None
+    blobtype: str|None = None
 
 class ParseRecord(BaseModel):
     tag: List[str]                     # e.g. ["my_record"]

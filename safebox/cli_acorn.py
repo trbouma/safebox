@@ -348,15 +348,19 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('label_info', default='hello')
 @click.option('--kind','-k', default=37375)
 @click.option('--origin','-o', default=None)
-def put(label, label_info, kind, origin):
+@click.option('--file','-f', default=None)
+def put(label, label_info, kind, origin, file):
     jsons=None
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     # click.echo(wallet.get_wallet_info())
-    
+    blob_data = None
+    if file:
+        with open(file, 'rb') as f:
+            blob_data = f.read()
 
     if click.confirm('Do you want to continue?'):    
-     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind, record_origin=origin))
+     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind, record_origin=origin, blob_data=blob_data))
 
 @click.command("get", help='get a private wallet record')
 @click.argument('label', default = "default")
@@ -369,7 +373,7 @@ def get(label,kind,origin):
     asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = asyncio.run(acorn_obj.get_wallet_info(label,record_kind=kind,record_origin=origin))
+        out_info = asyncio.run(acorn_obj.get_record_safebox(label,record_kind=kind,record_origin=origin))
         # safebox_info = wallet_obj.get_record(label)
         pass
 

@@ -55,6 +55,8 @@ from safebox.models import TxHistory, SafeboxRecord, ParseRecord
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
+from python_blossom import BlossomClient
+
 RECORD_LIMIT: int = 1024
 PROOF_LIMIT: int = 32
 
@@ -1460,7 +1462,7 @@ class Acorn:
         except:
             return f"Could not retrieve info for: {label}. Does a record exist?"
         
-
+        
 
         return decrypt_content
     
@@ -1578,15 +1580,66 @@ class Acorn:
 
         
     async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None, record_origin:str = None):
-        #FIXME - not sure if this function is used
+        #FIXME - not sure if this function is used - get_wallet_info is doing is
+        
         record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
         try:
             record_obj = json.loads(record_out)
+            
         except:
             record_obj = record_out
 
         return record_obj
 
+    async def get_record_safebox(self, label:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None)->SafeboxRecord:
+        my_enc = NIP44Encrypt(self.k)
+
+        if record_origin:
+            label = ':'.join([record_origin,label])
+
+        if record_by_hash:
+            label_hash = record_by_hash
+        else:
+            m = hashlib.sha256()
+            m.update(self.privkey_hex.encode())
+            m.update(label.encode())
+            label_hash = m.digest().hex()
+        
+        decrypt_content = None
+        
+        # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
+        # a_tag = ["a", label_hash]
+        # print("a_tag:",a_tag)
+       
+        self.logger.debug(f"getting record for: {label}")
+        
+        # DEFAULT_RELAY = self.relays[0]
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+            'authors': [self.pubkey_hex],
+            'kinds': [record_kind],
+            '#d': [label_hash]   
+            
+            
+        }]
+
+        # print("are we here?", label_hash)
+        event =await self._async_get_wallet_info(FILTER, label_hash)
+        
+        # print(event.data())
+        try:
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        except:
+            return f"Could not decrypt info for: {label}. Does a record exist?"
+        
+        try:
+            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            print(f"This is the blobref: {safebox_record.blobref}")
+        except:
+             return f"Could create safebox record: {label}. Does a record exist?"
+
+
+        return safebox_record
 
    
     def get_proofs(self):
@@ -1734,7 +1787,9 @@ class Acorn:
             
             return events[0]
 
-    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None):
+    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
+
+        blossom_server = "https://blossom.getsafebox.app"
 
         if record_origin:
             record_name = ':'.join([record_origin,record_name])
@@ -1747,9 +1802,20 @@ class Acorn:
             await self.set_wallet_info(record_name,record_value,record_kind=record_kind)
             return record_name
         else:
-
-
-            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value)
+            blob_ref = None
+            blob_type = None
+            if blob_data:
+                print("blob data needs to be added to blossom")
+                client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
+                upload_result = client.upload_blob(blossom_server, data=blob_data,
+                             description='Blob to server')
+                sha256 = upload_result['sha256']
+                blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
+                # blob_ref = upload_result['sha256']
+                blob_type = upload_result['type']
+                print(f"Blossom result: {upload_result}")
+                
+            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value, blobref=blob_ref, blobtype=blob_type)
             record_json_str = record_obj.model_dump_json()
 
             await self.update_tags([["user_record",record_name,record_type]])
