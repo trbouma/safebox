@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import UploadFile, File, Form
 
 from pydantic import BaseModel
 from typing import Optional, List
@@ -18,6 +19,7 @@ import ipinfo
 import requests
 from safebox.func_utils import get_profile_for_pub_hex, get_attestation
 from safebox.monstrmore import ExtendedNIP44Encrypt
+from safebox.models import SafeboxRecord
 from monstr.encrypt import NIP44Encrypt
 import oqs
 
@@ -25,7 +27,7 @@ import oqs
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken, BlobRequest
 from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
@@ -1076,15 +1078,15 @@ async def display_offer(     request: Request,
     content = ""
     
 
-    record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+    record: SafeboxRecord = await acorn_obj.get_record_safebox(record_name=card, record_kind=kind)
+    # record = await acorn_obj.get_record(record_name=card, record_kind=kind)
     label_hash = await acorn_obj.get_label_hash(label=card)
     template_to_use = "records/offer.html"
 
-    try:
-        content = record["payload"]
-    except:
-        content = record    
-    
+    print(f"display record: {record}")
+  
+    content = record.payload
+   
 
     
     credential_record = {"card":card, "content": content}
@@ -1121,6 +1123,27 @@ async def display_offer(     request: Request,
                                             "ws_url": ws_url
                                             
                                         })
+
+
+@router.post("/upload")
+async def upload_record(
+                        file: UploadFile = File(...),
+                        nauth: str = Form(...),
+                        record_kind: int = Form(...),
+                        card: str = Form(...),
+                        content: str = Form(...),
+                        acorn_obj: Acorn = Depends(get_acorn)
+                        ):
+    
+    contents: bytes = await file.read()
+    print(f"finished uploading {len(contents)} record_kind: {record_kind}")
+
+    record_name = "test_upload"
+    record_value = "test booga"
+    await acorn_obj.put_record(record_name=card,record_kind=record_kind,record_value=content, blob_data=contents)
+
+    return {"status": "OK", "detail": "OK"}
+    
 
 @router.get("/manageoffer", tags=["records", "protected"])
 async def manage_offer(     request: Request, 
@@ -2024,3 +2047,29 @@ async def accept_offer_token( request: Request,
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
     return {"status": status, "detail": detail}  
+
+
+
+
+@router.post("/blob")
+async def post_blob(
+    req: BlobRequest,
+    acorn_obj: Acorn = Depends(get_acorn)  # your protected session
+):
+    blob_type, blob_data = await acorn_obj.get_record_blobdata(record_name=req.record_name, record_kind=req.record_kind)
+
+    if blob_data is None:
+        raise HTTPException(status_code=404, detail="Blob data not found")
+
+    if not blob_data or not blob_type:
+        raise HTTPException(status_code=404, detail="Blob not available")
+
+    print (f"returned blob data: {type(blob_data)}")
+    return Response(
+        content= blob_data,        # raw bytes
+        media_type=blob_type,      # image/png, application/pdf, etc.
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-store"  # recommended for protected content
+        }
+    )

@@ -238,5 +238,9 @@ class wotEntity(BaseModel):
 
 class signedEvent(BaseModel):
     signed_event: dict
+
+class BlobRequest(BaseModel):
+    record_name: str
+    record_kind: int
    
     

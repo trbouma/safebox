@@ -382,6 +382,28 @@ def get(label,kind,origin):
     
     click.echo(out_info)
 
+@click.command("get_blob", help='get blob data from private wallet record')
+@click.argument('label', default = "default")
+@click.option('--kind','-k', default=37375)
+@click.option('--origin','-o', default=None)
+def get_blob(label,kind,origin):
+    
+    out_info = "None"
+    blob_type = None
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+
+    try:
+        blob_type, blob_data = asyncio.run(acorn_obj.get_record_blobdata(label,record_kind=kind,record_origin=origin))
+        # safebox_info = wallet_obj.get_record(label)
+        pass
+
+    except:
+        click.echo("Error")
+        out_info = "No label found!"
+    
+    click.echo(f"blob type: {blob_type} ")
+
 @click.command("delete", help='get a private wallet record')
 @click.argument('label', default = "default")
 def delete_record(label):
@@ -765,6 +787,7 @@ cli.add_command(swap)
 cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
+cli.add_command(get_blob)
 cli.add_command(delete_record)
 cli.add_command(delete_kind)
 cli.add_command(get_records)
