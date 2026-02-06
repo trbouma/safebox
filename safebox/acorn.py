@@ -1871,6 +1871,10 @@ class Acorn:
     async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
 
         blossom_server = "https://blossom.getsafebox.app"
+        mime_type_guess = None
+        origsha256 = None
+        encrypt_parms = None
+
 
         if record_origin:
             record_name = ':'.join([record_origin,record_name])
