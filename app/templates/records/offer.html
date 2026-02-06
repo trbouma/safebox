@@ -369,8 +369,7 @@ async function uploadSelectedFile() {
   }
 
   const formData = new FormData();
-  formData.append("file", selectedFile);
-  formData.append("nauth", global_transmit_nauth);
+  formData.append("file", selectedFile);  
   formData.append("record_kind", global_offer_kind);
   formData.append("card", "{{card}}");
   formData.append("content", "{{content}}");

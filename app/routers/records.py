@@ -1127,8 +1127,7 @@ async def display_offer(     request: Request,
 
 @router.post("/upload")
 async def upload_record(
-                        file: UploadFile = File(...),
-                        nauth: str = Form(...),
+                        file: UploadFile = File(...),                        
                         record_kind: int = Form(...),
                         card: str = Form(...),
                         content: str = Form(...),

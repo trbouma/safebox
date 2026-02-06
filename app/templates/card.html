@@ -9,6 +9,10 @@
 <script>
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
+
+const global_record_kind = parseInt("{{record_kind}}")
+const global_card = "{{card}}"
+
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -100,6 +104,147 @@ async function deleteCard() {
 
 }      
 
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+
+let selectedFile = null;
+
+function handleFileSelected() {
+  const input = document.getElementById("file_input");
+  selectedFile = input.files[0];
+
+  if (!selectedFile) return;
+
+  document.getElementById("file_name").innerText =
+    `Selected: ${selectedFile.name} (${selectedFile.size} bytes)`;
+
+  consoleLog(`File selected: ${selectedFile.name}`);
+
+  const img = document.getElementById("dynamic_image");
+  const pdf = document.getElementById("pdf_viewer");
+
+  // Clean up old blob URLs
+  if (img.dataset.blobUrl) {
+    URL.revokeObjectURL(img.dataset.blobUrl);
+    img.dataset.blobUrl = "";
+  }
+  if (pdf.dataset.blobUrl) {
+    URL.revokeObjectURL(pdf.dataset.blobUrl);
+    pdf.dataset.blobUrl = "";
+  }
+
+  // Hide both by default
+  img.style.display = "none";
+  pdf.style.display = "none";
+
+  // IMAGE PREVIEW
+  if (selectedFile.type.startsWith("image/")) {
+    const blobUrl = URL.createObjectURL(selectedFile);
+    img.src = blobUrl;
+    img.dataset.blobUrl = blobUrl;
+    img.style.display = "block";
+    return;
+  }
+
+  // PDF PREVIEW
+  if (selectedFile.type === "application/pdf") {
+    const blobUrl = URL.createObjectURL(selectedFile);
+    pdf.src = blobUrl;
+    pdf.dataset.blobUrl = blobUrl;
+    pdf.style.display = "block";
+    return;
+  }
+
+  // Fallback
+  consoleLog(`No preview available for type: ${selectedFile.type}`);
+}
+
+async function uploadSelectedFile() {
+  if (!selectedFile) {
+    alert("Please choose a file first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile); 
+  formData.append("record_kind", global_record_kind);
+  formData.append("card", document.getElementById("input_card_title").value);
+  formData.append("content", document.getElementById("input_card_content").value);
+
+  await fetch("/records/upload", {
+    method: "POST",
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    consoleLog(`Upload complete: ${data.detail}`);
+    alert(data.detail);
+  })
+  .catch(err => {
+    consoleLog(`Upload error: ${err}`);
+  });
+}
+
+async function getBlob() {
+  try {
+    const res = await fetch("/records/blob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        record_name: global_card,
+        record_kind: global_record_kind
+      })
+    });
+
+    if (!res.ok) {
+      consoleLog(`No blob to fetch (${res.status})`);
+      return;
+    }
+
+    const mimeType = res.headers.get("Content-Type") || "";
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    const img = document.getElementById("dynamic_image");
+    const pdf = document.getElementById("pdf_viewer");
+
+    // Cleanup previous URLs
+    if (img?.dataset.blobUrl) URL.revokeObjectURL(img.dataset.blobUrl);
+    if (pdf?.dataset.blobUrl) URL.revokeObjectURL(pdf.dataset.blobUrl);
+
+    if (img) img.style.display = "none";
+    if (pdf) pdf.style.display = "none";
+
+    if (mimeType.startsWith("image/") && img) {
+      img.src = objectUrl;
+      img.dataset.blobUrl = objectUrl;
+      img.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    if (mimeType === "application/pdf" && pdf) {
+      pdf.src = objectUrl;
+      pdf.dataset.blobUrl = objectUrl;
+      pdf.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    // Fallback
+    window.open(objectUrl, "_blank");
+
+  } catch (err) {
+    consoleLog(`Error rendering blob: ${err}`);
+  }
+  
+}
+
+getBlob();
 
 
 </script>
@@ -111,19 +256,30 @@ async function deleteCard() {
 
 
 <div class="center-text">
-    <h4>Update Card {{card}}</h4>
-    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
-    <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
+    <h4>Update Card {{card}}</h4>    
+    <button onclick="goBack()">Back</button>    
+    <br><br>
+    <input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
     <br><br>
     <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
+    <h3>Manage Original Record</h3>
+    <input type="file" id="file_input" style="display: none;" onchange="handleFileSelected()"/>
+    <button onclick="document.getElementById('file_input').click()">Select Original Record</button>
+    <div id="file_name" style="margin-top: 8px; font-style: italic;"></div>    
+    <button onclick="getBlob()">Retrieve Original Record</button>
     <br><br>
+    <button onclick="uploadSelectedFile()">Upload Original Record</button>    
+    <div class="center-text">
+      <br>Original Record<br><br>
+      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
+      <br>
+      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+    </div>
     <button onclick="updateCard()">Save Card</button>
-    <br><br>
-    <button onclick="shareCard()">Share Card</button>
-    <br><br>
+    <br><br>   
+    
     <button onclick="deleteCard()">Delete Card</button>
-    <br><br>
-    <button onclick="goBack()">Back</button>
+
     <br><br>
     <button onclick="backToProfile()">Home</button>
     
@@ -132,11 +288,12 @@ async function deleteCard() {
 
    
 
-<div class="center-text">    
-    <hr>
-    {{action_mode}} {{record_kind}}  {{referer}}   
-</div>
 
+<div class="center-text">    
+ 
+    <hr>
+    <pre id="log"></pre>  
+</div>
      
 <script>
   setDarkMode();
