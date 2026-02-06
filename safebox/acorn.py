@@ -13,6 +13,7 @@ import httpx
 import math
 from zoneinfo import ZoneInfo
 from datetime import timezone
+import filetype
 
 from hotel_names import hotel_names
 # from coolname import generate, generate_slug
@@ -37,7 +38,7 @@ from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
 from safebox.monstrmore import KindOtherGiftWrap, ExtendedNIP44Encrypt
-from safebox.func_utils import npub_to_hex
+from safebox.func_utils import npub_to_hex, encrypt_bytes, decrypt_bytes
 
 
 tail = util_funcs.str_tails
@@ -51,7 +52,7 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory, SafeboxRecord, ParseRecord
+from safebox.models import TxHistory, SafeboxRecord, ParseRecord, EncryptionParms, EncryptionResult
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
@@ -1678,25 +1679,42 @@ class Acorn:
             
         }]
 
-        # print("are we here?", label_hash)
+        print("are we here?", label_hash)
         event =await self._async_get_wallet_info(FILTER, label_hash)
         
         # print(event.data())
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+            print(f"decrypt {decrypt_content}")
         except:
             return f"Could not decrypt info for: {record_name}. Does a record exist?"
         
         try:
-            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            print(f"create safebox record")
+            try:
+                safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            except Exception as e:
+                print(f"Error is {e}")
             print(f"This is the blobref for getblob: {safebox_record.blobref} blobtype: {safebox_record.blobtype} blobsha256: {safebox_record.blobsha256}")
             blob_sha256 = safebox_record.blobsha256
             blob_type = safebox_record.blobtype
             if blob_type:                
                 server = blossom_servers[0]
                 # meta = client.head_blob(server, blobsha256)
-                blob_retrieve: BlossomBlob = client.get_blob(server=server,sha256=blob_sha256,mime_type=blob_type)
-                blob_data = blob_retrieve.get_bytes()
+                blob_retrieve: BlossomBlob = client.get_blob(server=server,sha256=blob_sha256,)
+                print(f"blob mime type {blob_retrieve.mime_type}")
+                if blob_retrieve.mime_type == "application/octet-stream":
+                    print(f"we have to decrypt! with {safebox_record.encryptparms.key}")
+                    try:
+                        blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
+                                                                
+                                                                key=bytes.fromhex(safebox_record.encryptparms.key),
+                                                                iv = bytes.fromhex(safebox_record.encryptparms.iv)
+                                                            )
+                    except Exception as e:
+                        print(f"Error {e}")
+                else:
+                    blob_data = blob_retrieve.get_bytes()
             
         except:
              return None, None
@@ -1870,8 +1888,20 @@ class Acorn:
             sha256 = None
             if blob_data:
                 print("blob data needs to be added to blossom")
+                origsha256 = hashlib.sha256(blob_data).hexdigest()
+                print(f"original sha256 {origsha256}")
+                mime_type_guess = filetype.guess(blob_data).mime
+                print(f"guessed mime type is {mime_type_guess}")
+                blob_key = os.urandom(32)  # 256-bit key
+                
+                encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+        
+                # final_blob_data = blob_data
+                final_blob_data = encrypt_result.cipherbytes
+
                 client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
-                upload_result = client.upload_blob(blossom_server, data=blob_data,
+                upload_result = client.upload_blob(blossom_server, data=final_blob_data,
                              description='Blob to server')
                 sha256 = upload_result['sha256']
                 blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
@@ -1879,7 +1909,8 @@ class Acorn:
                 blob_type = upload_result['type']
                 print(f"Blossom result: {upload_result}")
                 
-            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value, blobref=blob_ref, blobtype=blob_type, blobsha256=sha256)
+            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value, blobref=blob_ref, blobtype=mime_type_guess, blobsha256=sha256, origsha256=origsha256, encryptparms=encrypt_parms)
+            print(f"record obj {record_obj}")
             record_json_str = record_obj.model_dump_json()
 
             await self.update_tags([["user_record",record_name,record_type]])

@@ -477,6 +477,13 @@ getBlob();
   <h3 style="margin-top: 0;">{{ card }}</h3>
   <p style="white-space: pre-wrap;">{{ content }}</p>
 </div>
+    <div class="center-text">
+      <br>Original Record<br><br>
+      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
+      <br>
+      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+    </div>
+    
     <h2>Offer {{offer_label}} Record to Recipient?</h2>
     Click below to authenticate with {{offer_kind_label}} recipient. 
     <br>Please ask them to scan the generated QR code.
@@ -492,23 +499,16 @@ getBlob();
     
     <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
     <br><br>
-    Original
-    <br><br>
+    <hr>
+    <h3>Manage Original Record</h3>
 
     <input type="file" id="file_input" style="display: none;" onchange="handleFileSelected()"/>
-    <button onclick="document.getElementById('file_input').click()">Choose Original Record</button>
+    <button onclick="document.getElementById('file_input').click()">Select Original Record</button>
     <div id="file_name" style="margin-top: 8px; font-style: italic;"></div>    
-    <button onclick="getBlob()">Get Original Record</button>
+    <button onclick="getBlob()">Retrieve Original Record</button>
     <br><br>
-    <button onclick="uploadSelectedFile()">Save Original Record</button>
-    <div class="center-text">
-      <br>Original Record<br><br>
-      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
-      <br>
-      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
-    </div>
+    <button onclick="uploadSelectedFile()">Upload Original Record</button>
     <br><br>
-
     <button onclick= "editOffer()">Edit {{offer_label}} Record Offer</button>
     <br><br>
     <button onclick="deleteOffer()">Delete {{offer_label}} Record Offer</button>

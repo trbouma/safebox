@@ -10,11 +10,15 @@ from mnemonic import Mnemonic
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
 import bech32
 
-from safebox.models import NIP60Proofs
+from safebox.models import NIP60Proofs, EncryptionParms, EncryptionResult
 
 from monstr.client.client import Client, ClientPool
 from monstr.event.event import Event
 from monstr.encrypt import Keys
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import os
+
 
 Tag = List[str]
 Tags = List[Tag]
@@ -248,3 +252,39 @@ async def get_attestation(owner_npub:str, safebox_npub:str, relays:List=None):
     else:
         return False
     
+
+def encrypt_bytes(plaintext: bytes, key: bytes, aad: bytes | None = None):
+    """
+    Encrypt bytes using AES-256-GCM.
+
+    Returns:
+        ciphertext: encrypted bytes (includes auth tag)
+        iv: nonce used for encryption
+    """
+    ALGORITHM = "AES-256-GCM"
+    if len(key) != 32:
+        raise ValueError("Key must be 32 bytes (AES-256)")
+
+    iv = os.urandom(12)  # 96-bit nonce (standard for GCM)
+    aesgcm = AESGCM(key)
+    cipherbytes = aesgcm.encrypt(iv, plaintext, aad)
+    return EncryptionResult(alg=ALGORITHM,cipherbytes=cipherbytes,iv=iv,aad=aad)
+
+def decrypt_bytes(
+    cipherbytes: bytes,
+    key: bytes,
+    iv: bytes,
+    aad: bytes | None = None
+) -> bytes:
+    """
+    Decrypt bytes encrypted with AES-256-GCM.
+
+    Raises:
+        InvalidTag if the key, iv, aad, or ciphertext is incorrect.
+    """
+    if len(key) != 32:
+        raise ValueError("Key must be 32 bytes (AES-256)")
+
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(iv, cipherbytes, aad)
+    return plaintext  
