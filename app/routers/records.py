@@ -261,6 +261,7 @@ async def transmit_records(        request: Request,
         except:
             pass
 
+        #TODO create a method called get_offer_record
         records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
         for each_record in records_to_transmit:
 
@@ -1667,6 +1668,7 @@ async def ws_listen_for_presentation( websocket: WebSocket,
     presenter_auth_relays = presenter_nauth_parsed['values'].get('auth_relays', settings.AUTH_RELAYS)
     
     print("we can now send the kem public key and kemalg")
+    #TODO Need to add in additional info for blossom blob transfer
 
     kem_material = {    'kem_public_key': config.PQC_KEM_PUBLIC_KEY,
                         'kemalg': settings.PQC_KEMALG

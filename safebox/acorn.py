@@ -1628,17 +1628,19 @@ class Acorn:
         event =await self._async_get_wallet_info(FILTER, label_hash)
         
         # print(event.data())
-        try:
-            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-        except:
-            return f"Could not decrypt info for: {record_name}. Does a record exist?"
-        
-        try:
-            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
-            print(f"This is the blobref: {safebox_record.blobref} blobsha256: {safebox_record.blobsha256}")
-        except:
-             return f"Could create safebox record: {record_name}. Does a record exist?"
-
+        if event:
+            try:
+                decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+            except:
+                return f"Could not decrypt info for: {record_name}. Does a record exist?"
+            
+            try:
+                safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+                print(f"This is the blobref: {safebox_record.blobref} blobsha256: {safebox_record.blobsha256}")
+            except:
+                raise Exception( f"Could create safebox record: {record_name}. Does a record exist?")
+        else:
+            raise Exception(f"No event found for {record_kind} {record_name}")
 
         return safebox_record
     
@@ -5199,6 +5201,29 @@ class Acorn:
         issued_record.sign(self.privkey_hex)
 
         return issued_record
+    
+    async def create_grant_from_offer(self, offer_kind:int, offer_name:str, holder: str, grant_kind:int=None,relays: List[str]=None):
+        blob_data: bytes = None
+        blob_type: str = None
+        h_pubhex = Keys(pub_k=holder).public_key_hex()
+
+        if not (30000 <= offer_kind < 40000 and offer_kind % 2 == 1):
+            """Create a grant from an offer"""
+            raise ValueError("offer_kind must be an odd integer in the range 30000–39999")
+        if not grant_kind:
+            grant_kind = offer_kind +1
+        
+        # Get the offer
+
+        safebox_record: SafeboxRecord = await self.get_record_safebox(record_name=offer_name,record_kind=offer_kind)
+        print(f" this is the payload:{safebox_record.payload}")
+        blob_type,blob_data = await self.get_record_blobdata(record_name=offer_name,record_kind=offer_kind)
+        print(blob_type, len(blob_data))
+        issued_grant: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind)
+        # Need to create original_transfer to tell where to pick up
+        
+        print(f"issued grant: {issued_grant.data()}")
+        return issued_grant
     
     async def get_trusted_entities(self,kind:int=37376, relays: List[str]=None):
 

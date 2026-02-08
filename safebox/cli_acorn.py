@@ -752,6 +752,23 @@ def get_wot_scores(pubkey, relays):
     record_out = asyncio.run(acorn_obj.get_wot_scores(pub_key_to_score=pubkey, relays=relay_list))
     click.echo(record_out) 
 
+@click.command("create_grant", help='create grant from offer')
+@click.argument('offer_name', type=str)
+@click.argument('holder',type=str )
+@click.option('--offer','-o', type=int, help='offer kind')
+@click.option('--grant','-g' ,type=str, default=None, help='grant kind, if not provided it default to offer_kind+1')
+
+def create_grant_from_offer(offer_name:str, holder:str, offer:int, grant: int):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    # if click.confirm('Do you want to create a grant from an offer?'): 
+    try:   
+        asyncio.run(acorn_obj.create_grant_from_offer(offer_kind=offer,offer_name=offer_name,holder=holder))
+    except Exception as e:
+        click.echo(e)
+
 @click.command("get_social_profile", help='get wot score')
 @click.argument('npub', default="npub")
 @click.option('--relays','-r', default=[])
@@ -809,6 +826,7 @@ cli.add_command(set_wot_entities)
 cli.add_command(get_wot_entities)
 cli.add_command(get_wot_scores)
 cli.add_command(get_social_profile)
+cli.add_command(create_grant_from_offer)
 
 
 if __name__ == "__main__":
