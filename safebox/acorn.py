@@ -5203,25 +5203,67 @@ class Acorn:
         return issued_record
     
     async def create_grant_from_offer(self, offer_kind:int, offer_name:str, holder: str, grant_kind:int=None,relays: List[str]=None):
+        """This function creates a corresponding grant for an offer and if an orginal record (blob) exists for the record, it will create the transfer blob"""
         blob_data: bytes = None
         blob_type: str = None
         h_pubhex = Keys(pub_k=holder).public_key_hex()
 
+        blossom_server = "https://blossom.getsafebox.app"
+        blossom_xfer_server = "https://nostr.download"
+        # blossom_xfer_server = "https://blossom.getsafebox.app"
+
+        mime_type_guess = None
+        origsha256 = None
+        encrypt_parms = None
+
         if not (30000 <= offer_kind < 40000 and offer_kind % 2 == 1):
             """Create a grant from an offer"""
             raise ValueError("offer_kind must be an odd integer in the range 30000–39999")
+        
+        # If grant kind is not supplied, the convention is that the grant kind is an increment of 1
         if not grant_kind:
             grant_kind = offer_kind +1
         
         # Get the offer
 
+        
         safebox_record: SafeboxRecord = await self.get_record_safebox(record_name=offer_name,record_kind=offer_kind)
+        
         print(f" this is the payload:{safebox_record.payload}")
         blob_type,blob_data = await self.get_record_blobdata(record_name=offer_name,record_kind=offer_kind)
-        print(blob_type, len(blob_data))
+        
         issued_grant: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind)
         # Need to create original_transfer to tell where to pick up
-        
+        if blob_data:
+            print(f"We have a blob to offer {blob_type}, {len(blob_data)}")
+
+            print("blob data needs to be added to blossom xfer server")
+            origsha256 = hashlib.sha256(blob_data).hexdigest()
+            print(f"original sha256 {origsha256}")
+            mime_type_guess = filetype.guess(blob_data).mime
+            print(f"guessed mime type is {mime_type_guess}")
+            blob_key = os.urandom(32)  # 256-bit key
+            
+            encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+            encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+    
+            # final_blob_data = blob_data
+            final_blob_data = encrypt_result.cipherbytes
+
+            client_xfer = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_xfer_server])
+            upload_result = client_xfer.upload_blob(blossom_xfer_server, data=final_blob_data,
+                            description='Blob to server')
+            sha256 = upload_result['sha256']
+            blob_ref = upload_result.get('url', f"{blossom_xfer_server}/{sha256}")
+            # blob_ref = upload_result['sha256']
+            blob_type = upload_result['type']
+            print(f"Blossom result: {upload_result} encryption parms: {encrypt_parms}")
+            delete_result = client_xfer.delete_blob(server=blossom_xfer_server,sha256=sha256)
+            print(f"Delete result: {delete_result}")
+        else:
+            print("there is no blob data with this offer")
+
+
         print(f"issued grant: {issued_grant.data()}")
         return issued_grant
     
