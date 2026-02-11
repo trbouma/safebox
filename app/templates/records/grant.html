@@ -7,7 +7,8 @@
 
 
 <script>
-var record_kind = parseInt("{{record_kind}}");
+var global_card = "{{card}}";
+var global_record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
 console.log(referer)
 async function backToProfile() {
@@ -59,8 +60,8 @@ async function updateOffer() {
 
     const submit_data = {"title": input_card_title.value,
                           "content": input_card_content.value,
-                          "kind": record_kind,
-                          "final_kind":record_kind };
+                          "kind": global_record_kind,
+                          "final_kind":global_record_kind };
 
     
 
@@ -84,7 +85,7 @@ async function deleteGrant() {
 
   user_confirm = confirm(`Are you sure you want to proceed with deleting {{ card }}?`) ;
 
-  const submit_data = {"title": "{{ card }}", "kind": record_kind};
+  const submit_data = {"title": "{{ card }}", "kind": global_record_kind};
 
     
 
@@ -104,6 +105,73 @@ async function deleteGrant() {
 
 </script>
 
+<script>
+
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+
+async function getBlob() {
+  try {
+    const res = await fetch("/records/blob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        record_name: global_card,
+        record_kind: global_record_kind
+      })
+    });
+
+    if (!res.ok) {
+      consoleLog(`No blob to fetch (${res.status})`);
+      return;
+    }
+
+    const mimeType = res.headers.get("Content-Type") || "";
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    const img = document.getElementById("dynamic_image");
+    const pdf = document.getElementById("pdf_viewer");
+
+    // Cleanup previous URLs
+    if (img?.dataset.blobUrl) URL.revokeObjectURL(img.dataset.blobUrl);
+    if (pdf?.dataset.blobUrl) URL.revokeObjectURL(pdf.dataset.blobUrl);
+
+    if (img) img.style.display = "none";
+    if (pdf) pdf.style.display = "none";
+
+    if (mimeType.startsWith("image/") && img) {
+      img.src = objectUrl;
+      img.dataset.blobUrl = objectUrl;
+      img.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    if (mimeType === "application/pdf" && pdf) {
+      pdf.src = objectUrl;
+      pdf.dataset.blobUrl = objectUrl;
+      pdf.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    // Fallback
+    window.open(objectUrl, "_blank");
+
+  } catch (err) {
+    consoleLog(`Error rendering blob: ${err}`);
+  }
+  
+}
+
+getBlob();
+</script>
+
 {% endblock %}
 
 {% block page_content %}
@@ -116,8 +184,14 @@ async function deleteGrant() {
       <div class="card-title">{{ card.split(':')[1] if ':' in card else card }}</div>
       <div class="card-content">{{ content }}</div>
     </div>
-  
-    <br><br>
+    <div class="center-text">
+      <br>Original Record<br><br>
+      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
+      <br>
+      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+      <br><br>
+      
+    </div>
     <button onclick="deleteGrant()">Delete</button>
     <br><br>
     <button onclick="goBack()">Back</button>
@@ -127,11 +201,17 @@ async function deleteGrant() {
 </div>
 
 
+
    
 
 <div class="center-text">    
     <hr>
     {{action_mode}} {{record_kind}}  {{referer}} grant.html   
+</div>
+<div class="center-text">    
+ 
+    <hr>
+    <pre id="log"></pre>  
 </div>
 
      

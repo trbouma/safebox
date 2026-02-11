@@ -1,5 +1,5 @@
 import urllib.parse
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
@@ -453,6 +453,7 @@ async def protected_route(    request: Request,
     scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
     port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
     ws_url = f"{scheme}://{host}{port}/safebox/ws/status"
+    ws_url_notify = f"{scheme}://{host}{port}/safebox/ws/notify"
     
     print(f"ws url {ws_url}")
 
@@ -468,6 +469,7 @@ async def protected_route(    request: Request,
                                             "currencies" : currencies,
                                             "lightning_address": lightning_address,
                                             "ws_url": ws_url,
+                                            "ws_url_notify": ws_url_notify,
                                             "lnurl": final_lnurl,
                                             "branding": settings.BRANDING,
                                             "onboard": onboard,
@@ -1314,8 +1316,26 @@ async def root_get_user_profile(    request: Request,
                                             })
 
 
+@router.websocket("/ws/notify")
+async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
+
+    # This is intended to replace ws/status
+    #TODO write a acorn method that senses state change in the balance and emit the message
+    await websocket.accept()
+    await websocket.send_json({"notify":"start"})
+    try:
+        while True:
+            await websocket.send_json({"notify": "test"})
+            await asyncio.sleep(60)
+    except WebSocketDisconnect as e:
+        print(f"Client disconnected {e.code}")
+
+
 @router.websocket("/ws/status")
 async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
+
+
+                
 
  
     global global_websocket
@@ -1750,13 +1770,13 @@ async def get_nauth(    request: Request,
 
     return {"status": status, "detail": detail}
 
-@router.post("/transmit", tags=["safebox", "protected"])
+@router.post("/transmitxxx", tags=["safebox", "protected"])
 async def transmit_records(        request: Request, 
                                         transmit_consultation: transmitConsultation,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
-
+    #FIXME This functio should be deprecated
     status = "OK"
     detail = "Nothing yet"
     transmit_consultation.originating_kind = 32227

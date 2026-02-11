@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
     LISTEN_TIMEOUT: int = 120
     ECASH_LISTEN_TIMEOUT: int = 120
+    BLOSSOM_SERVERS: List[str] = ['https://blossom.getsafebox.app']
+    BLOSSOM_HOME_SERVER: str = 'https://blossom.getsafebox.app'
+    BLOSSOM_XFER_SERVER: str = 'https://nostr.download'
 
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant

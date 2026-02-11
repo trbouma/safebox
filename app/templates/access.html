@@ -785,6 +785,18 @@ function getInvoiceStatus(ln_invoice_status) {
 </script>
 
 <script>
+  const ws_notify = new WebSocket("{{ws_url_notify}}");
+  ws_notify.onopen = () => { console.log("WebSocket for notify connected");}
+  ws_notify.onmessage = (event) => {
+    console.log("Notification received:", event.data);
+
+    }
+  ws_notify.onclose = () => { console.log("Notification closed");}
+  
+
+</script>
+
+<script>
   document.addEventListener("touchstart", handleInteraction); 
   //document.addEventListener("click", handleInteraction); 
   const ws = new WebSocket("{{ws_url}}");

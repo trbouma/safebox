@@ -357,10 +357,22 @@ class SafeboxRecord(BaseModel):
     payload: Any                       # can hold any JSON-serializable value
     blobref: str|None = None
     blobtype: str|None = None
-    blobdata: bytes|None = None
+    # blobdata: bytes|None = None
     blobsha256: str|None = None
     origsha256: str|None = None
     encryptparms: EncryptionParms|None=None
+
+class OriginalRecordTransfer(BaseModel):
+    origsha256: str
+    origmimetype: str
+    encryptparms: EncryptionParms|None=None
+    blobref: str|None = None
+    blobserver: str|None = None
+    blobsha256: str|None = None
+    blobmimetype:str|None =None
+    blobnsec: str |None=None
+    
+
   
 
 class ParseRecord(BaseModel):

@@ -19,7 +19,7 @@ import ipinfo
 import requests
 from safebox.func_utils import get_profile_for_pub_hex, get_attestation
 from safebox.monstrmore import ExtendedNIP44Encrypt
-from safebox.models import SafeboxRecord
+from safebox.models import SafeboxRecord, OriginalRecordTransfer
 from monstr.encrypt import NIP44Encrypt
 import oqs
 
@@ -33,6 +33,8 @@ from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
 
 import logging, jwt
+import mimetypes
+from tempfile import NamedTemporaryFile
 
 
 settings = Settings()
@@ -210,10 +212,12 @@ async def transmit_records(        request: Request,
 
     status = "OK"
     detail = "Nothing yet"
+   
     
     # Need to generalize the parameters below
     # transmit_consultation.originating_kind = 34001
     # transmit_consultation.final_kind = 34002
+    
 
     
     print(f"transmit nauth: {transmit_consultation.nauth} record name: {transmit_consultation.record_name}")
@@ -261,47 +265,48 @@ async def transmit_records(        request: Request,
         except:
             pass
 
-        #TODO create a method called get_offer_record
-        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
-        for each_record in records_to_transmit:
+        #TODO Replace with create_grant
+        
+        print(f"create_grant will go here instead of issued record")
+        issued_record: Event
+        original_record: OriginalRecordTransfer
+        issued_record, original_record = await acorn_obj.create_grant_from_offer(   offer_kind=transmit_consultation.originating_kind, 
+        offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex)
+        print(f"grant is {issued_record}")
+        issued_record_str = json.dumps(issued_record.data())
+        pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
+        print(f"pqc encrypted payload: {pqc_encrypted_payload}")
+        if original_record:           
+            original_record_str = original_record.model_dump_json(exclude_none=True)
+            print(f"now we need to include the original record: ")
+            pqc_encrypted_original = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=original_record_str)
+            
 
-            # Issue record here:
-            
-            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],holder=transmittal_npub, kind=transmit_consultation.final_kind)
-            
-            issued_record_str = json.dumps(issued_record.data())
-            print(f"issued record here before transmitting: {issued_record_str}")
 
-            # PQC Encrypt Payload
-            
-            
-            pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
-            print(f"pqc encrypted payload: {pqc_encrypted_payload}")
+        else:
+            print(f"no original record")
+            pqc_encrypted_original = None
 
-           
-            
-            if each_record['tag'][0] == transmit_consultation.record_name:
-                print(f"transmitting: {each_record['tag'][0]} {each_record['payload']}")
 
-                record_obj = { "tag"   : [each_record['tag']],
-                                "type"  : str(transmit_consultation.final_kind),
-                                "payload": "This record is quantum-safe",
-                                "timestamp": int(datetime.now(timezone.utc).timestamp()),
-                                "endorsement": acorn_obj.pubkey_bech32,
-                                "ciphertext": kem_ciphertext_hex,
-                                "kemalg": transmit_consultation.kemalg,
-                                "pqc_encrypted_payload": pqc_encrypted_payload
+        transmittal_obj = { "tag"   : [transmit_consultation.record_name],
+                        "type"  : str(transmit_consultation.final_kind),
+                        "payload": "This record is quantum-safe",
+                        "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                        "endorsement": acorn_obj.pubkey_bech32,
+                        "ciphertext": kem_ciphertext_hex,
+                        "kemalg": transmit_consultation.kemalg,
+                        "pqc_encrypted_payload": pqc_encrypted_payload,
+                        "pqc_encrypted_original": pqc_encrypted_original
                             }
-                print(f"record obj: {record_obj}")
-                # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
-                # 32227 are transmitted as kind 1060
 
-                # The PQC payload wrapping occurs here
-                print(f"payload is additionally encrypted {kem_shared_secret_hex}" )
-                
-                msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
+        msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(transmittal_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successfully transmitted kind {transmit_consultation.final_kind} to {transmittal_npub} via {transmittal_relays}"
+
+        return {"status": status, "detail": detail}
+
+        
+        
         
     except Exception as e:
         status = "ERROR"
@@ -820,7 +825,7 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         print(each_record['tag'][0][0],each_record['payload'] )
             # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
             # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
-        record_name = f"{each_record['tag'][0][0]}" 
+        record_name = f"{each_record['tag'][0]}" 
         record_value = each_record['payload']
         record_timestamp = each_record.get("timestamp",0)
         record_endorsement = each_record.get("endorsement","")
@@ -842,9 +847,22 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
             print(f"decrypted payload: {decrypted_payload}")
             record_value = decrypted_payload
 
+        original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
+
+        if original_record_to_decrpyt:
+            decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+            print(f"decrypted original: {decrypted_original}")   
+
         # Just add in record_value instead of final value
         
         await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
+        # Ingest original recored if there is one
+
+        if original_record_to_decrpyt:
+            await acorn_obj.transfer_blob(record_name=record_name,record_kind=type, record_origin=npub_initiator, blobxfer=decrypted_original)
+
+
+
 
     await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
    
@@ -2064,8 +2082,13 @@ async def post_blob(
 
     if not blob_data or not blob_type:
         raise HTTPException(status_code=404, detail="Blob not available")
+    
+       
+    
 
-    print (f"returned blob data: {type(blob_data)}")
+
+
+    print (f"returned blob type: {blob_type} blob data: {type(blob_data)}")
     return Response(
         content= blob_data,        # raw bytes
         media_type=blob_type,      # image/png, application/pdf, etc.

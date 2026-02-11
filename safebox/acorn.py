@@ -52,11 +52,13 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory, SafeboxRecord, ParseRecord, EncryptionParms, EncryptionResult
+from safebox.models import TxHistory, SafeboxRecord, ParseRecord, EncryptionParms, EncryptionResult, OriginalRecordTransfer
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
 
 from python_blossom import BlossomClient, Blob as BlossomBlob
+from tempfile import NamedTemporaryFile
+import mimetypes
 
 RECORD_LIMIT: int = 1024
 PROOF_LIMIT: int = 32
@@ -1382,7 +1384,7 @@ class Acorn:
                  
         label_name_hash = m.digest().hex()
         
-        print(f"set wallet info {label}, {label_info}")
+        # print(f"set wallet info {label}, {label_info}")
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
@@ -1652,8 +1654,11 @@ class Acorn:
         blossom_servers = ['https://blossom.getsafebox.app']
         client = BlossomClient(nsec=None, default_servers=blossom_servers)
 
+        
         if record_origin:
             record_name = ':'.join([record_origin,record_name])
+
+        print(f"getting blob for {record_name}")
 
         if record_by_hash:
             label_hash = record_by_hash
@@ -1704,6 +1709,7 @@ class Acorn:
                 server = blossom_servers[0]
                 # meta = client.head_blob(server, blobsha256)
                 blob_retrieve: BlossomBlob = client.get_blob(server=server,sha256=blob_sha256,)
+                
                 print(f"blob mime type {blob_retrieve.mime_type}")
                 if blob_retrieve.mime_type == "application/octet-stream":
                     print(f"we have to decrypt! with {safebox_record.encryptparms.key}")
@@ -1716,13 +1722,27 @@ class Acorn:
                     except Exception as e:
                         print(f"Error {e}")
                 else:
+                    print("we can't seem to decrypt")
                     blob_data = blob_retrieve.get_bytes()
             
         except:
              return None, None
 
-        print(f"returning")
-        return blob_type, blob_data
+        if blob_data:
+            guessed_blob_type = filetype.guess_mime(blob_data)
+            guessed_extension = '.'+filetype.guess_extension(blob_data)
+            extension = mimetypes.guess_extension(blob_data) or ""
+            with NamedTemporaryFile(
+                mode="wb",
+                suffix=guessed_extension,
+                dir = './tmp',
+                delete=False
+            ) as tmp:
+                tmp.write(blob_data)
+                tmp_path = tmp.name
+            print(f"returning {guessed_blob_type} and {extension} {guessed_extension}")
+
+        return guessed_blob_type, blob_data
 
    
     def get_proofs(self):
@@ -1869,6 +1889,117 @@ class Acorn:
   
             
             return events[0]
+        
+    async def transfer_blob(self,record_name, record_kind: int = 37375,record_origin: str = None, blobxfer: str = None):
+        """This function transfers a blob, adds it to the target record and deletes"""
+        # blobxfer pass in as string and instantiate
+        print(f"transfer blob: {record_name} {record_name} {record_kind}")
+        blossom_servers = ['https://blossom.getsafebox.app']
+        blossom_server = 'https://blossom.getsafebox.app'
+        
+
+        if record_origin:
+            record_name = ':'.join([record_origin,record_name])
+
+        if blobxfer:
+            
+            try:
+                pass
+                blobxfer: OriginalRecordTransfer = OriginalRecordTransfer.model_validate_json(blobxfer)
+                print(f"transfer success with blobxfer: {blobxfer}")
+                try:
+                    client_xfer = BlossomClient(nsec=blobxfer.blobnsec, default_servers=blossom_servers)
+                    blob_retrieve: BlossomBlob = client_xfer.get_blob(server=blobxfer.blobserver ,sha256=blobxfer.blobsha256)
+                    delete_result = client_xfer.delete_blob(server=blobxfer.blobserver,sha256=blobxfer.blobsha256)
+                    print(f"Delete result: {delete_result}")
+                    # Now we need need to decrypt the blob
+                    print(f"blob mime type {blob_retrieve.mime_type}")
+                    if blob_retrieve.mime_type == "application/octet-stream":
+                        print(f"we have to decrypt! with {blobxfer.encryptparms.key}")
+                        try:
+                            blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
+                                                                    
+                                                                    key=bytes.fromhex(blobxfer.encryptparms.key),
+                                                                    iv = bytes.fromhex(blobxfer.encryptparms.iv)
+                                                                )
+                        except Exception as e:
+                            print(f"Error {e}")
+
+                        # Now we have the original data, check against original hash
+                        resultsha256 = hashlib.sha256(blob_data).hexdigest()
+                        print(f"compare hashes {resultsha256} {blobxfer.origsha256}")
+                        if resultsha256 == blobxfer.origsha256:
+                            print(f"Yes! We have the original doc which is {mimetypes.guess_extension(blob_data)}  ")
+                            if blob_data:
+                                guessed_blob_type = filetype.guess_mime(blob_data)
+                                guessed_extension = '.'+filetype.guess_extension(blob_data)
+                                extension = mimetypes.guess_extension(blob_data) or ""
+                                with NamedTemporaryFile(
+                                    mode="wb",
+                                    prefix="transfer",
+                                    suffix=guessed_extension,
+                                    dir = './tmp',
+                                    delete=False
+                                ) as tmp:
+                                    tmp.write(blob_data)
+                                    tmp_path = tmp.name
+                                print(f"transferred {guessed_blob_type} and {extension} {guessed_extension}")
+
+
+                        else:
+                            raise Exception("Not the same as the original document")
+                        # Get existing record
+                        safebox_record = await self.get_record_safebox(record_name=record_name,record_kind=record_kind)
+                        print(f"starting safebox record: {safebox_record}")
+
+                        blob_key = os.urandom(32)  # 256-bit key
+                
+                        encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                        encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+        
+                        # final_blob_data = blob_data
+                        final_blob_data = encrypt_result.cipherbytes
+
+                        client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
+                        upload_result = client.upload_blob(blossom_server, data=final_blob_data,
+                             description='Blob to server')
+                        sha256 = upload_result['sha256']
+                        blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
+                        
+                        blob_type = upload_result['type']
+                        print(f"Blossom final result: {upload_result}")
+                        updated_safebox_record = SafeboxRecord( tag=safebox_record.tag,
+                                                                type = safebox_record.type,
+                                                                payload = safebox_record.payload,
+                                                                blobref=blob_ref,
+                                                                blobtype=guessed_blob_type,
+                                                                blobsha256=sha256,
+                                                                origsha256=blobxfer.origsha256,
+                                                                encryptparms=encrypt_parms)
+                        print(f"existing safebox record {safebox_record}")
+                        print(f"updated safebox record {updated_safebox_record}")
+                        record_json_str = updated_safebox_record.model_dump_json()
+
+                        record_type = "generic"
+                        await self.update_tags([["user_record",record_name,record_type]])
+
+                        await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)
+                        # print(user_records)
+                        await   self.set_wallet_config()
+
+                    else:
+                        raise Exception("Transfer did not occur")
+                        # blob_data = blob_retrieve.get_bytes()
+
+                except Exception as e:
+                    print(f"blobxfer error: {e}")
+
+            except:
+                pass
+
+
+
+        return
 
     async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
 
@@ -1952,7 +2083,7 @@ class Acorn:
                         self.acorn_tags[index]=tag_value
             
         
-        print(f"update tags: {self.acorn_tags}")
+        # print(f"update tags: {self.acorn_tags}")
         await self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
@@ -5202,14 +5333,17 @@ class Acorn:
 
         return issued_record
     
-    async def create_grant_from_offer(self, offer_kind:int, offer_name:str, holder: str, grant_kind:int=None,relays: List[str]=None):
+    async def create_grant_from_offer(self, offer_kind:int, offer_name:str, holder: str, grant_kind:int=None,shared_secret_hex: str=None, relays: List[str]=None, blossom_xfer_server:str=None):
         """This function creates a corresponding grant for an offer and if an orginal record (blob) exists for the record, it will create the transfer blob"""
         blob_data: bytes = None
         blob_type: str = None
+        original_record: OriginalRecordTransfer = None
         h_pubhex = Keys(pub_k=holder).public_key_hex()
 
         blossom_server = "https://blossom.getsafebox.app"
-        blossom_xfer_server = "https://nostr.download"
+        if not blossom_xfer_server:
+            blossom_xfer_server = "https://nostr.download"
+        
         # blossom_xfer_server = "https://blossom.getsafebox.app"
 
         mime_type_guess = None
@@ -5232,25 +5366,36 @@ class Acorn:
         print(f" this is the payload:{safebox_record.payload}")
         blob_type,blob_data = await self.get_record_blobdata(record_name=offer_name,record_kind=offer_kind)
         
-        issued_grant: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind)
+        issued_private_record: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind)
         # Need to create original_transfer to tell where to pick up
-        if blob_data:
-            print(f"We have a blob to offer {blob_type}, {len(blob_data)}")
 
-            print("blob data needs to be added to blossom xfer server")
+        if blob_data:
+            
+            print(f"We have an orginal record blob to offer {blob_type}, {len(blob_data)}")
+
+
+            print("blob data needs to be encrpyted added to blossom xfer server")
             origsha256 = hashlib.sha256(blob_data).hexdigest()
             print(f"original sha256 {origsha256}")
-            mime_type_guess = filetype.guess(blob_data).mime
-            print(f"guessed mime type is {mime_type_guess}")
-            blob_key = os.urandom(32)  # 256-bit key
-            
-            encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
-            encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
-    
+            origmime_type_guess = filetype.guess(blob_data).mime
+            print(f"guessed mime type is {origmime_type_guess} same as {blob_type}")
+            if shared_secret_hex:
+                blob_key = bytes.fromhex(shared_secret_hex)
+                print(f"shared secret came from kem {shared_secret_hex}")
+            else:
+                blob_key = os.urandom(32)  # 256-bit key
+            try:    
+                print("are we here?")
+                encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+            except Exception as e:
+                print(f"there is an encryption error {e}")
+
             # final_blob_data = blob_data
             final_blob_data = encrypt_result.cipherbytes
-
-            client_xfer = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_xfer_server])
+            print("upload final blob data to blossom server")
+            blob_nsec = Keys().private_key_bech32()
+            client_xfer = BlossomClient(nsec=blob_nsec, default_servers=[blossom_xfer_server])
             upload_result = client_xfer.upload_blob(blossom_xfer_server, data=final_blob_data,
                             description='Blob to server')
             sha256 = upload_result['sha256']
@@ -5258,14 +5403,29 @@ class Acorn:
             # blob_ref = upload_result['sha256']
             blob_type = upload_result['type']
             print(f"Blossom result: {upload_result} encryption parms: {encrypt_parms}")
-            delete_result = client_xfer.delete_blob(server=blossom_xfer_server,sha256=sha256)
-            print(f"Delete result: {delete_result}")
+            # await asyncio.sleep(5)
+
+            # Create what is necessary for original record trasfer
+            original_record = OriginalRecordTransfer(   origsha256=origsha256,
+                                                        origmimetype=origmime_type_guess,
+                                                        encryptparms=encrypt_parms,
+                                                        blobserver= blossom_xfer_server,
+                                                        blobsha256=sha256,
+                                                        blobmimetype=blob_type,
+                                                        blobref=blob_ref,
+                                                        blobnsec=blob_nsec
+                                                    )
+
+
+            #TODO Eliminate the delete function once the receiving party can clean it up
+            # delete_result = client_xfer.delete_blob(server=blossom_xfer_server,sha256=sha256)
+            # print(f"Delete result: {delete_result}")
         else:
-            print("there is no blob data with this offer")
+            print(f"there is no blob data with this offer: {offer_name} {offer_kind}")
 
 
-        print(f"issued grant: {issued_grant.data()}")
-        return issued_grant
+        print(f"issued grant: {issued_private_record.data()}")
+        return issued_private_record, original_record
     
     async def get_trusted_entities(self,kind:int=37376, relays: List[str]=None):
 
