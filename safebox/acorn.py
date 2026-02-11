@@ -1649,6 +1649,7 @@ class Acorn:
     async def get_record_blobdata(self, record_name:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None)->bytes:
         blob_data: bytes = None
         blob_type:  str = None
+        guessed_blob_type: str = None
         my_enc = NIP44Encrypt(self.k)
 
         blossom_servers = ['https://blossom.getsafebox.app']

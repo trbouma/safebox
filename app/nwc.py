@@ -396,23 +396,31 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
         grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
         user_records_with_label = []
-        for each in user_records:
-            each['label'] = get_label_by_id(settings.GRANT_KINDS, int(each['type']))
-            user_records_with_label.append(each)
-        # This is the same as the accept
-
-        for each_record in user_records_with_label:
-            record_name = f"{each_record['tag'][0][0]}" 
-            record_type = int(each_record['type'])
+        for each_record in user_records:
+            type = int(each_record['type'])
+            print(f"incoming record: {each_record} type: {type}")
+            # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
+            # 32227 are transmitted as kind 1060
+            # await acorn_obj.secure_transmittal(npub,json.dumps(record_obj), dm_relays=relay,transmittal_kind=1060)
+            
+            print(each_record)
+            print(each_record['tag'][0][0],each_record['payload'] )
+                # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
+                # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
+            record_name = f"{each_record['tag'][0]}" 
             record_value = each_record['payload']
             record_timestamp = each_record.get("timestamp",0)
             record_endorsement = each_record.get("endorsement","")
-            # Do PQC stuff here
+            endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
+            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]" 
+            print(f"record_name: {record_name} record value: {final_record} type: {type}")
+            # PQC Step 3 Accept
+            
             record_ciphertext = each_record.get("ciphertext", None)
             record_kemalg = each_record.get("kemalg", None)
             pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
             shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-            print(f"NWC PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+            print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
             k_pqc = Keys(shared_secret.hex())
             my_enc = ExtendedNIP44Encrypt(k_pqc)
             payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
@@ -421,15 +429,23 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 print(f"decrypted payload: {decrypted_payload}")
                 record_value = decrypted_payload
 
+            original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
 
-            endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
-            final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]"
-            print(f'record name {record_name} record value {record_value} record type {record_type}' )
-            if record_type == grant_kind:
-                await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind, record_origin=npub_initiator)
+            if original_record_to_decrpyt:
+                decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+                print(f"decrypted original: {decrypted_original}")   
+
+        # Just add in record_value instead of final value
+        
+        await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
+        # Ingest original recored if there is one
+
+        if original_record_to_decrpyt:
+            await acorn_obj.transfer_blob(record_name=record_name,record_kind=type, record_origin=npub_initiator, blobxfer=decrypted_original)
     
         print(f"records finished added")
-
+        # Not sure if I need the following line
+        
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
 
     elif instruction_obj['method'] == 'pay_ecash':

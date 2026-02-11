@@ -271,7 +271,7 @@ async def transmit_records(        request: Request,
         issued_record: Event
         original_record: OriginalRecordTransfer
         issued_record, original_record = await acorn_obj.create_grant_from_offer(   offer_kind=transmit_consultation.originating_kind, 
-        offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex)
+        offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex, blossom_xfer_server=settings.BLOSSOM_XFER_SERVER)
         print(f"grant is {issued_record}")
         issued_record_str = json.dumps(issued_record.data())
         pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
