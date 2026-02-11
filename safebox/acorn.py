@@ -1732,14 +1732,14 @@ class Acorn:
             guessed_blob_type = filetype.guess_mime(blob_data)
             guessed_extension = '.'+filetype.guess_extension(blob_data)
             extension = mimetypes.guess_extension(blob_data) or ""
-            with NamedTemporaryFile(
-                mode="wb",
-                suffix=guessed_extension,
-                dir = './tmp',
-                delete=False
-            ) as tmp:
-                tmp.write(blob_data)
-                tmp_path = tmp.name
+            # with NamedTemporaryFile(
+            #   mode="wb",
+            #    suffix=guessed_extension,
+            #    dir = './tmp',
+            #    delete=False
+            #) as tmp:
+            #    tmp.write(blob_data)
+            #    tmp_path = tmp.name
             print(f"returning {guessed_blob_type} and {extension} {guessed_extension}")
 
         return guessed_blob_type, blob_data
@@ -1934,15 +1934,15 @@ class Acorn:
                                 guessed_blob_type = filetype.guess_mime(blob_data)
                                 guessed_extension = '.'+filetype.guess_extension(blob_data)
                                 extension = mimetypes.guess_extension(blob_data) or ""
-                                with NamedTemporaryFile(
-                                    mode="wb",
-                                    prefix="transfer",
-                                    suffix=guessed_extension,
-                                    dir = './tmp',
-                                    delete=False
-                                ) as tmp:
-                                    tmp.write(blob_data)
-                                    tmp_path = tmp.name
+                                # with NamedTemporaryFile(
+                                #    mode="wb",
+                                #    prefix="transfer",
+                                #    suffix=guessed_extension,
+                                #    dir = './tmp',
+                                #    delete=False
+                                # ) as tmp:
+                                #     tmp.write(blob_data)
+                                #    tmp_path = tmp.name
                                 print(f"transferred {guessed_blob_type} and {extension} {guessed_extension}")
 
 
