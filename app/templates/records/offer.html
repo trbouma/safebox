@@ -6,6 +6,15 @@
 
 
 
+<script type="module">
+  import * as pdfjsLib from "/js/pdf.mjs";
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/js/pdf.worker.mjs";
+
+  window.pdfjsLib = pdfjsLib;  // expose globally if needed
+</script>
+
 <script>
 
 var global_naddr = "";
@@ -312,7 +321,8 @@ async function offerRecord() {
 
 let selectedFile = null;
 
-function handleFileSelected() {
+async function handleFileSelected() {
+
   const input = document.getElementById("file_input");
   selectedFile = input.files[0];
 
@@ -324,126 +334,193 @@ function handleFileSelected() {
   consoleLog(`File selected: ${selectedFile.name}`);
 
   const img = document.getElementById("dynamic_image");
-  const pdf = document.getElementById("pdf_viewer");
+  const container = document.getElementById("media_container");
 
-  // Clean up old blob URLs
-  if (img.dataset.blobUrl) {
-    URL.revokeObjectURL(img.dataset.blobUrl);
-    img.dataset.blobUrl = "";
-  }
-  if (pdf.dataset.blobUrl) {
-    URL.revokeObjectURL(pdf.dataset.blobUrl);
-    pdf.dataset.blobUrl = "";
+  // Clear previous renders
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
   }
 
-  // Hide both by default
-  img.style.display = "none";
-  pdf.style.display = "none";
+  if (container) {
+    container.innerHTML = "";
+  }
 
-  // IMAGE PREVIEW
+  // 🖼 IMAGE PREVIEW
   if (selectedFile.type.startsWith("image/")) {
+
     const blobUrl = URL.createObjectURL(selectedFile);
+
     img.src = blobUrl;
-    img.dataset.blobUrl = blobUrl;
+    img.style.width = "90%";
+    img.style.height = "auto";
     img.style.display = "block";
+
     return;
   }
 
-  // PDF PREVIEW
+  // 📄 PDF PREVIEW (PDF.js)
   if (selectedFile.type === "application/pdf") {
+
     const blobUrl = URL.createObjectURL(selectedFile);
-    pdf.src = blobUrl;
-    pdf.dataset.blobUrl = blobUrl;
-    pdf.style.display = "block";
+
+    try {
+      const loadingTask = pdfjsLib.getDocument(blobUrl);
+      const pdf = await loadingTask.promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+
+        const page = await pdf.getPage(pageNum);
+
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = container.clientWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        canvas.style.display = "block";
+        canvas.style.marginBottom = "16px";
+
+        container.appendChild(canvas);
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+      }
+
+    } catch (err) {
+      consoleLog(`PDF preview error: ${err}`);
+    }
+
     return;
   }
 
-  // Fallback
   consoleLog(`No preview available for type: ${selectedFile.type}`);
 }
 
 async function uploadSelectedFile() {
+
   if (!selectedFile) {
     alert("Please choose a file first.");
     return;
   }
 
   const formData = new FormData();
-  formData.append("file", selectedFile);  
+  formData.append("file", selectedFile);
   formData.append("record_kind", global_offer_kind);
   formData.append("card", "{{card}}");
   formData.append("content", "{{content}}");
 
-  await fetch("/records/upload", {
-    method: "POST",
-    body: formData
-  })
-  .then(res => res.json())
-  .then(data => {
+  try {
+    const res = await fetch("/records/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
     consoleLog(`Upload complete: ${data.detail}`);
     alert(data.detail);
-  })
-  .catch(err => {
+
+    // Refresh from server after upload
+    getBlob();
+
+  } catch (err) {
     consoleLog(`Upload error: ${err}`);
-  });
+  }
 }
 
 
 async function getBlob() {
+
+  const container = document.getElementById("media_container");
+  const img = document.getElementById("dynamic_image");
+
+  // Clear previous PDF render
+  if (container) container.innerHTML = "";
+
+  // Hide image initially
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
+  }
+
+  const blobUrl = `/records/blob?record_name=${encodeURIComponent(global_offer_card)}&record_kind=${global_offer_kind}`;
+
   try {
-    const res = await fetch("/records/blob", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        record_name: global_offer_card,
-        record_kind: global_offer_kind
-      })
-    });
+    const res = await fetch(blobUrl);
 
+    // 🚫 If not found → show nothing
     if (!res.ok) {
-      consoleLog(`No blob to fetch (${res.status})`);
       return;
     }
 
-    const mimeType = res.headers.get("Content-Type") || "";
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
+    const mimeType = (res.headers.get("Content-Type") || "")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
 
-    const img = document.getElementById("dynamic_image");
-    const pdf = document.getElementById("pdf_viewer");
-
-    // Cleanup previous URLs
-    if (img?.dataset.blobUrl) URL.revokeObjectURL(img.dataset.blobUrl);
-    if (pdf?.dataset.blobUrl) URL.revokeObjectURL(pdf.dataset.blobUrl);
-
-    if (img) img.style.display = "none";
-    if (pdf) pdf.style.display = "none";
-
+    // 🖼 IMAGE HANDLING (use existing img tag)
     if (mimeType.startsWith("image/") && img) {
-      img.src = objectUrl;
-      img.dataset.blobUrl = objectUrl;
+
+      img.src = blobUrl;
+      img.style.width = "90%";      // 90% width
+      img.style.height = "auto";
       img.style.display = "block";
+
       return;
     }
 
-    if (mimeType === "application/pdf" && pdf) {
-      pdf.src = objectUrl;
-      pdf.dataset.blobUrl = objectUrl;
-      pdf.style.display = "block";
+    // 📄 PDF HANDLING (PDF.js)
+    if (mimeType === "application/pdf" && container) {
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: blobUrl,
+        standardFontDataUrl: "/js/standard_fonts/"
+        });
+
+      const pdf = await loadingTask.promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+
+        const page = await pdf.getPage(pageNum);
+
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = container.clientWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        canvas.style.display = "block";
+        canvas.style.marginBottom = "16px";
+
+        container.appendChild(canvas);
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+      }
+
       return;
     }
 
-    // Fallback
-    window.open(objectUrl, "_blank");
+    // Anything else → do nothing
 
   } catch (err) {
-    consoleLog(`Error rendering blob: ${err}`);
+    console.log("Render error:", err);
   }
 }
 
-getBlob();
+// getBlob();
+document.addEventListener("DOMContentLoaded", () => getBlob());
 </script>
 
 {% endblock %}
@@ -454,6 +531,7 @@ getBlob();
 
 <div class="center-text">
     <h1>Offer {{offer_label}} Record </h1>
+
 
    
 <div 
@@ -481,6 +559,7 @@ getBlob();
       <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
       <br>
       <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+      <div id="media_container" style="width:90%; max-width:900px; margin:0 auto;"></div>
     </div>
     
     <h2>Offer {{offer_label}} Record to Recipient?</h2>

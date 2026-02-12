@@ -2067,7 +2067,28 @@ async def accept_offer_token( request: Request,
 
     return {"status": status, "detail": detail}  
 
+@router.get("/blob")
+async def get_blob(
+    record_name: str,
+    record_kind: int,
+    acorn_obj: Acorn = Depends(get_acorn)
+):
+    blob_type, blob_data = await acorn_obj.get_record_blobdata(
+        record_name=record_name,
+        record_kind=record_kind
+    )
+    
+    if not blob_data or not blob_type:
+        raise HTTPException(status_code=404, detail="Blob not available")
 
+    blob_type = blob_type.split(";")[0].strip().lower()
+    print(f"getblob: {record_name} {record_kind} {blob_type}")
+
+    return Response(
+        content=blob_data,
+        media_type=blob_type,
+        headers={"Cache-Control": "no-store"}
+    )
 
 
 @router.post("/blob")
@@ -2086,7 +2107,7 @@ async def post_blob(
        
     
 
-
+    blob_type = blob_type.split(";")[0].strip()
 
     print (f"returned blob type: {blob_type} blob data: {type(blob_data)}")
     return Response(

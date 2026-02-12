@@ -4,7 +4,14 @@
 {% block head %}
 {{ super() }}
 
+<script type="module">
+  import * as pdfjsLib from "/js/pdf.mjs";
 
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/js/pdf.worker.mjs";
+
+  window.pdfjsLib = pdfjsLib;  // expose globally if needed
+</script>
 
 <script>
 var global_card = "{{card}}";
@@ -113,63 +120,91 @@ function consoleLog(data) {
   };
 
 async function getBlob() {
+
+  const container = document.getElementById("media_container");
+  const img = document.getElementById("dynamic_image");
+
+  // Clear previous PDF render
+  if (container) container.innerHTML = "";
+
+  // Hide image initially
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
+  }
+
+  const blobUrl = `/records/blob?record_name=${encodeURIComponent(global_card)}&record_kind=${global_record_kind}`;
+
   try {
-    const res = await fetch("/records/blob", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        record_name: global_card,
-        record_kind: global_record_kind
-      })
-    });
+    const res = await fetch(blobUrl);
 
+    // 🚫 If not found → show nothing
     if (!res.ok) {
-      consoleLog(`No blob to fetch (${res.status})`);
       return;
     }
 
-    const mimeType = res.headers.get("Content-Type") || "";
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
+    const mimeType = (res.headers.get("Content-Type") || "")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
 
-    const img = document.getElementById("dynamic_image");
-    const pdf = document.getElementById("pdf_viewer");
-
-    // Cleanup previous URLs
-    if (img?.dataset.blobUrl) URL.revokeObjectURL(img.dataset.blobUrl);
-    if (pdf?.dataset.blobUrl) URL.revokeObjectURL(pdf.dataset.blobUrl);
-
-    if (img) img.style.display = "none";
-    if (pdf) pdf.style.display = "none";
-
+    // 🖼 IMAGE HANDLING (use existing img tag)
     if (mimeType.startsWith("image/") && img) {
-      img.src = objectUrl;
-      img.dataset.blobUrl = objectUrl;
+
+      img.src = blobUrl;
+      img.style.width = "90%";      // 90% width
+      img.style.height = "auto";
       img.style.display = "block";
-      consoleLog(`${mimeType} is fetched and rendered!`);
+
       return;
     }
 
-    if (mimeType === "application/pdf" && pdf) {
-      pdf.src = objectUrl;
-      pdf.dataset.blobUrl = objectUrl;
-      pdf.style.display = "block";
-      consoleLog(`${mimeType} is fetched and rendered!`);
+    // 📄 PDF HANDLING (PDF.js)
+    if (mimeType === "application/pdf" && container) {
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: blobUrl,
+        standardFontDataUrl: "/js/standard_fonts/"
+        });
+
+      const pdf = await loadingTask.promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+
+        const page = await pdf.getPage(pageNum);
+
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = container.clientWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        canvas.style.display = "block";
+        canvas.style.marginBottom = "16px";
+
+        container.appendChild(canvas);
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+      }
+
       return;
     }
 
-    // Fallback
-    window.open(objectUrl, "_blank");
+    // Anything else → do nothing
 
   } catch (err) {
-    consoleLog(`Error rendering blob: ${err}`);
+    console.log("Render error:", err);
   }
-  
 }
 
-getBlob();
+// getBlob();
+document.addEventListener("DOMContentLoaded", () => getBlob());
 </script>
 
 {% endblock %}
@@ -183,18 +218,21 @@ getBlob();
     <div class="card">
       <div class="card-title">{{ card.split(':')[1] if ':' in card else card }}</div>
       <div class="card-content">{{ content }}</div>
+
     </div>
-    <div class="center-text">
-      <br>Original Record<br><br>
+    <br><br>
+    <button onclick="goBack()">Back</button>
+   <div class="center-text">
+      <br>Original Record<hr>
       <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
       <br>
       <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
-      <br><br>
-      
+      <div id="media_container" style="width:90%; max-width:900px; margin:0 auto;"></div>
+      <hr>
     </div>
+    <br>
     <button onclick="deleteGrant()">Delete</button>
-    <br><br>
-    <button onclick="goBack()">Back</button>
+
     <br><br>
     <button onclick="backToProfile()">Home</button>
     
