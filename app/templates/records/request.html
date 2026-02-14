@@ -5,7 +5,14 @@
 {{ super() }}
 
 
+<script type="module">
+  import * as pdfjsLib from "/js/pdf.mjs";
 
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/js/pdf.worker.mjs";
+
+  window.pdfjsLib = pdfjsLib;  // expose globally if needed
+</script>
 
 
 <script>
@@ -290,7 +297,8 @@ async function listenForPresentation(nauth) {
         for (const rec of response.records) {
           //console.log(rec);
           // addCard(rec.tag, `${response.result}`,rec.payload);
-          addCard(rec.tag,rec.content, rec.verification, rec.picture, rec.is_attested);
+          addCard(rec.tag,rec.content, rec.verification, rec.picture, rec.is_attested, rec.original_record);
+          
           
         }
 
@@ -334,9 +342,100 @@ async function listenForPresentation(nauth) {
       return str.substring(idx + 1);     // Return everything after the colon
     }
 
+async function fetchOriginalBlob(record) {
+
+  const container = document.getElementById("media_container");
+  const img = document.getElementById("dynamic_image");
+
+  // Clear previous PDF render
+  if (container) container.innerHTML = "";
+
+  // Hide image initially
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
+  }
+
+  try {
+    const res = await fetch("/records/originalblob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(record)
+    });
+
+    // 🚫 If not found → show nothing
+    if (!res.ok) {
+      return;
+    }
+
+    const mimeType = (res.headers.get("Content-Type") || "")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    // 🖼 IMAGE HANDLING
+    if (mimeType.startsWith("image/") && img) {
+
+      img.src = objectUrl;
+      img.style.width = "90%";
+      img.style.height = "auto";
+      img.style.display = "block";
+
+      return;
+    }
+
+    // 📄 PDF HANDLING (PDF.js)
+    if (mimeType === "application/pdf" && container) {
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: objectUrl,
+        standardFontDataUrl: "/js/standard_fonts/"
+      });
+
+      const pdf = await loadingTask.promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+
+        const page = await pdf.getPage(pageNum);
+
+        const viewport = page.getViewport({ scale: 1 });
+        const scale = container.clientWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        canvas.style.display = "block";
+        canvas.style.marginBottom = "16px";
+
+        container.appendChild(canvas);
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+      }
+
+      return;
+    }
+
+    // Anything else → do nothing
+
+  } catch (err) {
+    console.log("Render error:", err);
+  }
+}
+
 
   // Function to create and add a card
-  function addCard(title, content, verification, picture, is_attested) {
+  function addCard(title, content, verification, picture, is_attested, original_record) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -414,7 +513,11 @@ async function listenForPresentation(nauth) {
     }
 
 
-    
+    if (original_record != null) {
+      
+      alert(`original_record exists ${JSON.stringify(original_record)}`);
+      fetchOriginalBlob(original_record);
+}
 
     
 
@@ -447,13 +550,14 @@ setDarkMode();
 
 
 
-
-
-
-
-
-
 </script>
+    <div class="center-text">
+      <br>Original Record<br><br>
+      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
+      <br>
+      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+      <div id="media_container" style="width:90%; max-width:900px; margin:0 auto;"></div>
+    </div>
    
 
 <div class="center-text">
@@ -461,10 +565,6 @@ setDarkMode();
   <button onclick="backToProfile()">Home</button>
   <br>
  
-
-    
-
-
      
         
 </div>

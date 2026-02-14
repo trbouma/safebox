@@ -373,7 +373,7 @@ def get(label,kind,origin):
     asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = asyncio.run(acorn_obj.get_record_safebox(label,record_kind=kind,record_origin=origin))
+        out_info = asyncio.run(acorn_obj.get_record_safebox(record_name=label,record_kind=kind,record_origin=origin))
         # safebox_info = wallet_obj.get_record(label)
         pass
 
@@ -443,11 +443,11 @@ def delete_kind(kind):
     
     click.echo(out_info)
 
-@click.command("getrecords", help='get a private wallet record')
+@click.command("get_user_records", help='get a private wallet record')
 @click.option('--kind','-k', default=37375)
 @click.option('--since','-s', default=None, help='since in hours')
 @click.option('--relays', '-r', default=None, help=RELAYS_HELP)
-def get_records(kind, since, relays):
+def get_user_records(kind, since, relays):
     
     out_info = "None"
     relay_array = None
@@ -476,7 +476,7 @@ def get_records(kind, since, relays):
         out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted, relays=relay_array_wss))
         
         for each in out_info:
-            click.echo(f"RECORD: {each['social_name']} {each['payload']}")
+            click.echo(f"\nRECORD PAYLOAD: {each['tag']} {each['payload']}")
         click.echo(f"No. of RECORDS: {len(out_info)}" )
 
     except Exception as e:
@@ -769,6 +769,21 @@ def create_grant_from_offer(offer_name:str, holder:str, offer:int, grant: int):
     except Exception as e:
         click.echo(e)
 
+@click.command("create_request", help='create request from grant')
+@click.argument('grant_name', type=str)
+@click.option('--grant','-g' ,type=int, default=34100, help='grant kind')
+
+def create_request_from_grant(grant_name:str, grant: int):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    # if click.confirm('Do you want to create a grant from an offer?'): 
+    try:   
+        asyncio.run(acorn_obj.create_request_from_grant(grant_name=grant_name, grant_kind=grant))
+    except Exception as e:
+        click.echo(e)
+
 @click.command("get_social_profile", help='get wot score')
 @click.argument('npub', default="npub")
 @click.option('--relays','-r', default=[])
@@ -807,7 +822,7 @@ cli.add_command(get)
 cli.add_command(get_blob)
 cli.add_command(delete_record)
 cli.add_command(delete_kind)
-cli.add_command(get_records)
+cli.add_command(get_user_records)
 cli.add_command(balance)
 cli.add_command(zap)
 cli.add_command(accept)
@@ -827,6 +842,7 @@ cli.add_command(get_wot_entities)
 cli.add_command(get_wot_scores)
 cli.add_command(get_social_profile)
 cli.add_command(create_grant_from_offer)
+cli.add_command(create_request_from_grant)
 
 
 if __name__ == "__main__":

@@ -235,7 +235,8 @@ console.log(`send record ${title}`);
 console.log(`Sending record... ${global_vrequest_nauth}`);
 // send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,
-                "grant": `${title}`,
+                "grant_name": `${title}`,
+                "grant_kind": 34100,
                 "kem_public_key": global_kem_public_key,
                 "kemalg": global_kemalg
               };

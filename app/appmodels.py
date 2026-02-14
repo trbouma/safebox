@@ -141,15 +141,11 @@ class recoverIdentity(BaseModel):
     new_identity: bool = False
     legacy: bool = False
 
-class sendCredentialParms(BaseModel):
-    nauth: str
-    grant: str = None
-    kem_public_key: str = None
-    kemalg: str = None
 
 class sendRecordParms(BaseModel):
     nauth: str
-    grant: str = None
+    grant_name: str = None
+    grant_kind: int = None
     kem_public_key: str = None
     kemalg: str = None
 

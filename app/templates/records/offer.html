@@ -21,7 +21,8 @@ var global_naddr = "";
 var global_transmit_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
-var global_offer_card = "{{card}}";
+var global_offer_card = {{card | tojson}};
+var global_offer_content = {{content | tojson}}
 var global_kem_public_key = "None";
 var global_kemalg = "None";
 
@@ -88,8 +89,8 @@ async function editOffer() {
     window.location.href=`/records/manageoffer?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
     
 
-    const submit_data = {"title": {{card|tojson}},
-                          "content": {{content|tojson}},
+    const submit_data = {"title": global_offer_card,
+                          "content": global_offer_content,
                           "kind": global_offer_kind,
                           "final_kind":global_grant_kind };
 
@@ -241,7 +242,7 @@ async function createQRCode() {
  const ws = new WebSocket(`{{ws_url}}${global_nauth}`);
   console.log(`{{ws_url}}${global_nauth}`);
    
-
+  
     ws.onopen = () => console.log("WebSocket connected");
     ws.onmessage = (event) => {
       console.log("Message received:", event.data);
@@ -263,11 +264,13 @@ async function createQRCode() {
     }
     // ws.close()
     // alert('Ready to transmit offer');
+    
     offerRecord();
     
     
   };
   ws.onclose = () => console.log("WebSocket closed");
+  
   
 
 }
@@ -412,8 +415,8 @@ async function uploadSelectedFile() {
   const formData = new FormData();
   formData.append("file", selectedFile);
   formData.append("record_kind", global_offer_kind);
-  formData.append("card", "{{card}}");
-  formData.append("content", "{{content}}");
+  formData.append("card", global_offer_card);
+  formData.append("content", global_offer_content);
 
   try {
     const res = await fetch("/records/upload", {
@@ -551,8 +554,8 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
   onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
   onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
 >
-  <h3 style="margin-top: 0;">{{ card }}</h3>
-  <p style="white-space: pre-wrap;">{{ content }}</p>
+  <h3 style="margin-top: 0;">{{ card  }}</h3>
+  <p style="white-space: pre-wrap;">{{ content  }}</p>
 </div>
     <div class="center-text">
       <br>Original Record<br><br>
