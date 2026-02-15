@@ -1648,7 +1648,7 @@ class Acorn:
 
         return safebox_record
     
-    async def get_original_blob(self, orginal_record: OriginalRecordTransfer):
+    async def get_original_blob(self, orginal_record: OriginalRecordTransfer, delete:bool = True):
 
         blob_data: bytes = None
         blob_type:  str = None
@@ -1666,6 +1666,9 @@ class Acorn:
                                                         iv = bytes.fromhex(orginal_record.encryptparms.iv)
                                                     )
                 blob_type = filetype.guess_mime(blob_data)
+                if delete:
+                    delete_result = client.delete_blob(server=orginal_record.blobserver,sha256=orginal_record.blobsha256)
+                    print(f"delete result {delete}")
             except Exception as e:
                 print(f"Error {e}")
         else:
@@ -5343,7 +5346,7 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
-    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002)->Event:
+    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002, origsha256:str = None)->Event:
         """Issue private record"""
         holder_pubhex = ""
         if holder:
@@ -5355,6 +5358,9 @@ class Acorn:
             
         
         tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)],["safebox_holder", holder_pubhex]]
+        if origsha256:
+            tags.append(["origsha25",origsha256])
+
         issued_record = Event(  pub_key=self.pubkey_hex,
                                 kind=kind,
                                 tags = tags,
@@ -5454,6 +5460,7 @@ class Acorn:
             print(f"there is no blob data with this offer: {offer_name} {offer_kind}")
 
 
+        issued_private_record: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind, origsha256=origsha256)
         print(f"issued grant: {issued_private_record.data()}")
         return issued_private_record, original_record
     
