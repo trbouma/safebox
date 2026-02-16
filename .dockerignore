@@ -1,0 +1,40 @@
+# VCS
+.git
+.gitignore
+
+# Local env/secrets
+.env
+.env.*
+
+# Python/cache/venv
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Build/output/temp
+build/
+dist/
+tmp/
+*.log
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Dev and local artifacts not needed in image context
+docs/
+scratch/
+output.csv
+currency.dump
+*.dump
+
+# Removed/legacy project folder
+expmtl/
