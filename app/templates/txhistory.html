@@ -4,6 +4,142 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, th, td {
+    color: #e8f0f4;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .tx-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+  }
+
+  table.tx-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 860px;
+  }
+
+  .tx-table th,
+  .tx-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #2c3e4b;
+    white-space: nowrap;
+    font-size: 0.95rem;
+  }
+
+  .tx-table th {
+    color: #bcd8e8;
+    text-align: left;
+    background: #111c25;
+    position: sticky;
+    top: 0;
+  }
+
+  .tx-table tbody tr:hover {
+    background: #152532;
+  }
+
+  .tx-table tbody tr:nth-child(odd) {
+    background: #101a23;
+  }
+
+  .tx-table tbody tr:nth-child(even) {
+    background: #13202b;
+  }
+
+  .tx-table td:last-child {
+    text-align: left;
+    white-space: normal;
+    min-width: 220px;
+    font-style: italic;
+  }
+
+  .tx-table th:nth-child(2),
+  .tx-table td:nth-child(2) {
+    width: 2ch;
+    text-align: center;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .tx-table th:nth-child(3),
+  .tx-table td:nth-child(3) {
+    text-align: right;
+  }
+
+
+  .amount-cell {
+    display: inline-flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 0.35rem;
+    width: 100%;
+  }
+
+  .amount-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    min-width: 8ch;
+  }
+
+  .amount-cur {
+    color: #bcd8e8;
+  }
+
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button {
+      width: 100%;
+    }
+  }
+</style>
 
 <script>
 
@@ -12,22 +148,8 @@ const local_timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 
 
-      
-  
-
-
-async function backToWallet() {
-
-
-window.location.href="/wallet/";
-
-}
-
-async function gotoHome() {
-
-
-window.location.href="/";
-
+async function backToHome() {
+  window.location.href="/";
 }
 
 
@@ -46,33 +168,36 @@ window.location.href="/";
   <h1>Account History</h1>
   <button onclick="backToHome()">Home</button>
   <hr>
-  <br><br>
-      <table width="90%">
+      <div class="tx-table-wrap">
+      <table class="tx-table">
         <tr>
-          <th align="center" valign="top">Date</th>
-          <th valign="top">Type</th>
-          <th valign="top">Amount</th>
-          <th valign="top">Cur</th>
-          <th valign="top">Sats</th>
-          <th valign="top">Fees</th> 
-          <th valign="top">Balance</th>
-          <th align="left" valign="top">Details</th>    
+          <th>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Sats</th>
+          <th>Fees</th> 
+          <th>Balance</th>
+          <th>Details</th>    
                  
         </tr>
         {% for entry in tx_history %}
         <tr>
-          <td align="right" valign="top">{{ entry['create_time']}}</td>
-          <td align="center" valign="top">{{ entry['tx_type']}}</td>
-          <td align="right" valign="top">{{ "%.2f"|format(entry['tendered_amount']) }}</td>         
-          <td align="right" valign="top">{{entry['tendered_currency']}}</td>
-          <td align="right" valign="top">{{entry['amount']}}</td>
-          <td align="right" valign="top">{{entry.get('fees',0)}}</td>
-          <td align="right" valign="top">{{entry['current_balance']}}</td>
-          <td align="left" valign="top">{{entry['comment']}}</td>
-          
+          <td>{{ (entry['create_time'] | string).replace('T', ' ')[5:16] }}</td>
+          <td>{{ entry['tx_type']}}</td>
+          <td>
+            <span class="amount-cell">
+              <span class="amount-value">{{ "%.2f"|format(entry['tendered_amount']) }}</span>
+              <span class="amount-cur">{{ entry['tendered_currency'] }}</span>
+            </span>
+          </td>
+          <td>{{entry['amount']}}</td>
+          <td>{{entry.get('fees',0)}}</td>
+          <td>{{entry['current_balance']}}</td>
+          <td>{{entry['comment']}}</td>
         </tr>
         {% endfor %}
       </table>
+      </div>
 
 </div>     
     

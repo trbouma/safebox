@@ -5614,11 +5614,12 @@ class Acorn:
 
     async def get_root_entities(self,kind:int=37376, relays: List[str]=None):
 
-        pubhex_list_out = []
-        record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
         try:
+            record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
             record_out_json = json.loads(record_out)
-            final_out = record_out_json['payload']
+            final_out = record_out_json.get('payload', "")
+            if not isinstance(final_out, str):
+                final_out = str(final_out)
         except Exception as exc:
             self.logger.debug("No root entities payload found: %s", exc)
             final_out = ""

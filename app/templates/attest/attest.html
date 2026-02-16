@@ -4,6 +4,78 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre {
+    color: #e8f0f4;
+  }
+
+  .hint {
+    color: #b8d8ea;
+  }
+
+  .actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .inline-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #d5e5ef;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+
+    button {
+      width: 100%;
+    }
+  }
+</style>
+
 
 
 <script>
@@ -129,12 +201,14 @@ if ("nostr" in window && use_signer.checked) {
 <div class="center-text">
 <h1>Attestation</h1>
 
-  Warning this is experimental!
-  <br><br>
-  <button onclick="attest()">Attest</button> 
-  <br><br>
-  <input type="checkbox" id="use_signer" name="use_signer" checked>
-  Use Signer, if available
+  <p class="hint">Warning this is experimental.</p>
+  <div class="actions">
+    <button onclick="attest()">Attest</button>
+  </div>
+  <label class="inline-check">
+    <input type="checkbox" id="use_signer" name="use_signer" checked>
+    <span>Use signer if available</span>
+  </label>
 
   
 
@@ -149,16 +223,9 @@ if ("nostr" in window && use_signer.checked) {
    
 
 <div class="center-text">
- 
-        
-    <br><br>
-    <button onclick="backToHome()">Home</button>
-      
- 
-
-        
-     
-        
+    <div class="actions">
+      <button onclick="backToHome()">Home</button>
+    </div>
 </div>
      
 <script>

@@ -4,6 +4,101 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre {
+    color: #e8f0f4;
+  }
+
+  .hint {
+    color: #b8d8ea;
+  }
+
+  .actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  textarea {
+    background: #111c25;
+    color: #dce8f0;
+    border: 1px solid #35506a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+    resize: vertical;
+  }
+
+  textarea:focus {
+    outline: 2px solid #4f8cb2;
+    outline-offset: 1px;
+    border-color: #5aa0cd;
+  }
+
+  #trust_list {
+    display: block;
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+    color: #b8d8ea;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+
+    button,
+    textarea {
+      width: 100% !important;
+    }
+  }
+</style>
 
 
 <script>
@@ -123,20 +218,21 @@ async function getTrustList() {
 <div class="center-text">
 <h1>Trust</h1>
 
-  Warning this is experimental!
-  <br><br> Enter the npubs of whom you trust as root authorities for issuers. Any npubs that these root authorities follow will be considered as trusted issuers.
+  <p class="hint">Warning this is experimental.</p>
+  <p class="hint">Enter npubs for root authorities. Any npubs followed by those root authorities will be considered trusted issuers.</p>
   <hr>
   <h2>Root Authorities</h2>  
-  <textarea id="root_entities"  rows="8" style="width:90%;">{{root_entities}}</textarea>
-  <br><br>  
-  <button onclick="setRootEntities()">Set Root Entities</button> 
-  <br><br>
-  <button onclick="getTrustList()">Get Root List</button>   
+  <textarea id="root_entities"  rows="8">{{root_entities}}</textarea>
+  <div class="actions">
+    <button onclick="setRootEntities()">Set Root Entities</button>
+    <button onclick="getTrustList()">Get Root List</button>
+  </div>
   <hr>
   <h2>Trusted Assertion Providers</h2>  
-  <textarea id="wot_entities"  rows="8" style="width:90%;">{{wot_entities}}</textarea>
-  <br><br>  
-  <button onclick="setWOTEntities()">Set Web of Trust Entities</button> 
+  <textarea id="wot_entities"  rows="8">{{wot_entities}}</textarea>
+  <div class="actions">
+    <button onclick="setWOTEntities()">Set Web of Trust Entities</button>
+  </div>
  
   
 </div>
@@ -144,15 +240,11 @@ async function getTrustList() {
  
 
 <div class="center-text">
- 
-        
-    <br><br>
-    <button onclick="backToHome()">Home</button>
+    <div class="actions">
+      <button onclick="backToHome()">Home</button>
+    </div>
     <hr>
     <span id="trust_list" ></span>
-      
-    
-        
 </div>
      
 <script>

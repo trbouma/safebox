@@ -1068,10 +1068,15 @@ async def my_attest(       request: Request,
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     
-   
-    await acorn_obj.load_data()
-    root_entities = await acorn_obj.get_root_entities(relays=settings.RELAYS)
-    wot_entities = await acorn_obj.get_wot_entities(relays=settings.RELAYS)
+    root_entities = ""
+    wot_entities = []
+    try:
+        await acorn_obj.load_data()
+        root_entities = await acorn_obj.get_root_entities(relays=settings.RELAYS)
+        wot_entities = await acorn_obj.get_wot_entities(relays=settings.RELAYS)
+    except Exception as exc:
+        logger.exception("Failed loading trust page data")
+
     wot_entities_str = ""
     for each in wot_entities:
         wot_entities_str += each + " "

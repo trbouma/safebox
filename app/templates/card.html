@@ -4,6 +4,134 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre {
+    color: #e8f0f4;
+  }
+
+  input[type="text"],
+  textarea {
+    background: #111c25;
+    color: #dce8f0;
+    border: 1px solid #35506a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  textarea {
+    min-height: 220px;
+    resize: vertical;
+  }
+
+  input[type="text"]:focus,
+  textarea:focus {
+    outline: 2px solid #4f8cb2;
+    outline-offset: 1px;
+    border-color: #5aa0cd;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .hint {
+    color: #b8d8ea;
+    font-style: italic;
+    text-align: center;
+  }
+
+  .preview-box {
+    border: 1px solid #345064;
+    border-radius: 12px;
+    background: #0f1a22;
+    padding: 12px;
+  }
+
+  .preview-title {
+    color: #d5e5ef;
+    margin-bottom: 10px;
+  }
+
+  #dynamic_image {
+    display: none;
+    margin: 0 auto;
+    max-width: 100%;
+    border-radius: 10px;
+  }
+
+  #pdf_viewer {
+    display: none;
+    width: 100%;
+    height: 600px;
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+  }
+
+  #log {
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+    color: #b8d8ea;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button,
+    input[type="text"],
+    textarea {
+      width: 100% !important;
+    }
+    #pdf_viewer {
+      height: 420px;
+    }
+  }
+</style>
 
 
 <script>
@@ -256,31 +384,23 @@ getBlob();
 
 
 <div class="center-text">
-    <h4>Update Card {{card}}</h4>    
-    <button onclick="goBack()">Back</button>    
-    <br><br>
-    <input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
-    <br><br>
-    <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
+    <h4>Update Card {{card}}</h4>
+    <button onclick="goBack()">Back</button>
+    <input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}">
+    <textarea id="input_card_content" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
     <h3>Manage Original Record</h3>
     <input type="file" id="file_input" style="display: none;" onchange="handleFileSelected()"/>
     <button onclick="document.getElementById('file_input').click()">Select Original Record</button>
-    <div id="file_name" style="margin-top: 8px; font-style: italic;"></div>    
+    <div id="file_name" class="hint"></div>
     <button onclick="getBlob()">Retrieve Original Record</button>
-    <br><br>
-    <button onclick="uploadSelectedFile()">Upload Original Record</button>    
-    <div class="center-text">
-      <br>Original Record<br><br>
-      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
-      <br>
-      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+    <button onclick="uploadSelectedFile()">Upload Original Record</button>
+    <div class="preview-box">
+      <p class="preview-title">Original Record</p>
+      <img id="dynamic_image" alt="" />
+      <iframe id="pdf_viewer"></iframe>
     </div>
     <button onclick="updateCard()">Save Card</button>
-    <br><br>   
-    
     <button onclick="deleteCard()">Delete Card</button>
-
-    <br><br>
     <button onclick="backToProfile()">Home</button>
     
 </div>
