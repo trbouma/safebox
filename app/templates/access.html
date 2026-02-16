@@ -4,6 +4,165 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Consistent vertical rhythm */
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  .center-text form > * + * {
+    margin-top: 10px;
+  }
+
+  .balance-currency-selector {
+    margin-bottom: 12px;
+  }
+
+  #ln_select_invoice_currency,
+  #ln_select_currency {
+    display: block;
+    margin: 10px auto 0;
+  }
+
+  h1, h2, h3, h5, p, span, pre, label, a, b {
+    color: #e8f0f4;
+  }
+
+  a {
+    color: #8ec9e7;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    background: #111c25;
+    color: #dce8f0;
+    border: 1px solid #35506a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+  }
+
+  .center-text input[type="text"],
+  .center-text input[type="number"],
+  .center-text textarea,
+  .center-text select {
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid #4f8cb2;
+    outline-offset: 1px;
+    border-color: #5aa0cd;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  #payment_notification,
+  #pay_to_message,
+  #log,
+  #npub {
+    display: block;
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+    color: #b8d8ea;
+    padding: 10px 12px;
+    overflow-wrap: anywhere;
+  }
+
+  #payment_notification {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: #d5e5ef;
+  }
+
+  /* Keep the top action area compact */
+  .center-text > #payment_notification + #ln_scan_button {
+    margin-top: 0;
+  }
+
+  .center-text > #ln_scan_button + * {
+    margin-top: 12px;
+  }
+
+  #img_qr_display {
+    border-radius: 14px;
+    border: 1px solid #2f4657;
+    background: #0f1a22;
+    max-width: 260px;
+    width: 100%;
+    height: auto;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  .center-text br {
+    display: block;
+    content: "";
+    margin-top: 8px;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button {
+      width: 100%;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100% !important;
+    }
+  }
+</style>
+
 
 
 
@@ -579,7 +738,7 @@ function checkBalance(balance) {
 
       if (ux_mode=="wait_invoice"){
         // alert("Invoice Paid!");
-        document.body.style.backgroundColor = "lightgreen";
+        document.body.style.backgroundColor = "#173627";
         img_qr_display_pic.src ="/img/green-check.png";
         
         payment_notification.textContent = "Invoice Paid!";
@@ -597,7 +756,7 @@ function checkBalance(balance) {
   else
   {
     payment_notification.textContent = "Ready for Payment!" ;
-    document.body.style.backgroundColor = "white";
+    document.body.style.backgroundColor = "#101820";
   }
   if (ux_mode == "init") {
         
@@ -712,10 +871,7 @@ async function lnPayAddress() {
 
         pay_button.textContent = old_text;
         pay_button.disabled = false;
-
-        window.location.href="/safebox/access";
-      
-
+        window.scrollTo({ top: 0, behavior: "smooth" });
 
 }
 
@@ -757,10 +913,10 @@ async function lnPayInvoice() {
         
         // location.reload();
         
-
+        
         
         invoice_pay_button.disabled = false;
-        window.location.href="/safebox/access";
+        window.scrollTo({ top: 0, behavior: "smooth" });
       
 
 
@@ -786,7 +942,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
 <script>
   const ws_notify = new WebSocket("{{ws_url_notify}}");
-  ws_notify.onopen = () => { console.log("WebSocket for notify connected");}
+  ws_notify.onopen = () => { console.log("WebSocket for notify connected for: {{ws_url_notify}} ");}
   ws_notify.onmessage = (event) => {
     console.log("Notification received:", event.data);
 
@@ -801,7 +957,7 @@ function getInvoiceStatus(ln_invoice_status) {
   //document.addEventListener("click", handleInteraction); 
   const ws = new WebSocket("{{ws_url}}");
 
-  ws.onopen = () => console.log("WebSocket connected");
+  ws.onopen = () => console.log("WebSocket connected for: {{ws_url}}");
   ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);
@@ -871,12 +1027,12 @@ function getInvoiceStatus(ln_invoice_status) {
 
   
   <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
-    <select id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
+    <select class="balance-currency-selector" id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
       {% for entry in currencies %}
       <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
       {% endfor %}
   </select>
-  <br><br>
+  <br>
   <p  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</p>  
   <br>
 
@@ -888,10 +1044,7 @@ function getInvoiceStatus(ln_invoice_status) {
   Welcome! Please see the <a href="#fine-print">fine print</a> below.
   <br><br>
   {% endif %}
-  <br><br>
   <button id="ln_scan_button" onclick="scanCode()">Scan</button>
-  
-  <br><br>
 
   {% if action_mode == "lninvoice" %}
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
@@ -902,9 +1055,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Payment</button> 
     <br><br>
   {% else %}
-    {% if action_mode == "lnaddress" %}
-
-    {% else %}
+    {% if action_mode != "lnaddress" %}
     <h2 style="margin: 0;">Receive a Payment</h2>
       <br>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
@@ -933,7 +1084,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
     
-    {% endif %} 
+    {% endif %}
 
     <hr>
     <h2 style="margin: 0;">Make a Payment</h2>
