@@ -4,6 +4,7 @@ ARG POETRY_VERSION=1.8.4
 
 # ---------- build stage: compile liboqs ----------
 FROM ${BASE_IMAGE} AS liboqs-builder
+ARG LIBOQS_REF
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,6 +34,7 @@ RUN git clone --depth 1 --branch "${LIBOQS_REF}" https://github.com/open-quantum
 
 # ---------- runtime image ----------
 FROM ${BASE_IMAGE}
+ARG POETRY_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive \
     POETRY_HOME=/opt/poetry \
@@ -75,6 +77,5 @@ USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:7375/ >/dev/null || exit 1
-
 
 
