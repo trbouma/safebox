@@ -771,12 +771,20 @@ class Acorn:
             # Convert payload to json
             # See if payload is in stringifed json and convert
                     
-            try:
-                payload_obj = json.loads(parsed_record['payload'])
-                parsed_record['payload'] = payload_obj
-                        
-            except Exception as exc:
-                self.logger.debug("Payload is not JSON for event_id=%s", parsed_record.get("id"))
+            if isinstance(parsed_record, dict) and "payload" in parsed_record:
+                try:
+                    payload_obj = json.loads(parsed_record["payload"])
+                    parsed_record["payload"] = payload_obj
+                except Exception as exc:
+                    self.logger.debug(
+                        "Payload is not JSON for event_id=%s",
+                        parsed_record.get("id", "unknown"),
+                    )
+            else:
+                self.logger.debug(
+                    "Skipping payload JSON parse for record_type=%s",
+                    type(parsed_record).__name__,
+                )
 
             #check to see if wallet record and skip
             if isinstance(parsed_record,list):
