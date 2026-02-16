@@ -75,6 +75,7 @@ window.location.href="/safebox/access" ;
         <br><br>
                
             <form action="/safebox/login" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <label for="access_key">Access Key:</label><br>
                 <input type="text" id="access_key" name="access_key" type="password" placeholder="Enter access key" style="width: auto;">
                 <br><br>    

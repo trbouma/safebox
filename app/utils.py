@@ -10,6 +10,7 @@ import validators
 from urllib.parse import urlparse
 import secrets
 from fastapi import Depends, Cookie, HTTPException
+from fastapi import Response
 
 from hashlib import sha256
 import base64
@@ -96,6 +97,28 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
     print(f"encrypted encoded jwt: {encrypted_encoded_jwt}")
     
     return encrypted_encoded_jwt
+
+def ensure_csrf_cookie(response: Response, current_token: str | None = None) -> str:
+    if current_token and isinstance(current_token, str) and len(current_token) >= 32:
+        token = current_token
+    else:
+        token = secrets.token_urlsafe(32)
+
+    response.set_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE.lower(),
+    )
+    return token
+
+def validate_csrf_token(csrf_form_token: str | None, csrf_cookie_token: str | None) -> None:
+    if not csrf_form_token or not csrf_cookie_token:
+        raise HTTPException(status_code=403, detail="Missing CSRF token")
+
+    if not secrets.compare_digest(csrf_form_token, csrf_cookie_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
 def decode_jwt_token(token: str):
     k = Keys(priv_k=config.SERVICE_NSEC)

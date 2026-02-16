@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import asyncio, os
+import asyncio, os, secrets
 from contextlib import asynccontextmanager
 from filelock import FileLock, Timeout
 
@@ -24,7 +24,7 @@ from app.routers import     (   lnaddress,
                                 records )
 
 from app.tasks import periodic_task
-from app.utils import fetch_safebox
+from app.utils import fetch_safebox, ensure_csrf_cookie
 from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
@@ -79,6 +79,14 @@ async def lifespan(app: FastAPI):
     await init_currency_rates();
    
 
+    is_production = SETTINGS.APP_ENV.lower() in {"prod", "production"}
+    if is_production and not SETTINGS.NWC_NSEC:
+        raise RuntimeError("NWC_NSEC must be set in production")
+    if is_production and ("*" in SETTINGS.CORS_ALLOW_ORIGINS or not SETTINGS.CORS_ALLOW_ORIGINS):
+        raise RuntimeError("CORS_ALLOW_ORIGINS must be explicit and non-empty in production")
+    if is_production and not SETTINGS.COOKIE_SECURE:
+        raise RuntimeError("COOKIE_SECURE must be enabled in production")
+
     asyncio.create_task(run_relay())
     if SETTINGS.NWC_SERVICE:
         pass
@@ -102,10 +110,12 @@ async def lifespan(app: FastAPI):
     #    print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
     
     # The single event handling is now done in nwc.py, so all listeners can be running
-    print(f"[PID {os.getpid()}] Starting nwc listener.")
-    # url = "wss://relay.getsafebox.app"
-    url = SETTINGS.NWC_RELAYS[0]
-    listener_task = asyncio.create_task(listen_notes_periodic(url))
+    if SETTINGS.NWC_NSEC:
+        print(f"[PID {os.getpid()}] Starting nwc listener.")
+        url = SETTINGS.NWC_RELAYS[0]
+        listener_task = asyncio.create_task(listen_notes_periodic(url))
+    else:
+        print(f"[PID {os.getpid()}] NWC listener disabled: NWC_NSEC not configured.")
 
     
     yield
@@ -128,7 +138,7 @@ async def lifespan(app: FastAPI):
 
 
 # Create an instance of the FastAPI application
-origins = ["*"]
+origins = SETTINGS.CORS_ALLOW_ORIGINS
 #TODO figure out how to lock a worker to do periodic tasks
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -170,11 +180,20 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
     except:
         pass
         print("pass")
-    return templates.TemplateResponse(  "welcome.html", 
-                                        {   "request": request, 
-                                            "title": "Welcome Page", 
-                                            "branding": SETTINGS.BRANDING,
-                                            "branding_message": SETTINGS.BRANDING_MESSAGE})
+    csrf_cookie = request.cookies.get(SETTINGS.CSRF_COOKIE_NAME)
+    csrf_token = csrf_cookie if csrf_cookie and len(csrf_cookie) >= 32 else secrets.token_urlsafe(32)
+    response = templates.TemplateResponse(
+        "welcome.html",
+        {
+            "request": request,
+            "title": "Welcome Page",
+            "branding": SETTINGS.BRANDING,
+            "branding_message": SETTINGS.BRANDING_MESSAGE,
+            "csrf_token": csrf_token,
+        },
+    )
+    ensure_csrf_cookie(response=response, current_token=csrf_token)
+    return response
 
 # Define a npub endpoint
 @app.get("/npub", tags=["public"])
@@ -189,7 +208,7 @@ async def get_pqc(request: Request):
                         "sigalg": SETTINGS.PQC_SIGALG,
                         "kempub": config.PQC_KEM_PUBLIC_KEY,
                         "kemalg": SETTINGS.PQC_KEMALG                        
-                    },
+                    }
 
 
     
@@ -350,6 +369,4 @@ def get_user_did_doc(user: str, request: Request):
 
 
   
-
-
 

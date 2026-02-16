@@ -40,8 +40,7 @@ config = ConfigWithFallback()
 
 RELAYS = settings.RELAYS
 TIMEDELTA_SECONDS = 60
-k = Keys(settings.NWC_NSEC)
-decryptor = NIP4Encrypt(k)
+SERVICE_NWC_KEYS: Keys | None = Keys(settings.NWC_NSEC) if settings.NWC_NSEC else None
 
 engine = create_engine(settings.DATABASE)
 

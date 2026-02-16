@@ -19,6 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
+    APP_ENV: str = "development"
     HOME_RELAY: str = 'wss://relay.getsafebox.app'
     HOME_MINT: str= 'https://mint.getsafebox.app'      
     SERVICE_NAME: str = 'Safebox'
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     INVITE_CODES: List = ["alpha", "rektuser", "earlyaccess"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_SERVICE: bool = False
-    NWC_NSEC: str = 'nsec1wml8qhq2qkmemlceg2fehvg2cefqrsp7ak47rdmc3qxum65wsxaqcvj7d6'
+    NWC_NSEC: str|None = None
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     DM_RELAYS: List = ['wss://relay.getsafebox.app']
@@ -66,6 +67,15 @@ class Settings(BaseSettings):
     BLOSSOM_SERVERS: List[str] = ['https://blossom.getsafebox.app']
     BLOSSOM_HOME_SERVER: str = 'https://blossom.getsafebox.app'
     BLOSSOM_XFER_SERVER: str = 'https://nostr.download'
+    CORS_ALLOW_ORIGINS: List[str] = [
+        "https://getsafebox.app",
+        "https://www.getsafebox.app",
+        "http://localhost:7375",
+        "http://127.0.0.1:7375",
+    ]
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "Lax"
+    CSRF_COOKIE_NAME: str = "csrf_token"
 
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant

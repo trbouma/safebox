@@ -17,6 +17,7 @@ from time import sleep
 import json
 import bolt11
 import hashlib
+import secrets
 from monstr.util import util_funcs
 import requests
 import time
@@ -33,7 +34,7 @@ from safebox.models import cliQuote
 from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity
 from app.config import Settings, ConfigWithFallback
@@ -60,11 +61,33 @@ router = APIRouter()
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 
+def _welcome_retry_response(request: Request):
+    csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
+    csrf_token = csrf_cookie if csrf_cookie and len(csrf_cookie) >= 32 else secrets.token_urlsafe(32)
+    response = templates.TemplateResponse(
+        "welcome.html",
+        {
+            "request": request,
+            "title": "Welcome Page",
+            "branding": settings.BRANDING,
+            "branding_message": settings.BRANDING_RETRY,
+            "csrf_token": csrf_token,
+        },
+    )
+    ensure_csrf_cookie(response=response, current_token=csrf_token)
+    return response
+
 
 
 
 @router.post("/login", tags=["safebox"])
-async def login(request: Request, access_key: str = Form()):
+async def login(
+    request: Request,
+    access_key: str = Form(),
+    csrf_token: str = Form(),
+    csrf_cookie_token: str | None = Cookie(default=None, alias="csrf_token"),
+):
+    validate_csrf_token(csrf_form_token=csrf_token, csrf_cookie_token=csrf_cookie_token)
 
 
     access_key=access_key.strip().lower()
@@ -82,11 +105,7 @@ async def login(request: Request, access_key: str = Form()):
             # Try to find withouy hypens
             leading_num = extract_leading_numbers(access_key)
             if not leading_num:
-                return templates.TemplateResponse(  "welcome.html", 
-                                        {   "request": request, 
-                                            "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_RETRY})
+                return _welcome_retry_response(request)
                 # raise HTTPException(status_code=404, detail=f"{access_key} not found")
             
             statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
@@ -105,11 +124,7 @@ async def login(request: Request, access_key: str = Form()):
             
             if not match:
                 
-                return templates.TemplateResponse(  "welcome.html", 
-                                        {   "request": request, 
-                                            "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_RETRY})
+                return _welcome_retry_response(request)
                 # raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
@@ -128,8 +143,8 @@ async def login(request: Request, access_key: str = Form()):
         value=access_token,
         httponly=True,  # Prevent JavaScript access
         max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
-        secure=False,  # Set to True in production to enforce HTTPS
-        samesite="Lax",  # Protect against CSRF
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE.lower(),
     )
     return response
 
@@ -152,11 +167,7 @@ async def login_withkey(request: Request, access_key: str):
             # Try to find withouy hypens
             leading_num = extract_leading_numbers(access_key)
             if not leading_num:
-                return templates.TemplateResponse(  "welcome.html", 
-                                        {   "request": request, 
-                                            "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_RETRY})
+                return _welcome_retry_response(request)
                 # raise HTTPException(status_code=404, detail=f"{access_key} not found")
             
             statement = select(RegisteredSafebox).where(RegisteredSafebox.access_key.startswith(leading_num))
@@ -175,11 +186,7 @@ async def login_withkey(request: Request, access_key: str):
             
             if not match:
                 
-                return templates.TemplateResponse(  "welcome.html", 
-                                        {   "request": request, 
-                                            "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
-                                            "branding_message": settings.BRANDING_RETRY})
+                return _welcome_retry_response(request)
                 # raise HTTPException(status_code=404, detail=f"{access_key} not found")
 
 
@@ -198,8 +205,8 @@ async def login_withkey(request: Request, access_key: str):
         value=access_token,
         httponly=True,  # Prevent JavaScript access
         max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
-        secure=False,  # Set to True in production to enforce HTTPS
-        samesite="Lax",  # Protect against CSRF
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE.lower(),
     )
     return response
 
@@ -304,8 +311,8 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         value=access_token,
         httponly=True,  # Prevent JavaScript access
         max_age=3600 * 24 * settings.SESSION_AGE_DAYS,  # Set login session length
-        secure=False,  # Set to True in production to enforce HTTPS
-        samesite="Lax",  # Protect against CSRF
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE.lower(),
     )
     return response
 
@@ -350,7 +357,6 @@ async def create_qr(qr_text: str):
 async def create_nwc_qr(request: Request,
                         acorn_obj: Acorn= Depends(get_acorn)):
 
-    k = Keys(priv_k=settings.NWC_NSEC)
     safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
 
     hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
