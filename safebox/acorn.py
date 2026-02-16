@@ -256,7 +256,7 @@ class Acorn:
             try:
                 npub_obj = Keys(pub_k=npub)
                 update_tags.append(["owner",npub])                
-            except:
+            except Exception as exc:
                 raise ValueError("npub is not a valid format")
         if local_currency:
             update_tags.append(["local_currency",local_currency])
@@ -383,7 +383,7 @@ class Acorn:
                         pub_key=self.pubkey_hex)
                 n_msg.sign(self.privkey_hex)
                 c.publish(n_msg)
-            except:
+            except Exception as exc:
                 out_msg = "error"
         return out_msg
 
@@ -517,7 +517,7 @@ class Acorn:
                                 \n{"*"*75}
 
             """
-        except:
+        except Exception as exc:
             raise Exception("No profile on relay")
             out_string = f"No profile - seed phrase: {mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
         return out_string
@@ -619,7 +619,7 @@ class Acorn:
                 nembed = None  
                
             return nauth, nembed
-        except:
+        except Exception as exc:
             return None, None
 
         finally:
@@ -712,8 +712,7 @@ class Acorn:
                         
                         
 
-                    except:
-                
+                    except Exception as exc:
                         parsed_record = {   "tag": ["message"],
                                             "type": "dm",
                                             "created_at": unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -741,14 +740,14 @@ class Acorn:
             else: # otherwise record is self-originating
                 try:
                     decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
-                except:
+                except Exception as exc:
                     # Try Gift Unwrapping
                     decrypt_event = my_enc.decrypt_event(each)
                     decrypt_content = decrypt_event.content
             
                 try:
                     parsed_record = json.loads(decrypt_content)
-                except: 
+                except Exception as exc:
                     #It's just a raw string stored - map into the fields    
                     parsed_record = {}           
                     parsed_record['payload'] = decrypt_content
@@ -776,8 +775,8 @@ class Acorn:
                 payload_obj = json.loads(parsed_record['payload'])
                 parsed_record['payload'] = payload_obj
                         
-            except:
-                pass
+            except Exception as exc:
+                self.logger.debug("Payload is not JSON for event_id=%s", parsed_record.get("id"))
 
             #check to see if wallet record and skip
             if isinstance(parsed_record,list):
@@ -813,7 +812,7 @@ class Acorn:
             # print("json_str", json_str)
             # json_obj = json.loads(json_str)
             json_obj = json.loads(json_str)
-        except:
+        except Exception as exc:
             {"staus": "could not access profile"}
             pass
        
@@ -836,7 +835,7 @@ class Acorn:
             profile_obj = nostrProfile(**json.loads(profile))
             print(profile_obj)
             asyncio.run(self._async_create_profile(profile_obj, replicate_relays=replicate_relays))
-        except:
+        except Exception as exc:
             out_string = "No profile found!"
             return out_string
         
@@ -941,12 +940,12 @@ class Acorn:
                 print("npub", npub)
             else:
                 npub = nrecipient
-        except:
+        except Exception as exc:
             return "error"
         try:
             token_amount = await self.issue_token(amount=amount)
             token_msg = comment +"\n\n" + token_amount
-        except:
+        except Exception as exc:
             return "insufficient funds"
         
         print(f"sending via {ecash_relays}")
@@ -964,12 +963,12 @@ class Acorn:
                 print("npub", npub)
             else:
                 npub = nrecipient
-        except:
+        except Exception as exc:
             return "error"
         try:
             token_msg = await self.issue_token(amount=amount)
             # token_msg = comment +"\n\n" + token_amount
-        except:
+        except Exception as exc:
             return "insufficient funds"
         
         print(f"sending via {ecash_relays}")
@@ -1011,7 +1010,7 @@ class Acorn:
         # last_dm = float(self.get_wallet_info("last_dm"))
         try:
             last_dm = float(self.wallet_reserved_records['last_dm'])
-        except:
+        except Exception as exc:
             last_dm = 0
 
         # last_dm = 0
@@ -1045,7 +1044,7 @@ class Acorn:
         tokens =[]
         try:
             last_dm = self.wallet_reserved_records['last_dm']
-        except:
+        except Exception as exc:
             last_dm = 0
         
         final_dm = int(last_dm)
@@ -1061,7 +1060,7 @@ class Acorn:
                 for each in events:
                     try:
                         decrypt_content = my_enc.decrypt_event(each)
-                    except:
+                    except Exception as exc:
                         print("no go")
                     
                     print("message", each.id, each.kind, each.created_at.timestamp(), decrypt_content.content )
@@ -1140,7 +1139,7 @@ class Acorn:
                 dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
+        except Exception as exc:
             raise Exception(f"Could not resove {nrecipient}")
         
         npub = hex_to_bech32(npub_hex)
@@ -1463,7 +1462,7 @@ class Acorn:
         # print(event.data())
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-        except:
+        except Exception as exc:
             return f"Could not retrieve info for: {label}. Does a record exist?"
         
         
@@ -1841,12 +1840,12 @@ class Acorn:
                         ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK", nonce))
                     
                     
-                except:
+                except Exception as exc:
                     ecash_out.append(("ERROR", 0,"SAT", "Redemption"))
                     pass
                 
                    
-        except:
+        except Exception as exc:
             print("need to create ecash latest record")
             await self.set_wallet_info("ecash_latest", "0", record_kind=37376)
             
@@ -1905,7 +1904,7 @@ class Acorn:
             index_obj = json.loads(decrypt_content)
 
             return index_obj
-        except:
+        except Exception as exc:
             return None
     
     async def _async_get_index_info(self, filter: List[dict]):
@@ -2028,8 +2027,8 @@ class Acorn:
                 except Exception as e:
                     print(f"blobxfer error: {e}")
 
-            except:
-                pass
+            except Exception as exc:
+                self.logger.warning("Blob transfer processing failed for record=%s error=%s", record_name, exc)
 
 
 
@@ -2557,7 +2556,7 @@ class Acorn:
                             
                             try:
                                 decrypt_content = my_enc.decrypt(each_record.content, self.pubkey_hex)
-                            except:
+                            except Exception as exc:
                                 decrypt_content = "could not decrpyt"
                                                         
                             reserved_record_label = reverse_hash.get(each_tag[1])
@@ -2617,7 +2616,7 @@ class Acorn:
                         proof_event.proofs.append(each)
                         # print(proof.amount, proof.secret)
                     # self.proof_events.proof_events.append(proof_event)          
-                except:
+                except Exception as exc:
                     content = each.content
 
                 
@@ -3353,7 +3352,7 @@ class Acorn:
                 # added a delay here so the delete event get published
                 await asyncio.sleep(1)
                 print("should have deleted")
-        except:
+        except Exception as exc:
             raise Exception("error deleting proof events")  
         
         return f"events of kind {record_kind} deleted on {self.home_relay}" 
@@ -3391,7 +3390,7 @@ class Acorn:
                 c.publish(n_msg)
                 # added a delay here so the delete event get published
                 await asyncio.sleep(1)
-        except:
+        except Exception as exc:
             raise Exception("error deleting proof events")    
 
     async def swap_proofs(self, incoming_swap_proofs: List[Proof]):
@@ -3585,7 +3584,7 @@ class Acorn:
                 self.add_proofs(json.dumps(proofs))
                 self._load_proofs()
                 
-            except:
+            except Exception as exc:
                 ValueError('test')
             
             # print(request_body) 
@@ -3718,7 +3717,7 @@ class Acorn:
 
                     # print(proofs)
                     i+=1
-            except:
+            except Exception as exc:
                     # don't error the whole swap routine here
                     # duplicate proofs just ignore
                     proofs = []   
@@ -3852,7 +3851,7 @@ class Acorn:
                                             )
                             proof_objs.append(proof_obj)
                             i+=1
-                    except:
+                    except Exception as exc:
                         # Don't error the whole swap routine
                         # Just igore the duplicate proofs
                         proofs = []    
@@ -3904,7 +3903,7 @@ class Acorn:
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
                     # print(each_proof['state'])
-            except:
+            except Exception as exc:
                 return f"there is a problem with the mint {self.known_mints[each_keyset]}"
                 
         # return
@@ -3984,7 +3983,7 @@ class Acorn:
                     
                     
 
-                except:
+                except Exception as exc:
                     ValueError("duplicate proofs")
                     print("duplicate proof, ignore")
 
@@ -4109,7 +4108,7 @@ class Acorn:
                 proofs.append(proof)
                 # print(proofs)
                 i+=1
-        except:
+        except Exception as exc:
             ValueError('test')
         
         for each in proofs:
@@ -4373,7 +4372,7 @@ class Acorn:
 
         try:
             token_obj = TokenV3.deserialize(cashu_token)
-        except:
+        except Exception as exc:
             return "bad token"
         for each in token_obj.token:
             print(each.mint)
@@ -4749,14 +4748,14 @@ class Acorn:
                 self.logger.debug(f"npub: {npub}")
                 event_id = npub
             
-        except:
+        except Exception as exc:
             raise ValueError(f"could not resolve nip05")
             
 
         if event_id.startswith("note"):
             try:
                 event_id = bech32_to_hex(event_id)
-            except:
+            except Exception as exc:
                 return "Note id format is invalid. Please check and try again."
             try:
                 zap_filter = [{  
@@ -4764,7 +4763,7 @@ class Acorn:
                 
                 }]
                 prs = await self._async_query_zap(amount, comment,zap_filter)
-            except:
+            except Exception as exc:
                 raise ValueError("Could not find event. Try an additional relay?")
                 # return "Could not find event. Try an additional relay?"
             
@@ -4807,7 +4806,7 @@ class Acorn:
             self.logger.debug(f"json_str: {json_str}")
             # json_obj = json.loads(json_str)
             # json_obj = json.loads(json_str)
-        except:
+        except Exception as exc:
             {"status": "could not access profile"}
             pass
        
@@ -4844,7 +4843,7 @@ class Acorn:
                 self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 
-            except:
+            except Exception as exc:
                 {"status": "could not access profile"}
                 self.logger.error("could not get profile")
                 pass
@@ -4930,7 +4929,7 @@ class Acorn:
                 prs.append(pr)
                
                 
-            except:
+            except Exception as exc:
                 {"status": "could not access profile"}
                 self.logger.error("could not get profile")
                 pass
@@ -4946,7 +4945,7 @@ class Acorn:
                 print("npub", npub)
             else:
                 npub = nrecipient
-        except:
+        except Exception as exc:
             return "error"
         
         # Now let's get the record
@@ -4997,7 +4996,7 @@ class Acorn:
             else:
                 npub = nrecipient
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
+        except Exception as exc:
             return "error"
         
         print(f"monitor {npub}")
@@ -5355,8 +5354,8 @@ class Acorn:
             try:
                 holder_key = Keys(pub_k=holder)
                 holder_pubhex = holder_key.public_key_hex()
-            except:
-                pass
+            except Exception as exc:
+                self.logger.warning("Invalid holder key supplied for private record: %s", exc)
             
         
         tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)],["safebox_holder", holder_pubhex]]
@@ -5585,8 +5584,8 @@ class Acorn:
                 # Now we are going to get the followers
                 
                 pubhex_list_out.append(k_to_add.public_key_hex())
-            except:
-                pass
+            except Exception as exc:
+                self.logger.debug("Skipping invalid root entity=%s error=%s", each, exc)
         
         print(f"pubhex list out {pubhex_list_out} use relays: {self.relays}")
         FILTER = [{
@@ -5612,7 +5611,8 @@ class Acorn:
         try:
             record_out_json = json.loads(record_out)
             final_out = record_out_json['payload']
-        except:
+        except Exception as exc:
+            self.logger.debug("No root entities payload found: %s", exc)
             final_out = ""
         return final_out
 
@@ -5624,8 +5624,8 @@ class Acorn:
             try:
                 k_to_validate = Keys(pub_k=each)
                 pubs_to_store += k_to_validate.public_key_bech32() + ' '
-            except:
-                pass
+            except Exception as exc:
+                self.logger.debug("Skipping invalid trusted entity npub=%s error=%s", each, exc)
 
         
         
@@ -5650,8 +5650,8 @@ class Acorn:
             try:
                 k_to_validate = Keys(pub_k=each_npub)
                 pubs_to_store += f"{k_to_validate.public_key_bech32()}{part_2}{part_3}" + ' '
-            except:
-                pass
+            except Exception as exc:
+                self.logger.debug("Skipping invalid wot entity npub=%s error=%s", each_npub, exc)
 
         
         
@@ -5693,10 +5693,10 @@ class Acorn:
                     
                     pubhex_list_out.append(final_entry)
                    
-                except:
-                    pass
-        except:
-            pass
+                except Exception as exc:
+                    self.logger.debug("Skipping malformed wot score entity=%s error=%s", each, exc)
+        except Exception as exc:
+            self.logger.warning("Could not load wot entities: %s", exc)
         
        
 
@@ -5708,7 +5708,7 @@ class Acorn:
         try:
             k_to_use = Keys(pub_k=pub_key_to_score)
             pubhex = k_to_use.public_key_hex()
-        except:
+        except Exception as exc:
             return "invalid npub"
         
 
@@ -5738,8 +5738,8 @@ class Acorn:
                                     score = 0
                                     score = each_tag[1]
                                     scores_out.append([each_wot_tag,score])
-            except:
-                pass
+            except Exception as exc:
+                self.logger.warning("Failed querying wot score relay=%s error=%s", each_wot_relay, exc)
         
 
         return scores_out
@@ -5747,7 +5747,7 @@ class Acorn:
         try:
             k_to_use = Keys(pub_k=pub_key_to_score)
             pubhex = k_to_use.public_key_hex()
-        except:
+        except Exception as exc:
             pubhex = None
 
         FILTER = [{
@@ -5778,7 +5778,7 @@ class Acorn:
     async def get_social_profile(self,npub: str, relays: List[str]=None):
         try:
             pubhex = Keys(pub_k=npub).public_key_hex()
-        except:
+        except Exception as exc:
             raise ValueError("Invalid public key")
         
         FILTER = [{

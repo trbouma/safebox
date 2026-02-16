@@ -304,7 +304,7 @@ async def db_lookup_safebox(npub: str) -> RegisteredSafebox:
         safeboxes = session.exec(statement)
         try:
             safebox_found = safeboxes.first()
-        except:
+        except Exception as exc:
             raise HTTPException(status_code=404, detail=f"{npub} not found")
         
     return safebox_found
@@ -1082,7 +1082,7 @@ def parse_nembed(encoded_string):
     
     try:
         json_obj = json.loads(decoded_data)  
-    except:
+    except Exception as exc:
         json_obj = {}
 
     return json_obj
@@ -1133,7 +1133,7 @@ def parse_nembed_compressed(encoded_string):
     
     try:
         json_obj = json.loads(decompressed_data.decode())  
-    except:
+    except Exception as exc:
         json_obj = {}
 
     return json_obj
@@ -1231,7 +1231,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
                                     tags=nostr_obj['tags'], 
                                     created_at=nostr_obj['created_at'])
             # print(f"zap receipt tags: {zap_receipt.tags}")
-        except:
+        except Exception as exc:
             print("could not load json object")
 
         #Extract the tags we need
@@ -1270,7 +1270,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
 
        
         # print("parsed zap receipt!")
-    except:
+    except Exception as exc:
         print("could not parse zap receipt!")
     
     # print(nostr_decode=urllib.parse.unquote(nostr))
@@ -1394,12 +1394,12 @@ def lnaddress_to_safebox_npub(lnaddress: str):
         response = requests.get(nip05_url)
         pubkey = response.json()['safebox']
         
-    except:
+    except Exception as exc:
         pubkey = None   
 
     try:
         relays = response.json()['relays']
-    except:
+    except Exception as exc:
         relays = []    
     return pubkey, relays  
 

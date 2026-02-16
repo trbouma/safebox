@@ -390,7 +390,7 @@ async def my_present_records(       request: Request,
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     #FIXME don't need the grant kinds
@@ -526,7 +526,7 @@ async def my_retrieve_records(       request: Request,
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     print(f"present records: {user_records}")
@@ -557,7 +557,7 @@ async def my_retrieve_records(       request: Request,
 
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
             record["content"] = content
-        except:
+        except Exception as exc:
             record["content"] = record
         present_records = record
     
@@ -645,7 +645,7 @@ async def retrieve_grant_list(       request: Request,
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     #FIXME don't need the grant kinds
@@ -948,7 +948,7 @@ async def display_record(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
@@ -959,7 +959,7 @@ async def display_record(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -1041,7 +1041,7 @@ async def display_grant(     request: Request,
             is_trusted = "TBD"
 
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
@@ -1053,7 +1053,7 @@ async def display_grant(     request: Request,
         try:
             #content = record["payload"]
             content = record["payload"]["content"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -1185,7 +1185,7 @@ async def manage_offer(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
@@ -1196,7 +1196,7 @@ async def manage_offer(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -1346,7 +1346,7 @@ async def generate_nauth(    request: Request,
         print(f"scope: {nauth_request.scope} grant: {nauth_request.grant}")
         print(f"generated nauth: {detail} {len(detail)}")
       
-    except:
+    except Exception as exc:
         detail = "Not created"
 
     return {"status": status, "detail": detail}
@@ -1416,8 +1416,9 @@ async def post_send_record(      request: Request,
             pass
             my_enc = ExtendedNIP44Encrypt(k_nip44)
             print(f"my NIP44 enc: {my_enc}")
-        except:
-            pass
+        except Exception as exc:
+            logger.exception("Failed to initialize PQC NIP44 encryptor")
+            raise HTTPException(status_code=500, detail="Encryption initialization failed")
         # Now add to record
         record_out['ciphertext']    = kem_ciphertext_hex
         record_out['kemalg']        = record_parms.kemalg
@@ -1446,7 +1447,7 @@ async def post_send_record(      request: Request,
         
         try:
             nembed = create_nembed_compressed(record_out)
-        except:
+        except Exception as exc:
             nembed = create_nembed_compressed({"test": "test"})
         # print(nembed)
 
@@ -1555,7 +1556,7 @@ async def ws_record_offer( websocket: WebSocket,
             # await acorn_obj.load_data()
             try:
                 client_nauth, presenter,kem_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1625,7 +1626,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             
             try:
                 client_nauth, presenter, ken_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1794,7 +1795,7 @@ async def ws_request_record( websocket: WebSocket,
                     print(f"each to present: {each} {presenter}")
                     try:
                         payload_to_use = json.loads(each['payload'])
-                    except:
+                    except Exception as exc:
                         payload_to_use = each['payload']
 
                     print(f"each ciphertext {each.get('ciphertext','None')}")
@@ -1934,7 +1935,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                 print(f"this is the kem public key: {kem_public_key} kemalg: {kemalg}")
                 # These paramaters get passed along to Step 2a via the browser
 
-            except:
+            except Exception as exc:
                 client_nauth=None
             
 

@@ -436,7 +436,7 @@ async def protected_route(    request: Request,
             currency_code  = fiat_currency.currency_code
             currency_rate = fiat_currency.currency_rate
             currency_symbol = fiat_currency.currency_symbol
-        except:
+        except Exception as exc:
             currency_code = "SAT"
             currency_rate = 1e8
             currency_symbol = ""
@@ -1017,7 +1017,7 @@ async def my_credentials(       request: Request,
     """Protected access to credentials stored in home relay"""
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1037,7 +1037,7 @@ async def my_ecash(       request: Request,
     """Protected access to credentials stored in home relay"""
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1140,9 +1140,10 @@ async def get_trust_list(            request: Request,
                 k_each = Keys(pub_k=each)            
                 trust_out += f"{k_each.public_key_bech32()} "
                 trust_count +=1
-            except:
-                pass
-    except:
+            except Exception as exc:
+                logger.debug("Skipping invalid trusted entity entry=%s error=%s", each, exc)
+    except Exception as exc:
+        logger.exception("Failed to fetch trusted entities")
         trust_out = "Error"
     
    
@@ -1504,7 +1505,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
             # await acorn_obj.load_data()
             try:
                 client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1544,7 +1545,7 @@ async def get_records(      request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1565,7 +1566,7 @@ async def add_card(         request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1592,7 +1593,7 @@ async def update_card(         request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1622,7 +1623,7 @@ async def delete_card(         request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1649,7 +1650,7 @@ async def set_custom_handle(   request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1707,7 +1708,7 @@ async def set_owner_data(   request: Request,
                 session.add(safebox_found)
                 session.commit() 
             msg_out = "success!"
-        except:
+        except Exception as exc:
             return {"status": "ERROR", "detail": "Owner update error, maybe bad npub format?" }
    
             
@@ -1744,7 +1745,7 @@ async def get_nprofile(    request: Request,
     detail = "None"
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -1758,7 +1759,7 @@ async def get_nprofile(    request: Request,
     try:
         nprofile = await create_nprofile_from_hex(pub_hex_to_use,[acorn_obj.home_relay])
         detail = nprofile
-    except:
+    except Exception as exc:
         detail = "Not created"
 
     return {"status": status, "detail": detail}
@@ -1817,7 +1818,7 @@ async def get_nauth(    request: Request,
 
         print(f"generated nauth: {detail}")
       
-    except:
+    except Exception as exc:
         detail = "Not created"
 
     return {"status": status, "detail": detail}
@@ -1894,7 +1895,7 @@ async def accept_incoming_record(       request: Request,
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except Exception as exc:
         response = RedirectResponse(url="/", status_code=302)
         return response
     
