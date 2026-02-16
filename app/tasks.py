@@ -7,6 +7,7 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 import signal, sys, string, cbor2, base64,os
 import aioconsole
 import json, requests
+import httpx
 
 from typing import Any, Dict, List, Optional, Union, Callable
 from fastapi import WebSocket
@@ -407,11 +408,14 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
                                 final_amount: int
                                 ):
     print("pay to nfc tag")
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    print(f"safebox: {response.json()}")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+    print(f"safebox: {response_json}")
     final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
-    invoice = response.json()["invoice"]
-    payee = response.json()["payee"]
+    invoice = response_json["invoice"]
+    payee = response_json["payee"]
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
      
@@ -422,8 +426,11 @@ async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data
     print(f"submit data: {submit_data}")
 
 
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    print(f"response: {response.json()}")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+    print(f"response: {response_json}")
     pass
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)

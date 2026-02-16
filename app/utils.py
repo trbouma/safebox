@@ -9,6 +9,7 @@ import io, gzip
 import validators
 from urllib.parse import urlparse
 import secrets
+import logging
 from fastapi import Depends, Cookie, HTTPException
 from fastapi import Response
 
@@ -40,6 +41,7 @@ from app.config import Settings, ConfigWithFallback
 
 settings = Settings()
 config = ConfigWithFallback()
+logger = logging.getLogger(__name__)
 # Secret key for signing JWT
 # SECRET_KEY = "foobar"
 # ALGORITHM = "HS256"
@@ -163,13 +165,13 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    print(f"from access_token {access_key}")
+    logger.debug("Decoded access token subject")
     try:
         k_from_token = Keys(priv_k=access_key)
-        print(f"we have a private key in the access token! The public key is: {k_from_token.public_key_bech32()}")
+        logger.info("Non-custodial token access detected for npub=%s", k_from_token.public_key_bech32())
         non_custodial = True
-    except:
-        print("just an ordinary access key")
+    except ValueError:
+        logger.debug("Token subject is not an nsec, using access_key lookup")
 
     # Token is valid, now get the safebox
     with Session(engine) as session:

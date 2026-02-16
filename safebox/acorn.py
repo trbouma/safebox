@@ -1187,8 +1187,9 @@ class Acorn:
                 dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
-            return "error"
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("Invalid transmittal recipient=%s error=%s", nrecipient, exc)
+            raise ValueError("invalid transmittal recipient") from exc
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
         await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, kind=kind) 
@@ -1591,7 +1592,7 @@ class Acorn:
         try:
             record_obj = json.loads(record_out)
             
-        except:
+        except json.JSONDecodeError:
             record_obj = record_out
 
         return record_obj
@@ -1635,14 +1636,16 @@ class Acorn:
         if event:
             try:
                 decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-            except:
-                return f"Could not decrypt info for: {record_name}. Does a record exist?"
+            except (ValueError, TypeError) as exc:
+                self.logger.warning("Could not decrypt record=%s error=%s", record_name, exc)
+                raise ValueError(f"Could not decrypt info for: {record_name}. Does a record exist?") from exc
             
             try:
                 safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
                 print(f"This is the blobref: {safebox_record.blobref} blobsha256: {safebox_record.blobsha256}")
-            except:
-                raise Exception( f"Could create safebox record: {record_name}. Does a record exist?")
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                self.logger.warning("Could not parse safebox record=%s error=%s", record_name, exc)
+                raise ValueError(f"Could create safebox record: {record_name}. Does a record exist?") from exc
         else:
             raise Exception(f"No event found for {record_kind} {record_name}")
 
@@ -1726,15 +1729,13 @@ class Acorn:
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
             print(f"decrypt {decrypt_content}")
-        except:
-            return f"Could not decrypt info for: {record_name}. Does a record exist?"
-        
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("Could not decrypt blob record=%s error=%s", record_name, exc)
+            return None, None
+
         try:
             print(f"create safebox record")
-            try:
-                safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
-            except Exception as e:
-                print(f"Error is {e}")
+            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
             print(f"This is the blobref for getblob: {safebox_record.blobref} blobtype: {safebox_record.blobtype} blobsha256: {safebox_record.blobsha256}")
             blob_sha256 = safebox_record.blobsha256
             blob_type = safebox_record.blobtype
@@ -1747,19 +1748,19 @@ class Acorn:
                 if blob_retrieve.mime_type == "application/octet-stream":
                     print(f"we have to decrypt! with {safebox_record.encryptparms.key}")
                     try:
-                        blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
-                                                                
-                                                                key=bytes.fromhex(safebox_record.encryptparms.key),
-                                                                iv = bytes.fromhex(safebox_record.encryptparms.iv)
-                                                            )
-                    except Exception as e:
-                        print(f"Error {e}")
+                        blob_data = decrypt_bytes(
+                            cipherbytes=blob_retrieve.get_bytes(),
+                            key=bytes.fromhex(safebox_record.encryptparms.key),
+                            iv=bytes.fromhex(safebox_record.encryptparms.iv),
+                        )
+                    except (ValueError, TypeError) as e:
+                        self.logger.warning("Blob decrypt failed for record=%s error=%s", record_name, e)
                 else:
                     print("we can't seem to decrypt")
                     blob_data = blob_retrieve.get_bytes()
-            
-        except:
-             return None, None
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.warning("Error parsing blob metadata for record=%s error=%s", record_name, exc)
+            return None, None
 
         if blob_data:
             guessed_blob_type = filetype.guess_mime(blob_data)
@@ -2915,8 +2916,8 @@ class Acorn:
                     #FIXME this is the critical error!!!
                     try: 
                         proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-                    except Exception as e:
-                        raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
+                    except (ValueError, RuntimeError) as e:
+                        raise RuntimeError(f"ERROR Swap for Payment: {e}. You may need to try the payment again.") from e
                         
 
                     # print("proofs remaining:", proofs_remaining)
@@ -2951,8 +2952,8 @@ class Acorn:
                     try:
                         response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
                         response.raise_for_status()
-                    except Exception as e:
-                        raise Exception(f"error: {e}")
+                    except requests.RequestException as e:
+                        raise RuntimeError(f"payment melt request failed: {e}") from e
                     
                     self.logger.debug(f"response json: {response.json()}")
                     payment_json = response.json()
@@ -3000,12 +3001,12 @@ class Acorn:
                 print("all done pay_multi")
                 print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
-        except Exception as e:
+        except (ValueError, RuntimeError, requests.RequestException) as e:
             await self.release_lock()
             final_fees = 0
             msg_out = f"There is an error sending the payment. Did it go through?"
-            print(msg_out)
-            raise Exception(msg_out)
+            self.logger.error("%s original_error=%s", msg_out, e)
+            raise RuntimeError(msg_out) from e
         finally:
             await self.release_lock()
     
@@ -3290,16 +3291,17 @@ class Acorn:
             self.logger.info(msg_out)
             await self.write_proofs()
             await self.release_lock()
-        except Exception as e:
+        except (ValueError, RuntimeError, requests.RequestException) as e:
             # await self.release_lock()
-            self.logger.error(f"Error in pay_multi_invoice to address {e}")
+            self.logger.error("Error in pay_multi_invoice: %s", e)
             # raise Exception(f"Error There is problem with the invoice payment {e}")
             final_fees = 0
             msg_out = f"There is a problem paying the invoice. {e}"
+            raise RuntimeError(msg_out) from e
         finally:
             await self.release_lock()
             print("all done pay_multi_invoice!")
-           
+        
         await self.add_tx_history( tx_type='D',
                                         amount=ln_amount,
                                         comment=comment,
@@ -5425,7 +5427,8 @@ class Acorn:
                 encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
                 encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
             except Exception as e:
-                print(f"there is an encryption error {e}")
+                self.logger.exception("Encryption error while creating grant from offer")
+                raise RuntimeError(f"encryption error while creating grant: {e}") from e
 
             # final_blob_data = blob_data
             final_blob_data = encrypt_result.cipherbytes
@@ -5505,9 +5508,9 @@ class Acorn:
             payload_json['pub_key'] = payload_json['pubkey'] 
             del payload_json['pubkey']
             issued_grant_record = Event(**payload_json)
-        except Exception as e:
-            print(f"error retrieving grant record {e}")
-            raise Exception(f"error retrieving grant record {e}")
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            self.logger.exception("Error retrieving grant record")
+            raise ValueError(f"error retrieving grant record {e}") from e
         # Need to create original_transfer to tell where to pick up
 
         if blob_data:
@@ -5530,7 +5533,8 @@ class Acorn:
                 encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
                 encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
             except Exception as e:
-                print(f"there is an encryption error {e}")
+                self.logger.exception("Encryption error while creating request from grant")
+                raise RuntimeError(f"encryption error while creating request: {e}") from e
 
             # final_blob_data = blob_data
             final_blob_data = encrypt_result.cipherbytes

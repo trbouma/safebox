@@ -17,6 +17,7 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 import ipinfo
 import requests
+import httpx
 from safebox.func_utils import get_profile_for_pub_hex, get_attestation
 from safebox.monstrmore import ExtendedNIP44Encrypt
 from safebox.models import SafeboxRecord, OriginalRecordTransfer
@@ -36,6 +37,7 @@ import logging, jwt
 import mimetypes
 from tempfile import NamedTemporaryFile
 
+logger = logging.getLogger(__name__)
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -220,11 +222,14 @@ async def transmit_records(        request: Request,
     
 
     
-    print(f"transmit nauth: {transmit_consultation.nauth} record name: {transmit_consultation.record_name}")
+    logger.info(
+        "Transmit requested (record_name=%s, originating_kind=%s, final_kind=%s)",
+        transmit_consultation.record_name,
+        transmit_consultation.originating_kind,
+        transmit_consultation.final_kind,
+    )
 
     try:
-
-
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
@@ -249,43 +254,35 @@ async def transmit_records(        request: Request,
         #     raise Exception("Invalid session!")
 
         # PQC Step 2a
-        print(f"PQC Step 2a {transmit_consultation.kem_public_key} {transmit_consultation.kemalg}")
+        logger.info("PQC encapsulation start (kemalg=%s)", transmit_consultation.kemalg)
+        if not transmit_consultation.kem_public_key:
+            raise HTTPException(status_code=400, detail="Missing kem_public_key")
+
         pqc = oqs.KeyEncapsulation(transmit_consultation.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
         kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(transmit_consultation.kem_public_key))
         kem_shared_secret_hex = kem_shared_secret.hex()
         kem_ciphertext_hex = kem_ciphertext.hex()
 
         k_nip44 = Keys(priv_k=kem_shared_secret_hex)
-
-        print(f"kem shared secret: {kem_shared_secret_hex} ciphertext: {kem_ciphertext_hex}")
-        try:
-            
-            my_enc = ExtendedNIP44Encrypt(k_nip44)
-            print(f"my NIP44 enc: {my_enc}")
-        except:
-            print("Encryption initialization failed:", e)
-            raise HTTPException(status_code=500, detail=f"NIP44 init failed: {str(e)}")
+        my_enc = ExtendedNIP44Encrypt(k_nip44)
 
         #TODO Replace with create_grant
-        
-        print(f"create_grant will go here instead of issued record")
+
         issued_record: Event
         original_record: OriginalRecordTransfer
         issued_record, original_record = await acorn_obj.create_grant_from_offer(   offer_kind=transmit_consultation.originating_kind, 
         offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex, blossom_xfer_server=settings.BLOSSOM_XFER_SERVER)
-        print(f"grant is {issued_record}")
+
         issued_record_str = json.dumps(issued_record.data())
         pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
-        print(f"pqc encrypted payload: {pqc_encrypted_payload}")
+
         if original_record:           
             original_record_str = original_record.model_dump_json(exclude_none=True)
-            print(f"now we need to include the original record: ")
             pqc_encrypted_original = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=original_record_str)
             
 
 
         else:
-            print(f"no original record")
             pqc_encrypted_original = None
 
 
@@ -305,11 +302,14 @@ async def transmit_records(        request: Request,
         detail = f"Successfully transmitted kind {transmit_consultation.final_kind} to {transmittal_npub} via {transmittal_relays}"
 
         return {"status": status, "detail": detail}
-
-        
-        
-        
+    except HTTPException:
+        raise
+    except (KeyError, ValueError, TypeError) as e:
+        logger.warning("Invalid transmit request payload: %s", e)
+        status = "ERROR"
+        detail = f"Error: invalid transmit request ({e})"
     except Exception as e:
+        logger.exception("Unexpected transmit failure")
         status = "ERROR"
         detail = f"Error: {e}"
     
@@ -2032,10 +2032,12 @@ async def accept_proof_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"vault url: {vault_url} submit data: {submit_data}")
 
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        vault_response = response.json()
     
-    print(response.json())
-    vault_response = response.json()
+    print(vault_response)
 
     # add in the polling task here
    
@@ -2088,9 +2090,12 @@ async def accept_offer_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"offer url: {offer_url} submit data: {submit_data}")
 
-    response = requests.post(url=offer_url, json=submit_data, headers=headers)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=offer_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
     
-    print(f"response from vault: {response.json()}")
+    print(f"response from vault: {response_json}")
 
     print("Now need to issue the private records")
 

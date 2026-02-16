@@ -14,6 +14,7 @@ from monstr.util import util_funcs
 from monstr.encrypt import Keys
 import ipinfo
 import requests
+import httpx
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, fetch_access_token, fetch_safebox_by_access_key, parse_nembed_compressed, sign_payload, fetch_safebox_by_handle
@@ -268,8 +269,11 @@ async def websocket_endpoint(   websocket: WebSocket
                         "comment": nfc_comment  
                         }
                     task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj, websocket=websocket))
-                    response = requests.post(url=vault_url, json=submit_data, headers=headers)        
-                    print(response.json())
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+                        response.raise_for_status()
+                        response_json = response.json()
+                    print(response_json)
                     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment being processed..."})
                     
 

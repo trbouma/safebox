@@ -20,6 +20,7 @@ import hashlib
 import secrets
 from monstr.util import util_funcs
 import requests
+import httpx
 import time
 
 from monstr.client.client import ClientPool
@@ -43,6 +44,7 @@ from app.rates import get_currency_rate
 
 import logging, jwt
 
+logger = logging.getLogger(__name__)
 
 
 global_websocket: WebSocket = None
@@ -266,7 +268,6 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
     nembed_acquired = nfc_card.nembed
     try:
         parsed_data = parse_nembed_compressed(nembed_acquired)
-        print(parsed_data)
         host = parsed_data["h"]
         encrypted_key = parsed_data["k"]
         decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
@@ -274,29 +275,30 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         decrypted_secure_pin = decrypted_payload.split(':')[1]
         nfc = parsed_data.get("n",["",""])
 
-        print(f"host: {host} encrypted key: {encrypted_key} {decrypted_key} secure pin {decrypted_secure_pin} nfc: {nfc}")
+        logger.info("NFC login payload parsed for host=%s", host)
         if host != request.url.hostname:
-            print(f"This is the wrong host - need to go to https://{host}")
+            logger.warning("NFC login host mismatch, redirecting to host=%s", host)
             return RedirectResponse(url=f"https://{host}",status_code=301)
            
         #FIXME This needs to be changed to look up an ephermeral key
         k_wallet = Keys(priv_k=decrypted_key)
         npub = k_wallet.public_key_bech32()
-        print(f"safebox {npub}")
+        logger.info("NFC login matched npub=%s", npub)
 
-    except:
-        print("could not parse")
-        return
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("NFC login payload invalid: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid NFC payload")
     pass
 
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==npub)
-        print(statement)
+        logger.debug("NFC login query: %s", statement)
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
-        if safebox_found:
-            out_name = safebox_found.handle  
-    print(f"found: {out_name}")
+        if not safebox_found:
+            logger.warning("NFC login failed: npub not registered")
+            raise HTTPException(status_code=404, detail="Safebox not found")
+    logger.info("NFC login succeeded for handle=%s", safebox_found.handle)
 
         # Create JWT token
     settings.TOKEN_EXPIRES_HOURS
@@ -547,7 +549,11 @@ async def ln_pay_address(   request: Request,
         #                                tendered_currency=ln_pay.currency,
         #                                comment=ln_pay.comment + tendered, 
         #                                fees=final_fees)
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Lightning payaddress failed: %s", e)
+        return {"status": "ERROR", f"detail": f"error {e}"}
     except Exception as e:
+        logger.exception("Unexpected error in payaddress")
         return {"status": "ERROR", f"detail": f"error {e}"}
 
     msg_out = "Payment sent!!"
@@ -565,7 +571,11 @@ async def ln_swap(   request: Request,
        msg_out = await acorn_obj.swap_multi_consolidate()
        pass
  
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Swap failed: %s", e)
+        return {"status": "ERROR", f"detail": f"error {e}"}
     except Exception as e:
+        logger.exception("Unexpected error in swap")
         return {"status": "ERROR", f"detail": f"error {e}"}
 
 
@@ -591,8 +601,12 @@ async def ln_pay_invoice(   request: Request,
 
        
 
-    except Exception as e:
-        return {f"detail": "error {e}"}
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Invoice payment failed: %s", e)
+        return {f"detail": f"error {e}"}
+    except Exception:
+        logger.exception("Unexpected error in payinvoice")
+        return {"detail": "internal payment error"}
 
 
     
@@ -611,9 +625,13 @@ async def issue_ecash(   request: Request,
         # msg_out = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         msg_out = await acorn_obj.issue_token(ecash_request.amount)
         # await acorn_obj.add_tx_history(tx_type='D',amount=ecash_request.amount,comment='ecash withdrawal')
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Issue ecash failed: %s", e)
         return {    "status": "ERROR",
-                    f"detail": "error {e}"}
+                    f"detail": f"error {e}"}
+    except Exception:
+        logger.exception("Unexpected error in issueecash")
+        return {"status": "ERROR", "detail": "internal ecash issue error"}
 
 
     
@@ -633,9 +651,13 @@ async def accept_ecash(   request: Request,
         msg_out, token_accepted_amount = await acorn_obj.accept_token(ecash_accept.ecash_token, comment="test")
         # await acorn_obj.add_tx_history(tx_type='C', amount=token_accepted_amount, comment='ecash deposit')
         pass
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Accept ecash failed: %s", e)
         return {    "status": "ERROR",
                     "detail": f"error {e}"}
+    except Exception:
+        logger.exception("Unexpected error in acceptecash")
+        return {"status": "ERROR", "detail": "internal ecash accept error"}
 
 
     
@@ -689,7 +711,12 @@ async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
         
-    except:
+    except HTTPException as exc:
+        logger.warning("Poll auth failure: %s", exc.detail)
+        return {"detail": "error",
+                "balance": 0}
+    except Exception:
+        logger.exception("Unexpected error in poll_for_balance")
         return {"detail": "error",
                 "balance": 0}
 
@@ -753,7 +780,12 @@ async def my_tx_history(    request: Request,
     """Protected access to private data stored in home relay"""
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except HTTPException:
+        logger.info("txhistory access denied; redirecting")
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    except Exception:
+        logger.exception("Unexpected error in txhistory")
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -851,7 +883,12 @@ async def get_inbox(      request: Request,
  
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except HTTPException:
+        logger.info("inbox access denied; redirecting")
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    except Exception:
+        logger.exception("Unexpected error in inbox")
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -900,7 +937,12 @@ async def my_health_data(       request: Request,
     nauth_response = None
     try:
         safebox_found = await fetch_safebox(access_token=access_token)
-    except:
+    except HTTPException:
+        logger.info("health access denied; redirecting")
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    except Exception:
+        logger.exception("Unexpected error in my_health_data auth")
         response = RedirectResponse(url="/", status_code=302)
         return response
     
@@ -908,7 +950,11 @@ async def my_health_data(       request: Request,
     await acorn_obj.load_data()
     try:
         health_records = await acorn_obj.get_user_records(record_kind=32225 )
-    except:
+    except (ValueError, RuntimeError) as exc:
+        logger.warning("Health records unavailable: %s", exc)
+        health_records = None
+    except Exception:
+        logger.exception("Unexpected error loading health records")
         health_records = None
 
     if nauth:
@@ -1955,9 +2001,12 @@ async def request_nfc_payment( request: Request,
         #FIXME Need to get relays to listen
         pass
         settings_url = f"https://{host}/.well-known/settings"
-        response = requests.get(url=settings_url)
-        print(response.json())
-        ecash_relays = response.json().get("ecash_relays", settings.ECASH_RELAYS)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url=settings_url)
+            response.raise_for_status()
+            response_json = response.json()
+        print(response_json)
+        ecash_relays = response_json.get("ecash_relays", settings.ECASH_RELAYS)
         task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
 
     else:
@@ -1983,8 +2032,11 @@ async def request_nfc_payment( request: Request,
     
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)        
-    print(response.json())
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+    print(response_json)
 
     return {"status": status, "detail": detail}  
 
