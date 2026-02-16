@@ -49,7 +49,6 @@ class Settings(BaseSettings):
     INVITE_CODES: List = ["alpha", "rektuser", "earlyaccess"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_SERVICE: bool = False
-    NWC_NSEC: str|None = None
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     DM_RELAYS: List = ['wss://relay.getsafebox.app']
@@ -204,6 +203,7 @@ settings = Settings()
 class ConfigWithFallback(BaseSettings):
     SERVICE_NSEC: str = "notset"
     SERVICE_NPUB: str = "notset"
+    NWC_NSEC: str = "notset"
     PQC_SIG_SECRET_KEY: str = "notset"
     PQC_SIG_PUBLIC_KEY: str = "notset"
     PQC_KEM_PUBLIC_KEY: str = "notset"
@@ -220,6 +220,13 @@ class ConfigWithFallback(BaseSettings):
         return {
             "SERVICE_NSEC": k.private_key_bech32(),
             "SERVICE_NPUB": k.public_key_bech32(),
+        }
+
+    @staticmethod
+    def _gen_nwc_key() -> Dict[str, str]:
+        k = Keys()
+        return {
+            "NWC_NSEC": k.private_key_bech32(),
         }
 
     @staticmethod
@@ -254,6 +261,10 @@ class ConfigWithFallback(BaseSettings):
         if {"SERVICE_NSEC", "SERVICE_NPUB"} & missing:
             generated.update(cls._gen_nostr_keys())
 
+        # NWC key
+        if "NWC_NSEC" in missing:
+            generated.update(cls._gen_nwc_key())
+
         # Signature pair
         if {"PQC_SIG_SECRET_KEY", "PQC_SIG_PUBLIC_KEY"} & missing:
             generated.update(cls._gen_pqc_sig_keys())
@@ -287,6 +298,7 @@ class ConfigWithFallback(BaseSettings):
         order = [
             "SERVICE_NSEC",
             "SERVICE_NPUB",
+            "NWC_NSEC",
             "PQC_SIG_SECRET_KEY",
             "PQC_SIG_PUBLIC_KEY",
             "PQC_KEM_SECRET_KEY",
@@ -305,6 +317,7 @@ class ConfigWithFallback(BaseSettings):
         required_keys = {
             "SERVICE_NSEC",
             "SERVICE_NPUB",
+            "NWC_NSEC",
             "PQC_SIG_SECRET_KEY",
             "PQC_SIG_PUBLIC_KEY",
             "PQC_KEM_PUBLIC_KEY",
@@ -312,7 +325,11 @@ class ConfigWithFallback(BaseSettings):
         }
 
         # Treat "notset" as missing too (in case a stub got written previously)
-        missing = {k for k in required_keys if k not in file_values or file_values.get(k) in (None, "", "notset")}
+        missing = {
+            k
+            for k in required_keys
+            if (k not in os.environ) and (k not in file_values or file_values.get(k) in (None, "", "notset"))
+        }
 
         # If anything is missing, generate *only* the missing ones and persist
         if missing:

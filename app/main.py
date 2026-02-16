@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
    
 
     is_production = SETTINGS.APP_ENV.lower() in {"prod", "production"}
-    if is_production and not SETTINGS.NWC_NSEC:
+    if is_production and not config.NWC_NSEC:
         raise RuntimeError("NWC_NSEC must be set in production")
     if is_production and ("*" in SETTINGS.CORS_ALLOW_ORIGINS or not SETTINGS.CORS_ALLOW_ORIGINS):
         raise RuntimeError("CORS_ALLOW_ORIGINS must be explicit and non-empty in production")
@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
     #    print(f"[PID {os.getpid()}] Could not acquire lock. Skipping listener.")
     
     # The single event handling is now done in nwc.py, so all listeners can be running
-    if SETTINGS.NWC_NSEC:
+    if config.NWC_NSEC:
         print(f"[PID {os.getpid()}] Starting nwc listener.")
         url = SETTINGS.NWC_RELAYS[0]
         listener_task = asyncio.create_task(listen_notes_periodic(url))
@@ -369,4 +369,3 @@ def get_user_did_doc(user: str, request: Request):
 
 
   
-

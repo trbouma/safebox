@@ -40,7 +40,7 @@ config = ConfigWithFallback()
 
 RELAYS = settings.RELAYS
 TIMEDELTA_SECONDS = 60
-SERVICE_NWC_KEYS: Keys | None = Keys(settings.NWC_NSEC) if settings.NWC_NSEC else None
+SERVICE_NWC_KEYS: Keys | None = Keys(config.NWC_NSEC) if config.NWC_NSEC else None
 
 engine = create_engine(settings.DATABASE)
 
