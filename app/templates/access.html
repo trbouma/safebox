@@ -728,6 +728,7 @@ async function submitNFCPayment(nfc_amount,nfc_currency, nfc_token, nfc_comment)
 paytoMessage(`Pay to Token ${nfc_amount} ${nfc_currency}${nfc_comment} ${nfc_token} `);
 
 document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}. Please wait...`;
+document.getElementById("img_qr_display").src = "/img/circle-256.gif";
 
 const submit_data =   { "nembed": nfc_token, 
                         "currency": nfc_currency,
@@ -741,12 +742,27 @@ headers: {"Content-Type": "application/json"},
 body: JSON.stringify(submit_data)         
 }) 
 .then((response) => response.json())
-.then((data) => { paytoMessage(`done ${data}`);
-                  consoleLog(`${data.detail}`);
-                  window.scrollTo(0, 0);
-                  // window.location.href="/safebox/access?action_comment=Complete" ;
-
-
+.then((data) => {
+  const status = data.status || "INFO";
+  const detail = data.detail || "NFC payment request completed.";
+  paytoMessage(detail);
+  userMessage(detail, status);
+  consoleLog(detail);
+  if (status === "OK") {
+    document.getElementById("img_qr_display").src = "/img/green-check.png";
+    setTimeout(() => {
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+    }, 2500);
+  } else {
+    document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+  }
+  window.scrollTo(0, 0);
+  // window.location.href="/safebox/access?action_comment=Complete" ;
+})
+.catch((error) => {
+  consoleLog(`NFC payment error: ${error}`);
+  userMessage("NFC payment failed. Please try again.", "ERROR");
+  document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
 });
 
 

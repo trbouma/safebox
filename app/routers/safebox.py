@@ -495,15 +495,9 @@ async def protected_route(    request: Request,
 async def ln_pay_address(   request: Request, 
                             ln_pay: lnPayAddress,
                             acorn_obj: Acorn = Depends(get_acorn)):
-    global global_websocket
     msg_out ="No payment"
     tendered = ""
     status = "OK"
-
-    
-    if global_websocket:
-        print("we have a global websocket")
-        pass
 
     if ln_pay.currency == "SAT":
         sat_amount = int(ln_pay.amount)
@@ -551,7 +545,16 @@ async def ln_pay_address(   request: Request,
         # msg_out, final_fees = await acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered)
         # task1 = asyncio.create_task(acorn_obj.pay_multi(amount=sat_amount,lnaddress=final_address,comment=ln_pay.comment + tendered, tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency))
 
-        task2 = asyncio.create_task(task_pay_multi(acorn_obj=acorn_obj,amount=sat_amount,lnaddress=final_address, comment=ln_pay.comment+tendered,tendered_amount=ln_pay.amount,tendered_currency=ln_pay.currency, websocket=global_websocket))
+        task2 = asyncio.create_task(
+            task_pay_multi(
+                acorn_obj=acorn_obj,
+                amount=sat_amount,
+                lnaddress=final_address,
+                comment=ln_pay.comment + tendered,
+                tendered_amount=ln_pay.amount,
+                tendered_currency=ln_pay.currency,
+            )
+        )
 
         # await acorn_obj.add_tx_history( tx_type='D',
         #                                amount=sat_amount,
@@ -617,7 +620,6 @@ async def ln_pay_invoice(   request: Request,
                 acorn_obj=acorn_obj,
                 lninvoice=ln_invoice.invoice,
                 comment=ln_invoice.comment,
-                websocket=global_websocket,
             )
         )
         msg_out = "Payment request accepted."
