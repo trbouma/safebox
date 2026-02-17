@@ -5,14 +5,27 @@
 {{ super() }}
 
 <style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
   .center-text {
     max-width: 1100px;
     margin: 0 auto;
     padding: 18px;
-    border: 1px solid #2f3d48;
+    border: 1px solid var(--sb-panel-border);
     border-radius: 16px;
-    background: #17232d;
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
   }
 
   .center-text > * {
@@ -25,21 +38,22 @@
   }
 
   h1, h2, h3, h4, h5, p, span, label, a, th, td {
-    color: #e8f0f4;
+    color: var(--sb-text-main);
   }
 
   hr {
     border: 0;
-    border-top: 1px solid #2c3e4b;
+    border-top: 1px solid #2f416d;
     margin: 16px 0;
   }
 
   button {
-    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
     color: #ffffff;
     border: 0;
     border-radius: 12px;
-    font-weight: 700;
+    font-weight: 800;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     width: 90%;
     display: block;
     margin-left: auto;
@@ -51,9 +65,9 @@
   .tx-table-wrap {
     width: 100%;
     overflow-x: auto;
-    border: 1px solid #345064;
+    border: 1px solid #3c518b;
     border-radius: 10px;
-    background: #0f1a22;
+    background: #0d1430;
   }
 
   table.tx-table {
@@ -65,29 +79,32 @@
   .tx-table th,
   .tx-table td {
     padding: 10px 12px;
-    border-bottom: 1px solid #2c3e4b;
+    border-bottom: 1px solid #2f416d;
     white-space: nowrap;
     font-size: 0.95rem;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
   }
 
   .tx-table th {
-    color: #bcd8e8;
+    color: #d7e2ff;
     text-align: left;
-    background: #111c25;
+    background: #111a3a;
     position: sticky;
     top: 0;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-weight: 700;
   }
 
   .tx-table tbody tr:hover {
-    background: #152532;
+    background: #1a2853;
   }
 
   .tx-table tbody tr:nth-child(odd) {
-    background: #101a23;
+    background: #0e1634;
   }
 
   .tx-table tbody tr:nth-child(even) {
-    background: #13202b;
+    background: #121d42;
   }
 
   .tx-table td:last-child {
@@ -127,7 +144,7 @@
   }
 
   .amount-cur {
-    color: #bcd8e8;
+    color: #c7d6ff;
   }
 
 

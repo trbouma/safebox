@@ -5,6 +5,19 @@
 {{ super() }}
 
 <style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
   .rc-page {
     min-height: 100vh;
     display: flex;
@@ -12,39 +25,40 @@
     justify-content: center;
     padding: 24px;
     background:
-      radial-gradient(circle at 20% 15%, #183a43 0%, transparent 38%),
-      radial-gradient(circle at 90% 90%, #3d2f22 0%, transparent 36%),
-      linear-gradient(145deg, #0f1a22 0%, #111821 100%);
-    color: #e8f0f4;
+      radial-gradient(circle at 20% 15%, rgba(82, 103, 236, 0.22) 0%, transparent 38%),
+      radial-gradient(circle at 90% 90%, rgba(0, 0, 96, 0.55) 0%, transparent 36%),
+      linear-gradient(145deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+    color: var(--sb-text-main);
   }
 
   .rc-card {
     width: 100%;
     max-width: 760px;
-    border: 1px solid #2f3d48;
+    border: 1px solid var(--sb-panel-border);
     border-radius: 18px;
-    background: #17232d;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    background: var(--sb-panel);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
     padding: 24px;
   }
 
   .rc-title {
     margin: 0 0 8px;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
     font-size: clamp(1.7rem, 2.8vw, 2.3rem);
   }
 
   .rc-subtitle {
     margin: 0 0 16px;
-    color: #b7c9d3;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     line-height: 1.45;
   }
 
   .rc-label {
     display: block;
     margin: 0 0 8px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-weight: 700;
     font-size: 0.92rem;
   }
@@ -53,11 +67,11 @@
   .rc-textarea {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid #35506a;
+    border: 1px solid #39497a;
     border-radius: 12px;
-    background: #111c25;
-    color: #dce8f0;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    background: #0d1430;
+    color: #e2e8ff;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 1rem;
     padding: 12px 14px;
   }
@@ -69,9 +83,9 @@
 
   .rc-input:focus,
   .rc-textarea:focus {
-    outline: 2px solid #4f8cb2;
+    outline: 2px solid var(--sb-brand-blue-1);
     outline-offset: 1px;
-    border-color: #5aa0cd;
+    border-color: var(--sb-brand-blue-1);
   }
 
   .rc-row {
@@ -85,8 +99,8 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
-    color: #c8d8e1;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    color: var(--sb-text-sub);
     font-size: 0.92rem;
   }
 
@@ -95,27 +109,27 @@
     border: 0;
     border-radius: 12px;
     padding: 12px 14px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 800;
     cursor: pointer;
     margin-top: 8px;
   }
 
   .rc-btn-primary {
     color: #fff;
-    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
   }
 
   .rc-btn-secondary {
-    color: #cbe4f2;
-    background: #1a2a36;
-    border: 1px solid #375368;
+    color: #d9e2ff;
+    background: rgba(82, 103, 236, 0.12);
+    border: 1px solid #435ca1;
   }
 
   .rc-divider {
     border: 0;
-    border-top: 1px solid #2c3e4b;
+    border-top: 1px solid #2f416d;
     margin: 18px 0;
   }
 </style>

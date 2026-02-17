@@ -5,6 +5,19 @@
 {{ super() }}
 
 <style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
   .wb-page {
     min-height: 100vh;
     display: flex;
@@ -12,10 +25,10 @@
     justify-content: center;
     padding: 24px;
     background:
-      radial-gradient(circle at 15% 20%, #163941 0%, transparent 40%),
-      radial-gradient(circle at 85% 85%, #3b2a1a 0%, transparent 35%),
-      linear-gradient(140deg, #0f1a22 0%, #10151b 100%);
-    color: #e8f0f4;
+      radial-gradient(circle at 15% 20%, rgba(82, 103, 236, 0.22) 0%, transparent 38%),
+      radial-gradient(circle at 85% 82%, rgba(0, 0, 96, 0.55) 0%, transparent 36%),
+      linear-gradient(140deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+    color: var(--sb-text-main);
   }
 
   .wb-shell {
@@ -27,35 +40,39 @@
   }
 
   .wb-panel {
-    border: 1px solid #2f3d48;
+    border: 1px solid var(--sb-panel-border);
     border-radius: 18px;
-    background: #17232d;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    background: var(--sb-panel);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
     padding: 24px;
   }
 
   .wb-brand h1 {
     margin: 0 0 10px;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
     font-size: clamp(1.8rem, 3.2vw, 2.6rem);
     line-height: 1.1;
+    text-align: center;
+    letter-spacing: 0.01em;
   }
 
   .wb-brand p {
     margin: 0 0 18px;
-    color: #b5c9d5;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     line-height: 1.5;
+    text-align: center;
   }
 
   .wb-badge {
     display: inline-block;
     padding: 8px 14px;
     border-radius: 999px;
-    background: #1f3a2f;
-    color: #bde8d5;
-    border: 1px solid #35624e;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    background: rgba(82, 103, 236, 0.16);
+    color: #d8e0ff;
+    border: 1px solid rgba(82, 103, 236, 0.52);
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 0.85rem;
     margin-bottom: 16px;
   }
@@ -66,11 +83,15 @@
     height: auto;
     margin: 10px auto 0;
     border-radius: 14px;
+    background: var(--sb-brand-light);
+    border: 1px solid #d6dcf4;
+    padding: 12px;
   }
 
   .wb-card-title {
     margin: 0 0 14px;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 800;
     font-size: 1.45rem;
   }
 
@@ -81,7 +102,7 @@
   .wb-label {
     display: block;
     margin-bottom: 8px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-weight: 700;
     font-size: 0.92rem;
   }
@@ -89,13 +110,13 @@
   .wb-input {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid #35506a;
+    border: 1px solid #39497a;
     border-radius: 12px;
-    background: #111c25;
+    background: #0d1430;
     padding: 12px 14px;
     font-size: 1rem;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
-    color: #dce8f0;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    color: #e2e8ff;
   }
 
   .wb-input-wrap {
@@ -121,7 +142,7 @@
     transform: translateY(-50%);
     border: 0;
     background: transparent;
-    color: #9ec3d8;
+    color: #b8c8ff;
     border-radius: 8px;
     width: 30px;
     height: 30px;
@@ -157,9 +178,9 @@
   }
 
   .wb-input:focus {
-    outline: 2px solid #4f8cb2;
+    outline: 2px solid var(--sb-brand-blue-1);
     outline-offset: 1px;
-    border-color: #5aa0cd;
+    border-color: var(--sb-brand-blue-1);
   }
 
   .wb-checkline {
@@ -167,8 +188,28 @@
     gap: 8px;
     align-items: flex-start;
     margin: 10px 0 14px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 0.92rem;
+    color: var(--sb-text-sub);
+  }
+
+  .wb-code-box {
+    border: 1px solid #3a4f86;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 10px 0 0;
+    margin-bottom: 12px;
+  }
+
+  .wb-code-box .wb-label {
+    margin: 0 12px 8px;
+  }
+
+  .wb-code-box .wb-input,
+  .wb-code-box input.wb-input[type="text"] {
+    width: 100% !important;
+    max-width: 100%;
+    margin: 0;
   }
 
   .wb-btn {
@@ -176,21 +217,21 @@
     border: 0;
     border-radius: 12px;
     padding: 12px 14px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 800;
     cursor: pointer;
   }
 
   .wb-btn-primary {
-    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
     color: #fff;
   }
 
   .wb-btn-secondary {
-    background: #1a2a36;
-    color: #cbe4f2;
-    border: 1px solid #375368;
+    background: rgba(82, 103, 236, 0.12);
+    color: #d9e2ff;
+    border: 1px solid #435ca1;
   }
 
   .wb-actions {
@@ -201,41 +242,41 @@
   }
 
   .wb-actions a {
-    color: #89c8e7;
+    color: #a6beff;
     text-decoration: none;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 0.93rem;
   }
 
   .wb-divider {
     border: 0;
-    border-top: 1px solid #2c3e4b;
+    border-top: 1px solid #2f416d;
     margin: 16px 0;
   }
 
   .wb-log {
     min-height: 72px;
-    border: 1px solid #355066;
+    border: 1px solid #3c518b;
     border-radius: 10px;
-    background: #0f1a22;
+    background: #0d1430;
     padding: 10px 12px;
     white-space: pre-wrap;
     font-family: "Courier New", monospace;
     font-size: 0.83rem;
-    color: #b8d8ea;
+    color: #cad9ff;
     overflow-wrap: anywhere;
   }
 
   .wb-foot {
     margin-top: 14px;
-    font-family: "Trebuchet MS", Tahoma, sans-serif;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
     font-size: 0.86rem;
-    color: #a4bdc9;
+    color: #aebbe7;
     line-height: 1.5;
   }
 
   .wb-foot a {
-    color: #8cc6e2;
+    color: #a6beff;
     text-decoration: none;
   }
 
@@ -329,8 +370,6 @@ function toggleAccessKeyVisibility() {
     </article>
 
     <article class="wb-panel">
-      <h2 class="wb-card-title">Access Your Safebox</h2>
-
       <form class="wb-form" action="/safebox/login" method="POST" autocomplete="on">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="wb-label" for="access_key">Access Key</label>
@@ -355,29 +394,29 @@ function toggleAccessKeyVisibility() {
       <hr class="wb-divider">
 
       <form class="wb-form" action="/onboard/website" method="POST" autocomplete="off">
-        <label class="wb-label" for="invite_code">Invite Code</label>
-        <input class="wb-input" type="text" id="invite_code" name="invite_code" placeholder="Enter invite code">
+        <div class="wb-code-box">
+          <label class="wb-label" for="invite_code">Invite Code</label>
+          <input class="wb-input" type="text" id="invite_code" name="invite_code" placeholder="Enter Invite Code">
+        </div>
         <label class="wb-checkline" for="non_custodial">
           <input type="checkbox" id="non_custodial" name="non_custodial" value="true">
           <span>I want a non-custodial private key (Danger).</span>
         </label>
-        <button class="wb-btn wb-btn-secondary" type="submit">Create Safebox</button>
+        <button class="wb-btn wb-btn-primary" type="submit">Create Safebox</button>
       </form>
 
-      <div class="wb-actions">
-        <a href="/recover">Recover</a>
-        <a href="https://github.com/trbouma">Verify the Code</a>
-      </div>
-
-      <hr class="wb-divider">
-
-      <button class="wb-btn wb-btn-secondary" type="button" onclick="loginwithNFC()">Login with NFC</button>
+      <button class="wb-btn wb-btn-primary" type="button" onclick="loginwithNFC()">Login with NFC</button>
       <pre id="log" class="wb-log" aria-live="polite"></pre>
 
       <div class="wb-foot">
         Follow updates
         <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a> and
         <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a>.
+      </div>
+
+      <div class="wb-actions">
+        <a href="/recover">Recover</a>
+        <a href="https://github.com/trbouma">Verify the Code</a>
       </div>
     </article>
   </section>

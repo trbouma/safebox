@@ -1547,20 +1547,25 @@ class Acorn:
         pass
 
     async def check_lock(self):
+        lock_value = "FALSE"
         try:
             lock_value = await self.get_wallet_info("lock")
             # print(lock_value)
         except Exception as e:
-            self.logger.error(f"Check lock error {e}")
+            self.logger.debug("Check lock fallback; lock record unavailable: %s", e)
         
-        return True if lock_value == "TRUE" else False
+        return str(lock_value).upper().strip() == "TRUE"
 
     async def acquire_lock(self, attempts=10):
         loop_count = 0
-        lock_value = await self.get_wallet_info(label="lock")
+        try:
+            lock_value = await self.get_wallet_info(label="lock")
+        except Exception as e:
+            self.logger.debug("Lock record missing/unreadable; defaulting to unlocked: %s", e)
+            lock_value = "FALSE"
 
         
-        if lock_value.upper().strip() == "TRUE":
+        if str(lock_value).upper().strip() == "TRUE":
             
             print("already locked, now waiting...")
             
@@ -1574,9 +1579,13 @@ class Acorn:
                     await self.set_wallet_info(label="lock",label_info="FALSE")
                     break
                     # raise Exception(f"Could not acquire lock after {timeout} attempts")
-                lock_value = await self.get_wallet_info(label="lock")
+                try:
+                    lock_value = await self.get_wallet_info(label="lock")
+                except Exception as e:
+                    self.logger.debug("Lock poll failed; assuming unlocked for recovery: %s", e)
+                    lock_value = "FALSE"
                 print(f"{lock_value} attempt {loop_count} of {attempts} attempts for {self.handle}")
-                if lock_value.upper().strip() != 'TRUE':
+                if str(lock_value).upper().strip() != 'TRUE':
                     await self.set_wallet_info(label="lock",label_info="TRUE")
                     print("we can acquire the lock!")
                     break
@@ -2228,7 +2237,7 @@ class Acorn:
             await self.add_proofs_obj(proof_objs)
             await self.release_lock()
         except Exception as e:
-          raise Exception("Error in mint_proofs {e}")  
+          raise RuntimeError(f"Error in mint_proofs {e}") from e
         
         finally:
             await self.release_lock()
