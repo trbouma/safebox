@@ -1,21 +1,34 @@
 /* Shared modern dark-first theme for /records templates */
 
+:root {
+  --sb-brand-navy: #000060;
+  --sb-brand-light: #f6f6f6;
+  --sb-brand-blue-1: #5267ec;
+  --sb-brand-blue-2: #5369ec;
+  --sb-bg-deep: #090c1a;
+  --sb-bg-mid: #0d1124;
+  --sb-panel: #121a33;
+  --sb-panel-border: #2f3d67;
+  --sb-text-main: #eef2ff;
+  --sb-text-sub: #bcc7ec;
+}
+
 body {
   background:
-    radial-gradient(circle at 12% 12%, #173a42 0%, transparent 32%),
-    radial-gradient(circle at 88% 88%, #3b2e1f 0%, transparent 30%),
-    linear-gradient(145deg, #0f1a22 0%, #111821 100%);
-  color: #e8f0f4;
+    radial-gradient(circle at 12% 12%, rgba(82, 103, 236, 0.22) 0%, transparent 34%),
+    radial-gradient(circle at 88% 88%, rgba(0, 0, 96, 0.55) 0%, transparent 32%),
+    linear-gradient(145deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+  color: var(--sb-text-main);
 }
 
 .center-text {
   max-width: 920px;
   margin: 0 auto;
   padding: 18px;
-  border: 1px solid #2f3d48;
+  border: 1px solid var(--sb-panel-border);
   border-radius: 16px;
-  background: #17232d;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  background: var(--sb-panel);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
 }
 
 /* Consistent vertical rhythm inside records panels */
@@ -35,40 +48,45 @@ body {
 }
 
 .card {
-  border: 1px solid #2f4657;
+  border: 1px solid #3b5187;
   border-radius: 14px;
-  background: #13202a;
+  background: #0f1735;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
 }
 
 .card-title {
-  color: #e7f4fb;
+  color: var(--sb-text-main);
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  font-weight: 700;
 }
 
 .card-content {
-  color: #c7dbe7;
+  color: #cad9ff;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
 }
 
 h1, h2, h3, h4, h5, p, span, label, pre, li {
-  color: #e8f0f4;
+  color: var(--sb-text-main);
 }
 
 a {
-  color: #8ec9e7;
+  color: #a6beff;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
 }
 
 hr {
   border: 0;
-  border-top: 1px solid #2c3e4b;
+  border-top: 1px solid #2f416d;
   margin: 16px 0;
 }
 
 button {
-  background: linear-gradient(135deg, #196c96, #1f8aa8);
+  background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
   color: #ffffff;
   border: 0;
   border-radius: 12px;
-  font-weight: 700;
+  font-weight: 800;
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
 }
 
 button:hover {
@@ -80,12 +98,13 @@ input[type="number"],
 input[type="password"],
 textarea,
 select {
-  background: #111c25;
-  color: #dce8f0;
-  border: 1px solid #35506a;
+  background: #0d1430;
+  color: #e2e8ff;
+  border: 1px solid #39497a;
   border-radius: 10px;
   padding: 10px 12px;
   box-sizing: border-box;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
 }
 
 textarea {
@@ -97,38 +116,41 @@ input[type="number"]:focus,
 input[type="password"]:focus,
 textarea:focus,
 select:focus {
-  outline: 2px solid #4f8cb2;
+  outline: 2px solid var(--sb-brand-blue-1);
   outline-offset: 1px;
-  border-color: #5aa0cd;
+  border-color: var(--sb-brand-blue-1);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  border: 1px solid #2f4657;
+  border: 1px solid #3b5187;
   border-radius: 12px;
   overflow: hidden;
 }
 
 th, td {
-  border-bottom: 1px solid #2a3d4b;
+  border-bottom: 1px solid #2f416d;
   padding: 10px;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
 }
 
 th {
-  background: #1a2b37;
-  color: #d7ebf6;
+  background: #111a3a;
+  color: #d7e2ff;
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  font-weight: 700;
 }
 
 td {
-  background: #14232d;
+  background: #0f1735;
 }
 
 pre {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #b8d8ea;
+  color: #cad9ff;
   padding: 4px 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
