@@ -52,17 +52,24 @@ body {
   border-radius: 14px;
   background: #0f1735;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  padding: 14px;
+  margin: 12px auto 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .card-title {
   color: var(--sb-text-main);
   font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
   font-weight: 700;
+  margin-bottom: 8px;
 }
 
 .card-content {
   color: #cad9ff;
   font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 h1, h2, h3, h4, h5, p, span, label, pre, li {
@@ -87,6 +94,14 @@ button {
   border-radius: 12px;
   font-weight: 800;
   font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  width: 90%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  min-height: 44px;
+  line-height: 1.2;
 }
 
 button:hover {

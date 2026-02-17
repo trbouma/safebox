@@ -35,11 +35,17 @@
   }
 
   .center-text > * + * {
-    margin-top: 12px;
+    margin-top: 10px;
+  }
+
+  /* Legacy layout uses many direct-child <br> nodes; neutralize them */
+  .center-text > br,
+  .center-text > br + br {
+    margin-top: 0 !important;
   }
 
   .center-text form > * + * {
-    margin-top: 10px;
+    margin-top: 8px;
   }
 
   .balance-currency-selector {
@@ -160,7 +166,37 @@
   .center-text br {
     display: block;
     content: "";
+    margin-top: 4px;
+  }
+
+  .center-text button + br {
+    margin-top: 0;
+  }
+
+  .center-text br + button {
+    margin-top: 4px;
+  }
+
+  .center-text button + br + br {
+    margin-top: 0;
+  }
+
+  .center-text button + br + br + button {
+    margin-top: 4px;
+  }
+
+  .center-text > button {
+    margin-top: 6px;
+  }
+
+  .btn-stack {
+    display: grid;
+    gap: 6px;
     margin-top: 8px;
+  }
+
+  .btn-stack button {
+    margin-top: 0 !important;
   }
 
   .numpad-overlay {
@@ -1183,30 +1219,29 @@ function getInvoiceStatus(ln_invoice_status) {
   
   {% endif %}
 
-  <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
-  <br><br>  
-  <button onclick="doAccountHistory()">Account History</button>
+  <div class="btn-stack">
+    <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
+    <button onclick="doAccountHistory()">Account History</button>
+  </div>
   <pre id="pay_to_message">Ready.</pre>
   
   <hr>
 
   <h2>My Records</h2>
-  <button id="my_personal_messages_button" onclick="personalMessages()" >Private Messages</button>
-  <br><br>
-  <button id="my_private_data_button" onclick="privateData()" >My Notes</button>
-  <br><br>
-  <button id="my_personal_records_button" onclick="myRecords()" >My Records</button>
+  <div class="btn-stack">
+    <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
+    <button id="my_private_data_button" onclick="privateData()">My Notes</button>
+    <button id="my_personal_records_button" onclick="myRecords()">My Records</button>
+  </div>
 
   
   <hr>
   <h2>Community</h2>
-  <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Record</button>  
-  <br>
-  <br>
-  <button id="my_credentials_button" onclick="requestRecord()" >Request a Record</button> 
-  <br>
-  <br>
-  <button id="onboard_button" onclick="onboardFriend()" >Onboard a Member</button>
+  <div class="btn-stack">
+    <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
+    <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
+    <button id="onboard_button" onclick="onboardFriend()">Onboard a Member</button>
+  </div>
 
 
   <hr>
@@ -1270,15 +1305,13 @@ function getInvoiceStatus(ln_invoice_status) {
   <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
   
   
-  <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
-  <br><br>
-  <button id="issue_card" onclick="issueCard()" >Issue Card</button>
-  <br><br>
-  <button onclick="attest()">Attest</button> 
-  <br><br>
-  <button onclick="trust()">Trust</button> 
-  <br><br>
-  <button id="logout_button"onclick="logout()" >Logout</button>
+  <div class="btn-stack">
+    <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
+    <button id="issue_card" onclick="issueCard()">Issue Card</button>
+    <button onclick="attest()">Attest</button>
+    <button onclick="trust()">Trust</button>
+    <button id="logout_button" onclick="logout()">Logout</button>
+  </div>
   <br>
   <hr>
  

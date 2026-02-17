@@ -370,7 +370,7 @@ function toggleAccessKeyVisibility() {
     </article>
 
     <article class="wb-panel">
-      <form class="wb-form" action="/safebox/login" method="POST" autocomplete="on">
+      <form class="wb-form" action="/safebox/login" method="POST" autocomplete="on" hx-boost="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="wb-label" for="access_key">Access Key</label>
         <div class="wb-input-wrap">
