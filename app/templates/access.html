@@ -157,12 +157,6 @@
     height: auto;
   }
 
-  hr {
-    border: 0;
-    border-top: 1px solid #2f416d;
-    margin: 16px 0;
-  }
-
   .center-text br {
     display: block;
     content: "";
@@ -197,6 +191,14 @@
 
   .btn-stack button {
     margin-top: 0 !important;
+  }
+
+  .account-box {
+    border: 1px solid #3c518b;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 12px;
+    margin-top: 10px;
   }
 
   .numpad-overlay {
@@ -540,24 +542,33 @@ alert("Npub copied to clipboard!");
 }
 
 async function useClipboard() {
-  try {
-    const clipboard_data = (await navigator.clipboard.readText()).trim();
-    if (!clipboard_data) {
-      userMessage("Clipboard is empty.", "ERROR");
+  async function submitScanData(rawData) {
+    const tokenData = (rawData || "").trim();
+    if (!tokenData) {
+      userMessage("No token provided.", "ERROR");
       return;
     }
-
     await fetch('/scanner/scanresult', {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ data: clipboard_data })
+      body: JSON.stringify({ data: tokenData })
     }).then((response) => {
       if (response.redirected) {
         window.location.href = response.url;
       }
     });
+  }
+
+  try {
+    const clipboard_data = await navigator.clipboard.readText();
+    await submitScanData(clipboard_data);
   } catch (error) {
-    userMessage("Unable to read clipboard.", "ERROR");
+    const manualPaste = prompt("Clipboard read is blocked by your browser. Paste token here:");
+    if (manualPaste === null) {
+      userMessage("Clipboard read blocked. No token pasted.", "ERROR");
+      return;
+    }
+    await submitScanData(manualPaste);
   }
 }
 async function copyAddress() {
@@ -1139,26 +1150,27 @@ function getInvoiceStatus(ln_invoice_status) {
 {% block page_content %}
 <div class="center-text">
 
-  
-  <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
-  <p id="heading_balance" style="margin: 0;">({{ "\u20BF" + "{:,}".format(acorn.balance)}})</p>
-    <select class="balance-currency-selector" id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
-      {% for entry in currencies %}
-      <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
-      {% endfor %}
-  </select>
-  <br>
+  <div class="account-box">
+    <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
+    <p id="heading_balance" style="margin: 0;">({{ "\u20BF" + "{:,}".format(acorn.balance)}})</p>
+      <select class="balance-currency-selector" id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
+        {% for entry in currencies %}
+        <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
+        {% endfor %}
+    </select>
+    <br>
 
-  <span id="payment_notification">
-    {{ action_comment if action_comment else ""}}
-  </span>  
-  
-  {% if onboard == true %}
-  Welcome! Please see the <a href="#fine-print">fine print</a> below.
-  <br><br>
-  {% endif %}
-  <button id="ln_scan_button" onclick="scanCode()">Scan</button>
-  <br>
+    <span id="payment_notification">
+      {{ action_comment if action_comment else ""}}
+    </span>  
+    
+    {% if onboard == true %}
+    Welcome! Please see the <a href="#fine-print">fine print</a> below.
+    <br><br>
+    {% endif %}
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br>
+  </div>
 
   {% if action_mode == "lninvoice" %}
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
@@ -1170,12 +1182,10 @@ function getInvoiceStatus(ln_invoice_status) {
     <br><br>
   {% else %}
     {% if action_mode != "lnaddress" %}
-    <h2 style="margin: 0;">Receive a Payment</h2>
-      <br>
+    <div class="account-box">
+      <h2 style="margin: 0;">Request a Payment</h2>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
-      <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
-      <br>
       <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
       <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
@@ -1183,76 +1193,75 @@ function getInvoiceStatus(ln_invoice_status) {
        <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>   
-      <br><br>
       <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <br><br>              
+      <br>
       <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
-      <br><br>
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
       Request by NFC
       </label>
       <pre id="log"></pre>
-      <br>
-
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
+    </div>
     
     {% endif %}
 
-    <hr>
-    <h2 style="margin: 0;">Make a Payment</h2>
-    <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
-    <datalist id="contacts">
-              <option value="NFC Tag"></option>
-             
-    </datalist>
-    <br>
-   
-    <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
-    
-    <select id="ln_select_currency" name="ln_select_currency"> 
-      <option value="SAT" >SAT</option>            
-      {% for each in currencies %}     
-       <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
-      {% endfor %}
-    </select>
-    <br>
-    
-    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
-    <br>
-    <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
-    <br>
+    <div class="account-box">
+      <h2 style="margin: 0;">Make a Payment</h2>
+      <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
+      <datalist id="contacts">
+                <option value="NFC Tag"></option>
+               
+      </datalist>
+      <br>
+     
+      <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
+      
+      <select id="ln_select_currency" name="ln_select_currency"> 
+        <option value="SAT" >SAT</option>            
+        {% for each in currencies %}     
+         <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
+        {% endfor %}
+      </select>
+      <br>
+      
+      <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <br>
+      <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
+      <br>
 
   
   {% endif %}
 
-  <div class="btn-stack">
-    <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
-    <button onclick="doAccountHistory()">Account History</button>
+    <div class="btn-stack">
+      <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
+      <button onclick="doAccountHistory()">Account History</button>
+    </div>
+    <pre id="pay_to_message">Ready.</pre>
   </div>
-  <pre id="pay_to_message">Ready.</pre>
   
-  <hr>
 
-  <h2>My Records</h2>
-  <div class="btn-stack">
-    <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
-    <button id="my_private_data_button" onclick="privateData()">My Notes</button>
-    <button id="my_personal_records_button" onclick="myRecords()">My Records</button>
+  <div class="account-box">
+    <h2>My Records</h2>
+    <div class="btn-stack">
+      <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
+      <button id="my_private_data_button" onclick="privateData()">My Notes</button>
+      <button id="my_personal_records_button" onclick="myRecords()">My Records</button>
+    </div>
   </div>
 
   
-  <hr>
-  <h2>Community</h2>
-  <div class="btn-stack">
-    <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
-    <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
-    <button id="onboard_button" onclick="onboardFriend()">Onboard a Member</button>
+  <div class="account-box">
+    <h2>Community</h2>
+    <div class="btn-stack">
+      <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
+      <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
+      <button id="onboard_button" onclick="onboardFriend()">Onboard a Member</button>
+    </div>
   </div>
 
 
-  <hr>
 
   
 
@@ -1305,23 +1314,23 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   </div>
-  <hr>
-  <h2>My Account</h2>
-  <p>My access_key: </b></p>
-  <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
-  <p>My recovery phrase: <br> 
-  <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
-  
-  
-  <div class="btn-stack">
-    <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
-    <button id="issue_card" onclick="issueCard()">Issue Card</button>
-    <button onclick="attest()">Attest</button>
-    <button onclick="trust()">Trust</button>
-    <button id="logout_button" onclick="logout()">Logout</button>
+  <div class="account-box">
+    <h2>My Account</h2>
+    <p>My access_key: </b></p>
+    <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
+    <p>My recovery phrase: <br> 
+    <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
+    
+    
+    <div class="btn-stack">
+      <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
+      <button id="issue_card" onclick="issueCard()">Issue Card</button>
+      <button onclick="attest()">Attest</button>
+      <button onclick="trust()">Trust</button>
+      <button id="logout_button" onclick="logout()">Logout</button>
+    </div>
   </div>
   <br>
-  <hr>
  
  {% if onboard == true %}
  <h2 id="fine-print" >The Fine Print</h2>
@@ -1329,24 +1338,26 @@ function getInvoiceStatus(ln_invoice_status) {
  <p>You are automatically and securely logged in! Write down your access key as soon as you can. You can find your access key and recovery phrase above. By continuing, you have agreed to the terms and conditions of this awesome experimental service! </p>
  {% endif %}
 
-  <h2>Technical Info</h2>
+  <div class="account-box">
+    <h2>Technical Info</h2>
 
-  <br>Mode: {{action_mode}} Data: {{action_data}}
-  <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
-  <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
-  <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
-  <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
-  <br>home relay: {{acorn.home_relay}}
-  <br><br>
-  <a href="/public/rates">Exchange Rates</a>
-  <br><br>
-  <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
-  
-  <br><br>
-  
-  
-  
-  <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+    <br>Mode: {{action_mode}} Data: {{action_data}}
+    <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+    <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
+    <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
+    <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
+    <br>home relay: {{acorn.home_relay}}
+    <br><br>
+    <a href="/public/rates">Exchange Rates</a>
+    <br><br>
+    <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
+    
+    <br><br>
+    
+    
+    
+    <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+  </div>
 
 
             

@@ -2260,19 +2260,23 @@ class Acorn:
         self.logger.debug(f"mint quote: {url}")
 
         headers = { "Content-Type": "application/json"}
-        response = requests.get(url, headers=headers)
-           
-        mint_quote = mintQuote(**response.json())
-        if mint_quote.paid == True:
-                print("let's to do the mint!")
-                success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
-                lninvoice = mint_quote.request
+        timeout = httpx.Timeout(10.0, connect=5.0)
 
-                    
-                    
-                # return mint_quote.paid
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                mint_quote = mintQuote(**response.json())
+        except (httpx.HTTPError, ValueError) as exc:
+            self.logger.warning("check_quote failed for quote=%s: %s", quote, exc)
+            return False, None
+
+        if mint_quote.paid == True:
+            print("let's to do the mint!")
+            success_mint = await self._mint_proofs(mint_quote.quote, amount, mint)
+            lninvoice = mint_quote.request
         else:
-                success_mint = False
+            success_mint = False
       
 
         return success_mint, lninvoice
@@ -2291,14 +2295,17 @@ class Acorn:
        
         headers = { "Content-Type": "application/json"}
         mint_request = mintRequest(amount=amount)
-        mint_request_dump = mint_request.model_dump()
         payload_json = mint_request.model_dump_json()
-        response = requests.post(url, data=payload_json, headers=headers)
-        # print(response.json())
-        mint_quote = mintQuote(**response.json())
-        # print(mint_quote)
-        invoice = response.json()['request']
-        quote = response.json()['quote']
+        timeout = httpx.Timeout(10.0, connect=5.0)
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, data=payload_json, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+
+        mint_quote = mintQuote(**response_json)
+        invoice = response_json['request']
+        quote = response_json['quote']
         print(f"invoice: {invoice}") 
         # print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
@@ -2346,28 +2353,24 @@ class Acorn:
     
     async def poll_for_payment(self, quote:str, amount: int, mint:str=None):
         start_time = time()  # Record the start time
-        end_time = start_time + 120  # Set the loop to run for 60 seconds
+        end_time = start_time + 120  # Set the loop to run for 120 seconds
         success = False
         lninvoice = None
         #FIXME figure out the prefit
-        mint = mint.replace("https://","")
-        try:
-            while time() < end_time:
-                
-                self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
-                success, lninvoice = await self.check_quote(quote=quote, amount=amount,mint=mint)
-                if success:
-                    self.logger.debug("quote is paid!")
-                    break
-                sleep(3)  # Sleep for 3 seconds
-            
-            self.logger.debug("polling done!")
+        if mint:
+            mint = mint.replace("https://","")
 
-            if time() > end_time:
-                raise Exception(f"Polling has timed out!"
-                                )
-        except Exception as e:
-            raise Exception(f"Error in poll_for_payment {e}")
+        while time() < end_time:
+            self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
+            success, lninvoice = await self.check_quote(quote=quote, amount=amount, mint=mint)
+            if success:
+                self.logger.debug("quote is paid!")
+                break
+            await asyncio.sleep(3)
+
+        self.logger.debug("polling done!")
+        if not success:
+            raise TimeoutError("Polling has timed out.")
         return success, lninvoice
         
     
