@@ -2141,15 +2141,19 @@ class Acorn:
         try:
             await self.acquire_lock()
             headers = { "Content-Type": "application/json"}
+            timeout = httpx.Timeout(20.0, connect=5.0)
             if mint:
                 keyset_url = f"https://{mint}/v1/keysets"
             else:
                 keyset_url = f"{self.home_mint}/v1/keysets"
 
-            response = requests.get(keyset_url, headers=headers)
-            keyset = response.json()['keysets'][0]['id']
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(keyset_url, headers=headers)
+                response.raise_for_status()
+                keysets_json = response.json()
 
-            keysets_obj = KeysetsResponse(**response.json())
+                keyset = keysets_json['keysets'][0]['id']
+                keysets_obj = KeysetsResponse(**keysets_json)
 
             if mint:
                 self.known_mints[keysets_obj.keysets[0].id]= f"https://{mint}"
@@ -2190,8 +2194,10 @@ class Acorn:
                             }
             # print(request_body)
             
-            response = requests.post(mint_url, json=request_body, headers=headers)
-            promises = response.json()['signatures']
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(mint_url, json=request_body, headers=headers)
+                response.raise_for_status()
+                promises = response.json()['signatures']
                 # print("promises:", promises)
            
 
@@ -2201,8 +2207,10 @@ class Acorn:
             else:
                 mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
 
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(mint_key_url, headers=headers)
+                response.raise_for_status()
+                keys = response.json()["keysets"][0]["keys"]
 
             proof_objs = []
             i = 0
@@ -2705,6 +2713,7 @@ class Acorn:
         final_fees = 0
 
         try:
+            timeout = httpx.Timeout(30.0, connect=5.0)
             # await self.acquire_lock()
             callback, safebox, nonce = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
@@ -2716,7 +2725,10 @@ class Acorn:
                 local_part = ln_parts[0]
                 safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
                 print(f"safebox to call {safebox_to_call}")
-                response = requests.get(safebox_to_call).json()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(safebox_to_call)
+                    response.raise_for_status()
+                    response = response.json()
                 pubkey = response.get("pubkey",None)
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
@@ -2801,9 +2813,10 @@ class Acorn:
                                             "options": {"mpp": {"amount": amount_to_use}}
                                     }
                         # print(f"{melt_quote_url, melt_url} {data_to_send}")
-                        
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-                        post_melt_response = PostMeltQuoteResponse(**response.json())
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            post_melt_response = PostMeltQuoteResponse(**response.json())
                         print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
 
                         # Now need to figure out how much can be paid based on case
@@ -2829,9 +2842,10 @@ class Acorn:
                                         "unit": "sat",
                                         "options": {"mpp": {"amount": amount_to_pay}}
                                 }
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
-                        response.raise_for_status()
-                        post_melt_response = PostMeltQuoteResponse(**response.json())
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            post_melt_response = PostMeltQuoteResponse(**response.json())
                         print(f"adjusted post melt response {post_melt_response}")
                         amount_remaining = amount_remaining - amount_to_pay   
                         print(f"amount remaining after adjusted {amount_remaining}")                                   
@@ -2865,9 +2879,9 @@ class Acorn:
                                         "unit": "sat"
 
                                     }
-                
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
-                    response.raise_for_status()
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                        response.raise_for_status()
                     
 
                     # print("post melt response:", response.json())
@@ -2904,8 +2918,9 @@ class Acorn:
                                         "unit": "sat"
 
                                     }
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
-                        response.raise_for_status()
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
                         # print("post melt response:", response.json())
                         post_melt_response = PostMeltQuoteResponse(**response.json())
                         # print("mint response:", post_melt_response)
@@ -2969,9 +2984,10 @@ class Acorn:
                     
                     self.logger.debug(f"lightning payment we are here!: {data_to_send}")
                     try:
-                        response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
-                        response.raise_for_status()
-                    except requests.RequestException as e:
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                    except httpx.HTTPError as e:
                         raise RuntimeError(f"payment melt request failed: {e}") from e
                     
                     self.logger.debug(f"response json: {response.json()}")
@@ -3020,7 +3036,7 @@ class Acorn:
                 print("all done pay_multi")
                 print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
-        except (ValueError, RuntimeError, requests.RequestException) as e:
+        except (ValueError, RuntimeError, httpx.HTTPError) as e:
             await self.release_lock()
             final_fees = 0
             msg_out = f"There is an error sending the payment. Did it go through?"
@@ -3085,7 +3101,7 @@ class Acorn:
             mpp_mint_melt_request.append((melt_url,data_to_send))
             
         # print(mpp_mint_melt_request)
-        asyncio.run(self._do_mpp_requests(mpp_mint_melt_request)) 
+        await self._do_mpp_requests(mpp_mint_melt_request)
         print("we are done with the requests")
 
 
@@ -3098,17 +3114,19 @@ class Acorn:
         tasks = []
         for each_request in mpp_requests:
             print(f"do each request: {each_request}")
-            asyncio.create_task(self._post_request(each_request))
+            tasks.append(asyncio.create_task(self._post_request(each_request)))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         
         print("tasks have been completed!")
     
     async def _post_request(self,request_item):
-        response = requests.post(url=request_item[0], json=request_item[1])
-        return
-        async with httpx.AsyncClient() as client:
+        timeout = httpx.Timeout(30.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             print(f"doing each request: {request_item}")
-            response = client.post(url=request_item[0], json=request_item[1])
-        pass    
+            response = await client.post(url=request_item[0], json=request_item[1])
+            response.raise_for_status()
+        return
 
             
 
@@ -3127,6 +3145,7 @@ class Acorn:
         # decode amount from invoice
         try:
             await self.acquire_lock()
+            timeout = httpx.Timeout(30.0, connect=5.0)
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
             payment_hash = bolt11.decode(lninvoice).payment_hash
             description_hash = bolt11.decode(lninvoice).description_hash
@@ -3169,8 +3188,9 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
             self.logger.debug(f"post melt response: {response.json()}")
             # check reponse for error
             # print(f"mint response: {response.json()}")
@@ -3212,7 +3232,9 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
                 self.logger.debug(f"post melt response: {response.json()}")
                 post_melt_response = PostMeltQuoteResponse(**response.json())
                 self.logger.debug(f"mint response: {post_melt_response}")
@@ -3267,8 +3289,9 @@ class Acorn:
             
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=melt_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 
             payment_preimage = payment_json.get('payment_preimage', None)            
@@ -3310,7 +3333,7 @@ class Acorn:
             self.logger.info(msg_out)
             await self.write_proofs()
             await self.release_lock()
-        except (ValueError, RuntimeError, requests.RequestException) as e:
+        except (ValueError, RuntimeError, httpx.HTTPError) as e:
             # await self.release_lock()
             self.logger.error("Error in pay_multi_invoice: %s", e)
             # raise Exception(f"Error There is problem with the invoice payment {e}")
@@ -3420,11 +3443,14 @@ class Acorn:
         count = 0
         
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         
         #keyset_url = f"{self.mints[0]}/v1/keysets"
         keyset_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(keyset_url, headers=headers)
+            response.raise_for_status()
+            keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/swap"
         swap_proofs = []
@@ -3459,15 +3485,15 @@ class Acorn:
             } 
         
         try:
-                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                # print(response.json())
-                promises = response.json()['signatures']
-                # print("promises:", promises)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
+                    promises = response.json()['signatures']
 
-            
-                mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                    mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
                 new_proofs = []
                 i = 0
@@ -3621,6 +3647,7 @@ class Acorn:
         #TODO run swap_multi_each first to get rid of any potential doublespends
         #TODO figure out how to catch doublespends in this routine
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
@@ -3638,9 +3665,10 @@ class Acorn:
 
                 # print(mint_verify_url, check)
                 Ys = {"Ys": check}
-                
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
@@ -3693,15 +3721,15 @@ class Acorn:
             
                 # print(data_to_send)
             try:
-                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                # print(response.json())
-                promises = response.json()['signatures']
-                # print("promises:", promises)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
+                    promises = response.json()['signatures']
 
-            
-                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                    mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
                 proofs = []
                 proof_objs = []
@@ -3774,6 +3802,7 @@ class Acorn:
     async def swap_multi_each(self):
         #FIXME this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
@@ -3789,9 +3818,10 @@ class Acorn:
 
                 # print(mint_verify_url, check)
                 Ys = {"Ys": check}
-                
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
@@ -3807,8 +3837,10 @@ class Acorn:
                 each_keyset_url = self.known_mints[each_keyset]
 
                 mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(each_keyset,each_keyset_url)
                 swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
                 
@@ -3835,9 +3867,10 @@ class Acorn:
                     proof_objs = []
                     
                     try:
-                        response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                        # print(response.json())
-                        promises = response.json()['signatures']
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            promises = response.json()['signatures']
                         # print("promises:", promises)
                         
                         i = 0
@@ -4144,9 +4177,12 @@ class Acorn:
         count = 0
         
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_url = f"{self.known_mints[keyset_to_use]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(keyset_url, headers=headers)
+            response.raise_for_status()
+            keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.known_mints[keyset_to_use]}/v1/swap"
         checkstate_url = f"{self.known_mints[keyset_to_use]}/v1/checkstate"
@@ -4164,8 +4200,10 @@ class Acorn:
 
         data_to_send = {"Ys": checkstate_ys}  
         print(f"check state: {data_to_send}")
-        response = requests.post(url=checkstate_url, json=data_to_send, headers=headers)
-        print(response.json())
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url=checkstate_url, json=data_to_send, headers=headers)
+            response.raise_for_status()
+            print(response.json())
 
         # Figure out proofs_to_use_amount
         proofs_to_use_amount = 0
@@ -4217,16 +4255,15 @@ class Acorn:
 
         try:
             self.logger.debug("are we here?")
-            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-            
-            # print(response.json())
-            promises = response.json()['signatures']
-            # print("promises:", promises)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
+                promises = response.json()['signatures']
 
-        
-            mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
+                mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
+                response = await client.get(mint_key_url, headers=headers)
+                response.raise_for_status()
+                keys = response.json()["keysets"][0]["keys"]
             # print(keys)
             
             i = 0

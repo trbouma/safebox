@@ -709,7 +709,7 @@ async def ln_invoice_payment(   request: Request,
     
     
 
-    cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT )   
+    cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=sat_amount, mint=HOME_MINT)
 
     task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, tendered_amount= ln_invoice.amount, tendered_currency= ln_invoice.currency, comment=ln_invoice.comment, mint=HOME_MINT))
 
@@ -2048,7 +2048,7 @@ async def request_nfc_payment( request: Request,
     else:
         print("do lightning clearing")
         
-        cli_quote = acorn_obj.deposit(amount=final_amount, mint=HOME_MINT)
+        cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=final_amount, mint=HOME_MINT)
       
 
         # need to send off to the vault for processing

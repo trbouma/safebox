@@ -126,7 +126,7 @@ async def ln_invoice_payment(   request: Request,
     
     
 
-    cli_quote = acorn_obj.deposit(amount=sat_amount, mint=settings.HOME_MINT )   
+    cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=sat_amount, mint=settings.HOME_MINT)
 
     task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, tendered_amount= ln_invoice.amount, tendered_currency= ln_invoice.currency, comment=ln_invoice.comment, mint=settings.HOME_MINT))
 

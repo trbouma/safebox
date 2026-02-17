@@ -149,7 +149,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         
         cli_quote: cliQuote
         amount = instruction_obj['params']['amount']//1000
-        cli_quote = acorn_obj.deposit(amount, settings.HOME_MINT)
+        cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount, settings.HOME_MINT)
         invoice_decoded = bolt11.decode(cli_quote.invoice)
 
 
