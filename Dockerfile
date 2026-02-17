@@ -69,13 +69,6 @@ COPY pyproject.toml poetry.lock /app/
 RUN poetry install --only main --no-root --no-interaction
 COPY . /app
 
-RUN groupadd --system --gid 10001 appgroup \
- && useradd --system --uid 10001 --gid appgroup --create-home --home-dir /home/appuser appuser \
- && chown -R appuser:appgroup /app
-
-USER appuser
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:7375/ >/dev/null || exit 1
-
 
