@@ -540,16 +540,25 @@ alert("Npub copied to clipboard!");
 }
 
 async function useClipboard() {
+  try {
+    const clipboard_data = (await navigator.clipboard.readText()).trim();
+    if (!clipboard_data) {
+      userMessage("Clipboard is empty.", "ERROR");
+      return;
+    }
 
-  const clipboard_data = await navigator.clipboard.readText(); 
-  window.location.href="/scanner/scanresult?qr_code=" + clipboard_data; 
-
-
-
-
-
-
-
+    await fetch('/scanner/scanresult', {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ data: clipboard_data })
+    }).then((response) => {
+      if (response.redirected) {
+        window.location.href = response.url;
+      }
+    });
+  } catch (error) {
+    userMessage("Unable to read clipboard.", "ERROR");
+  }
 }
 async function copyAddress() {
 
@@ -918,10 +927,10 @@ function getlnPayStatus(ln_pay_status) {
   // var ln_pay_button = document.getElementById("ln_pay_button");
     console.log(ln_pay_status);
 
-    var status = JSON.stringify(ln_pay_status["detail"]);
     const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
-    // alert("Payment " + parsedObject.detail);
-    userMessage(parsedObject.detail);
+    const status = parsedObject.status || "INFO";
+    const detail = parsedObject.detail || "Payment request completed.";
+    userMessage(detail, status);
 
     // location.reload();
   
@@ -964,22 +973,21 @@ async function lnPayAddress() {
   console.log(submit_data);
     // ln_pay_button.textContent = "Please wait...";
 
-      await fetch('/safebox/payaddress', {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},        
-            body: JSON.stringify(submit_data)         
-          })
-        .then((response) => response.json())
-        .then((data) => getlnPayStatus(data));
-        //ln_pay_button.textContent = "Pay to Lightning Address!";
-        //ln_pay_button.disabled = false;
-        
-        // location.reload();
-        //window.location.href="/wallet/"
-
+      try {
+        await fetch('/safebox/payaddress', {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},        
+              body: JSON.stringify(submit_data)         
+            })
+          .then((response) => response.json())
+          .then((data) => getlnPayStatus(data));
+      } catch (error) {
+        userMessage("Payment request failed. Please try again.", "ERROR");
+      } finally {
         pay_button.textContent = old_text;
         pay_button.disabled = false;
         window.scrollTo({ top: 0, behavior: "smooth" });
+      }
 
 }
 
@@ -1168,7 +1176,7 @@ function getInvoiceStatus(ln_invoice_status) {
       <br>
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
       <br>
-      <input type="number" inputmode="decimal" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
+      <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
       <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
       {% for each in currencies %}     
@@ -1209,12 +1217,12 @@ function getInvoiceStatus(ln_invoice_status) {
        <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>
-    <br><br>
+    <br>
     
     <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
-    <br><br>
+    <br>
     <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
-    <br><br>
+    <br>
 
   
   {% endif %}
@@ -1265,7 +1273,7 @@ function getInvoiceStatus(ln_invoice_status) {
         inputmode="decimal"
         id="amount" 
         name="amount" 
-        step="0.01" 
+        step="any" 
         min="0" 
         required
         >
@@ -1370,6 +1378,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
 <script>
 let numpadTarget = null;
+let numpadValue = "";
 const isTouchPrimary = window.matchMedia("(pointer: coarse)").matches;
 
 function updateNumpadDisplay(value) {
@@ -1379,10 +1388,11 @@ function updateNumpadDisplay(value) {
 
 function openNumpad(inputEl) {
   numpadTarget = inputEl;
+  numpadValue = String(inputEl.value || "");
   const overlay = document.getElementById("numpad_overlay");
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
-  updateNumpadDisplay(inputEl.value || "");
+  updateNumpadDisplay(numpadValue);
 }
 
 function closeNumpad() {
@@ -1390,33 +1400,41 @@ function closeNumpad() {
   overlay.classList.remove("is-open");
   overlay.setAttribute("aria-hidden", "true");
   numpadTarget = null;
+  numpadValue = "";
+}
+
+function syncNumpadTarget() {
+  if (!numpadTarget) return;
+  // Keep trailing decimal in keypad display, but write a valid numeric string to the input.
+  const normalized = numpadValue.endsWith(".") ? numpadValue.slice(0, -1) : numpadValue;
+  numpadTarget.value = normalized;
 }
 
 function applyNumpadKey(key) {
   if (!numpadTarget) return;
-  let value = String(numpadTarget.value || "");
   if (key === ".") {
-    if (!value.includes(".")) {
-      value = value ? `${value}.` : "0.";
+    if (!numpadValue.includes(".")) {
+      numpadValue = numpadValue ? `${numpadValue}.` : "0.";
     }
   } else {
-    value = value === "0" ? key : `${value}${key}`;
+    numpadValue = numpadValue === "0" ? key : `${numpadValue}${key}`;
   }
-  numpadTarget.value = value;
-  updateNumpadDisplay(value);
+  syncNumpadTarget();
+  updateNumpadDisplay(numpadValue);
 }
 
 function applyNumpadAction(action) {
   if (!numpadTarget && action !== "done") return;
   if (action === "backspace") {
-    const value = String(numpadTarget.value || "");
-    numpadTarget.value = value.slice(0, -1);
-    updateNumpadDisplay(numpadTarget.value);
+    numpadValue = numpadValue.slice(0, -1);
+    syncNumpadTarget();
+    updateNumpadDisplay(numpadValue);
     return;
   }
   if (action === "clear") {
-    numpadTarget.value = "";
-    updateNumpadDisplay("");
+    numpadValue = "";
+    syncNumpadTarget();
+    updateNumpadDisplay(numpadValue);
     return;
   }
   if (action === "done") {

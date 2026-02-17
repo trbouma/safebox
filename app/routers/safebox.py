@@ -513,6 +513,16 @@ async def ln_pay_address(   request: Request,
         sat_amount = int(ln_pay.amount* 1e8 // local_currency.currency_rate)
         tendered = f" {ln_pay.amount} {ln_pay.currency.upper()}"
 
+    if sat_amount <= 0:
+        return {"status": "ERROR", "detail": "Amount must be greater than zero."}
+
+    # Fast-fail in request path so UI gets immediate, structured feedback.
+    if sat_amount > acorn_obj.balance:
+        return {
+            "status": "ERROR",
+            "detail": f"Insufficient balance. Requested {sat_amount} sats, available {acorn_obj.balance} sats.",
+        }
+
     # check to see if address is local only  
 
     if '@' not in ln_pay.address:
@@ -551,10 +561,10 @@ async def ln_pay_address(   request: Request,
         #                                fees=final_fees)
     except (ValueError, RuntimeError) as e:
         logger.warning("Lightning payaddress failed: %s", e)
-        return {"status": "ERROR", f"detail": f"error {e}"}
+        return {"status": "ERROR", "detail": f"error {e}"}
     except Exception as e:
         logger.exception("Unexpected error in payaddress")
-        return {"status": "ERROR", f"detail": f"error {e}"}
+        return {"status": "ERROR", "detail": f"error {e}"}
 
     msg_out = "Payment sent!!"
 
@@ -573,10 +583,10 @@ async def ln_swap(   request: Request,
  
     except (ValueError, RuntimeError) as e:
         logger.warning("Swap failed: %s", e)
-        return {"status": "ERROR", f"detail": f"error {e}"}
+        return {"status": "ERROR", "detail": f"error {e}"}
     except Exception as e:
         logger.exception("Unexpected error in swap")
-        return {"status": "ERROR", f"detail": f"error {e}"}
+        return {"status": "ERROR", "detail": f"error {e}"}
 
 
     return {"status": "OK", "detail": f"{msg_out} {acorn_obj.balance} sats"}
@@ -585,12 +595,32 @@ async def ln_swap(   request: Request,
 async def ln_pay_invoice(   request: Request, 
                         ln_invoice: lnPayInvoice,
                         acorn_obj: Acorn = Depends(get_acorn)):
-    msg_out ="No payment"
+    msg_out = "No payment"
     try:
+        decoded_invoice = bolt11.decode(ln_invoice.invoice)
+        invoice_amount_sat = 0
+        if decoded_invoice.amount_msat:
+            invoice_amount_sat = decoded_invoice.amount_msat // 1000
 
+        # Fast-fail when invoice amount is known and exceeds current balance.
+        if invoice_amount_sat > 0 and invoice_amount_sat > acorn_obj.balance:
+            return {
+                "status": "ERROR",
+                "detail": (
+                    f"Insufficient balance. Invoice requires {invoice_amount_sat} sats, "
+                    f"available {acorn_obj.balance} sats."
+                ),
+            }
 
-        task2 = asyncio.create_task(task_pay_multi_invoice(acorn_obj=acorn_obj,lninvoice=ln_invoice.invoice,comment=ln_invoice.comment, websocket=global_websocket)) 
-        msg_out = "Payment sent"
+        task2 = asyncio.create_task(
+            task_pay_multi_invoice(
+                acorn_obj=acorn_obj,
+                lninvoice=ln_invoice.invoice,
+                comment=ln_invoice.comment,
+                websocket=global_websocket,
+            )
+        )
+        msg_out = "Payment request accepted."
         # msg_out, final_fees = await  acorn_obj.pay_multi_invoice(lninvoice=ln_invoice.invoice, comment=ln_invoice.comment)
         # decoded_invoice = bolt11.decode(ln_invoice.invoice)
        
@@ -603,14 +633,14 @@ async def ln_pay_invoice(   request: Request,
 
     except (ValueError, RuntimeError) as e:
         logger.warning("Invoice payment failed: %s", e)
-        return {f"detail": f"error {e}"}
+        return {"status": "ERROR", "detail": f"error {e}"}
     except Exception:
         logger.exception("Unexpected error in payinvoice")
-        return {"detail": "internal payment error"}
+        return {"status": "ERROR", "detail": "internal payment error"}
 
 
     
-    return {"detail": msg_out}
+    return {"status": "OK", "detail": msg_out}
 
 @router.post("/issueecash", tags=["protected"])
 async def issue_ecash(   request: Request, 
