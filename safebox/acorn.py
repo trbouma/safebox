@@ -1552,6 +1552,12 @@ class Acorn:
     async def set_lock(self, lock: bool):
         pass
 
+    @staticmethod
+    def _is_missing_record_message(value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+        return value.startswith("Could not retrieve info for:")
+
     async def check_lock(self):
         lock_value = "FALSE"
         try:
@@ -1559,6 +1565,9 @@ class Acorn:
             # print(lock_value)
         except Exception as e:
             self.logger.debug("Check lock fallback; lock record unavailable: %s", e)
+        if self._is_missing_record_message(lock_value):
+            self.logger.debug("op=check_lock status=missing_lock_record")
+            lock_value = "FALSE"
         
         return str(lock_value).upper().strip() == "TRUE"
 
@@ -1568,6 +1577,9 @@ class Acorn:
             lock_value = await self.get_wallet_info(label="lock")
         except Exception as e:
             self.logger.debug("Lock record missing/unreadable; defaulting to unlocked: %s", e)
+            lock_value = "FALSE"
+        if self._is_missing_record_message(lock_value):
+            self.logger.debug("op=acquire_lock status=missing_lock_record")
             lock_value = "FALSE"
 
         
@@ -1589,6 +1601,9 @@ class Acorn:
                     lock_value = await self.get_wallet_info(label="lock")
                 except Exception as e:
                     self.logger.debug("Lock poll failed; assuming unlocked for recovery: %s", e)
+                    lock_value = "FALSE"
+                if self._is_missing_record_message(lock_value):
+                    self.logger.debug("op=acquire_lock status=missing_lock_record_during_poll")
                     lock_value = "FALSE"
                 print(f"{lock_value} attempt {loop_count} of {attempts} attempts for {self.handle}")
                 if str(lock_value).upper().strip() != 'TRUE':
@@ -1652,24 +1667,32 @@ class Acorn:
 
         # print("are we here?", label_hash)
         event =await self._async_get_wallet_info(FILTER, label_hash)
-        print(f"get_record_safebox event: {event.data()}")
+        if not event:
+            self.logger.warning(
+                "op=get_record_safebox status=missing record=%s kind=%s hash=%s",
+                record_name,
+                record_kind,
+                label_hash,
+            )
+            raise ValueError(f"No event found for {record_kind} {record_name}")
+
+        try:
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("op=get_record_safebox status=decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            raise ValueError(f"Could not decrypt info for: {record_name}. Does a record exist?") from exc
         
-        # print(event.data())
-        if event:
-            try:
-                decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-            except (ValueError, TypeError) as exc:
-                self.logger.warning("Could not decrypt record=%s error=%s", record_name, exc)
-                raise ValueError(f"Could not decrypt info for: {record_name}. Does a record exist?") from exc
-            
-            try:
-                safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
-                print(f"This is the blobref: {safebox_record.blobref} blobsha256: {safebox_record.blobsha256}")
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                self.logger.warning("Could not parse safebox record=%s error=%s", record_name, exc)
-                raise ValueError(f"Could create safebox record: {record_name}. Does a record exist?") from exc
-        else:
-            raise Exception(f"No event found for {record_kind} {record_name}")
+        try:
+            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            self.logger.debug(
+                "op=get_record_safebox status=ok record=%s kind=%s blobref=%s",
+                record_name,
+                record_kind,
+                safebox_record.blobref,
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.warning("op=get_record_safebox status=parse_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            raise ValueError(f"Could create safebox record: {record_name}. Does a record exist?") from exc
 
         return safebox_record
     
@@ -1716,7 +1739,7 @@ class Acorn:
         if record_origin:
             record_name = ':'.join([record_origin,record_name])
 
-        print(f"getting blob for {record_name}")
+        self.logger.debug("op=get_record_blobdata record=%s kind=%s", record_name, record_kind)
 
         if record_by_hash:
             label_hash = record_by_hash
@@ -1744,21 +1767,25 @@ class Acorn:
             
         }]
 
-        print("are we here?", label_hash)
         event =await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            self.logger.warning(
+                "op=get_record_blobdata status=missing record=%s kind=%s hash=%s",
+                record_name,
+                record_kind,
+                label_hash,
+            )
+            return None, None
         
         # print(event.data())
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-            print(f"decrypt {decrypt_content}")
         except (ValueError, TypeError) as exc:
-            self.logger.warning("Could not decrypt blob record=%s error=%s", record_name, exc)
+            self.logger.warning("op=get_record_blobdata status=decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
             return None, None
 
         try:
-            print(f"create safebox record")
             safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
-            print(f"This is the blobref for getblob: {safebox_record.blobref} blobtype: {safebox_record.blobtype} blobsha256: {safebox_record.blobsha256}")
             blob_sha256 = safebox_record.blobsha256
             blob_type = safebox_record.blobtype
             if blob_type:                
@@ -1766,9 +1793,7 @@ class Acorn:
                 # meta = client.head_blob(server, blobsha256)
                 blob_retrieve: BlossomBlob = client.get_blob(server=server,sha256=blob_sha256,)
                 
-                print(f"blob mime type {blob_retrieve.mime_type}")
                 if blob_retrieve.mime_type == "application/octet-stream":
-                    print(f"we have to decrypt! with {safebox_record.encryptparms.key}")
                     try:
                         blob_data = decrypt_bytes(
                             cipherbytes=blob_retrieve.get_bytes(),
@@ -1776,12 +1801,11 @@ class Acorn:
                             iv=bytes.fromhex(safebox_record.encryptparms.iv),
                         )
                     except (ValueError, TypeError) as e:
-                        self.logger.warning("Blob decrypt failed for record=%s error=%s", record_name, e)
+                        self.logger.warning("op=get_record_blobdata status=blob_decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, e)
                 else:
-                    print("we can't seem to decrypt")
                     blob_data = blob_retrieve.get_bytes()
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
-            self.logger.warning("Error parsing blob metadata for record=%s error=%s", record_name, exc)
+            self.logger.warning("op=get_record_blobdata status=parse_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
             return None, None
 
         if blob_data:
@@ -1796,7 +1820,12 @@ class Acorn:
             #) as tmp:
             #    tmp.write(blob_data)
             #    tmp_path = tmp.name
-            print(f"returning {guessed_blob_type} and {extension} {guessed_extension}")
+            self.logger.debug(
+                "op=get_record_blobdata status=ok record=%s kind=%s mime=%s",
+                record_name,
+                record_kind,
+                guessed_blob_type,
+            )
 
         return guessed_blob_type, blob_data
 
@@ -1949,7 +1978,7 @@ class Acorn:
     async def transfer_blob(self,record_name, record_kind: int = 37375,record_origin: str = None, blobxfer: str = None):
         """This function transfers a blob, adds it to the target record and deletes"""
         # blobxfer pass in as string and instantiate
-        print(f"transfer blob: {record_name} {record_name} {record_kind}")
+        self.logger.debug("op=transfer_blob status=start record=%s kind=%s", record_name, record_kind)
         blossom_servers = ['https://blossom.getsafebox.app']
         blossom_server = 'https://blossom.getsafebox.app'
         
@@ -1960,32 +1989,28 @@ class Acorn:
         if blobxfer:
             
             try:
-                pass
                 blobxfer: OriginalRecordTransfer = OriginalRecordTransfer.model_validate_json(blobxfer)
-                print(f"transfer success with blobxfer: {blobxfer}")
+                self.logger.debug("op=transfer_blob status=validated record=%s kind=%s", record_name, record_kind)
                 try:
                     client_xfer = BlossomClient(nsec=blobxfer.blobnsec, default_servers=blossom_servers)
                     blob_retrieve: BlossomBlob = client_xfer.get_blob(server=blobxfer.blobserver ,sha256=blobxfer.blobsha256)
                     delete_result = client_xfer.delete_blob(server=blobxfer.blobserver,sha256=blobxfer.blobsha256)
-                    print(f"Delete result: {delete_result}")
+                    self.logger.debug("op=transfer_blob status=source_deleted record=%s result=%s", record_name, delete_result)
                     # Now we need need to decrypt the blob
-                    print(f"blob mime type {blob_retrieve.mime_type}")
                     if blob_retrieve.mime_type == "application/octet-stream":
-                        print(f"we have to decrypt! with {blobxfer.encryptparms.key}")
                         try:
                             blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
                                                                     
                                                                     key=bytes.fromhex(blobxfer.encryptparms.key),
                                                                     iv = bytes.fromhex(blobxfer.encryptparms.iv)
                                                                 )
-                        except Exception as e:
-                            print(f"Error {e}")
+                        except (ValueError, TypeError) as e:
+                            self.logger.warning("op=transfer_blob status=decrypt_failed record=%s error=%s", record_name, e)
+                            return
 
                         # Now we have the original data, check against original hash
                         resultsha256 = hashlib.sha256(blob_data).hexdigest()
-                        print(f"compare hashes {resultsha256} {blobxfer.origsha256}")
                         if resultsha256 == blobxfer.origsha256:
-                            print(f"Yes! We have the original doc which is {mimetypes.guess_extension(blob_data)}  ")
                             if blob_data:
                                 guessed_blob_type = filetype.guess_mime(blob_data)
                                 guessed_extension = '.'+filetype.guess_extension(blob_data)
@@ -1999,14 +2024,14 @@ class Acorn:
                                 # ) as tmp:
                                 #     tmp.write(blob_data)
                                 #    tmp_path = tmp.name
-                                print(f"transferred {guessed_blob_type} and {extension} {guessed_extension}")
+                                self.logger.debug("op=transfer_blob status=decrypted record=%s mime=%s", record_name, guessed_blob_type)
 
 
                         else:
-                            raise Exception("Not the same as the original document")
+                            raise ValueError("Transferred blob hash does not match original hash")
                         # Get existing record
                         safebox_record = await self.get_record_safebox(record_name=record_name,record_kind=record_kind)
-                        print(f"starting safebox record: {safebox_record}")
+                        self.logger.debug("op=transfer_blob status=loaded_record record=%s", record_name)
 
                         blob_key = os.urandom(32)  # 256-bit key
                 
@@ -2023,7 +2048,7 @@ class Acorn:
                         blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
                         
                         blob_type = upload_result['type']
-                        print(f"Blossom final result: {upload_result}")
+                        self.logger.debug("op=transfer_blob status=uploaded record=%s sha256=%s", record_name, sha256)
                         updated_safebox_record = SafeboxRecord( tag=safebox_record.tag,
                                                                 type = safebox_record.type,
                                                                 payload = safebox_record.payload,
@@ -2032,8 +2057,6 @@ class Acorn:
                                                                 blobsha256=sha256,
                                                                 origsha256=blobxfer.origsha256,
                                                                 encryptparms=encrypt_parms)
-                        print(f"existing safebox record {safebox_record}")
-                        print(f"updated safebox record {updated_safebox_record}")
                         record_json_str = updated_safebox_record.model_dump_json()
 
                         record_type = "generic"
@@ -2044,14 +2067,14 @@ class Acorn:
                         await   self.set_wallet_config()
 
                     else:
-                        raise Exception("Transfer did not occur")
+                        raise ValueError("Transfer did not occur; missing encrypted payload")
                         # blob_data = blob_retrieve.get_bytes()
 
-                except Exception as e:
-                    print(f"blobxfer error: {e}")
+                except (ValueError, TypeError, RuntimeError) as e:
+                    self.logger.warning("op=transfer_blob status=processing_failed record=%s kind=%s error=%s", record_name, record_kind, e)
 
-            except Exception as exc:
-                self.logger.warning("Blob transfer processing failed for record=%s error=%s", record_name, exc)
+            except (ValueError, TypeError) as exc:
+                self.logger.warning("op=transfer_blob status=invalid_blobxfer record=%s kind=%s error=%s", record_name, record_kind, exc)
 
 
 
@@ -2251,8 +2274,15 @@ class Acorn:
 
             #TODO change this to write_proofs
             await self.add_proofs_obj(proof_objs)
-        except Exception as e:
-          raise RuntimeError(f"Error in mint_proofs {e}") from e
+        except (httpx.HTTPError, KeyError, ValueError, TypeError) as e:
+            self.logger.error(
+                "op=mint_proofs quote=%s amount=%s mint=%s error=%s",
+                quote,
+                amount,
+                mint,
+                e,
+            )
+            raise RuntimeError(f"Error in mint_proofs {e}") from e
         
         finally:
             if lock_acquired:
@@ -2261,7 +2291,7 @@ class Acorn:
         return True
 
     async def check_quote(self, quote:str, amount:int, mint:str = None):
-        print(f"check quote: {quote}")
+        self.logger.debug("op=check_quote quote=%s amount=%s mint=%s", quote, amount, mint)
         
         
 
@@ -2283,12 +2313,18 @@ class Acorn:
                 response = await client.get(url, headers=headers)
                 response.raise_for_status()
                 mint_quote = mintQuote(**response.json())
-        except (httpx.HTTPError, ValueError) as exc:
-            self.logger.warning("check_quote failed for quote=%s: %s", quote, exc)
+        except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+            self.logger.warning(
+                "op=check_quote status=failed quote=%s amount=%s mint=%s error=%s",
+                quote,
+                amount,
+                mint,
+                exc,
+            )
             return False, None
 
         if mint_quote.paid == True:
-            print("let's to do the mint!")
+            self.logger.debug("op=check_quote status=paid quote=%s", quote)
             success_mint = await self._mint_proofs(mint_quote.quote, amount, mint)
             lninvoice = mint_quote.request
         else:
@@ -2314,15 +2350,25 @@ class Acorn:
         payload_json = mint_request.model_dump_json()
         timeout = httpx.Timeout(10.0, connect=5.0)
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, data=payload_json, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, data=payload_json, headers=headers)
+                response.raise_for_status()
+                response_json = response.json()
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            self.logger.error(
+                "op=async_deposit amount=%s mint=%s url=%s error=%s",
+                amount,
+                mint,
+                url,
+                exc,
+            )
+            raise RuntimeError(f"Deposit quote request failed: {exc}") from exc
 
         mint_quote = mintQuote(**response_json)
         invoice = response_json['request']
         quote = response_json['quote']
-        print(f"invoice: {invoice}") 
+        self.logger.debug("op=async_deposit quote_received amount=%s mint_url=%s", amount, url)
         # print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
 
@@ -2377,15 +2423,16 @@ class Acorn:
             mint = mint.replace("https://","")
 
         while time() < end_time:
-            self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
+            self.logger.debug("op=poll_for_payment quote=%s amount=%s mint=%s", quote, amount, mint)
             success, lninvoice = await self.check_quote(quote=quote, amount=amount, mint=mint)
             if success:
-                self.logger.debug("quote is paid!")
+                self.logger.info("op=poll_for_payment status=paid quote=%s amount=%s", quote, amount)
                 break
             await asyncio.sleep(3)
 
-        self.logger.debug("polling done!")
+        self.logger.debug("op=poll_for_payment status=done quote=%s", quote)
         if not success:
+            self.logger.warning("op=poll_for_payment status=timeout quote=%s amount=%s", quote, amount)
             raise TimeoutError("Polling has timed out.")
         return success, lninvoice
         
@@ -2451,8 +2498,9 @@ class Acorn:
                     self.logger.debug(f"proof event content {n_msg.kind} {record}")
                     c.publish(n_msg)
                     await asyncio.sleep(0.2)
-        except Exception as e:
-            raise Exception(f"Error {e}")
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            self.logger.error("op=add_proofs_obj status=failed proofs=%s error=%s", len(proofs_arg), e)
+            raise RuntimeError(f"Error writing proofs: {e}") from e
         
         return
 
@@ -2476,7 +2524,7 @@ class Acorn:
                 old_proof_event_ids = [event.id for event in existing_events]
 
             # get proofs by keyset
-            all_proofs, amount = self._proofs_by_keyset()
+            all_proofs, _amount = self._proofs_by_keyset()
             
             for key, value in all_proofs.items():
 
@@ -2486,9 +2534,9 @@ class Acorn:
                 await self._async_delete_events_by_ids(old_proof_event_ids, record_kind=7375)
 
             await self._load_proofs()
-        except Exception as e:
-            self.logger.error(f"error writhing proofs {e}")
-            raise Exception(e)
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=write_proofs status=failed error=%s", e)
+            raise RuntimeError(f"error writing proofs: {e}") from e
 
         
         return
@@ -3972,115 +4020,123 @@ class Acorn:
     async def _async_swap(self):
         # This is the async version of swap
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
         
         # Let's check all the proofs before we do anything
 
-        for each_keyset in keyset_proofs:
-            check = []
-            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
-            for each_proof in keyset_proofs[each_keyset]:
-                check.append(each_proof.Y)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for each_keyset in keyset_proofs:
+                check = []
+                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
+                for each_proof in keyset_proofs[each_keyset]:
+                    check.append(each_proof.Y)
 
-            # print(mint_verify_url, check)
-            Ys = {"Ys": check}
-            try:
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
-                proofs_to_check = check_response['states']
-                for each_proof in proofs_to_check:
-                    assert each_proof['state'] == "UNSPENT"
-                    # print(each_proof['state'])
-            except Exception as exc:
-                return f"there is a problem with the mint {self.known_mints[each_keyset]}"
-                
-        # return
-        # All the proofs are verified, we are good to go for the swap   
-        # In multi_each we are going to swap for each proof 
-        
- 
-        for each_keyset in keyset_proofs:
-            
-            each_keyset_url = self.known_mints[each_keyset]
-
-            mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
-            # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
-            
-            for each_proof in keyset_proofs[each_keyset]:
-                # print(each_proof.amount)
-                blinded_values =[]
-                blinded_messages = []
-                secret = secrets.token_hex(32)
-                B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret,Y))
-                
-                blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
-                                                            id=each_keyset,
-                                                            B_=B_.serialize().hex(),
-                                                            Y = Y.serialize().hex(),
-                                                            ).model_dump()
-                                        )
-                data_to_send = {
-                            "inputs":   [each_proof.model_dump()],
-                            "outputs": blinded_messages
-                            
-                }
-                proofs = []
-                proof_objs = []
+                Ys = {"Ys": check}
                 try:
-                    response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                    # print(response.json())
-                    promises = response.json()['signatures']
-                    # print("promises:", promises)
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
+                    proofs_to_check = check_response["states"]
+                    for each_proof in proofs_to_check:
+                        if each_proof.get("state") != "UNSPENT":
+                            raise ValueError(f"Proof state not spendable: {each_proof.get('state')}")
+                except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                    self.logger.warning(
+                        "op=async_swap status=checkstate_failed mint=%s keyset=%s error=%s",
+                        self.known_mints.get(each_keyset),
+                        each_keyset,
+                        exc,
+                    )
+                    return f"there is a problem with the mint {self.known_mints[each_keyset]}"
+                
+            # return
+            # All the proofs are verified, we are good to go for the swap
+            # In multi_each we are going to swap for each proof
+            for each_keyset in keyset_proofs:
+                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                try:
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
+                except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                    self.logger.error(
+                        "op=async_swap status=key_fetch_failed keyset=%s mint=%s error=%s",
+                        each_keyset,
+                        self.known_mints.get(each_keyset),
+                        exc,
+                    )
+                    raise RuntimeError(f"Unable to fetch keys for keyset {each_keyset}") from exc
+
+                swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
+                
+                for each_proof in keyset_proofs[each_keyset]:
+                    blinded_values =[]
+                    blinded_messages = []
+                    secret = secrets.token_hex(32)
+                    B_, r, Y = step1_alice(secret)
+                    blinded_values.append((B_,r, secret,Y))
                     
-                    i = 0
-            
-                    for each in promises:
-                        pub_key_c = PublicKey()
-                        # print("each:", each['C_'])
-                        pub_key_c.deserialize(unhexlify(each['C_']))
-                        promise_amount = each['amount']
-                        A = keys[str(int(promise_amount))]
-                        # A = keys[str(j)]
-                        pub_key_a = PublicKey()
-                        pub_key_a.deserialize(unhexlify(A))
-                        r = blinded_values[i][1]
-                        Y = blinded_values[i][3]
-                        # print(pub_key_c, promise_amount,A, r)
-                        C = step3_alice(pub_key_c,r,pub_key_a)
-                        proof = {   "amount": promise_amount,
-                            "id": each_keyset,
-                            "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex(),
-                            "Y":    Y.serialize().hex()
-                            }
-                        proofs.append(proof)
-                        # print(proofs)
-                        proof_obj = Proof(amount=promise_amount,
-                                      id=each_keyset,
-                                      secret=blinded_values[i][2],
-                                      C=C.serialize().hex(),
-                                      Y = Y.serialize().hex()
-                                      )
-                        proof_objs.append(proof_obj)
-                        i+=1
+                    blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
+                                                                id=each_keyset,
+                                                                B_=B_.serialize().hex(),
+                                                                Y = Y.serialize().hex(),
+                                                                ).model_dump()
+                                            )
+                    data_to_send = {
+                                "inputs":   [each_proof.model_dump()],
+                                "outputs": blinded_messages
+                                
+                    }
+                    proofs = []
+                    proof_objs = []
+                    try:
+                        response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                        response.raise_for_status()
+                        promises = response.json()['signatures']
                         
-                    
-                    
+                        i = 0
+                
+                        for each in promises:
+                            pub_key_c = PublicKey()
+                            pub_key_c.deserialize(unhexlify(each['C_']))
+                            promise_amount = each['amount']
+                            A = keys[str(int(promise_amount))]
+                            pub_key_a = PublicKey()
+                            pub_key_a.deserialize(unhexlify(A))
+                            r = blinded_values[i][1]
+                            Y = blinded_values[i][3]
+                            C = step3_alice(pub_key_c,r,pub_key_a)
+                            proof = {   "amount": promise_amount,
+                                "id": each_keyset,
+                                "secret": blinded_values[i][2],
+                                "C":    C.serialize().hex(),
+                                "Y":    Y.serialize().hex()
+                                }
+                            proofs.append(proof)
+                            proof_obj = Proof(amount=promise_amount,
+                                          id=each_keyset,
+                                          secret=blinded_values[i][2],
+                                          C=C.serialize().hex(),
+                                          Y = Y.serialize().hex()
+                                          )
+                            proof_objs.append(proof_obj)
+                            i+=1
+                    except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                        self.logger.warning(
+                            "op=async_swap status=swap_step_failed keyset=%s mint=%s error=%s",
+                            each_keyset,
+                            self.known_mints.get(each_keyset),
+                            exc,
+                        )
+                        continue
 
-                except Exception as exc:
-                    ValueError("duplicate proofs")
-                    print("duplicate proof, ignore")
+                    combined_proofs = combined_proofs + proofs
+                    combined_proof_objs = combined_proof_objs + proof_objs
 
-                combined_proofs = combined_proofs + proofs
-                combined_proof_objs = combined_proof_objs + proof_objs
-
-        print("XXXXX async swap multi each")
+        self.logger.debug("op=async_swap status=write_proofs proofs=%s", len(combined_proof_objs))
         self.proofs = combined_proof_objs
         await self.write_proofs()
         
@@ -4587,7 +4643,7 @@ class Acorn:
 
 
     async def accept_token(self,cashu_token: str, comment:str = "ecash deposit"):
-        print("accept token")
+        self.logger.debug("op=accept_token status=start comment=%s", comment)
         # asyncio.run(self.nip17_accept(cashu_token))
         # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
@@ -4600,10 +4656,7 @@ class Acorn:
         try:
 
             
-            headers = { "Content-Type": "application/json"}
             token_amount =0
-            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
-            old_balance = self.balance
 
             if cashu_token[:6] == "cashuA":
 
@@ -4641,11 +4694,15 @@ class Acorn:
                         token_amount += each_proof.amount
                     self.known_mints[id]=token_obj.mint
             else:
-                return "not a valid token", 0
+                raise ValueError("Not a valid cashu token format")
               
             swap_proofs = await self.swap_proofs(proof_obj_list)
-
-            print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
+            self.logger.debug(
+                "op=accept_token status=swapped token_amount=%s input_proofs=%s output_proofs=%s",
+                token_amount,
+                len(proof_obj_list),
+                len(swap_proofs),
+            )
             
             await self.acquire_lock()
             lock_acquired = True
@@ -4653,10 +4710,10 @@ class Acorn:
 
         
             
-            self.logger.debug(f"Proofs of {token_amount} are added! ")
-        except Exception as e:
-            self.logger.error(f"ecash accept error {e}")  
-            raise Exception(f"Is token already spent? {e}")
+            self.logger.info("op=accept_token status=success token_amount=%s", token_amount)
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=accept_token status=failed error=%s", e)
+            raise RuntimeError(f"Is token already spent? {e}") from e
             
         
         finally:
@@ -4688,7 +4745,7 @@ class Acorn:
             
             
             
-            self.logger.debug(f"available amount {available_amount} ")
+            self.logger.debug("op=issue_token status=balance amount=%s available=%s", amount, available_amount)
             if available_amount < amount:                
                 raise ValueError("Insufficient balance.")
                 # msg_out = "insufficient balance. you need more funds!"
@@ -4702,8 +4759,8 @@ class Acorn:
                     break
             if not chosen_keyset:
                
-                self.logger.error("insufficient balance in any one keyset, you need to swap!")
-                return   
+                self.logger.error("op=issue_token status=no_single_keyset amount=%s", amount)
+                raise ValueError("Insufficient balance in a single keyset; swap required.")
             
             proofs_to_use = []
             proof_amount = 0
@@ -4712,17 +4769,18 @@ class Acorn:
                 pay_proof = proofs_from_keyset.pop()
                 proofs_to_use.append(pay_proof)
                 proof_amount += pay_proof.amount
-                print(f"pop proof amount of {pay_proof.amount} from {chosen_keyset}")
+                self.logger.debug("op=issue_token selecting_proof keyset=%s amount=%s", chosen_keyset, pay_proof.amount)
                 
-            print("proofs to use:", proofs_to_use)
-            print("remaining", proofs_from_keyset)
-            print("chosen keyset for payment", chosen_keyset)
+            self.logger.debug(
+                "op=issue_token status=prepared keyset=%s proofs_to_use=%s",
+                chosen_keyset,
+                len(proofs_to_use),
+            )
             
             proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
             
 
-            print("proofs remaining:", proofs_remaining)
-            print(f"amount needed: {amount}")
+            self.logger.debug("op=issue_token status=swap_complete amount=%s proofs_remaining=%s", amount, len(proofs_remaining))
             # Implement from line 824
             sum_proofs =0
             spend_proofs = []
@@ -4765,9 +4823,9 @@ class Acorn:
             
             v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
             # print("proofs remaining:", proofs_remaining)
-        except Exception as e:
-            # self.logger(f"issue token error {e}")
-            raise Exception(f"Error {e}")
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=issue_token status=failed amount=%s error=%s", amount, e)
+            raise RuntimeError(f"Error issuing token: {e}") from e
         finally:
             if lock_acquired:
                 await self.release_lock()
