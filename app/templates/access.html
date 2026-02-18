@@ -288,6 +288,7 @@
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
+  var reset_to_home_scheduled = false;
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{account_access_key}} \n\nRecovery Phrase (12 words):\n\n{{acorn.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
   var onboard_msg = "Welcome to {{branding}}! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
@@ -959,6 +960,9 @@ function getlnPayStatus(ln_pay_status) {
     const status = parsedObject.status || "INFO";
     const detail = parsedObject.detail || "Payment request completed.";
     userMessage(detail, status);
+    if (status === "OK" && action_mode === "lninvoice") {
+      userMessage("Payment accepted. Waiting for confirmation...", "INFO");
+    }
 
     // location.reload();
   
@@ -1138,6 +1142,13 @@ function getInvoiceStatus(ln_invoice_status) {
                           console.log("5 seconds passed");
                           document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
                         }, 5000);
+
+      if (status == "SENT" && action_mode === "lninvoice" && !reset_to_home_scheduled) {
+        reset_to_home_scheduled = true;
+        setTimeout(() => {
+          window.location.href = "/safebox/access";
+        }, 1200);
+      }
 
       }
 
