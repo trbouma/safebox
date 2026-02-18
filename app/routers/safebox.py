@@ -37,12 +37,13 @@ from urllib.parse import quote, unquote
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret
 from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 
 import logging, jwt
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,31 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
+
+
+def get_or_create_nwc_secret(npub: str, rotate: bool = False) -> str:
+    with Session(engine) as session:
+        existing = session.exec(select(NWCSecret).where(NWCSecret.npub == npub)).all()
+
+        if existing and not rotate:
+            return existing[0].nwc_secret
+
+        if existing and rotate:
+            for each in existing:
+                session.delete(each)
+            session.flush()
+
+        nwc_secret = Keys().private_key_hex()
+        session.add(NWCSecret(nwc_secret=nwc_secret, npub=npub))
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            # In the unlikely case of a collision/race, retry one time.
+            nwc_secret = Keys().private_key_hex()
+            session.add(NWCSecret(nwc_secret=nwc_secret, npub=npub))
+            session.commit()
+        return nwc_secret
 
 def _welcome_retry_response(request: Request):
     csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
@@ -361,11 +387,8 @@ async def create_nwc_qr(request: Request,
 
     safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
 
-    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
-
-    handle = safebox_found.custom_handle if safebox_found.custom_handle else safebox_found.handle
-
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
+    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # &lud16={handle}@{request.url.hostname}
     encoded_qr_text = urllib.parse.quote(qr_text)
@@ -1206,7 +1229,8 @@ async def my_danger_zone(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
@@ -1263,7 +1287,8 @@ async def issue_card(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={acorn_obj.privkey_hex}"
+    nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=True)
+    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # Publish profile
     async with Client(settings.NWC_RELAYS[0]) as c:
