@@ -15,7 +15,7 @@ To conclude this section, the author has a working knowledge of the [OAuth 2.0 P
 ## nAuth Interaction Diagram
 The following diagram shows the general sequence of a nAuth interaction between an Initiator (right) and a Responder (left). The tags that are defined in a nAuth are depicted on the righthand side of the diagram.
 
-![nAuth Interaction Diagram](./img/nAuth-interaction.png)
+![nAuth Interaction Diagram](../img/nAuth-interaction.png)
 
 
 ## The nAuth Scheme
