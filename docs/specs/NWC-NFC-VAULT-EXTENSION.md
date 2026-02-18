@@ -27,6 +27,7 @@ Safebox consumes NWC request events (`kind: 23194`) from configured NWC relays a
 Entry path:
 
 - listener in `app/nwc.py` (`listen_notes*`, `my_handler`)
+- resolve wallet by NWC secret mapping (`NWCSecret`) and validate request target
 - decrypt request with wallet key (NIP-4)
 - dispatch in `nwc_handle_instruction(...)`
 
@@ -52,6 +53,59 @@ Card issuance paths (`/safebox/issuecard`, related flows):
 - place encrypted token into `nembed`
 
 At runtime, vault endpoints decrypt token material, recover the target wallet key, and issue an NWC instruction to that wallet.
+
+## Per-Card NWC Secret Rotation
+
+Safebox now separates NWC connection secrets from wallet private keys.
+
+### Data model
+
+- `NWCSecret` table stores:
+  - `nwc_secret` (connection secret)
+  - `npub` (wallet mapping target)
+
+### Issuance behavior
+
+- `GET /safebox/issuecard` rotates NWC credentials for that wallet:
+  - previous `NWCSecret` rows for the wallet are removed
+  - a fresh secret is generated and stored
+  - newly generated secret is used in the NWC URI
+- Non-rotating views (for example NWC QR display) reuse the current mapped secret.
+
+### Runtime routing behavior
+
+- Incoming NWC requests are resolved by sender pubkey derived from `NWCSecret`.
+- Handler maps `event.pubkey -> NWCSecret -> npub -> RegisteredSafebox`.
+- If request target tag (`p`) conflicts with secret mapping, request is rejected.
+- Compatibility fallback can still route by `p` when no mapping is present.
+
+This model provides scoped credential rotation and reduces coupling between pairing credentials and wallet root keys.
+
+### Rotation and Routing Sequence
+
+```mermaid
+sequenceDiagram
+    participant U as "User"
+    participant SB as "Safebox UI (/issuecard)"
+    participant DB as "NWCSecret Table"
+    participant C as "Card/Wallet Client"
+    participant R as "NWC Relay"
+    participant H as "NWC Handler (nwc.py)"
+    participant W as "Target Wallet"
+
+    U->>SB: Issue card
+    SB->>DB: Delete prior secrets for wallet npub
+    SB->>DB: Insert new nwc_secret -> npub
+    SB-->>U: New card token + NWC URI (new secret)
+
+    C->>R: Publish NWC request (kind 23194)
+    R->>H: Deliver event
+    H->>DB: Resolve event.pubkey via NWCSecret
+    H->>H: Validate p-tag against mapped npub
+    H->>W: Decrypt and dispatch instruction
+    W-->>R: Publish response (kind 23195)
+    R-->>C: Return NWC response
+```
 
 This is conceptually similar to payment-token approaches used by major processors/mobile wallets:
 

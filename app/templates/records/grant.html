@@ -124,6 +124,8 @@ async function getBlob() {
 
   const container = document.getElementById("media_container");
   const img = document.getElementById("dynamic_image");
+  const recordStatus = document.getElementById("original_record_status");
+  if (recordStatus) recordStatus.textContent = "Loading original record...";
 
   // Clear previous PDF render
   if (container) container.innerHTML = "";
@@ -141,6 +143,7 @@ async function getBlob() {
 
     // 🚫 If not found → show nothing
     if (!res.ok) {
+      if (recordStatus) recordStatus.textContent = "Original Record";
       return;
     }
 
@@ -156,6 +159,7 @@ async function getBlob() {
       img.style.width = "90%";      // 90% width
       img.style.height = "auto";
       img.style.display = "block";
+      if (recordStatus) recordStatus.textContent = "Original Record";
 
       return;
     }
@@ -258,6 +262,7 @@ async function getBlob() {
       });
 
       await renderPage(currentPage);
+      if (recordStatus) recordStatus.textContent = "Original Record";
 
       return;
     }
@@ -266,6 +271,7 @@ async function getBlob() {
 
   } catch (err) {
     console.log("Render error:", err);
+    if (recordStatus) recordStatus.textContent = "Original Record";
   }
 }
 
@@ -289,7 +295,7 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
     <br><br>
     <button onclick="goBack()">Back</button>
    <div class="center-text">
-      <br>Original Record<hr>
+      <br><span id="original_record_status">Original Record</span><hr>
       <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
       <br>
       <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
