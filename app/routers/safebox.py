@@ -29,7 +29,7 @@ from monstr.relay.relay import Relay
 
 from monstr.client.client import Client
 from typing import List
-from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt
+from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt, DecryptionException
 from monstr.event.event import Event
 from safebox.models import cliQuote
 from urllib.parse import quote, unquote
@@ -296,11 +296,22 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         parsed_data = parse_nembed_compressed(nembed_acquired)
         host = parsed_data["h"]
         encrypted_key = parsed_data["k"]
-        decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
-        decrypted_key = decrypted_payload.split(':')[0]
-        decrypted_secure_pin = decrypted_payload.split(':')[1]
-        nfc = parsed_data.get("n",["",""])
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("NFC login payload invalid: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid NFC payload")
 
+    try:
+        decrypted_payload = my_enc.decrypt(encrypted_key, for_pub_k=k.public_key_hex())
+    except DecryptionException as exc:
+        logger.warning("NFC login decrypt failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid NFC card")
+    except (ValueError, TypeError) as exc:
+        logger.warning("NFC login decrypt payload invalid: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid NFC payload")
+
+    try:
+        decrypted_key, decrypted_secure_pin = decrypted_payload.split(":", 1)
+        nfc = parsed_data.get("n",["",""])
         logger.info("NFC login payload parsed for host=%s", host)
         if host != request.url.hostname:
             logger.warning("NFC login host mismatch, redirecting to host=%s", host)
@@ -310,9 +321,8 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
         k_wallet = Keys(priv_k=decrypted_key)
         npub = k_wallet.public_key_bech32()
         logger.info("NFC login matched npub=%s", npub)
-
-    except (KeyError, ValueError, TypeError) as exc:
-        logger.warning("NFC login payload invalid: %s", exc)
+    except (IndexError, ValueError, TypeError) as exc:
+        logger.warning("NFC login decrypted payload malformed: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid NFC payload")
     pass
 
