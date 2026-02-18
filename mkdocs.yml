@@ -1,0 +1,47 @@
+site_name: Safebox Documentation
+site_description: Safebox specs, architecture notes, and implementation documents
+site_url: https://trbouma.github.io/safebox/
+repo_url: https://github.com/trbouma/safebox
+repo_name: trbouma/safebox
+
+docs_dir: docs
+
+theme:
+  name: material
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+
+nav:
+  - Specs Index: specs/INDEX.md
+  - Specs:
+      - Acceptance Model: specs/ACCEPTANCE-MODEL.md
+      - NAuth Protocol: specs/NAUTH-PROTOCOL.md
+      - NEmbed Protocol: specs/NEMBED-PROTOCOL.md
+      - OAE Protocol: specs/OAE-PROTOCOL.md
+      - NWC NFC Vault Extension: specs/NWC-NFC-VAULT-EXTENSION.md
+      - NFC Flows and Security: specs/NFC-FLOWS-AND-SECURITY.md
+      - Payments (Cashu + Lightning Fallback): specs/PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md
+      - Cashu Storage and Multi-Mint: specs/CASHU-STORAGE-AND-MULTI-MINT.md
+      - Wallet Record Storage: specs/WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md
+      - Blossom Blob Storage and Transfer: specs/BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md
+      - Quantum-Safe Cryptography: specs/QUANTUM-SAFE-CRYPTOGRAPHY.md
+      - Transport Security and Hybrid Addressing: specs/TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md
+  - Docs:
+      - Record Flows: RECORD-FLOWS.md
+      - Specification: SPECIFICATION.md
+      - Nostr for Institutions: NOSTRFORINSTITUTIONS.md
+      - Nostr Safebox (Nov 2024): NOSTR-SAFEBOX-NOV-2024.md
+      - Northern Link Case Study: NortherLinkCaseStudy.md
+      - Policy Brief: POLICY-BRIEF.md
+      - Progress Report 01: PROGRESS-REPORT-01.md
+      - Initial Proposal: INITIAL-PROPOSAL.md
+      - Phase 3 Proposal: PHASE3-PROPOSAL.md
+      - Nosfabrica Proposal: NOSFABRICA-PROPOSAL.md
+      - Worknotes: WORKNOTES.md
+  - Apostille:
+      - Rationale: apostille/rationale.md
+      - Private Apostille: apostille/private-apostille.md
+      - Articles: apostille/articles.md

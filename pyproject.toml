@@ -9,8 +9,6 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
 monstr = "^0.1.9"
-asyncio = "^3.4.3"
-logging = "^0.4.9.6"
 click = "^8.1.7"
 wheel = "^0.43.0"
 pyyaml = "^6.0.1"
