@@ -55,11 +55,21 @@ from contextlib import suppress
 
 
 
+def _is_expected_ws_close_exc(exc: BaseException) -> bool:
+    return isinstance(exc, WSMessageTypeError) and "not WSMsgType.TEXT" in str(exc)
+
+
 async def _close_client(c: Client) -> None:
     """Handle monstr client end() implementations that may be sync or async."""
-    result = c.end()
-    if inspect.isawaitable(result):
-        await result
+    try:
+        result = c.end()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:
+        if _is_expected_ws_close_exc(exc):
+            logging.getLogger(__name__).debug("Suppressed expected websocket close during client end()")
+            return
+        raise
 
 
 def add_nwc_event_if_not_exists(event_id: str) -> bool:
@@ -670,13 +680,14 @@ async def listen_notes(url):
 
 
 async def listen_notes_connected(url):
+    logger = logging.getLogger(__name__)
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
 
         try:
             await c.wait_connect(timeout=10)
-            print(f"[{url}] Connected and listening...")
+            logger.info("[%s] Connected and listening...", url)
 
             c.subscribe(
                 handlers=my_handler,
@@ -690,19 +701,23 @@ async def listen_notes_connected(url):
             await run_task
 
         except asyncio.CancelledError:
-            print(f"[{url}] listen_notes_connected cancelled.")
+            logger.info("[%s] listen_notes_connected cancelled", url)
             run_task.cancel()
             try:
                 await run_task
             except asyncio.CancelledError:
                 pass
-            except Exception as e:
-                print(f"[{url}] Exception while awaiting cancelled run_task: {e}")
+            except Exception as exc:
+                if not _is_expected_ws_close_exc(exc):
+                    logger.debug("[%s] Suppressed cancellation exception: %r", url, exc)
             await _close_client(c)
             raise  # must re-raise to properly propagate cancellation
 
-        except Exception as e:
-            print(f"[{url}] Listener error: {e}. Restarting in 5 seconds...")
+        except Exception as exc:
+            if _is_expected_ws_close_exc(exc):
+                logger.debug("[%s] Suppressed expected websocket close exception", url)
+            else:
+                logger.warning("[%s] Listener error, restarting in 5s: %r", url, exc)
 
         finally:
             if not run_task.done():
@@ -711,11 +726,14 @@ async def listen_notes_connected(url):
                     await run_task
                 except asyncio.CancelledError:
                     pass
-                except Exception as e:
-                    print(f"[{url}] Suppressed error from cancelled run_task: {e}")
+                except Exception as exc:
+                    if not _is_expected_ws_close_exc(exc):
+                        logger.debug("[%s] Suppressed error from cancelled run_task: %r", url, exc)
 
             await _close_client(c)
-            await asyncio.sleep(5)
+            # During app shutdown we propagate CancelledError immediately and skip restart delay.
+            with suppress(asyncio.CancelledError):
+                await asyncio.sleep(5)
 
 
 
