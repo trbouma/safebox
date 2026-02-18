@@ -5,12 +5,16 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import asyncio, os, secrets
+import logging
+import inspect
 from contextlib import asynccontextmanager
 from filelock import FileLock, Timeout
+from sqlalchemy.exc import SQLAlchemyError
+from aiohttp.client_exceptions import WSMessageTypeError
 
 import oqs
 
-from monstr.encrypt import Keys
+from monstr.encrypt import Keys, DecryptionException
 
 from app.config import Settings, ConfigWithFallback
 from app.routers import     (   lnaddress, 
@@ -29,15 +33,50 @@ from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 from app.relay import run_relay
-from app.nwc import listen_nwc, listen_notes, listen_notes_connected, listen_notes_query, listen_notes_periodic
+from app.nwc import listen_nwc, listen_notes, listen_notes_connected, listen_notes_query
 from safebox.acorn import Acorn
 import sys
 
 lock_path = "/tmp/monstr_listener.lock"
 listener_task = None
+relay_task = None
+logger = logging.getLogger(__name__)
+previous_loop_exception_handler = None
 
 # Create Settings:
 SETTINGS = Settings()
+DB_ENGINE = create_engine(SETTINGS.DATABASE)
+
+
+def _is_expected_monstr_ws_close(context: dict) -> bool:
+    """Suppress known monstr websocket close noise during shutdown."""
+    exc = context.get("exception")
+    if not isinstance(exc, WSMessageTypeError):
+        return False
+    if "not WSMsgType.TEXT" not in str(exc):
+        return False
+    fut = context.get("future") or context.get("task")
+    coro = fut.get_coro() if fut and hasattr(fut, "get_coro") else None
+    qualname = getattr(coro, "__qualname__", "")
+    return "Client._my_consumer" in qualname
+
+
+def _install_loop_exception_filter() -> None:
+    global previous_loop_exception_handler
+    loop = asyncio.get_running_loop()
+    previous_loop_exception_handler = loop.get_exception_handler()
+
+    def _handler(loop_obj, context):
+        if _is_expected_monstr_ws_close(context):
+            logger.debug("Suppressed expected monstr websocket close-frame exception")
+            return
+        if previous_loop_exception_handler is not None:
+            previous_loop_exception_handler(loop_obj, context)
+        else:
+            loop_obj.default_exception_handler(context)
+
+    loop.set_exception_handler(_handler)
+
 
 config = ConfigWithFallback()
 # print(f"config: {config.SERVICE_NSEC}")
@@ -69,11 +108,13 @@ async def periodic_task(interval: int, stop_event: asyncio.Event):
 async def lifespan(app: FastAPI):
     # stop_event = asyncio.Event()  # Event to signal stopping
     global nwc_task_handle
+    global relay_task
+    _install_loop_exception_filter()
     try:
-        engine = create_engine(SETTINGS.DATABASE)
-        SQLModel.metadata.create_all(engine, checkfirst=True)
-    except:
-        pass
+        SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
+    except SQLAlchemyError:
+        logger.exception("Database initialization failed during startup")
+        raise
     
     #TODO add in current rates    
     await init_currency_rates();
@@ -87,7 +128,7 @@ async def lifespan(app: FastAPI):
     if is_production and not SETTINGS.COOKIE_SECURE:
         raise RuntimeError("COOKIE_SECURE must be enabled in production")
 
-    asyncio.create_task(run_relay())
+    relay_task = asyncio.create_task(run_relay())
     if SETTINGS.NWC_SERVICE:
         pass
         # nwc_task_handle = asyncio.create_task(listen_nwc())
@@ -113,7 +154,7 @@ async def lifespan(app: FastAPI):
     if config.NWC_NSEC:
         print(f"[PID {os.getpid()}] Starting nwc listener.")
         url = SETTINGS.NWC_RELAYS[0]
-        listener_task = asyncio.create_task(listen_notes_periodic(url))
+        listener_task = asyncio.create_task(listen_notes_connected(url))
     else:
         print(f"[PID {os.getpid()}] NWC listener disabled: NWC_NSEC not configured.")
 
@@ -123,7 +164,22 @@ async def lifespan(app: FastAPI):
     if listener_task:
         print("Shutting down listener...")
         listener_task.cancel()
-       
+        try:
+            await listener_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.debug("Suppressed listener shutdown exception: %r", exc)
+
+    if relay_task:
+        print("Shutting down relay...")
+        relay_task.cancel()
+        try:
+            await relay_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.debug("Suppressed relay shutdown exception: %r", exc)
 
    
 
@@ -171,15 +227,17 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Define a root endpoint
 @app.get("/", tags=["public"])
 async def read_root(request: Request, access_token: str = Cookie(default=None)):    
-
-    
-    try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        response = RedirectResponse(url="/safebox/access", status_code=302)
-        return response
-    except:
-        pass
-        print("pass")
+    if access_token:
+        try:
+            await fetch_safebox(access_token=access_token)
+            response = RedirectResponse(url="/safebox/access", status_code=302)
+            return response
+        except DecryptionException:
+            logger.debug("Access token decrypt failed at root route")
+        except HTTPException as exc:
+            logger.debug("Access token not usable at root route: %s", exc.detail)
+        except Exception:
+            logger.exception("Unexpected error resolving root access token")
     csrf_cookie = request.cookies.get(SETTINGS.CSRF_COOKIE_NAME)
     csrf_token = csrf_cookie if csrf_cookie and len(csrf_cookie) >= 32 else secrets.token_urlsafe(32)
     response = templates.TemplateResponse(
@@ -220,8 +278,6 @@ async def get_pqc(request: Request):
 async def get_nostr_name(request: Request, name: str, ):
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
-    engine = create_engine(SETTINGS.DATABASE)
-    
     if name == "_":
         npub_hex = SERVICE_KEY.public_key_hex()
         return {
@@ -232,7 +288,7 @@ async def get_nostr_name(request: Request, name: str, ):
                      { f"{npub_hex}": SETTINGS.RELAYS}  }
     else:
         pass
-        with Session(engine) as session:
+        with Session(DB_ENGINE) as session:
             statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==name)
             safeboxes = session.exec(statement)
             safebox_found = safeboxes.first()
@@ -258,15 +314,7 @@ async def get_nostr_name(request: Request, name: str, ):
                 else:
                     raise HTTPException(status_code=404, detail=f"{name} not found")
 
-    try: 
-        # wallet_info = get_public_profile(wallet_name=name)
-        # print(wallet_info['wallet_info']['npub_hex'])
-        # return{"status": "OK", "reason": "not implemented yet"}
-        
-        pubkey = npub_hex
-        
-    except:
-        return{"status": "ERROR", "reason": "Name does not exist"}
+    pubkey = npub_hex
 
     account_metadata = {}    
     # pubkey =  wallet_info['wallet_info']['npub_hex']
@@ -293,8 +341,6 @@ async def get_safebox_pubhex(request: Request, name: str, ):
     # Either the custom handle or default
 
     # nostr_db = SqliteDict(os.path.join(wallets_directory,"nostr_lookup.db"))
-    engine = create_engine(SETTINGS.DATABASE)
-    
     if name == "_":
         npub_hex = SERVICE_KEY.public_key_hex()
         return {
@@ -307,7 +353,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
                      { f"{npub_hex}": SETTINGS.ECASH_RELAYS}                  }
     else:
         pass
-        with Session(engine) as session:
+        with Session(DB_ENGINE) as session:
             statement = select(RegisteredSafebox).where(RegisteredSafebox.custom_handle==name)
             safeboxes = session.exec(statement)
             safebox_found = safeboxes.first()
@@ -322,9 +368,7 @@ async def get_safebox_pubhex(request: Request, name: str, ):
                     key_obj = Keys(pub_k=safebox_found.npub)
                     npub_hex = key_obj.public_key_hex()
                 else:
-                    npub_hex = None
-                    # 
-                    # raise HTTPException(status_code=404, detail=f"{name} not found")
+                    raise HTTPException(status_code=404, detail=f"{name} not found")
 
 
 

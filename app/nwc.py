@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import inspect
 from monstr.relay.relay import Relay
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from monstr.client.client import Client
@@ -52,6 +53,13 @@ from aiohttp import WSMsgType, WSMessageTypeError
 import contextlib, sys,io
 from contextlib import suppress
 
+
+
+async def _close_client(c: Client) -> None:
+    """Handle monstr client end() implementations that may be sync or async."""
+    result = c.end()
+    if inspect.isawaitable(result):
+        await result
 
 
 def add_nwc_event_if_not_exists(event_id: str) -> bool:
@@ -624,7 +632,7 @@ async def listen_notes(url):
             await asyncio.sleep(1)
     except asyncio.CancelledError:
         print(f"[PID {os.getpid()}] Listener cancelled. Shutting down client...")
-        await c.end()
+        await _close_client(c)
         raise
 
     
@@ -660,7 +668,7 @@ async def listen_notes_connected(url):
                 pass
             except Exception as e:
                 print(f"[{url}] Exception while awaiting cancelled run_task: {e}")
-            await c.end()
+            await _close_client(c)
             raise  # must re-raise to properly propagate cancellation
 
         except Exception as e:
@@ -676,7 +684,7 @@ async def listen_notes_connected(url):
                 except Exception as e:
                     print(f"[{url}] Suppressed error from cancelled run_task: {e}")
 
-            await c.end()
+            await _close_client(c)
             await asyncio.sleep(5)
 
 
