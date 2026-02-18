@@ -174,3 +174,5 @@ The specs folder documents key protocols/flows, including:
 ## Disclaimer
 
 Safebox is experimental software. No warranty is provided. Audit, test, and stage carefully before production use.
+
+![Safebox Logo](./assets/safebox-orginal.png)
