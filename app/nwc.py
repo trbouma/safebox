@@ -21,7 +21,7 @@ import json
 import bolt11
 from typing import Optional
 
-from app.appmodels import RegisteredSafebox, NWCEvent
+from app.appmodels import RegisteredSafebox, NWCEvent, NWCSecret
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 from sqlalchemy.exc import IntegrityError
 
@@ -93,6 +93,24 @@ def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
             safebox_found = None
         
     return safebox_found
+
+
+def nwc_lookup_npub_by_secret_pubkey(secret_pubkey_hex: str) -> Optional[str]:
+    """
+    Resolve a wallet npub by matching the incoming event pubkey against
+    registered NWC secrets.
+    """
+    with Session(engine) as session:
+        secrets = session.exec(select(NWCSecret)).all()
+
+    for each in secrets:
+        try:
+            k = Keys(priv_k=each.nwc_secret)
+            if k.public_key_hex() == secret_pubkey_hex:
+                return each.npub
+        except Exception:
+            continue
+    return None
 
 
 async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_obj, evt: Event):
@@ -492,7 +510,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         print(f"{amount} {recipient_pubkey} {relays}")
         # Need to create the nembed object
         try:
-            cashu_token = await acorn_obj.issue_token(amount)
+            cashu_token = await acorn_obj.issue_token(amount=amount, comment=comment)
         except:
             cashu_token = "nsf"
             
@@ -511,8 +529,6 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         if cashu_token == "nsf":
             pass
             await acorn_obj.add_tx_history(tx_type='X', amount=0, comment="Failed due to NSF",tendered_amount=0,tendered_currency="NAN")
-        else:
-            await acorn_obj.add_tx_history(tx_type='D', amount=amount, comment=comment,tendered_amount=tendered_amount,tendered_currency=tendered_currency)
 
     elif instruction_obj['method'] == 'accept_ecash':
         print("we gotta accept ecash!")
@@ -587,7 +603,21 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
         if add_nwc_event_if_not_exists(event_id=evt.id):
             
             print(f"we have a new event! {evt.created_at}, {evt.tags}")
-            safebox_npub = hex_to_npub(evt.p_tags[0])
+            requested_npub = None
+            try:
+                requested_npub = hex_to_npub(evt.p_tags[0])
+            except Exception:
+                requested_npub = None
+
+            mapped_npub = nwc_lookup_npub_by_secret_pubkey(evt.pub_key)
+            if mapped_npub and requested_npub and mapped_npub != requested_npub:
+                print("NWC secret mapping mismatch; rejecting event")
+                return
+
+            safebox_npub = mapped_npub or requested_npub
+            if not safebox_npub:
+                print("could not determine safebox for incoming nwc event")
+                return
         
             safebox_found = nwc_db_lookup_safebox(safebox_npub)
             if safebox_found:
