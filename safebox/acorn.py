@@ -1465,7 +1465,9 @@ class Acorn:
         }]
 
         # print("are we here?", label_hash)
-        event =await self._async_get_wallet_info(FILTER, label_hash)
+        event = await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            return f"Could not retrieve info for: {label}. Does a record exist?"
         
         # print(event.data())
         try:
@@ -1503,7 +1505,9 @@ class Acorn:
         }]
 
         # print("are we here?", label_hash)
-        event =await self._async_get_wallet_info(FILTER, label_hash)
+        event = await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            return f"{label} not found."
         
         # Do the delete here
         tags = [["e", event.id]]
@@ -1528,9 +1532,7 @@ class Acorn:
         # target_tag = filter[0]['d']
         target_tag = label_hash
         
-        print(f"1523 here")
         self.logger.debug(f"target tag: {target_tag}")
-        event_select = None
         async with ClientPool([self.home_relay]) as c:
         
             
@@ -1539,6 +1541,10 @@ class Acorn:
             self.logger.debug(f"no of events: {len(events)}")
             
             # print(f"_async event xoxoxo: type: {type(events[0])} data: {events[0].data()}")
+
+        if not events:
+            self.logger.debug("No wallet info events found for tag=%s", target_tag)
+            return None
 
         return events[0]
 
@@ -5630,10 +5636,14 @@ class Acorn:
     
     async def get_trusted_entities(self,kind:int=37376, relays: List[str]=None):
 
-        pubhex_list_out = []    
-        record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
-        record_out_json = json.loads(record_out)
-        pubs_to_process = record_out_json['payload'].split(' ')
+        pubhex_list_out = []
+        try:
+            record_out = await self.get_wallet_info(label="trusted entities", record_kind=kind)
+            record_out_json = json.loads(record_out)
+            pubs_to_process = record_out_json.get("payload", "").split(" ")
+        except Exception as exc:
+            self.logger.debug("No trusted entities configured: %s", exc)
+            return []
        
         for each in pubs_to_process:
             try:
@@ -5721,11 +5731,12 @@ class Acorn:
     async def get_wot_entities(self,kind:int=37376, relays: List[str]=None):
 
         pubhex_list_out = []    
-        final_out = ""
         try:
             record_out = await self.get_wallet_info(label="wot entities",record_kind=kind)
+            if not record_out or str(record_out).startswith("Could not retrieve info for:"):
+                return []
             record_out_json = json.loads(record_out)
-            pubs_to_process = record_out_json['payload'].split(' ')
+            pubs_to_process = record_out_json.get('payload', '').split(' ')
             print(f'pubs to process{pubs_to_process}')
         
             for each in pubs_to_process:
@@ -5753,8 +5764,12 @@ class Acorn:
                    
                 except Exception as exc:
                     self.logger.debug("Skipping malformed wot score entity=%s error=%s", each, exc)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.debug("Could not load wot entities: %s", exc)
+            return []
         except Exception as exc:
             self.logger.warning("Could not load wot entities: %s", exc)
+            return []
         
        
 

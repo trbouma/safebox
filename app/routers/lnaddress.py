@@ -277,8 +277,15 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     detail = None
 
    # First, check to see if signature checks out
-    if verify_payload(nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey):
-        print("Payload is verified!")
+    try:
+        is_verified = verify_payload(nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid signature payload: {exc}")
+
+    if not is_verified:
+        raise HTTPException(status_code=401, detail="Signature verification failed")
+
+    print("Payload is verified!")
  
 
     k  = Keys(config.SERVICE_NSEC)
@@ -351,8 +358,15 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     detail = "No error"
 
    # First, check to see if signature checks out
-    if verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey):
-        print("Payload is verified!")
+    try:
+        is_verified = verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid signature payload: {exc}")
+
+    if not is_verified:
+        raise HTTPException(status_code=401, detail="Signature verification failed")
+
+    print("Payload is verified!")
  
 
     k  = Keys(config.SERVICE_NSEC)

@@ -27,12 +27,20 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function setRequestStatus(message) {
+  const statusEl = document.getElementById("span_msg_status");
+  if (statusEl) {
+    statusEl.textContent = message;
+  }
+}
+
 async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
    
     var qr_img_func = document.getElementById("img_qr_display");
     // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
     consoleLog(`Requesting by NFC. ${grant_kind} ${nfc_pin} ${maskedNauth}. \n Please wait...`);
+    setRequestStatus("Tap NFC card to request record...");
     
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
@@ -41,31 +49,34 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       const ndef = new NDEFReader();
       try {
         await ndef.scan();
-        ndef.onreading = event => {
+        ndef.onreading = async event => {
           const decoder = new TextDecoder();
           for (const record of event.message.records) {
 
             nfc_token = decoder.decode(record.data);
           }
          //  alert(`Present ${grant_kind} ${nfc_token}` );
-         qr_img_func.src = "/img/nfc-check.png";
-        consoleLog(`NFC card read successfully!`);
+         qr_img_func.src = "/img/circle-256.gif";
+         consoleLog(`NFC card read successfully!`);
+         setRequestStatus("Card read. Processing request...");
 
          
 
-         submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
          // alert("submitted"); 
          // qr_img_func.src = "/img/hourglass.png";
-         qr_img_func.src = "/img/circle-256.gif";
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
           
         }
       } catch(error) {
         consoleLog(error);
+        setRequestStatus("NFC read failed. Please try again.");
+        qr_img_func.src = "/img/safebox.png";
       }
     } else {
       consoleLog("Web NFC is not supported.");
+      setRequestStatus("Web NFC is not supported on this device/browser.");
     }
 
 
@@ -81,16 +92,28 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
                             "kind":record_kind,
                             "pin": nfc_pin };
     consoleLog(JSON.stringify(submit_data));
-    await fetch('/records/acceptprooftoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => {   consoleLog(`${data.status} ${data.detail}`);
-                      // qr_img_func.src = "/img/check.png";
-
-                  });
+    try {
+      const response = await fetch('/records/acceptprooftoken', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_data)
+      });
+      const data = await response.json();
+      const status = data.status || "ERROR";
+      const detail = data.detail || "Proof request did not return a valid response.";
+      consoleLog(`${status} ${detail}`);
+      setRequestStatus(detail);
+      if (status === "ERROR") {
+        qr_img_func.src = "/img/safebox.png";
+      } else {
+        qr_img_func.src = "/img/circle-256.gif";
+        setRequestStatus("Request accepted. Waiting for records...");
+      }
+    } catch (error) {
+      consoleLog(`submitProof error: ${error}`);
+      setRequestStatus("Unable to submit NFC proof request.");
+      qr_img_func.src = "/img/safebox.png";
+    }
   
   
   
@@ -343,19 +366,9 @@ async function listenForPresentation(nauth) {
       return str.substring(idx + 1);     // Return everything after the colon
     }
 
-async function fetchOriginalBlob(record) {
-
-  const container = document.getElementById("media_container");
-  const img = document.getElementById("dynamic_image");
-
-  // Clear previous PDF render
-  if (container) container.innerHTML = "";
-
-  // Hide image initially
-  if (img) {
-    img.src = "";
-    img.style.display = "none";
-  }
+async function fetchOriginalBlob(record, mediaHost) {
+  if (!mediaHost) return;
+  mediaHost.innerHTML = "";
 
   try {
     const res = await fetch("/records/originalblob", {
@@ -380,18 +393,20 @@ async function fetchOriginalBlob(record) {
     const objectUrl = URL.createObjectURL(blob);
 
     // 🖼 IMAGE HANDLING
-    if (mimeType.startsWith("image/") && img) {
-
+    if (mimeType.startsWith("image/")) {
+      const img = document.createElement("img");
       img.src = objectUrl;
-      img.style.width = "90%";
+      img.style.width = "100%";
       img.style.height = "auto";
       img.style.display = "block";
+      img.style.marginTop = "10px";
+      mediaHost.appendChild(img);
 
       return;
     }
 
     // 📄 PDF HANDLING (PDF.js)
-    if (mimeType === "application/pdf" && container) {
+    if (mimeType === "application/pdf") {
 
       const loadingTask = pdfjsLib.getDocument({
         url: objectUrl,
@@ -399,30 +414,91 @@ async function fetchOriginalBlob(record) {
       });
 
       const pdf = await loadingTask.promise;
+      let currentPage = 1;
+      const totalPages = pdf.numPages;
 
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.flexDirection = "column";
+      controls.style.alignItems = "center";
+      controls.style.justifyContent = "center";
+      controls.style.gap = "6px";
+      controls.style.margin = "8px 0 10px";
 
+      const navRow = document.createElement("div");
+      navRow.style.display = "flex";
+      navRow.style.alignItems = "center";
+      navRow.style.justifyContent = "center";
+      navRow.style.gap = "10px";
+      navRow.style.flexWrap = "nowrap";
+      navRow.style.width = "100%";
+
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.textContent = "Prev";
+      prevBtn.style.width = "88px";
+      prevBtn.style.minWidth = "88px";
+      prevBtn.style.padding = "8px 10px";
+      prevBtn.style.margin = "0";
+
+      const pageLabel = document.createElement("span");
+      pageLabel.style.fontSize = "0.9rem";
+      pageLabel.style.color = "#cfd8ff";
+
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.textContent = "Next";
+      nextBtn.style.width = "88px";
+      nextBtn.style.minWidth = "88px";
+      nextBtn.style.padding = "8px 10px";
+      nextBtn.style.margin = "0";
+
+      navRow.appendChild(prevBtn);
+      navRow.appendChild(nextBtn);
+      controls.appendChild(navRow);
+      controls.appendChild(pageLabel);
+      mediaHost.appendChild(controls);
+
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      canvas.style.display = "block";
+      canvas.style.marginBottom = "12px";
+      mediaHost.appendChild(canvas);
+
+      async function renderPage(pageNum) {
         const page = await pdf.getPage(pageNum);
-
         const viewport = page.getViewport({ scale: 1 });
-        const scale = container.clientWidth / viewport.width;
+        const hostWidth = Math.max(320, mediaHost.clientWidth || viewport.width);
+        const scale = hostWidth / viewport.width;
         const scaledViewport = page.getViewport({ scale: scale });
-
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
 
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
-        canvas.style.display = "block";
-        canvas.style.marginBottom = "16px";
-
-        container.appendChild(canvas);
+        pageLabel.textContent = `${pageNum}/${totalPages}`;
+        prevBtn.disabled = pageNum <= 1;
+        nextBtn.disabled = pageNum >= totalPages;
 
         await page.render({
           canvasContext: context,
           viewport: scaledViewport
         }).promise;
       }
+
+      prevBtn.addEventListener("click", async () => {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      nextBtn.addEventListener("click", async () => {
+        if (currentPage < totalPages) {
+          currentPage += 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      await renderPage(currentPage);
 
       return;
     }
@@ -488,6 +564,12 @@ async function fetchOriginalBlob(record) {
     }
 
     card.appendChild(cardOwnerProfile);
+
+    const cardMedia = document.createElement("div");
+    cardMedia.className = "card-content";
+    cardMedia.style.marginTop = "8px";
+    cardMedia.style.width = "100%";
+    card.appendChild(cardMedia);
   
 
 
@@ -515,17 +597,12 @@ async function fetchOriginalBlob(record) {
 
 
     if (original_record != null) {
-      
-      // alert(`original_record exists ${JSON.stringify(original_record)}`);
-      fetchOriginalBlob(original_record);
-}
+      fetchOriginalBlob(original_record, cardMedia);
+    }
 
     
 
-    card.addEventListener('click', () => {
-        alert(`Verified ${title} ${content}`);
-        // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
-      });
+    // Keep cards non-interactive to avoid accidental alerts while paging embedded PDFs.
 
     // Append the card to the container
     const container = document.getElementById('card-container');
@@ -552,15 +629,6 @@ setDarkMode();
 
 
 </script>
-    <div class="center-text">
-      <br>Original Record<br><br>
-      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
-      <br>
-      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
-      <div id="media_container" style="width:90%; max-width:900px; margin:0 auto;"></div>
-    </div>
-   
-
 <div class="center-text">
 
   <button onclick="backToProfile()">Home</button>

@@ -293,6 +293,29 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         records_out = await acorn_obj.get_user_records(record_kind=record_kind)
 
+        async def _enrich_with_original_record(each_record: dict, requested_label: str | None) -> dict:
+            each_out = dict(each_record)
+            tag_values = each_record.get("tag", [])
+            raw_tag = tag_values[0] if isinstance(tag_values, list) and tag_values else None
+            tag_filter = raw_tag.split(":", 1)[1] if isinstance(raw_tag, str) and ":" in raw_tag else raw_tag
+            candidate_labels = []
+            for candidate in [requested_label, tag_filter, raw_tag]:
+                if isinstance(candidate, str) and candidate and candidate not in candidate_labels:
+                    candidate_labels.append(candidate)
+            for candidate_label in candidate_labels:
+                try:
+                    _, original_record = await acorn_obj.create_request_from_grant(
+                        grant_name=candidate_label,
+                        grant_kind=record_kind,
+                    )
+                    if original_record:
+                        each_out["original_record"] = original_record.model_dump(exclude_none=True)
+                        print(f"present_record original_record found for label={candidate_label}")
+                        break
+                except Exception as exc:
+                    print(f"present_record original_record lookup failed for {candidate_label}: {exc}")
+            return each_out
+
         filtered_records_out = []
         if label:
             print(f"need to filter out for label: {label} for {records_out}")
@@ -302,10 +325,13 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 print(f"tag filter {tag_filter}")
                 # if tag_filter == label:
                 if starts_with(test=label, target=tag_filter):
-                    filtered_records_out.append(each)
+                    each_out = await _enrich_with_original_record(each, label)
+                    filtered_records_out.append(each_out)
         else:
             print("just add all the records")
-            filtered_records_out = records_out
+            for each in records_out:
+                each_out = await _enrich_with_original_record(each, None)
+                filtered_records_out.append(each_out)
 
 
 

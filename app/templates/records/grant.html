@@ -169,30 +169,95 @@ async function getBlob() {
         });
 
       const pdf = await loadingTask.promise;
+      let currentPage = 1;
+      const totalPages = pdf.numPages;
 
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.flexDirection = "column";
+      controls.style.alignItems = "center";
+      controls.style.justifyContent = "center";
+      controls.style.gap = "6px";
+      controls.style.margin = "8px 0 10px";
 
+      const navRow = document.createElement("div");
+      navRow.style.display = "flex";
+      navRow.style.alignItems = "center";
+      navRow.style.justifyContent = "center";
+      navRow.style.gap = "10px";
+      navRow.style.flexWrap = "nowrap";
+      navRow.style.width = "100%";
+
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.textContent = "Prev";
+      prevBtn.style.width = "88px";
+      prevBtn.style.minWidth = "88px";
+      prevBtn.style.padding = "8px 10px";
+      prevBtn.style.margin = "0";
+
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.textContent = "Next";
+      nextBtn.style.width = "88px";
+      nextBtn.style.minWidth = "88px";
+      nextBtn.style.padding = "8px 10px";
+      nextBtn.style.margin = "0";
+
+      const pageLabel = document.createElement("span");
+      pageLabel.style.fontSize = "0.9rem";
+      pageLabel.style.color = "#cfd8ff";
+
+      navRow.appendChild(prevBtn);
+      navRow.appendChild(nextBtn);
+      controls.appendChild(navRow);
+      controls.appendChild(pageLabel);
+      container.appendChild(controls);
+
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      canvas.style.display = "block";
+      canvas.style.width = "100%";
+      canvas.style.maxWidth = "100%";
+      canvas.style.height = "auto";
+      canvas.style.boxSizing = "border-box";
+      canvas.style.marginBottom = "12px";
+      container.appendChild(canvas);
+
+      async function renderPage(pageNum) {
         const page = await pdf.getPage(pageNum);
-
         const viewport = page.getViewport({ scale: 1 });
-        const scale = container.clientWidth / viewport.width;
+        const hostWidth = Math.max(280, (container.clientWidth || viewport.width) - 4);
+        const scale = hostWidth / viewport.width;
         const scaledViewport = page.getViewport({ scale: scale });
-
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
 
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
-        canvas.style.display = "block";
-        canvas.style.marginBottom = "16px";
-
-        container.appendChild(canvas);
+        pageLabel.textContent = `${pageNum}/${totalPages}`;
+        prevBtn.disabled = pageNum <= 1;
+        nextBtn.disabled = pageNum >= totalPages;
 
         await page.render({
           canvasContext: context,
           viewport: scaledViewport
         }).promise;
       }
+
+      prevBtn.addEventListener("click", async () => {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      nextBtn.addEventListener("click", async () => {
+        if (currentPage < totalPages) {
+          currentPage += 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      await renderPage(currentPage);
 
       return;
     }

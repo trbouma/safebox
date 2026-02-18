@@ -1760,6 +1760,15 @@ async def ws_request_record( websocket: WebSocket,
                 is_presenter = False
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
+                    original_record_to_present_json = None
+                    incoming_original_record = each.get("original_record")
+                    if isinstance(incoming_original_record, dict):
+                        original_record_to_present_json = incoming_original_record
+                    elif isinstance(incoming_original_record, str):
+                        try:
+                            original_record_to_present_json = json.loads(incoming_original_record)
+                        except Exception:
+                            original_record_to_present_json = None
                     # Add in PQC stuff here
                     record_ciphertext = each.get("ciphertext", None)
                     record_kemalg = each.get("kemalg", None) 
@@ -1776,7 +1785,6 @@ async def ws_request_record( websocket: WebSocket,
                             decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
                             print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
                             each['payload'] = decrypted_payload
-                        original_record_to_present_json = None
                         if original_record_to_decrpyt:
                             print("there is an original record in the presentation!")
                             decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
@@ -1998,14 +2006,20 @@ async def accept_proof_token( request: Request,
     token_to_use = proof_token.proof_token
     label_to_use = proof_token.label
     record_kind_to_use = proof_token.kind
-    
-    
-    token_split = token_to_use.split(':')
-    parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]
+
+    if not token_to_use:
+        return {"status": "ERROR", "detail": "Missing proof token."}
+
+    try:
+        parsed_nembed = parse_nembed_compressed(token_to_use)
+        host = parsed_nembed["h"]
+        proof_token_to_use = parsed_nembed["k"]
+        nfc_default = parsed_nembed.get("n", ["Holder", "default"])
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Invalid NFC proof token payload: %s", exc)
+        return {"status": "ERROR", "detail": "Invalid NFC proof token payload."}
+
     vault_url = f"https://{host}/.well-known/proof"
-    proof_token_to_use = parsed_nembed["k"]
-    nfc_default = parsed_nembed.get("n",["Holder","default"])
 
     print(f"proof token: {token_to_use} acquired pin: {proof_token.pin} record kind {record_kind_to_use} label to use: {label_to_use} nfc default: {nfc_default}")
 
@@ -2033,10 +2047,23 @@ async def accept_proof_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"vault url: {vault_url} submit data: {submit_data}")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url=vault_url, json=submit_data, headers=headers)
-        response.raise_for_status()
-        vault_response = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=vault_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            vault_response = response.json()
+    except httpx.TimeoutException:
+        logger.warning("Proof vault timeout for host=%s", host)
+        return {"status": "ERROR", "detail": "Proof vault request timed out."}
+    except httpx.HTTPStatusError as exc:
+        logger.warning("Proof vault HTTP error %s for host=%s", exc.response.status_code, host)
+        return {"status": "ERROR", "detail": f"Proof vault returned HTTP {exc.response.status_code}."}
+    except httpx.RequestError as exc:
+        logger.warning("Proof vault network error for host=%s: %s", host, exc)
+        return {"status": "ERROR", "detail": "Proof vault network error."}
+    except ValueError:
+        logger.warning("Proof vault returned non-JSON response for host=%s", host)
+        return {"status": "ERROR", "detail": "Proof vault returned an invalid response."}
     
     print(vault_response)
 
@@ -2044,7 +2071,10 @@ async def accept_proof_token( request: Request,
    
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    return {"status": vault_response['status'], "detail": vault_response['detail']}  
+    return {
+        "status": vault_response.get("status", "ERROR"),
+        "detail": vault_response.get("detail", "Proof vault request completed."),
+    }
 
 @router.post("/acceptoffertoken", tags=["records", "protected"])
 async def accept_offer_token( request: Request, 
