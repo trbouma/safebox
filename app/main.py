@@ -88,10 +88,13 @@ if config.SERVICE_NSEC:
     
     SERVICE_KEY = Keys(config.SERVICE_NSEC)
 else:
-    print("add new key")
+    logger.error("SERVICE_NSEC is not configured; generated a replacement key for setup guidance")
     SERVICE_KEY = Keys()
-    print(f"Please add this entry to you your enviroment: SERVICE_SECRET_KEY={SERVICE_KEY.private_key_bech32()}")
-    raise Exception("error")
+    logger.error(
+        "Add this to your environment: SERVICE_SECRET_KEY=%s",
+        SERVICE_KEY.private_key_bech32(),
+    )
+    raise RuntimeError("SERVICE_NSEC is required")
 
 
 nwc_task_handle = None
@@ -100,7 +103,7 @@ nwc_task_handle = None
 async def periodic_task(interval: int, stop_event: asyncio.Event):
     while not stop_event.is_set():
         worker_id = os.getenv("GUNICORN_WORKER_ID", "1")
-        print(f"Executing periodic task... {worker_id}")
+        logger.debug("Executing periodic task worker_id=%s", worker_id)
         # await refresh_currency_rates()
         await asyncio.sleep(interval)  # Wait for the next interval
 
@@ -133,7 +136,7 @@ async def lifespan(app: FastAPI):
         pass
         # nwc_task_handle = asyncio.create_task(listen_nwc())
     
-    print("let's start up!")
+    logger.info("Application startup complete")
     # Create Task
     # task = asyncio.create_task(periodic_task(SETTINGS.REFRESH_CURRENCY_INTERVAL, stop_event))
     global listener_task
@@ -152,17 +155,17 @@ async def lifespan(app: FastAPI):
     
     # The single event handling is now done in nwc.py, so all listeners can be running
     if config.NWC_NSEC:
-        print(f"[PID {os.getpid()}] Starting nwc listener.")
+        logger.info("[PID %s] Starting nwc listener", os.getpid())
         url = SETTINGS.NWC_RELAYS[0]
         listener_task = asyncio.create_task(listen_notes_connected(url))
     else:
-        print(f"[PID {os.getpid()}] NWC listener disabled: NWC_NSEC not configured.")
+        logger.info("[PID %s] NWC listener disabled: NWC_NSEC not configured", os.getpid())
 
     
     yield
 
     if listener_task:
-        print("Shutting down listener...")
+        logger.info("Shutting down listener")
         listener_task.cancel()
         try:
             await listener_task
@@ -172,7 +175,7 @@ async def lifespan(app: FastAPI):
             logger.debug("Suppressed listener shutdown exception: %r", exc)
 
     if relay_task:
-        print("Shutting down relay...")
+        logger.info("Shutting down relay")
         relay_task.cancel()
         try:
             await relay_task

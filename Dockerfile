@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=tiangolo/uvicorn-gunicorn-fastapi:python3.11
+ARG BASE_IMAGE=python:3.11-slim-bookworm
 ARG LIBOQS_REF=0.14.0
 ARG POETRY_VERSION=1.8.4
 
@@ -39,21 +39,17 @@ ARG POETRY_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
     POETRY_HOME=/opt/poetry \
     POETRY_VIRTUALENVS_CREATE=false \
+    PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/poetry/bin:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    python3-dev \
     libpq-dev \
     build-essential \
-    automake \
     pkg-config \
-    libtool \
     libffi-dev \
-    cmake \
-    git \
     ca-certificates \
     openssl \
     libssl-dev \
@@ -71,4 +67,3 @@ COPY . /app
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:7375/ >/dev/null || exit 1
-
