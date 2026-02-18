@@ -511,21 +511,24 @@ def zap(amount:int, event, comment):
     result_out = asyncio.run(acorn_obj.zap(amount,event,comment))    
     click.echo(result_out)
 
-@click.command(help="Accept cashu token")
+@click.command("accept_token", help="Accept cashu token")
 @click.argument('token')
-def accept(token):
+def accept_token(token):
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    result_out = asyncio.run(acorn_obj.accept_token(token))
-    click.echo(result_out)
+    try:
+        result_out = asyncio.run(acorn_obj.accept_token(token))
+        click.echo(result_out)
+    except Exception as e:
+        click.echo(f"Error: {e}")
 
-@click.command("issue", help="Issue token amount")
+@click.command("issue_token", help="Issue token amount")
 @click.argument('amount', default=1)
-def issue(amount:int):
+def issue_token(amount:int):
     click.echo(f"Issue token amount: {amount}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
@@ -656,12 +659,12 @@ def release_lock():
     asyncio.run(acorn_obj.load_data()) 
     asyncio.run(acorn_obj.release_lock()) 
 
-@click.command("issue", help="Issue private record")
+@click.command("issue_record", help="Issue private record")
 @click.argument('content', default="hello")
 @click.option('--tags','-t', default=[])
 @click.option('--kind','-k', default=34002, help="kind for record")
 
-def issue( content:str, tags, kind:int):
+def issue_record(content:str, tags, kind:int):
   
     
     click.echo(f"Issue content: {content}")
@@ -825,15 +828,15 @@ cli.add_command(delete_kind)
 cli.add_command(get_user_records)
 cli.add_command(balance)
 cli.add_command(zap)
-cli.add_command(accept)
-cli.add_command(issue)
+cli.add_command(accept_token)
+cli.add_command(issue_token)
 cli.add_command(send)
 cli.add_command(recover)
 cli.add_command(set_owner)
 cli.add_command(dm_recipient)
 cli.add_command(stx_recipient)
 cli.add_command(run)
-cli.add_command(issue)
+cli.add_command(issue_record)
 cli.add_command(set_trusted_entities)
 cli.add_command(get_trusted_entities)
 cli.add_command(get_root_entities)

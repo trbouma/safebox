@@ -2144,8 +2144,10 @@ class Acorn:
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
+        lock_acquired = False
         try:
             await self.acquire_lock()
+            lock_acquired = True
             headers = { "Content-Type": "application/json"}
             timeout = httpx.Timeout(20.0, connect=5.0)
             if mint:
@@ -2176,7 +2178,7 @@ class Acorn:
             for each in powers_of_2:
                 secret = secrets.token_hex(32)
                 B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret))
+                blinded_values.append((B_,r, secret, Y))
                 
                 blinded_messages.append(    BlindedMessage( amount=each,
                                                             id=keyset,
@@ -2238,7 +2240,7 @@ class Acorn:
                             id = keyset,
                             secret=blinded_values[i][2],
                             C=C.serialize().hex(),
-                            Y=Y.serialize().hex()
+                            Y=blinded_values[i][3].serialize().hex()
                 )
 
                 proof_objs.append(proof)
@@ -2249,12 +2251,12 @@ class Acorn:
 
             #TODO change this to write_proofs
             await self.add_proofs_obj(proof_objs)
-            await self.release_lock()
         except Exception as e:
           raise RuntimeError(f"Error in mint_proofs {e}") from e
         
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
         
         return True
 
@@ -2463,14 +2465,26 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         try:
-            
-            await self.delete_proof_events()
+            old_filter = [{
+                'limit': RECORD_LIMIT,
+                'authors': [self.pubkey_hex],
+                'kinds': [7375]
+            }]
+            old_proof_event_ids: List[str] = []
+            async with ClientPool([self.home_relay]) as c:
+                existing_events = await c.query(old_filter)
+                old_proof_event_ids = [event.id for event in existing_events]
+
             # get proofs by keyset
             all_proofs, amount = self._proofs_by_keyset()
             
             for key, value in all_proofs.items():
 
                 await self.add_proofs_obj(value) 
+
+            if old_proof_event_ids:
+                await self._async_delete_events_by_ids(old_proof_event_ids, record_kind=7375)
+
             await self._load_proofs()
         except Exception as e:
             self.logger.error(f"error writhing proofs {e}")
@@ -3442,6 +3456,27 @@ class Acorn:
         except Exception as exc:
             raise Exception("error deleting proof events")    
 
+    async def _async_delete_events_by_ids(self, event_ids: List[str], record_kind: int):
+        if not event_ids:
+            return
+
+        tags = []
+        for event_id in event_ids:
+            tags.append(["e", event_id])
+        tags.append(["k", str(record_kind)])
+        self.logger.debug(f"deleting {len(event_ids)} events for kind {record_kind}")
+
+        async with ClientPool([self.home_relay]) as c:
+            n_msg = Event(
+                kind=Event.KIND_DELETE,
+                content=None,
+                pub_key=self.pubkey_hex,
+                tags=tags,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            await asyncio.sleep(1)
+
     async def swap_proofs(self, incoming_swap_proofs: List[Proof]):
         '''This function swaps proofs'''
         self.logger.debug("Swap proofs")
@@ -3786,10 +3821,6 @@ class Acorn:
             for each in self.proofs:
                 swap_balance += each.amount
             # print(len(self.proofs))
-            # delete old proofs
-            await self._async_delete_proof_events()
-            # self.add_proofs(json.dumps(combined_proofs))
-
             self.proofs = combined_proof_objs
             await self.write_proofs()
             await self.release_lock()
@@ -4049,10 +4080,9 @@ class Acorn:
                 combined_proofs = combined_proofs + proofs
                 combined_proof_objs = combined_proof_objs + proof_objs
 
-        await self._async_delete_proof_events()
         print("XXXXX async swap multi each")
-        # self.add_proofs_obj(combined_proof_objs)
-        await self._async_add_proofs_obj(combined_proof_objs)
+        self.proofs = combined_proof_objs
+        await self.write_proofs()
         
         # self._load_proofs()
         FILTER = [{
@@ -4566,6 +4596,7 @@ class Acorn:
         
         # return f'Not implemented', 0
         
+        lock_acquired = False
         try:
 
             
@@ -4617,22 +4648,20 @@ class Acorn:
             print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
             
             await self.acquire_lock()
+            lock_acquired = True
             await self.add_proofs_obj(swap_proofs)
-            await self.release_lock()
 
         
             
             self.logger.debug(f"Proofs of {token_amount} are added! ")
         except Exception as e:
             self.logger.error(f"ecash accept error {e}")  
-            await self.release_lock()
             raise Exception(f"Is token already spent? {e}")
             
         
         finally:
-            pass
-            
-            await self.release_lock()  
+            if lock_acquired:
+                await self.release_lock()
         self.balance+=token_amount
         # print(f"accept token new balance is: {self.balance}")
         await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
@@ -4646,8 +4675,10 @@ class Acorn:
 
     async def issue_token(self, amount:int, comment:str = "ecash withdrawal"):
 
+        lock_acquired = False
         try:
             await self.acquire_lock()
+            lock_acquired = True
             # print("issue token")
             available_amount = 0
             chosen_keyset = None
@@ -4720,7 +4751,6 @@ class Acorn:
                 for each_proof in each_proofs:
                     post_payment_proofs.append(each_proof)
             self.proofs = post_payment_proofs
-            await self._async_delete_proof_events()
             
             #TODO change this to write_proof
             await self.write_proofs()
@@ -4735,13 +4765,12 @@ class Acorn:
             
             v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
             # print("proofs remaining:", proofs_remaining)
-            await self.release_lock()
         except Exception as e:
             # self.logger(f"issue token error {e}")
-            await self.release_lock()
             raise Exception(f"Error {e}")
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
 
         self.balance -= amount
         await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
