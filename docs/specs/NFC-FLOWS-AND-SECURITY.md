@@ -203,10 +203,18 @@ Flow:
 2. Offerer taps recipient card and captures token.
 3. `acceptoffertoken` parses token and runs card preflight:
    - `POST /.well-known/card-status`
-4. If preflight fails, request returns immediate `ERROR` to UI.
-5. If preflight passes, service signs token and calls `/.well-known/offer`.
+4. Preflight is advisory for stability:
+   - If it passes, proceed normally.
+   - If it fails due to timeout/network/proxy transport issues, continue with warning logs.
+5. Service signs token and calls `/.well-known/offer` (authoritative check).
 6. Vault validates token, resolves active secret, and emits NWC `offer_record`.
 7. Recipient wallet handles offer flow and transmittal.
+
+Security note:
+
+- Offer flow security does not rely on preflight success.
+- The authoritative decision is made by `/.well-known/offer` validation.
+- This avoids false negatives from transport-only failures while preserving cryptographic checks.
 
 ### B. Request/Present Record over NFC
 
@@ -224,8 +232,10 @@ Flow:
 2. Requester taps presenter card and captures token.
 3. `acceptprooftoken` parses token and runs card preflight:
    - `POST /.well-known/card-status`
-4. If preflight fails, request returns immediate `ERROR`.
-5. If preflight passes, service signs token and calls `/.well-known/proof`.
+4. Preflight is advisory for stability:
+   - If it passes, proceed normally.
+   - If it fails for transport reasons, continue with warning logs.
+5. Service signs token and calls `/.well-known/proof` (authoritative check).
 6. Vault validates token, checks PIN, and emits NWC `present_record`.
 7. Presenter wallet returns records over transmittal channels.
 8. Requester receives, verifies, and renders records (including original blob flow when present).
@@ -240,13 +250,82 @@ Key points:
 - PIN mismatch can reject or downgrade authorization depending on vault policy.
 - Secret validity and PIN validity are separate checks.
 
+### PIN-Provided and PIN-Not-Provided Flows
+
+Safebox now supports explicit user decisioning in record request UX.
+
+1. PIN provided and valid:
+   - `/.well-known/proof` returns `status=OK`.
+   - Request proceeds normally.
+2. PIN provided but invalid:
+   - `/.well-known/proof` returns non-OK (typically `WARNING` / invalid PIN detail).
+   - Client shows a confirm dialog: "Invalid PIN. Continue anyway?"
+   - If user cancels, request stops.
+   - If user confirms, request remains active and waits for record delivery based on vault policy.
+3. PIN not provided (empty/omitted):
+   - Treated as PIN mismatch by vault-side PIN check.
+   - Client receives non-OK detail and applies the same continue/cancel confirm flow.
+
+Operationally, this keeps PIN as a user-level control while allowing controlled bypass where policy permits.
+
+## Record Flow Stability Hardening
+
+Recent changes were made specifically to reduce exploitability from brittle transport behavior and to improve reliability in heterogeneous browser/proxy setups.
+
+### 1. Preflight Converted to Advisory
+
+Endpoints:
+
+- `POST /records/acceptoffertoken`
+- `POST /records/acceptprooftoken`
+
+Behavior:
+
+- Card-status preflight (`/.well-known/card-status`) is still executed.
+- Preflight failure no longer hard-fails the flow.
+- The flow proceeds to authoritative vault endpoints (`/.well-known/offer`, `/.well-known/proof`).
+
+Reason:
+
+- Preflight can fail for non-security reasons (proxy header mismatch, transient network failures, timeout).
+- Hard-failing at preflight caused user-visible regressions in NFC offer/request while QR flows still worked.
+- Authoritative vault validation already enforces signature + token + secret checks.
+
+### 2. Authoritative Validation Remains Unchanged
+
+- Offer vault (`/.well-known/offer`) and proof vault (`/.well-known/proof`) remain the enforcement points.
+- Invalid/revoked card secrets still fail.
+- Signature verification still required.
+- Decrypt/parse errors still fail.
+
+### 3. Better Upstream Error Propagation
+
+For vault HTTP errors, Safebox now returns upstream `detail` when available instead of generic HTTP-only text.
+
+Outcome:
+
+- Users get actionable failures (for example invalid card/invalid PIN specific detail).
+- Operators can correlate UI failures with backend logs quickly.
+
+### 4. Browser Stability and Transport Safety
+
+Record templates now normalize websocket URL usage on HTTPS pages:
+
+- If page protocol is HTTPS and websocket base contains `ws://`, client upgrades to `wss://` before connect.
+
+Outcome:
+
+- Prevents mixed-content websocket blocks in stricter desktop browsers.
+- Keeps QR-driven and NFC-assisted offer/request record flows consistent across Chrome/Safari/mobile.
+
 ## User Experience Requirements
 
 For NFC actions, UI should:
 
 1. Show immediate success/failure status after submit.
-2. Alert on `status != OK` (invalid/rotated card, timeout, network failure).
-3. Keep QR workflows unchanged and independent from NFC card rotation state.
+2. For record PIN failures, use confirm-style user decisioning instead of hard-stop alerts.
+3. For non-PIN failures, show explicit error detail from vault responses when available.
+4. Keep QR workflows unchanged and independent from NFC card rotation state.
 
 ## Operational Guidance
 

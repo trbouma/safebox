@@ -73,6 +73,17 @@ body {
   overflow-wrap: anywhere;
 }
 
+.original-record-panel {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #3b5187;
+  border-radius: 14px;
+  background: #0f1735;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  padding: 14px;
+  margin: 12px auto 0;
+}
+
 h1, h2, h3, h4, h5, p, span, label, pre, li {
   color: var(--sb-text-main);
 }
