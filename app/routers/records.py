@@ -61,7 +61,7 @@ def _raise_if_missing_acorn(acorn_obj: Acorn):
         logger.warning("records API called without an active acorn session")
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
 
-async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str]:
+async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
     status_url = f"https://{host}/.well-known/card-status"
     headers = {"Content-Type": "application/json"}
@@ -71,18 +71,18 @@ async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -
             response = await client.post(status_url, json=payload, headers=headers)
     except httpx.TimeoutException:
         logger.warning("Card status preflight timeout for host=%s", host)
-        return False, "Card validation timed out."
+        return False, "Card validation timed out.", False
     except httpx.RequestError as exc:
         logger.warning("Card status preflight network error for host=%s: %s", host, exc)
-        return False, "Card validation network error."
+        return False, "Card validation network error.", False
 
     if response.status_code == 200:
-        return True, "Card is active"
+        return True, "Card is active", True
     if response.status_code in (401, 404):
-        return False, "Card is invalid or rotated. Re-issue the NFC card."
+        return False, "Card is invalid or rotated. Re-issue the NFC card.", True
 
     logger.warning("Card status preflight failed host=%s code=%s body=%s", host, response.status_code, response.text)
-    return False, f"Card validation failed with HTTP {response.status_code}."
+    return False, f"Card validation failed with HTTP {response.status_code}.", True
 
 
 
@@ -922,12 +922,34 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         # Ingest original recored if there is one
 
         if original_record_to_decrpyt:
-            await acorn_obj.transfer_blob(record_name=record_name,record_kind=type, record_origin=npub_initiator, blobxfer=decrypted_original)
+            blob_result = await acorn_obj.transfer_blob(
+                record_name=record_name,
+                record_kind=type,
+                record_origin=npub_initiator,
+                blobxfer=decrypted_original,
+            )
+            if blob_result.get("status") != "OK":
+                logger.warning(
+                    "Original blob transfer non-fatal status record=%s kind=%s status=%s reason=%s",
+                    record_name,
+                    type,
+                    blob_result.get("status"),
+                    blob_result.get("reason"),
+                )
 
 
 
 
-    await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
+    try:
+        await websocket.send_json(
+            {
+                "status": "OK",
+                "detail": f"all good {acorn_obj.handle} {scope} {grant} {user_records}",
+                "grant_kind": first_type,
+            }
+        )
+    except WebSocketDisconnect:
+        logger.info("websocket_accept client disconnected before final send")
    
 
 @router.post("/acceptincomingrecord", tags=["records", "protected"])
@@ -2018,9 +2040,17 @@ async def ws_listen_for_nauth( websocket: WebSocket,
     nauth_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
+    start_time = datetime.now()
 
     # This is PQC Step 2 in the KEM iteraction 
     while True:
+        if datetime.now() - start_time > timedelta(seconds=settings.LISTEN_TIMEOUT):
+            print("listenfornauth timeout reached. Exiting loop.")
+            try:
+                await websocket.send_json({"status": "TIMEOUT", "detail": "Authentication timed out."})
+            except WebSocketDisconnect:
+                logger.info("ws_listen_for_nauth client disconnected before TIMEOUT send")
+            break
         try:
             # await acorn_obj.load_data()
             try:
@@ -2075,6 +2105,9 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                 break
            
         
+        except WebSocketDisconnect:
+            logger.info("ws_listen_for_nauth client disconnected")
+            break
         except Exception as e:
             print(f"Websocket message: {e}")
             break
@@ -2127,10 +2160,12 @@ async def accept_proof_token( request: Request,
     
     sig = sign_payload(proof_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
-    card_ok, card_detail = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
     if not card_ok:
-        # Do not fail closed on preflight transport issues. The proof vault will
-        # still perform signature + token validation authoritatively.
+        if preflight_definitive:
+            logger.warning("Proof preflight rejected host=%s detail=%s", host, card_detail)
+            return {"status": "ERROR", "detail": card_detail}
+        # On transport-level uncertainty, continue and rely on authoritative vault validation.
         logger.warning("Proof preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
@@ -2221,10 +2256,12 @@ async def accept_offer_token( request: Request,
     
     sig = sign_payload(offer_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
-    card_ok, card_detail = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
     if not card_ok:
-        # Do not fail closed on preflight transport issues. The offer vault will
-        # still perform signature + token validation authoritatively.
+        if preflight_definitive:
+            logger.warning("Offer preflight rejected host=%s detail=%s", host, card_detail)
+            return {"status": "ERROR", "detail": card_detail}
+        # On transport-level uncertainty, continue and rely on authoritative vault validation.
         logger.warning("Offer preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing

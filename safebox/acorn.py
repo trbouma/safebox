@@ -2011,110 +2011,147 @@ class Acorn:
             
             return events[0]
         
-    async def transfer_blob(self,record_name, record_kind: int = 37375,record_origin: str = None, blobxfer: str = None):
-        """This function transfers a blob, adds it to the target record and deletes"""
-        # blobxfer pass in as string and instantiate
+    async def transfer_blob(
+        self,
+        record_name,
+        record_kind: int = 37375,
+        record_origin: str = None,
+        blobxfer: str = None,
+    ) -> Dict[str, Any]:
+        """Transfer source blob to wallet blob store and attach metadata to record."""
         self.logger.debug("op=transfer_blob status=start record=%s kind=%s", record_name, record_kind)
         blossom_servers = ['https://blossom.getsafebox.app']
         blossom_server = 'https://blossom.getsafebox.app'
-        
 
         if record_origin:
-            record_name = ':'.join([record_origin,record_name])
+            record_name = ':'.join([record_origin, record_name])
 
-        if blobxfer:
-            
+        if not blobxfer:
+            return {"status": "SKIPPED", "reason": "no_blobxfer"}
+
+        try:
+            blobxfer_obj: OriginalRecordTransfer = OriginalRecordTransfer.model_validate_json(blobxfer)
+        except (ValueError, TypeError) as exc:
+            self.logger.warning(
+                "op=transfer_blob status=invalid_blobxfer record=%s kind=%s error=%s",
+                record_name,
+                record_kind,
+                exc,
+            )
+            return {"status": "INVALID_BLOBXFER", "reason": str(exc)}
+
+        self.logger.debug("op=transfer_blob status=validated record=%s kind=%s", record_name, record_kind)
+        try:
+            client_xfer = BlossomClient(nsec=blobxfer_obj.blobnsec, default_servers=blossom_servers)
             try:
-                blobxfer: OriginalRecordTransfer = OriginalRecordTransfer.model_validate_json(blobxfer)
-                self.logger.debug("op=transfer_blob status=validated record=%s kind=%s", record_name, record_kind)
-                try:
-                    client_xfer = BlossomClient(nsec=blobxfer.blobnsec, default_servers=blossom_servers)
-                    blob_retrieve: BlossomBlob = client_xfer.get_blob(server=blobxfer.blobserver ,sha256=blobxfer.blobsha256)
-                    delete_result = client_xfer.delete_blob(server=blobxfer.blobserver,sha256=blobxfer.blobsha256)
-                    self.logger.debug("op=transfer_blob status=source_deleted record=%s result=%s", record_name, delete_result)
-                    # Now we need need to decrypt the blob
-                    if blob_retrieve.mime_type == "application/octet-stream":
-                        try:
-                            blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
-                                                                    
-                                                                    key=bytes.fromhex(blobxfer.encryptparms.key),
-                                                                    iv = bytes.fromhex(blobxfer.encryptparms.iv)
-                                                                )
-                        except (ValueError, TypeError) as e:
-                            self.logger.warning("op=transfer_blob status=decrypt_failed record=%s error=%s", record_name, e)
-                            return
+                blob_retrieve: BlossomBlob = client_xfer.get_blob(
+                    server=blobxfer_obj.blobserver,
+                    sha256=blobxfer_obj.blobsha256,
+                )
+            except Exception as exc:
+                if exc.__class__.__name__ == "BlobNotFound":
+                    self.logger.info(
+                        "op=transfer_blob status=source_missing record=%s kind=%s sha256=%s",
+                        record_name,
+                        record_kind,
+                        blobxfer_obj.blobsha256,
+                    )
+                    return {"status": "NOT_FOUND", "reason": "source_blob_missing"}
+                self.logger.warning(
+                    "op=transfer_blob status=fetch_failed record=%s kind=%s error=%s",
+                    record_name,
+                    record_kind,
+                    exc,
+                )
+                return {"status": "FETCH_FAILED", "reason": str(exc)}
 
-                        # Now we have the original data, check against original hash
-                        resultsha256 = hashlib.sha256(blob_data).hexdigest()
-                        if resultsha256 == blobxfer.origsha256:
-                            if blob_data:
-                                guessed_blob_type = filetype.guess_mime(blob_data)
-                                guessed_extension = '.'+filetype.guess_extension(blob_data)
-                                extension = mimetypes.guess_extension(blob_data) or ""
-                                # with NamedTemporaryFile(
-                                #    mode="wb",
-                                #    prefix="transfer",
-                                #    suffix=guessed_extension,
-                                #    dir = './tmp',
-                                #    delete=False
-                                # ) as tmp:
-                                #     tmp.write(blob_data)
-                                #    tmp_path = tmp.name
-                                self.logger.debug("op=transfer_blob status=decrypted record=%s mime=%s", record_name, guessed_blob_type)
+            try:
+                delete_result = client_xfer.delete_blob(
+                    server=blobxfer_obj.blobserver,
+                    sha256=blobxfer_obj.blobsha256,
+                )
+                self.logger.debug("op=transfer_blob status=source_deleted record=%s result=%s", record_name, delete_result)
+            except Exception as exc:
+                self.logger.warning(
+                    "op=transfer_blob status=source_delete_failed record=%s kind=%s error=%s",
+                    record_name,
+                    record_kind,
+                    exc,
+                )
 
+            if blob_retrieve.mime_type != "application/octet-stream":
+                return {"status": "INVALID_SOURCE_MIME", "reason": blob_retrieve.mime_type}
 
-                        else:
-                            raise ValueError("Transferred blob hash does not match original hash")
-                        # Get existing record
-                        safebox_record = await self.get_record_safebox(record_name=record_name,record_kind=record_kind)
-                        self.logger.debug("op=transfer_blob status=loaded_record record=%s", record_name)
-
-                        blob_key = os.urandom(32)  # 256-bit key
-                
-                        encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
-                        encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
-        
-                        # final_blob_data = blob_data
-                        final_blob_data = encrypt_result.cipherbytes
-
-                        client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
-                        upload_result = client.upload_blob(blossom_server, data=final_blob_data,
-                             description='Blob to server')
-                        sha256 = upload_result['sha256']
-                        blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
-                        
-                        blob_type = upload_result['type']
-                        self.logger.debug("op=transfer_blob status=uploaded record=%s sha256=%s", record_name, sha256)
-                        updated_safebox_record = SafeboxRecord( tag=safebox_record.tag,
-                                                                type = safebox_record.type,
-                                                                payload = safebox_record.payload,
-                                                                blobref=blob_ref,
-                                                                blobtype=guessed_blob_type,
-                                                                blobsha256=sha256,
-                                                                origsha256=blobxfer.origsha256,
-                                                                encryptparms=encrypt_parms)
-                        record_json_str = updated_safebox_record.model_dump_json()
-
-                        record_type = "generic"
-                        await self.update_tags([["user_record",record_name,record_type]])
-
-                        await self.set_wallet_info(record_name,record_json_str,record_kind=record_kind)
-                        # print(user_records)
-                        await   self.set_wallet_config()
-
-                    else:
-                        raise ValueError("Transfer did not occur; missing encrypted payload")
-                        # blob_data = blob_retrieve.get_bytes()
-
-                except (ValueError, TypeError, RuntimeError) as e:
-                    self.logger.warning("op=transfer_blob status=processing_failed record=%s kind=%s error=%s", record_name, record_kind, e)
-
+            try:
+                blob_data = decrypt_bytes(
+                    cipherbytes=blob_retrieve.get_bytes(),
+                    key=bytes.fromhex(blobxfer_obj.encryptparms.key),
+                    iv=bytes.fromhex(blobxfer_obj.encryptparms.iv),
+                )
             except (ValueError, TypeError) as exc:
-                self.logger.warning("op=transfer_blob status=invalid_blobxfer record=%s kind=%s error=%s", record_name, record_kind, exc)
+                self.logger.warning("op=transfer_blob status=decrypt_failed record=%s error=%s", record_name, exc)
+                return {"status": "DECRYPT_FAILED", "reason": str(exc)}
 
+            resultsha256 = hashlib.sha256(blob_data).hexdigest()
+            if resultsha256 != blobxfer_obj.origsha256:
+                self.logger.warning(
+                    "op=transfer_blob status=hash_mismatch record=%s expected=%s got=%s",
+                    record_name,
+                    blobxfer_obj.origsha256,
+                    resultsha256,
+                )
+                return {"status": "HASH_MISMATCH", "reason": "transferred_hash_mismatch"}
 
+            guessed_blob_type = filetype.guess_mime(blob_data) or "application/octet-stream"
+            self.logger.debug("op=transfer_blob status=decrypted record=%s mime=%s", record_name, guessed_blob_type)
 
-        return
+            safebox_record = await self.get_record_safebox(record_name=record_name, record_kind=record_kind)
+            self.logger.debug("op=transfer_blob status=loaded_record record=%s", record_name)
+
+            blob_key = os.urandom(32)
+            encrypt_result: EncryptionResult = encrypt_bytes(blob_data, blob_key)
+            encrypt_parms = EncryptionParms(
+                alg=encrypt_result.alg,
+                key=blob_key.hex(),
+                iv=encrypt_result.iv.hex(),
+            )
+
+            final_blob_data = encrypt_result.cipherbytes
+            client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
+            upload_result = client.upload_blob(
+                blossom_server,
+                data=final_blob_data,
+                description='Blob to server',
+            )
+            sha256 = upload_result['sha256']
+            blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
+
+            self.logger.debug("op=transfer_blob status=uploaded record=%s sha256=%s", record_name, sha256)
+            updated_safebox_record = SafeboxRecord(
+                tag=safebox_record.tag,
+                type=safebox_record.type,
+                payload=safebox_record.payload,
+                blobref=blob_ref,
+                blobtype=guessed_blob_type,
+                blobsha256=sha256,
+                origsha256=blobxfer_obj.origsha256,
+                encryptparms=encrypt_parms,
+            )
+            record_json_str = updated_safebox_record.model_dump_json()
+
+            await self.update_tags([["user_record", record_name, "generic"]])
+            await self.set_wallet_info(record_name, record_json_str, record_kind=record_kind)
+            await self.set_wallet_config()
+            return {"status": "OK", "blobref": blob_ref, "blobsha256": sha256}
+
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            self.logger.warning(
+                "op=transfer_blob status=processing_failed record=%s kind=%s error=%s",
+                record_name,
+                record_kind,
+                exc,
+            )
+            return {"status": "PROCESSING_FAILED", "reason": str(exc)}
 
     async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
 

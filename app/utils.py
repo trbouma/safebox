@@ -10,7 +10,7 @@ import validators
 from urllib.parse import urlparse
 import secrets
 import logging
-from fastapi import Depends, Cookie, HTTPException
+from fastapi import Depends, Cookie, HTTPException, Request
 from fastapi import Response
 
 from hashlib import sha256
@@ -100,17 +100,25 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
     
     return encrypted_encoded_jwt
 
-def ensure_csrf_cookie(response: Response, current_token: str | None = None) -> str:
+def ensure_csrf_cookie(
+    response: Response,
+    current_token: str | None = None,
+    request: Request | None = None,
+) -> str:
     if current_token and isinstance(current_token, str) and len(current_token) >= 32:
         token = current_token
     else:
         token = secrets.token_urlsafe(32)
 
+    host = (request.url.hostname if request else "") or ""
+    is_localhost = host in {"localhost", "127.0.0.1"}
+    secure_cookie = settings.COOKIE_SECURE and not is_localhost
+
     response.set_cookie(
         key=settings.CSRF_COOKIE_NAME,
         value=token,
         httponly=False,
-        secure=settings.COOKIE_SECURE,
+        secure=secure_cookie,
         samesite=settings.COOKIE_SAMESITE.lower(),
     )
     return token

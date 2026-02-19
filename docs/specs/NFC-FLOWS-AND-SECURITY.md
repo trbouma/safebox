@@ -318,6 +318,22 @@ Outcome:
 - Prevents mixed-content websocket blocks in stricter desktop browsers.
 - Keeps QR-driven and NFC-assisted offer/request record flows consistent across Chrome/Safari/mobile.
 
+### 5. Legacy Browser PDF Fallback
+
+For original-record rendering in offer/grant views, Safebox now uses a compatibility fallback when modern PDF rendering is unavailable.
+
+Behavior:
+
+- Primary path: render PDF inline with PDF.js (single-page view with Prev/Next controls).
+- Fallback path: if PDF.js is unavailable or PDF rendering fails, show:
+  - "PDF preview unavailable on this browser."
+  - "Open/Download Original PDF" link to the original blob endpoint.
+
+Outcome:
+
+- Older browsers/devices (for example older Chromebook builds) can still access original records.
+- Record exchange remains functional even when inline PDF preview is unsupported.
+
 ## User Experience Requirements
 
 For NFC actions, UI should:

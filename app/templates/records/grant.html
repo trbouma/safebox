@@ -120,6 +120,39 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function renderPdfFallback(container, blobUrl, message = "PDF preview unavailable on this browser.") {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.style.padding = "10px";
+  wrap.style.border = "1px solid #3b5187";
+  wrap.style.borderRadius = "12px";
+  wrap.style.background = "#0d1430";
+  wrap.style.textAlign = "center";
+
+  const note = document.createElement("p");
+  note.textContent = message;
+  note.style.margin = "0 0 10px";
+  note.style.color = "#cad9ff";
+  wrap.appendChild(note);
+
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Open/Download Original PDF";
+  link.style.display = "inline-block";
+  link.style.padding = "10px 12px";
+  link.style.border = "1px solid #5267ec";
+  link.style.borderRadius = "10px";
+  link.style.textDecoration = "none";
+  link.style.color = "#eaf0ff";
+  wrap.appendChild(link);
+
+  container.appendChild(wrap);
+}
+
 async function getBlob() {
 
   const container = document.getElementById("media_container");
@@ -166,6 +199,11 @@ async function getBlob() {
 
     // 📄 PDF HANDLING (PDF.js)
     if (mimeType === "application/pdf" && container) {
+      if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+        renderPdfFallback(container, blobUrl);
+        if (recordStatus) recordStatus.textContent = "Original Record";
+        return;
+      }
 
       const loadingTask = pdfjsLib.getDocument({
         url: blobUrl,
@@ -271,6 +309,7 @@ async function getBlob() {
 
   } catch (err) {
     console.log("Render error:", err);
+    if (container) renderPdfFallback(container, blobUrl);
     if (recordStatus) recordStatus.textContent = "Original Record";
   }
 }

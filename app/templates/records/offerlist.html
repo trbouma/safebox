@@ -63,6 +63,11 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function buildWsUrl(path) {
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}`;
+}
+
 async function requestbyNFC(offer_kind, nauth) {
    
     var qr_img_func = document.getElementById("img_qr_display");
@@ -178,10 +183,8 @@ async function createQRCode() {
 
   }
 
- const wsBase = window.location.protocol === "https:"
-   ? "{{ws_url}}".replace(/^ws:\/\//i, "wss://")
-   : "{{ws_url}}";
- const ws = new WebSocket(`${wsBase}${global_nauth}`);
+ const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
+ const ws = new WebSocket(wsUrl);
 
    
 
@@ -189,6 +192,11 @@ async function createQRCode() {
     ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);  
+      if (response.status === "TIMEOUT") {
+        alert(response.detail || "Recipient authentication timed out. Please regenerate the QR code.");
+        qr_img_func.src = "/img/safebox.png";
+        return;
+      }
       global_transmit_nauth = response.nauth;
       client_name = response.name;
       client_transmittal_kind = response.transmittal_kind;
@@ -206,6 +214,11 @@ async function createQRCode() {
     offerRecord();
     
     
+  };
+  ws.onerror = (event) => {
+    consoleLog(`WebSocket error: ${event}`);
+    alert("Unable to establish authentication channel. Please retry.");
+    qr_img_func.src = "/img/safebox.png";
   };
   ws.onclose = () => console.log("WebSocket closed");
   

@@ -37,6 +37,44 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function buildWsUrl(path) {
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}`;
+}
+
+function renderPdfFallback(container, blobUrl, message = "PDF preview unavailable on this browser.") {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.style.padding = "10px";
+  wrap.style.border = "1px solid #3b5187";
+  wrap.style.borderRadius = "12px";
+  wrap.style.background = "#0d1430";
+  wrap.style.textAlign = "center";
+
+  const note = document.createElement("p");
+  note.textContent = message;
+  note.style.margin = "0 0 10px";
+  note.style.color = "#cad9ff";
+  wrap.appendChild(note);
+
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Open/Download Original PDF";
+  link.style.display = "inline-block";
+  link.style.padding = "10px 12px";
+  link.style.border = "1px solid #5267ec";
+  link.style.borderRadius = "10px";
+  link.style.textDecoration = "none";
+  link.style.color = "#eaf0ff";
+  wrap.appendChild(link);
+
+  container.appendChild(wrap);
+}
+
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -250,17 +288,20 @@ async function createQRCode() {
   }
 
  // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
- const wsBase = window.location.protocol === "https:"
-   ? "{{ws_url}}".replace(/^ws:\/\//i, "wss://")
-   : "{{ws_url}}";
- const ws = new WebSocket(`${wsBase}${global_nauth}`);
-  console.log(`${wsBase}${global_nauth}`);
+ const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
+ const ws = new WebSocket(wsUrl);
+  console.log(wsUrl);
    
   
     ws.onopen = () => console.log("WebSocket connected");
     ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);  
+      if (response.status === "TIMEOUT") {
+        alert(response.detail || "Recipient authentication timed out. Please regenerate the QR code.");
+        qr_img_func.src = "/img/safebox.png";
+        return;
+      }
       global_transmit_nauth = response.nauth;
       client_name = response.name;
       client_transmittal_kind = response.transmittal_kind;
@@ -282,6 +323,11 @@ async function createQRCode() {
     offerRecord();
     
     
+  };
+  ws.onerror = (event) => {
+    console.log("WebSocket error:", event);
+    alert("Unable to establish authentication channel. Please retry.");
+    qr_img_func.src = "/img/safebox.png";
   };
   ws.onclose = () => console.log("WebSocket closed");
   
@@ -474,12 +520,17 @@ async function handleFileSelected() {
     const blobUrl = URL.createObjectURL(selectedFile);
 
     try {
+      if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+        renderPdfFallback(container, blobUrl);
+        return;
+      }
       const loadingTask = pdfjsLib.getDocument(blobUrl);
       const pdf = await loadingTask.promise;
       await renderSinglePagePdf(pdf, container);
 
     } catch (err) {
       consoleLog(`PDF preview error: ${err}`);
+      renderPdfFallback(container, blobUrl);
     }
 
     return;
@@ -567,6 +618,11 @@ async function getBlob() {
 
     // 📄 PDF HANDLING (PDF.js)
     if (mimeType === "application/pdf" && container) {
+      if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+        renderPdfFallback(container, blobUrl);
+        if (recordStatus) recordStatus.textContent = "Original Record";
+        return;
+      }
 
       const loadingTask = pdfjsLib.getDocument({
         url: blobUrl,
@@ -584,6 +640,7 @@ async function getBlob() {
 
   } catch (err) {
     console.log("Render error:", err);
+    if (container) renderPdfFallback(container, blobUrl);
     if (recordStatus) recordStatus.textContent = "Original Record";
   }
 }

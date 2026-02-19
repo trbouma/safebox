@@ -519,7 +519,20 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         # Ingest original recored if there is one
 
         if original_record_to_decrpyt:
-            await acorn_obj.transfer_blob(record_name=record_name,record_kind=type, record_origin=npub_initiator, blobxfer=decrypted_original)
+            blob_result = await acorn_obj.transfer_blob(
+                record_name=record_name,
+                record_kind=type,
+                record_origin=npub_initiator,
+                blobxfer=decrypted_original,
+            )
+            if blob_result.get("status") != "OK":
+                print(
+                    "transfer_blob non-fatal status",
+                    record_name,
+                    type,
+                    blob_result.get("status"),
+                    blob_result.get("reason"),
+                )
     
         print(f"records finished added")
         # Not sure if I need the following line

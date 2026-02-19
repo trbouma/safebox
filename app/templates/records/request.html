@@ -27,6 +27,11 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function buildWsUrl(path) {
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}`;
+}
+
 function setRequestStatus(message) {
   const statusEl = document.getElementById("span_msg_status");
   if (statusEl) {
@@ -318,11 +323,9 @@ async function listenForPresentation(nauth) {
   console.log(`listen for request presentation ${nauth}`);
     
     // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
-    const wsBase = window.location.protocol === "https:"
-      ? "{{ws_url}}".replace(/^ws:\/\//i, "wss://")
-      : "{{ws_url}}";
-    const ws = new WebSocket(`${wsBase}${nauth}`);
-    console.log(wsBase);
+    const wsUrl = buildWsUrl(`/records/ws/request/${nauth}`);
+    const ws = new WebSocket(wsUrl);
+    console.log(wsUrl);
     
        
       // alert("listen for request");

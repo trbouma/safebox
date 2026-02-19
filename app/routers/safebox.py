@@ -130,7 +130,7 @@ def _welcome_retry_response(request: Request):
             "csrf_token": csrf_token,
         },
     )
-    ensure_csrf_cookie(response=response, current_token=csrf_token)
+    ensure_csrf_cookie(response=response, current_token=csrf_token, request=request)
     return response
 
 

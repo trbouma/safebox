@@ -251,7 +251,7 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
             "csrf_token": csrf_token,
         },
     )
-    ensure_csrf_cookie(response=response, current_token=csrf_token)
+    ensure_csrf_cookie(response=response, current_token=csrf_token, request=request)
     return response
 
 # Define a npub endpoint
