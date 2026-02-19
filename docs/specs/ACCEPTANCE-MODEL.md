@@ -105,7 +105,7 @@ In this model:
 
 The diagram below illustrates these relationships:
 
-![Acceptance Model](./img/acceptance-model.png)
+![Acceptance Model](../img/acceptance-model.png)
 
 ## Statements: Facts and Views
 
@@ -214,7 +214,7 @@ Acceptance is:
 
 Acceptance is a recursive resolution model that halts at first-order assertions.
 
-![Acceptance Steps](./img/acceptance-steps.png)
+![Acceptance Steps](../img/acceptance-steps.png)
 
 ## Synthesis
 
