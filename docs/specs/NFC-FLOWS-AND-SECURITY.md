@@ -1,198 +1,268 @@
 # NFC Flows and Security
 
+## Introduction
+
+Safebox uses a software-defined NFC card model to provide near full wallet functionality on inexpensive commodity tags such as NTAG215. In practice, this means a user can carry a low-cost NFC card and still perform core wallet operations without requiring their phone at the moment of interaction.
+
+With a provisioned card, Safebox supports card-mediated:
+
+- Logging into an NFC-enabled web app session
+- Sending payments
+- Receiving/requesting payments
+- Offering records
+- Requesting/presenting records
+
+This enables practical "card-only at point of interaction" usage for payments and record exchange, while Safebox services handle secure vault messaging, authorization, and settlement in the background.
+
+Safebox also uses a self-issuance model. The holder issues their own cards from the wallet and controls lifecycle state through secret rotation:
+
+- A user can issue multiple cards.
+- Each issued card can have its own unique PIN.
+- The user can rotate the active secret to revoke previously issued cards.
+- Rotation invalidates any old card payloads still in circulation.
+
+This gives users direct control to activate new cards and revoke any and all prior cards without relying on specialized secure hardware.
+
+## Key Takeaways
+
+- Safebox NFC works with inexpensive NTAG215 cards and similar commodity NFC tags.
+- A provisioned card can drive payments and record exchange flows at the point of interaction.
+- A cardholder can log into an NFC-enabled Safebox web app directly with the card.
+- Card validity is controlled in software through an active secret mapping, not secure card hardware.
+- Users can self-issue multiple cards and revoke all older cards by rotating the active secret.
+- Multiple cards can be active at once, each with a distinct PIN, while sharing the current active secret set.
+- QR flows remain independent and continue working even when NFC cards are rotated/revoked.
+
 ## Overview
 
-This document describes how NFC works in Safebox today, including:
+This document defines how Safebox NFC works today for:
 
-- Issuance of an NFC card by the holder
+- Card issuance and rotation
 - NFC login
-- NFC-assisted payment flows (accept and send)
-- NFC-assisted record flows (offer and present/request)
-- Security model and hardening considerations
+- NFC payment flows (request/receive and send)
+- NFC record flows (offer and request/present)
 
-## Scope
+It also describes the active-secret security model and failure behavior.
 
-This specification covers NFC issuance, login, payment, and record flows as currently implemented.
+## Core Security Model
 
-This specification does not define hardware-level secure element requirements.
+Safebox uses an application-layer card token model:
 
-## NFC Card Issuance (Holder)
+1. A card payload contains an encrypted value `k` which decrypts to:
+   - `nwc_secret:pin`
+2. `nwc_secret` is looked up in `NWCSecret` to resolve the active target `npub`.
+3. If no active mapping exists, the card is invalid.
 
-The holder issues an NFC token from the protected route:
+### Single Active Secret per Safebox
+
+Each Safebox has one active NWC secret mapping used for NFC card operations.
+
+- Reusing cards:
+  - Multiple physical cards can carry the same `nwc_secret`.
+- Rotation:
+  - Rotating creates a new `nwc_secret` mapping for that `npub`.
+  - Previously issued cards with the old secret fail immediately.
+
+### Cards Can Have Different PINs
+
+The encrypted card payload includes `secret:pin`.
+This means multiple cards can share the same active secret while using different PIN values.
+
+- Secret identifies which wallet/card-set is valid.
+- PIN is an additional per-card user gate.
+
+## Issuance and Rotation
+
+Holder endpoint:
 
 - `GET /safebox/issuecard`
 
-At issuance time, the server:
+Behavior:
 
-1. Generates a one-time `secure_pin`.
-2. Builds plaintext secret material:
-   - `holder_privkey_hex:secure_pin`
-3. Encrypts this with service key material (`SERVICE_NSEC`) using NIP-44.
-4. Wraps encrypted token into a compact `nembed` payload:
-   - `h`: expected host/domain
-   - `k`: encrypted token material
-   - `a`: default amount fallback (e.g., 21 sats)
-   - `n`: NFC defaults/profile metadata (`NFC_DEFAULT`)
+1. Fetch active `nwc_secret` for the safebox.
+2. If rotate requested, generate/store a new `nwc_secret`.
+3. Generate `secure_pin`.
+4. Encrypt `"{nwc_secret}:{secure_pin}"` with service key (`SERVICE_NSEC`, NIP-44).
+5. Build `nembed` token with:
+   - `h` host binding
+   - `k` encrypted payload
+   - `a` default amount hint
+   - `n` defaults metadata
+6. User writes this `nembed` to one or more cards.
 
-The resulting `nembed` string is what gets written to the NFC card/tag.
+Operational result:
 
-## NFC Login
+- No rotation: newly written cards remain compatible with existing active cards.
+- Rotation: old cards are revoked by design.
 
-Route:
+## Card Validation and Fast-Fail
+
+Public validation endpoint:
+
+- `POST /.well-known/card-status`
+
+Request must include signed token fields:
+
+- `token`
+- `pubkey`
+- `sig`
+
+Validation sequence:
+
+1. Verify signature over token.
+2. Decrypt token payload.
+3. Resolve `nwc_secret` in active mapping table.
+4. Return active status or reject.
+
+Reject behavior:
+
+- Rotated/revoked/unknown secret returns invalid-card response.
+- NFC flows should stop immediately and show user-facing error.
+- QR flows are not affected.
+
+## NFC Login Flow
+
+Endpoint:
 
 - `POST /safebox/loginwithnfc`
 
-Flow:
+Sequence:
 
-1. Client submits `nembed`.
-2. Server parses and validates payload host.
-3. Server resolves holder identity from token payload and looks up registered safebox.
-4. If valid, server issues access token and redirects to `/safebox/access`.
+1. Client submits NFC `nembed`.
+2. Server parses token and validates host.
+3. Server decrypts `k` and resolves `nwc_secret -> npub`.
+4. If mapping exists, login proceeds and access token is issued.
+5. If mapping does not exist, login fails (invalid/revoked card).
 
 ## NFC Payment Flows
 
-There are two distinct directions:
+### A. Request Payment (Receiver Reads Payer Card)
 
-- **A. Accept payment from another card/token**
-- **B. Send payment to another card/token**
+Client/API endpoint:
 
-### 3A. Accept Payment by NFC (`requestnfcpayment`)
+- `POST /safebox/requestnfcpayment`
 
-Routes:
+Remote vault endpoint:
 
-- Client/API: `POST /safebox/requestnfcpayment`
-- Remote vault endpoint: `POST /.well-known/nfcvaultrequestpayment`
+- `POST /.well-known/nfcvaultrequestpayment`
 
-Sequence:
+Flow:
 
-1. Receiver scans NFC token.
-2. Receiver submits `{payment_token, amount, currency, comment}`.
-3. Server parses token (`h`, `k`, optional default amount).
-4. Server signs `k` (`sig = sign_payload(...)`) with service key.
-5. If lightning path:
-   - Creates invoice (`deposit(...)`), starts payment monitor task.
-   - Sends signed request + invoice to remote `/.well-known/nfcvaultrequestpayment`.
-6. If ecash-clearing path:
-   - Sends signed ecash instruction and starts ecash listener.
-7. Remote vault decrypts token, emits NWC instruction (`kind 23194`) to the payer wallet.
-8. Payer wallet executes payment instruction; receiver settles and balance updates.
+1. Receiver taps payer NFC card and gets token.
+2. Receiver submits token + amount/currency/comment.
+3. Server parses token host and signs token payload.
+4. Server forwards to payer vault endpoint.
+5. Vault validates token/signature, decrypts card payload, resolves active secret.
+6. Vault emits NWC instruction to payer wallet.
+7. Payer wallet executes payment path (ecash or lightning workflow).
+8. Receiver gets completion updates (notify/status channel) and balance refresh.
 
-### 3B. Send Payment to NFC Tag (`paytonfctag`)
+Failure mode:
 
-Routes:
+- If card secret is stale/rotated, vault rejects early and request fails immediately.
 
-- Client/API: `POST /safebox/paytonfctag`
-- Remote vault endpoint: `POST /.well-known/nfcpayout`
+### B. Send Payment (Sender Reads Recipient Card)
 
-Sequence:
+Client/API endpoint:
 
-1. Sender scans recipient NFC tag.
-2. Sender submits `{nembed, amount, currency, comment}`.
-3. Server parses token and computes final amount (fallback to `a` if needed).
-4. Server signs token (`sig`) and posts to recipient vault `/.well-known/nfcpayout`.
-5. Recipient vault resolves target wallet from token secret and:
-   - creates invoice (lightning) or
-   - accepts ecash path
-6. Sender side pays invoice / sends ecash asynchronously.
-7. Sender and recipient balances are updated via existing payment tasks.
+- `POST /safebox/paytonfctag`
+
+Remote vault endpoint:
+
+- `POST /.well-known/nfcpayout`
+
+Flow:
+
+1. Sender taps recipient NFC card.
+2. Sender submits token + amount/currency/comment.
+3. Server parses token and computes SAT amount.
+4. Server signs token and posts to recipient vault.
+5. Vault validates/decrypts token, resolves active recipient secret.
+6. Vault starts recipient-side invoice/ecash handling.
+7. Sender completes payment and both wallets update.
+
+Failure mode:
+
+- Stale/rotated card secret fails before payout processing.
 
 ## NFC Record Flows
 
-There are two core record operations over NFC:
+### A. Offer Record over NFC
 
-- **Offer a record**
-- **Present a record in response to a request**
+Client/API endpoint:
 
-### 4A. Offer Record by NFC
+- `POST /records/acceptoffertoken`
 
-Routes:
+Remote vault endpoint:
 
-- Client/API: `POST /records/acceptoffertoken`
-- Remote vault endpoint: `POST /.well-known/offer`
+- `POST /.well-known/offer`
 
-Sequence:
+Flow:
 
-1. Offeror generates `nauth` (scope/grant context) and scans recipient NFC token.
-2. Offeror posts `{offer_token, nauth}` to `/records/acceptoffertoken`.
-3. Server parses token host + encrypted key, signs token, forwards to `/.well-known/offer`.
-4. Vault decrypts token and publishes NWC instruction:
-   - `method = "offer_record"`
-   - `params = {nauth}`
-5. Recipient wallet receives instruction and runs offer/grant transmittal flow.
+1. Offerer prepares `nauth` context.
+2. Offerer taps recipient card and captures token.
+3. `acceptoffertoken` parses token and runs card preflight:
+   - `POST /.well-known/card-status`
+4. If preflight fails, request returns immediate `ERROR` to UI.
+5. If preflight passes, service signs token and calls `/.well-known/offer`.
+6. Vault validates token, resolves active secret, and emits NWC `offer_record`.
+7. Recipient wallet handles offer flow and transmittal.
 
-### 4B. Request/Present Record by NFC
+### B. Request/Present Record over NFC
 
-Routes:
+Client/API endpoint:
 
-- Client/API: `POST /records/acceptprooftoken`
-- Remote vault endpoint: `POST /.well-known/proof`
+- `POST /records/acceptprooftoken`
 
-Sequence:
+Remote vault endpoint:
 
-1. Requestor creates `nauth` (record kind/scope) and scans presenter NFC token.
-2. Requestor posts `{proof_token, nauth, label, kind, pin}`.
-3. Server parses token, signs token, forwards to `/.well-known/proof`.
-4. Vault verifies signature, checks token PIN, and emits NWC instruction:
-   - `method = "present_record"`
-   - `params = {nauth, label, kind, pin_ok}`
-5. Presenter wallet resolves requested record and transmits result over nauth transmittal channels.
-6. Requestor websocket receives, verifies, and renders record(s).
-7. If original blob metadata is present, requestor fetches and renders original record inline.
+- `POST /.well-known/proof`
 
-## Security Considerations
+Flow:
 
-## Token Confidentiality
+1. Requester prepares `nauth`, kind, label, and PIN.
+2. Requester taps presenter card and captures token.
+3. `acceptprooftoken` parses token and runs card preflight:
+   - `POST /.well-known/card-status`
+4. If preflight fails, request returns immediate `ERROR`.
+5. If preflight passes, service signs token and calls `/.well-known/proof`.
+6. Vault validates token, checks PIN, and emits NWC `present_record`.
+7. Presenter wallet returns records over transmittal channels.
+8. Requester receives, verifies, and renders records (including original blob flow when present).
 
-- NFC tokens do **not** expose raw wallet secret directly.
-- Sensitive token payload (`k`) is encrypted with service-side key material.
+## PIN Behavior
 
-## Domain/Host Binding
+PIN is checked in proof/presentation-style authorization flows and can be used as a gate before sensitive actions.
 
-- Token includes host `h` to bind operation to a target domain/environment.
-- Parsing logic checks this to avoid cross-host misuse.
+Key points:
 
-## Signed Vault Requests
+- PIN is card-specific and embedded with the active secret.
+- PIN mismatch can reject or downgrade authorization depending on vault policy.
+- Secret validity and PIN validity are separate checks.
 
-- Outbound vault requests include:
-  - `token` (encrypted payload)
-  - `pubkey` (service pubkey)
-  - `sig` (Schnorr signature over token payload)
-- Some vault endpoints enforce signature failure with immediate reject.
+## User Experience Requirements
 
-## NWC Relay Isolation
+For NFC actions, UI should:
 
-- Vault endpoints do not perform direct wallet actions.
-- They publish encrypted NWC instructions (`kind 23194`) addressed to wallet pubkey.
-- Wallet executes instruction in its own context.
+1. Show immediate success/failure status after submit.
+2. Alert on `status != OK` (invalid/rotated card, timeout, network failure).
+3. Keep QR workflows unchanged and independent from NFC card rotation state.
 
-## PIN Gate for Presentation
+## Operational Guidance
 
-- Proof/presentation path carries `pin_ok` from vault check.
-- This signal can be used to enforce policy before record release.
-
-## Original Blob Safety
-
-- Original records may be transferred as encrypted metadata + blob references.
-- Request-side retrieval can be one-time (fetch then delete at source) depending on flow.
-
-## Operational Notes
-
-These are important implementation notes for operators:
-
-- Ensure signature verification is consistently enforced across **all** NFC vault endpoints.
-  - Some endpoints enforce fail-fast today; others should be reviewed for parity.
-- Keep `SERVICE_NSEC` protected; compromise impacts NFC trust boundary.
-- Consider replay protections (nonce/timestamp/TTL) for signed vault payloads.
-- Restrict allowed hosts for token-directed outbound calls (SSRF controls).
-- Log structured status for:
+- Protect `SERVICE_NSEC`; compromise affects NFC token trust boundary.
+- Keep `NWCSecret` mapping authoritative and auditable.
+- Use structured logging for:
   - signature failures
-  - invalid token formats
-  - upstream vault failures/timeouts
-- Keep NFC token issuance and rotation operationally documented (revocation, reissue).
+  - decrypt failures
+  - invalid/revoked secret lookups
+  - upstream timeout/network errors
+- Rotate secret when card set should be invalidated.
+- Reissue cards after rotation.
 
-## Implementation References
+## Endpoints Reference
 
-Holder-facing:
+Holder/client:
 
 - `/safebox/issuecard`
 - `/safebox/loginwithnfc`
@@ -201,8 +271,9 @@ Holder-facing:
 - `/records/acceptoffertoken`
 - `/records/acceptprooftoken`
 
-Vault-facing:
+Vault/public:
 
+- `/.well-known/card-status`
 - `/.well-known/nfcvaultrequestpayment`
 - `/.well-known/nfcpayout`
 - `/.well-known/offer`

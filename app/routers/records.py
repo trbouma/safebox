@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 import asyncio,qrcode, io, urllib
+from starlette.websockets import WebSocketDisconnect
 
 from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
@@ -1747,7 +1748,10 @@ async def ws_request_record( websocket: WebSocket,
     while True:
         if datetime.now() - start_time > timedelta(minutes=1):
             print("1 minute has passed. Exiting loop.")
-            await websocket.send_json({"status":"TIMEOUT"})
+            try:
+                await websocket.send_json({"status":"TIMEOUT"})
+            except WebSocketDisconnect:
+                logger.info("ws_request_record client disconnected before TIMEOUT send")
             break
         try:
             # await acorn_obj.load_data()
@@ -1906,12 +1910,19 @@ async def ws_request_record( websocket: WebSocket,
                                }
                 # print(f"send {incoming_record} {record_json}") 
                 # print(f"msg out: {msg_out}") 
-                await websocket.send_json(msg_out)
+                try:
+                    await websocket.send_json(msg_out)
+                except WebSocketDisconnect:
+                    logger.info("ws_request_record client disconnected before VERIFIED send")
+                    break
                 incoming_record_old = incoming_record
                 print("incoming record  successful!")
                 break
            
         
+        except WebSocketDisconnect:
+            logger.info("ws_request_record client disconnected")
+            break
         except Exception as e:
             print(f"Websocket message: {e}")
             break
