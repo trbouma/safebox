@@ -26,6 +26,18 @@ Safebox is actively developed and still experimental.
 
 Use with caution, test before production, and treat all deployments as security-sensitive.
 
+Phase 1 and Phase 2 are completed. Currently in [Phase 3](./docs/PHASE3-PROPOSAL.md)
+
+Read previous funding proposals and progress reports [here](./docs/INITIAL-PROPOSAL.md)
+
+Demo highlights:
+
+- Live field test in Madeira, Portugal [video](https://youtu.be/rRX6p0Oy584)
+- Comprehensive overview [video](https://youtu.be/Q7nhgmGtemk)
+- Five minute overview of core functions [video](https://youtu.be/nxTBgffyssQ)
+
+Follow development updates on Nostr [here](https://tim-bouma.npub.pro/tag/safebox).
+
 ## Core Capabilities
 
 - Wallet
