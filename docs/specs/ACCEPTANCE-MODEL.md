@@ -1,372 +1,320 @@
-# The Acceptance Model  
+# The Acceptance Model
 *A generic framework for how statements become facts*
-
-
-
----
 
 ## Overview
 
-The **Acceptance Model** expresses a simple idea:
+The **Acceptance Model** captures a simple idea:
 
-> **Facts and views are not established by the system; they exist outside in the world, and are known and resolved to be true about assertions made about them.**
+> Facts and views are not created by a system; they exist in the world.  
+> A system decides what it will treat as settled and actionable.
 
-Across law, governance, science, and technical systems, disputes rarely hinge on *what might be true in some ultimate sense*. Instead, they hinge on **what a system is prepared to treat as settled and binding**.
+Across law, governance, science, and technical systems, disputes usually do not hinge on ultimate truth. They hinge on what the system is prepared to treat as **resolved, binding, and sufficient for action**.
 
-The Acceptance Model provides a **generic vocabulary** for understanding how that settlement and binding happens using a decentralized protocol like Nostr.
+The model provides a generic vocabulary for that process in decentralized contexts such as Nostr.
 
-The Acceptance Model is useful whenever:
-- Multiple actors make competing or complementary claims about reality (i.e., the world)
-- Disagreement or uncertainty exists
-- Decisions must be made despite incomplete knowledge
-- A system must eventually **stop asking questions** about the world, but in a way that is resolvable, transparent, deterministic and binding.
+It is useful whenever:
 
-This model can apply to many different situations and use cases:
-- Courts determining legal facts
-- Administrations making binding decisions
-- Technical systems validating states
-- Registries recording ownership or control
-- Cryptographic systems finalizing transactions
+- multiple actors make competing or complementary claims
+- uncertainty or disagreement exists
+- decisions must be made under incomplete information
+- the system must eventually stop asking questions in a transparent, deterministic way
 
-The Acceptanc Model deliberately avoids metaphysics or morality; it does not ask *what is ultimately true*, but rather:
+Typical applications:
 
-> **What must be accepted in order for a decision to be made and action to proceed?**
+- legal fact-finding
+- administrative decision processes
+- technical state validation
+- ownership/control registries
+- cryptographic transaction finalization
 
----
+The model avoids metaphysical claims. It asks:
 
-## Acceptance Model implemented using Nostr
+> What must be accepted so action can proceed?
 
-The Acceptance Model is intended to be agnostic in its implementation, however, the simplicity of the Nostr Protocol enables exploration and demonstration of the model.
+## Working-Group Context and Safebox Position
 
-In the context of Nostr: 
+This model is being developed in the context of an active Web of Trust working-group effort and is incorporated into Safebox as a generalized framework for determining:
 
-- The **system** is the Nostr protocol consisting of its core primitives of **npubs** and **signed events**.
-- The **world** is everything out there that exists independently of nostr and which may, or may not be expressed using nostr.
+- which parties are considered trustworthy in a given context
+- what those parties are permitted to do under the relevant legal system or governance structure in effect
 
-zEvery **system** that operates at scale (i.e., nostr protocol and its artifacts)  must answer three questions:
+Safebox’s design objective is neutral infrastructure:
 
-1. **What is being claimed?**
-2. **Who vouches for this claim (and how)?**
-3. **When does the system stop pursuing the question of system uncertainty regarding this claim?** 
+- Safebox aims to enforce and operationalize recognized decisions/policies.
+- Safebox does not define substantive truth, legal outcomes, or governance legitimacy.
+- Safebox is designed to minimize implication in, or influence over, those external determinations.
 
-The Acceptance Model structures those questions into clear layers, separating:
-- Reality from language
-- Claims from validation
-- Trust in statements from trust in action
-- Truth from recognition
+In practice, Safebox provides the verification, attestation, recognition, and policy-execution machinery while leaving normative authority to the governing institutions, communities, and legal frameworks that rely on it.
 
----
+## Acceptance Model with Nostr
 
-## Core Concepts (Plain Definitions)
+The Acceptance Model is implementation-agnostic, but Nostr provides minimal primitives that make it easy to demonstrate:
 
-- **Claim** A claim is a declaration of a condition or configuration of reality at a given moment. A claim may be a **Fact** or a **View**
+- the **system**: npubs + signed events
+- the **world**: everything outside the protocol that claims refer to
 
-- **Fact** A fact is a claim related to a state of affairs that is defined in verifiable terms and is capable of being accepted as true by a system.
+Any system operating at scale must answer:
 
-- **View** A view is a claim that is an evaluative interpretation of a state of affairs that depends on judgment, perspective, or normative criteria (standar) rather than the fact alone alone.
+1. What is being claimed?
+2. Who vouches for the claim (and how)?
+3. When does uncertainty stop for operational purposes?
 
-- **Assertion** A claim put forward as true by an actor, taking responsibility for its truth.
+The model separates:
 
-- **Attestation** An assertion that affirms the truth or validity of another assertion (event) or an actor (npub).
+- reality from language
+- claims from validation
+- trust in statements from trust in action
+- truth from recognition
 
-- **Acceptance**  A decision based on the evalution of system-level artefacts that concludes that a fact or view can be accepted.
+## Core Concepts
 
----
-## Recogition, Authority and Delegation
+- **Claim**: A declaration about reality at a point in time. A claim may be factual or evaluative.
+- **Fact**: A claim that is defined in verifiable terms and can be accepted as true by a system.
+- **View**: A claim that depends on judgment, perspective, or norms rather than factual conditions alone.
+- **Assertion**: A claim put forward by an actor as true, with responsibility attached.
+- **Attestation**: An assertion about another assertion or actor (for example, validity or control).
+- **Recognition**: A system-level decision to treat an actor as having standing.
+- **Acceptance**: A system-level decision to treat a claim-chain as operationally resolved.
 
-Recognition, delegation, and authority are often conflated, but the Acceptance Model treats them as distinct. Authority does not arise from delegation alone; it exists only where it is recognized. Delegation is an act by which one actor purports to transfer or confer authority, but that act has no effect unless a system accepts it. Recognition is the system’s determination that an asserted authority will be treated as operative. Authority, in turn, is not a substance that flows from one actor to another, but a condition that stabilizes once recognition occurs. In this sense, delegation proposes authority, recognition produces standing which makes it effective. Authority exists only to the extent of the standing of an actors that makes it effective.
+## Recognition, Authority, and Delegation
 
-**In the Acceptance Model, assertions introduce claims about facts and views, attestations qualify them, and recognition produces standing which is the precondition authority and delegation.**
+Recognition, authority, and delegation are distinct:
 
-## The Acceptance Model
+- Delegation proposes authority.
+- Recognition makes authority effective in a given system.
+- Authority exists only to the extent recognized standing exists.
 
-### States, Assertions, Attestations, and Recognitions
+In this model:
 
-| Level | Layer | Refers To | What It Is | Example |
+- assertions introduce claims
+- attestations qualify claims and actors
+- recognition produces standing
+- standing enables authority/delegation to operate
+
+## Layers: Statements, Assertions, Attestations, Recognition
+
+| Level | Layer | Refers To | Meaning | Example |
 |---|---|---|---|---|
-| 0a | **Statement (Factual)** | Reality | Verifiable condition | The light is on |
-| 0b | **Statement (Evaluative)** | Reality + judgment | Interpreted condition | The light is too bright |
-| 1 | **Assertion** | State (0a or 0b) | A claim regarding a statement | Alice: “The light is on” |
-| 2 | **Attestation (2nd Order Assertion)** | Assertion | Validity of an assertion | Bob: “Alice’s claim is true” |
-| 3 | **Attestation (nth Order Assertion)** | Attestation | Validity of an attestation | Carol: “Bob’s attestation is valid” |
-| — | **Recognition** | **Actor** | Recognizing another actor which may result in an authorization or delegation | Bob: “I recognize that Alice is competent and can do something on behalf of me” |
-| — | **Acceptance** | Chain | System recognition/authorization | Condition of when system reaches a conclusion regarding a statement |
+| 0a | Statement (Factual) | Reality | Verifiable condition | "The light is on" |
+| 0b | Statement (Evaluative) | Reality + judgment | Interpreted condition | "The light is too bright" |
+| 1 | Assertion | Statement | Actor claims a statement | Alice: "The light is on" |
+| 2 | Attestation (2nd order) | Assertion | Assertion about an assertion | Bob: "Alice's claim is true" |
+| 3 | Attestation (nth order) | Attestation | Assertion about an attestation | Carol: "Bob's attestation is valid" |
+| - | Recognition | Actor | Actor standing decision | Bob: "Alice is authorized to act for me" |
+| - | Acceptance | Chain | Stop condition for action | System concludes and proceeds |
 
----
-The following diagram is a logical graphical rendition of the above. It is intended to illustrate that:
-- an **Assertion** is an assertion (signed event) about a **Statement**
-- an **Attestation** is an assertiona (signed event) about an **Assertion** (another signed event)
-- an **Recognition** is an assertion (signed event) recognizing another **Npub** which may result in an authorized or delegation.
+The diagram below illustrates these relationships:
 
-For simplicity, the diagram does not illustrate **nth Order Assertions**.
+![Acceptance Model](./img/acceptance-model.png)
 
-![Acceptance Mode](./img/acceptance-model.png)
+## Statements: Facts and Views
 
-## Statement: Facts and Views
+A statement is an expression about conditions. It is not automatically a fact.
 
-A **statement** is simply an expression of condition of affairs. It is **not automatically a fact**.
+### Factual statements
 
-### Factual states
-- Defined in verifiable terms
-- Binary or measurable
-- Capable of being true or false
+- defined in verifiable terms
+- measurable or binary
+- true/false capable
 
-Example:
-- *The light is on*
+Example: *The light is on*
 
 ### Evaluative statements (views)
-- Incorporate judgment or perspective
-- Depend on purpose, comfort, or norms
-- Not verifiable without a standard
 
-Example:
-- *The light is too bright*
+- include judgment or perspective
+- depend on purpose, comfort, or norms
+- require a standard to become testable
 
-> **Facts require conditions; views require interpretation.**
+Example: *The light is too bright*
 
----
+> Facts require conditions; views require interpretation.
 
 ## Assertions
 
-An **assertion** is the first step where responsibility enters.
+An assertion introduces responsibility:
 
-- Assertions may concern factual statements or evaluative statements
-- Signing an event regard a **statement** becomes an **assertion**:
-  - Binds it to an identity
-  - Creates accountability regarding the **statement**
-  - The act of signing an event does not itself create a fact; it creates another point to reach a conclusion.
+- assertions may concern facts or views
+- a signed event binds the claim to an identity
+- signing creates accountability, not truth
 
 Example:
-- Alice signs: *“The light is on”*
 
-This is an **assertion** (signed event), not itself a **fact**, though the system might lead to this conclusion.
+- Alice signs: *"The light is on"*
 
----
+This is an assertion. It may later be accepted as a fact by the system.
 
 ## Attestations (Nth-Order)
 
-An **attestation** is an assertion **about another assertion**.
+An attestation is an assertion about another assertion:
 
-- It is referential within the system.
-- It affirms truth or validity.
-- It can recurse until it reaches an **assertion**
-- The result of the recursion may lead to the conclusion of a **fact**
+- referential within the system
+- affirms validity, truth, or control claims
+- can recurse (attestation about attestation)
 
-Example recursion:
-1. Alice asserts: *“The light is on”*
-2. Bob attests: *“Alice’s assertion is true”*
-3. Carol attests: *“Bob’s attestation is valid”*
-4. It can be conclude that *“The light is on”* is a **fact** because it was signed by Alice, attested by Bob, in turn, attested by Carol.
+Example chain:
 
+1. Alice asserts: *"The light is on"*
+2. Bob attests: *"Alice's assertion is true"*
+3. Carol attests: *"Bob's attestation is valid"*
 
-Important limitation:
+Important:
 
-> **Attestations increase confidence, not truth.**
-
-'Truth' or **fact** is anchored to an assertion which is a **statement** about a state.
-
-Multiple attestations can increase 'truthiness', but is not truth itself.
-
----
+> Attestations increase confidence, not truth by themselves.
 
 ## Recognition (Orthogonal to Attestation)
 
-A **recognition** produces **standing** of another **actor** which is the start of authority and/or delegation.
+Recognition is actor-directed (not claim-directed) and creates standing.
 
-**Standing** is the condition created when the system recognizes an actor as one whose assertions or actions will be treated as effective.
-
-- Actor-directed, not claim-directed
-- Generalizes trust across future assertions
-- Operates independently of specific facts
+Standing means the system treats an actor's assertions/actions as effective for specific purposes.
 
 Example:
-- Bob signs: *“Alice is reliable”*
 
-A **recognition** is a type of assertion that produces standing of another **actor** for the purposes of **authorization** or **delegation**.
+- Bob signs: *"Alice is reliable/authorized."*
 
----
+Recognition can enable authorization or delegation policies, independent of any single fact claim.
 
 ## Standards: Turning Views into Facts
 
-Evaluative states become fact-capable only when a **standard** is applied.
+Evaluative statements become fact-capable when standards are applied.
 
 Example:
-- View: *“The light is too bright”*
+
+- View: *"The light is too bright"*
 - Standard: *Maximum brightness is 500 lux*
-- Fact-capable claim: *“The light exceeds 500 lux”*
+- Fact-capable claim: *"Brightness exceeds 500 lux"*
 
-> **Standards convert judgment into testable conditions.**
+> Standards convert judgment into testable conditions.
 
-This is how law, engineering, and governance discipline opinion.
+## Acceptance and System Fact
 
----
+A system-level fact emerges when:
 
-## Acceptance and Legal Fact
-
-A **fact (legal or system-level)** emerges when:
-
-- A system accepts an assertion or attestation chain
-- Further inquiry is procedurally closed
-- The outcome becomes binding for action
+- an assertion/attestation chain is accepted
+- procedural inquiry is closed for the current context
+- outcome is binding for action
 
 Acceptance is:
-- Decisive
-- Context-specific
-- Independent of metaphysical certainty
 
-> **A legal fact is reality as recognized by the system, not reality itself.**
+- decisive
+- context-specific
+- operational (not metaphysical)
 
----
+> A legal/system fact is reality as recognized by the system.
 
-## Key Distinctions (Summary)
+## Key Distinctions
 
-- **State** → what is actually reality - in the form of a **Fact** or **View**
-- **Statement** → what is said about reality (fact or view)  
-- **Assertion** → what is claimed of the world by an actor
-- **Attestation** → what is vouched for in the system.  
-- **Acceptance** → what can be deterministically and reliably resolved by the system
+- **State**: reality as it exists
+- **Statement**: what is said about reality
+- **Assertion**: a claim by an actor
+- **Attestation**: vouching/qualification inside the system
+- **Recognition**: standing granted to an actor
+- **Acceptance**: system stop condition for action
 
----
 ## Acceptance Steps
 
-The acceptance steps is a (recursive) resolution model that halts at a first order assertion.
-
-Below is an initial resolution model
+Acceptance is a recursive resolution model that halts at first-order assertions.
 
 ![Acceptance Steps](./img/acceptance-steps.png)
 
 ## Synthesis
 
-> **The Acceptance Model explains how statements become assertions, assertions attract attestations, delegations of actors by other actors, and systems ultimately decide which claims count as facts.**
+> The model explains how statements become assertions, assertions attract attestations, actors gain standing through recognition, and systems decide what counts as settled fact.
 
 Or more sharply:
 
-> **Facts in the system emerge when the system stops asking questions.**
+> Facts in a system emerge when the system stops asking questions.
 
-## Safebox Implementation of the Acceptance Model
+## Safebox Implementation
 
-Safebox provides an implementation of the acceptance model.
+Safebox implements this model for record acceptance and trust evaluation.
 
-## Acceptance
+### Acceptance Stages
 
-`Acceptance` is the more generalized notion of `verification` and is performed in three discrete steps:
-
-|No.|Step|Confirmation|Success Criteria|
+| No. | Stage | Confirmation | Success Criteria |
 |---|---|---|---|
-|1.|Validated|The record is cryptographically correct|Successful signature validity check|
-|2.|Attested|An attestion record signed by the owner referred to by the safebox|Valid owner attestation event|
-|3.|Authorized|Member of list for authorization/recognition|Membership in List|
-|4.|Trusted|Web of Trust |Score|
+| 1 | Validated | Record is cryptographically correct | Signature validity checks pass |
+| 2 | Attested | Owner attestation exists | Valid owner attestation event |
+| 3 | Authorized | Actor appears in recognition/authorization policy | Membership or policy match |
+| 4 | Trusted | Web-of-Trust or equivalent reputation policy | Score/policy threshold |
 
-`Acceptance` is based on the evaluation of the above steps and is solely in the eyes of the verifier if one or several of the above steps are successful.
-
+Acceptance is evaluated by the verifier. One or more stages may be required depending on verifier policy.
 
 ### Private Record Format
 
-A **private record** is a signed event as per [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) that is embedded in a safebox record. This embedded record or payload can be considered a **private record** because it is not published to any relay; rather it stored as a safebox record payload and stored as a NIP-44 encrypted event.
+A **private record** is a signed [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) event embedded in a Safebox record payload rather than publicly posted to relays.
 
-### Attribution and Ownership
-For attribution and ownership, two tags are added to each private record: `["safebox", "<pubhex of safebox>"]` and `["safebox_ower", <pubhex of purported safebox owner ]`
+Private payloads are stored in Safebox as encrypted content (for example NIP-44 protected data) and may include structured record metadata.
 
-The `["safebox", , "<pubhex of safebox>"]` tag is easily validated because it should be the same as the `pubhex` that has signed the event. While this data might be considered redundant, the `["safebox"]` tag indicates that the the signed event should be considered and handled as a **private record** according to this specification.
+### Attribution and Ownership Tags
 
-The `["safebox_ower", <pubhex of purported owner ]` must be verified independently, because the safebox could add any owner to the private record. This independent verification is done using the [Attestations NIP](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qy28wumn8ghj7un9d3shjtnyv9kh2uewd9hsqrrpw36x2um5v96xjmmwwvuhdk8z) where the owner, using their `nsec' must sign a `31871' event attesting that they 'own' or control the safebox in question. 
+Private records include tags such as:
 
-This is done by creating a `d-tag` of the format: `"<safebox npub>:safebox-under-control"` to indicate which safebox instance is under the control of the owner (they may have many safeboxes under their control). The p-tag is populated as: `["p", f"<safebox pubhex"]` (note the pubhex format, instead of npub).
+- `["safebox", "<pubhex of safebox>"]`
+- `["safebox_owner", "<pubhex of owner>"]`
 
-For additional context info, the `content` field may be populated as such: `"Npub holder: <npub owner> has attested ownership of safebox: <npub safebox> "`
+Notes:
 
-This attestation event must be signed and published by the `<npub owner>`. During a verification process, there is step to retrieve this event to confirm that the safebox is indeed controlled by the owner that it claims.
+- `safebox` can be checked against event signer identity for consistency.
+- `safebox_owner` must be independently verified.
+
+Ownership attestation may be expressed using attestation events that bind owner identity to safebox control context (for example via deterministic tags such as `<safebox npub>:safebox-under-control` plus corresponding `p` tags).
 
 ### Trustworthiness
 
-It is up to the verifier to decide the trustworthiness of a npub. This should be under the sole discretion of the verifier: they may use a scoring algorithm and threshold value to determine trustworthiness, or, referencing a list of which a npub is a member.
+Trust scoring is verifier-controlled. A verifier may:
 
+- use thresholds/scoring algorithms
+- use allow/deny lists
+- use Web-of-Trust policies
 
+Trust policy remains local to the relying party unless explicitly federated.
 
-## Nostr Safebox Implementation
-
-### Private Record Issuance
-Nostr Safebox can issue private records. Private records are issued using the NIP-01 format with the following
-
-Private record tags
-
-The following tags are added to the private record:
-
-`[["safebox", <pubkeyhex of safebox instance issuing the record>], ["safebox_owner", <pubkeyhex of safebox owner>],["safebox_holder", <pubkeyhex of safebox instance holding the private record]]`
-
-
-
-### Verification Stages
-
-This specification defines a staged verification model for records, progressing from technical integrity to social standing. Each stage answers a distinct question and may be evaluated independently. Failure at any stage does not imply failure at subsequent stages unless explicitly required by the relying party.
+### Verification Stages (Normative)
 
 #### 1. Validated
 
-A record is Validated if its internal integrity can be established.
+Validation establishes technical integrity and MAY include:
 
-Validation MUST include, as applicable:
-	- Verification of cryptographic signatures
-	- Verification of hashes or content identifiers
-	- Conformance to required schemas or formats
-	- Consistency of metadata (e.g., identifiers, timestamps)
+- cryptographic signature checks
+- hash/content identifier checks
+- schema/format conformance
+- metadata consistency checks (identifiers, timestamps, references)
 
-Validation establishes that the record is technically sound.
-Validation alone DOES NOT establish identity, authorship, entitlement, or authority.
-
-⸻
+Validation does not, by itself, establish entitlement or authority.
 
 #### 2. Self-Presented
 
-A record is Self-Presented if it is presented by the same entity to whom the record was issued.
+A record is self-presented when it is presented by the same holder/control context it was issued to.
 
-Self-presentation MUST demonstrate continuity of control between issuance and presentation, typically through proof of control over the same cryptographic key, credential, or capability bound to the record at issuance.
-
-Self-presentation MUST NOT rely on delegation, proxy, or bearer transfer unless explicitly permitted by the record’s issuance policy.
-
-Self-presentation establishes agency: the record is not only valid, but presented by its rightful holder.
-
-⸻
+This typically requires continuity of control proof (key/capability continuity).
 
 #### 3. Attested
 
-A record is Attested if one or more third parties have made explicit assertions regarding the record, its presenter, or associated attributes.
+A record is attested when one or more independent parties provide verifiable assertions about:
 
-Attestations:
-	- MAY assert facts, claims, or assessments
-	- MUST be independently verifiable
-	- MAY be additive and multiple
+- the record
+- the presenter
+- relevant attributes
 
-Attestation DOES NOT imply acceptance or standing; it represents witnessed or asserted information only.
-
-⸻
+Attestation is evidence, not automatic acceptance.
 
 #### 4. Recognized
 
-A record is Recognized if one or more attestations are accepted as effective within a defined realm.
+A record is recognized when attestations are accepted as effective within a defined realm (institution, network, community, jurisdiction, etc.).
 
-Recognition is context-dependent and MAY vary across jurisdictions, institutions, platforms, or communities. Recognition MAY be time-limited or revocable.
-
-Recognition establishes standing: the record and its attestations are treated as meaningful for a given purpose within a specific realm.
-
-⸻
+Recognition may be time-limited, scoped, or revocable.
 
 #### 5. Reputation (Optional)
 
-A record, presenter, or attester MAY accrue Reputation through repeated recognition over time.
+Reputation may accumulate from repeated recognized interactions:
 
-Reputation:
-	•	Is derived from historical interactions, outcomes, or reliance
-	•	MAY influence future recognition decisions
-	•	MUST NOT substitute for validation, self-presentation, or attestation
+- can influence later decisions
+- should remain advisory unless policy says otherwise
+- should not replace validation or attestation requirements
 
-Reputation represents accumulated standing rather than a discrete verification event and is inherently non-portable across realms unless explicitly recognized.
+### Stage Independence
 
-⸻
-
-Notes on Independence
-	•	Each stage addresses a distinct verification concern and MUST NOT be conflated.
-	•	A record MAY be validated but not self-presented.
-	•	A record MAY be attested but not recognized.
-	•	Reputation MUST be treated as advisory unless explicitly required by policy.
-
+- stages are distinct and should not be conflated
+- validated does not imply recognized
+- attested does not imply accepted
+- reputation does not imply current authorization
