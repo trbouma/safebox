@@ -148,10 +148,8 @@ async def get_scan_result(  request: Request,
         action_data = qr_code
     
     elif qr_code[:8].lower() == "nprofile":
-            # Go directly to health consultation
             action_mode = "nprofile"
             action_data = qr_code
-            return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
 
     elif qr_code[:5].lower() == "nauth":
             # Do nauth handling
@@ -179,9 +177,6 @@ async def get_scan_result(  request: Request,
             if referer == "health-data":
                 return RedirectResponse(f"/safebox/health?nauth={qr_code}") 
                   
-            elif referer == "health-consult":
-                return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
-            
             elif referer == "my-credentials":
                 return RedirectResponse(f"/credentials/present?nauth={qr_code}")
             elif referer == "credential-offer":

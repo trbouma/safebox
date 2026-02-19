@@ -135,7 +135,7 @@ ws_present.onclose = () => console.log("WebSocket closed");
   <h1>Display My {{ record_label}}</h1>
   {% endif %}
     
-    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <button id="present_scan_button" onclick="scanCode()">Scan</button>
     <br><br>
     <button onclick="gotoHome()">Home</button>
     <br><br>
@@ -276,7 +276,7 @@ await fetch(`/records/sendrecord`, {
       <br><br>
       If your credential issuer can't scan your QR code, you can scan their QR code instead by clicking on the button below.
       <br><br>
-      <button id="ln_scan_button" onclick="scanCode()">Authenticate Credential Issuer</button> 
+      <button id="auth_issuer_scan_button" onclick="scanCode()">Authenticate Credential Issuer</button> 
       <br><br>
       Once you've authenticated, you can accept your credential offers.  
       <br><br>

@@ -34,6 +34,16 @@ function setRequestStatus(message) {
   }
 }
 
+function centerQrImageInView() {
+  const qrImg = document.getElementById("img_qr_display");
+  if (!qrImg) return;
+  qrImg.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+    inline: "nearest"
+  });
+}
+
 async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
    
     var qr_img_func = document.getElementById("img_qr_display");
@@ -169,6 +179,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
     // qr_img_func.src="/img/circle-256.gif";
     qr_img_func.src = "/safebox/qr/"+ global_nauth;
+    setTimeout(centerQrImageInView, 80);
 
   }
    

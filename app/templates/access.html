@@ -425,20 +425,6 @@ async function myEcash() {
 
 window.location.href="/safebox/ecash";
 }
-
-
-
-
-
-async function doHealthConsult() {
-
-window.location.href="/safebox/healthconsult";
-
-}
-
-
-
-
 async function doOfferRecord() {
 
 window.location.href="/records/offerlist";
@@ -549,7 +535,7 @@ alert("Lightning invoice copied to clipboard!");
     var data;
    
    
-    var owner_currency = document.getElementById("select_currency").value;
+    var owner_currency = document.getElementById("owner_select_currency").value;
 
     console.log(`owner currency: ${owner_currency}`);
 
@@ -1175,7 +1161,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <div class="account-box">
     <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
     <p id="heading_balance" style="margin: 0;">({{ "\u20BF" + "{:,}".format(acorn.balance)}})</p>
-      <select class="balance-currency-selector" id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
+      <select class="balance-currency-selector" id="owner_select_currency" name="select_currency" onchange="setOwnerCurrency()">
         {% for entry in currencies %}
         <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
         {% endfor %}
@@ -1209,7 +1195,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <div class="account-box">
       <h2 style="margin: 0;">Request a Payment</h2>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
-      <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
+      <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></h3>
       <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
       <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
@@ -1308,7 +1294,7 @@ function getInvoiceStatus(ln_invoice_status) {
         min="0" 
         required
         >
-        <select id="select_currency" name="select_currency">
+        <select id="request_select_currency" name="select_currency">
           <option >SAT</option> 
           {% for entry in currencies %}
           <option >{{entry}}</option>         

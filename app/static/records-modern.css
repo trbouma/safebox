@@ -22,7 +22,8 @@ body {
 }
 
 .center-text {
-  max-width: 920px;
+  width: min(96vw, 1120px);
+  max-width: 1120px;
   margin: 0 auto;
   padding: 18px;
   border: 1px solid var(--sb-panel-border);
@@ -43,7 +44,7 @@ body {
 
 #card-container {
   width: 100%;
-  max-width: 980px;
+  max-width: 1120px;
   margin: 10px auto 0;
 }
 
@@ -196,5 +197,17 @@ img {
   select,
   button {
     width: 100% !important;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  .center-text {
+    width: min(95vw, 1020px);
+    max-width: 1020px;
+    padding: 16px;
+  }
+
+  #card-container {
+    max-width: 1020px;
   }
 }

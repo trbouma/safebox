@@ -275,6 +275,65 @@ async function getBlob() {
   }
 }
 
+function mimeTypeToExtension(mimeType) {
+  const map = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/svg+xml": "svg",
+    "text/plain": "txt",
+    "application/json": "json",
+    "application/xml": "xml",
+    "text/xml": "xml"
+  };
+  return map[mimeType] || "bin";
+}
+
+function slugifyGrantName(name) {
+  const cleaned = String(name || "grant")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return cleaned || "grant";
+}
+
+async function exportGrantBlob() {
+  const blobUrl = `/records/blob?record_name=${encodeURIComponent(global_card)}&record_kind=${global_record_kind}`;
+  try {
+    const res = await fetch(blobUrl);
+    if (!res.ok) {
+      alert("No original record blob found to export.");
+      return;
+    }
+
+    const mimeType = (res.headers.get("Content-Type") || "application/octet-stream")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    const extension = mimeTypeToExtension(mimeType);
+    const grantTitle = "{{ card.split(':')[1] if ':' in card else card }}";
+    const filename = `${slugifyGrantName(grantTitle)}.${extension}`;
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    consoleLog(`Export error: ${error}`);
+    alert("Unable to export original record.");
+  }
+}
+
 // getBlob();
 document.addEventListener("DOMContentLoaded", () => getBlob());
 </script>
@@ -300,6 +359,7 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
       <br>
       <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
       <div id="media_container" style="width:90%; max-width:900px; margin:0 auto;"></div>
+      <button type="button" onclick="exportGrantBlob()">Export Original</button>
       <hr>
     </div>
     <br>

@@ -222,7 +222,7 @@ async function setCustomHandle() {
     
     var data;
    
-    var owner_currency = document.getElementById("select_currency").value;
+    var owner_currency = document.getElementById("owner_select_currency").value;
 
    
     user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_currency} as your owner currency?`);
@@ -431,7 +431,7 @@ window.location.href="/safebox/attest/";
      <button onclick="setOwnerNpub()">Set Owner Npub</button>
      <br><br>
      Set your owner currency: 
-     <select id="select_currency" name="select_currency">
+     <select id="owner_select_currency" name="select_currency">
       {% for entry in currencies %}
       <option >{{entry}}</option>         
       {% endfor %}
@@ -526,7 +526,7 @@ window.location.href="/safebox/attest/";
         min="0" 
         required
         >
-        <select id="select_currency" name="select_currency">
+        <select id="request_select_currency" name="select_currency">
           <option >SAT</option> 
           {% for entry in currencies %}
           <option >{{entry}}</option>         

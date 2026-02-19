@@ -20,7 +20,6 @@ from app.config import Settings, ConfigWithFallback
 from app.routers import     (   lnaddress, 
                                 safebox, 
                                 scanner, 
-                                prescriptions, 
                                 emergency, 
                                 pos, 
                                 public, 
@@ -212,7 +211,6 @@ app.add_middleware(
 app.include_router(lnaddress.router) 
 app.include_router(safebox.router, prefix="/safebox") 
 app.include_router(scanner.router, prefix="/scanner") 
-app.include_router(prescriptions.router, prefix="/prescriptions") 
 app.include_router(emergency.router) 
 app.include_router(pos.router, prefix="/pos")
 app.include_router(public.router, prefix="/public")
