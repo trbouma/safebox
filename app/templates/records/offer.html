@@ -170,7 +170,7 @@ async function requestbyNFC(offer_kind, nauth) {
       const ndef = new NDEFReader();
       try {
         await ndef.scan();
-        ndef.onreading = event => {
+        ndef.onreading = async event => {
           const decoder = new TextDecoder();
           for (const record of event.message.records) {
 
@@ -182,7 +182,7 @@ async function requestbyNFC(offer_kind, nauth) {
 
          
 
-         submitOffer(nfc_token, nauth);
+         await submitOffer(nfc_token, nauth);
           
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
@@ -250,8 +250,11 @@ async function createQRCode() {
   }
 
  // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
- const ws = new WebSocket(`{{ws_url}}${global_nauth}`);
-  console.log(`{{ws_url}}${global_nauth}`);
+ const wsBase = window.location.protocol === "https:"
+   ? "{{ws_url}}".replace(/^ws:\/\//i, "wss://")
+   : "{{ws_url}}";
+ const ws = new WebSocket(`${wsBase}${global_nauth}`);
+  console.log(`${wsBase}${global_nauth}`);
    
   
     ws.onopen = () => console.log("WebSocket connected");

@@ -114,8 +114,19 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       consoleLog(`${status} ${detail}`);
       setRequestStatus(detail);
       if (status !== "OK") {
-        alert(detail);
-        qr_img_func.src = "/img/safebox.png";
+        if (detail && detail.toLowerCase().includes("invalid pin")) {
+          const continueWithoutPin = confirm("Invalid PIN. Continue anyway?");
+          if (!continueWithoutPin) {
+            qr_img_func.src = "/img/safebox.png";
+            setRequestStatus("Request cancelled.");
+          } else {
+            qr_img_func.src = "/img/circle-256.gif";
+            setRequestStatus("PIN bypass confirmed. Waiting for records...");
+          }
+        } else {
+          alert(detail);
+          qr_img_func.src = "/img/safebox.png";
+        }
       } else {
         qr_img_func.src = "/img/circle-256.gif";
         setRequestStatus("Request accepted. Waiting for records...");
@@ -307,8 +318,11 @@ async function listenForPresentation(nauth) {
   console.log(`listen for request presentation ${nauth}`);
     
     // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
-    const ws = new WebSocket(`{{ws_url}}${nauth}`);
-    console.log("{{ws_url}}");
+    const wsBase = window.location.protocol === "https:"
+      ? "{{ws_url}}".replace(/^ws:\/\//i, "wss://")
+      : "{{ws_url}}";
+    const ws = new WebSocket(`${wsBase}${nauth}`);
+    console.log(wsBase);
     
        
       // alert("listen for request");

@@ -1895,6 +1895,8 @@ class Acorn:
                     ecash_nembed = parse_nembed_compressed(each["payload"])                    
                     token_to_redeem = ecash_nembed["token"]
                     receive_nonce = ecash_nembed.get("nonce", None)
+                    tendered_amount = ecash_nembed.get("tendered_amount", None)
+                    tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
                     self.logger.debug(
                         "op=get_ecash_latest status=parsed_token nonce_match=%s",
                         bool(nonce and receive_nonce == nonce),
@@ -1904,7 +1906,12 @@ class Acorn:
                     else:
                         self.logger.debug("op=get_ecash_latest status=different_nonce")
 
-                    msg_out, token_amount = await  self.accept_token(cashu_token=token_to_redeem, comment=ecash_nembed["comment"])
+                    msg_out, token_amount = await self.accept_token(
+                        cashu_token=token_to_redeem,
+                        comment=ecash_nembed["comment"],
+                        tendered_amount=tendered_amount,
+                        tendered_currency=tendered_currency,
+                    )
 
                     if token_to_redeem == "nsf":
                         pass
@@ -1913,16 +1920,12 @@ class Acorn:
                         # tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
                         # ecash_out.append(("ERROR", 0,"SAT"))
                         # await self.add_tx_history(tx_type='X',amount=0, comment="PAYMENT UNSUCCESSFUL", tendered_amount=0, tendered_currency="NSF" )
-                        ecash_out.append(("ADVISORY", 0,"SAT", "NSF"))
+                        ecash_out.append(("ADVISORY", 0, "SAT", "NSF", nonce, 0))
                     else:
                         self.logger.info("op=get_ecash_latest status=redeemed_ok")
-                        
-                        tendered_amount = ecash_nembed.get("tendered_amount", None)
-                        tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
-                        
                         self.logger.debug("op=get_ecash_latest status=record_payment tendered_currency=%s", tendered_currency)
                         # await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
-                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK", nonce))
+                        ecash_out.append(("OK", tendered_amount, tendered_currency, "Payment OK", nonce, token_amount))
                     
                     
                 except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
@@ -4441,7 +4444,13 @@ class Acorn:
 
         return proofs
             
-    async def accept_token(self,cashu_token: str, comment:str = "ecash deposit"):
+    async def accept_token(
+        self,
+        cashu_token: str,
+        comment: str = "ecash deposit",
+        tendered_amount: float | None = None,
+        tendered_currency: str = "SAT",
+    ):
         self.logger.debug("op=accept_token status=start comment=%s", comment)
         # asyncio.run(self.nip17_accept(cashu_token))
         # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
@@ -4520,7 +4529,13 @@ class Acorn:
                 await self.release_lock()
         self.balance+=token_amount
         # print(f"accept token new balance is: {self.balance}")
-        await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
+        await self.add_tx_history(
+            tx_type='C',
+            amount=token_amount,
+            comment=comment,
+            tendered_amount=tendered_amount,
+            tendered_currency=tendered_currency,
+        )
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 

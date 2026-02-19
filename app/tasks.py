@@ -366,6 +366,15 @@ async def handle_ecash(
 ):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
+    def _ecash_detail(each: tuple) -> str:
+        tendered_amount = each[1] if len(each) > 1 else 0
+        tendered_currency = each[2] if len(each) > 2 else "SAT"
+        status_note = each[3] if len(each) > 3 else "Payment update"
+        credited_sats = each[5] if len(each) > 5 else 0
+        return f"Tendered Amount {tendered_amount} {tendered_currency} | Credited {credited_sats} sats | {status_note}"
+
+    last_detail = "Payment complete!"
+
     start_time = time.time()
     # duration = 60  # 1 minutes in seconds
     ecash_listen_timeout = settings.ECASH_LISTEN_TIMEOUT
@@ -391,9 +400,10 @@ async def handle_ecash(
                 for each in ecash_out: 
                     print(f"each for websocket: {each}") 
                     if each[0] in ["OK", "ADVISORY"]:             
-                        await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}"})
+                        last_detail = _ecash_detail(each)
+                        await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": last_detail})
                         await asyncio.sleep(5)
-                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment!"})                       
+                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": last_detail})                       
                     else:
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
@@ -401,17 +411,18 @@ async def handle_ecash(
             if notify_callback:
                 for each in ecash_out:
                     if each[0] in ["OK", "ADVISORY"]:
+                        last_detail = _ecash_detail(each)
                         payload = {
                             "status": each[0],
                             "action": "nfc_token",
-                            "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}",
+                            "detail": last_detail,
                             "balance": acorn_obj.balance,
                         }
                         await notify_callback(payload)
                 await notify_callback({
                     "status": "OK",
                     "action": "nfc_token",
-                    "detail": "Payment complete!",
+                    "detail": last_detail,
                     "balance": acorn_obj.balance,
                 })
             break

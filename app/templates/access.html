@@ -649,13 +649,13 @@ if (nfc_amount == 0) {
   consoleLog(`Advisory: Since 0 was provided for NFC, your minimun amount will be used`);
 
 }
-await fetch('/safebox/requestnfcpayment', {
-method: "POST",
-headers: {"Content-Type": "application/json"},        
-body: JSON.stringify(submit_data)         
-})
-.then((response) => response.json())
-.then(async (data) => {
+try {
+  const response = await fetch('/safebox/requestnfcpayment', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(submit_data)
+  });
+  const data = await response.json();
   const status = data.status || "INFO";
   const detail = data.detail || "NFC payment request completed.";
   userMessage(detail, status);
@@ -665,7 +665,11 @@ body: JSON.stringify(submit_data)
   } else {
     userMessage("Payment request accepted. Waiting for network confirmation...", "INFO");
   }
-});
+} catch (error) {
+  consoleLog(`NFC request error: ${error}`);
+  userMessage("NFC payment request failed. Please try again.", "ERROR");
+  document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+}
 window.scrollTo(0, 0);
 
 // window.location.href="/safebox/access" ;
@@ -780,6 +784,9 @@ async function requestPayment() {
   
   
   if (nfc_payment.checked == true) {  
+      if (isNaN(ln_create_invoice_amount) || ln_create_invoice_amount < 0) {
+        ln_create_invoice_amount = 0;
+      }
       alert("Please tap NFC card!");
       await requestbyNFC(ln_create_invoice_amount, ln_currency, ln_comment);
                       return;

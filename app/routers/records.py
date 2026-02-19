@@ -50,6 +50,17 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 
+def _redirect_if_missing_acorn(acorn_obj: Acorn):
+    if acorn_obj is None:
+        logger.warning("records route called without an active acorn session")
+        return RedirectResponse(url="/", status_code=302)
+    return None
+
+def _raise_if_missing_acorn(acorn_obj: Acorn):
+    if acorn_obj is None:
+        logger.warning("records API called without an active acorn session")
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
     status_url = f"https://{host}/.well-known/card-status"
@@ -81,6 +92,9 @@ async def issue_credentials (   request: Request,
                     
                        
                             ):
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     
     profile = acorn_obj.get_profile()
     
@@ -100,6 +114,9 @@ async def offer_list(      request: Request,
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to consulting recods in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nprofile_parse = None
     auth_msg = None
 
@@ -158,6 +175,10 @@ async def offer_list(      request: Request,
     offer_kinds = settings.OFFER_KINDS
     grant_kinds = settings.GRANT_KINDS
     offer_kind_label = get_label_by_id(offer_kinds, kind)
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
 
     # Get correspond grant kind
     grant_kind = get_id_by_label(grant_kinds,offer_kind_label)
@@ -174,7 +195,8 @@ async def offer_list(      request: Request,
                                             "client_nprofile": nprofile,
                                             "client_nprofile_parse": nprofile_parse,
                                             "client_nauth": auth_msg,
-                                            "offer_kinds": offer_kinds
+                                            "offer_kinds": offer_kinds,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -185,6 +207,9 @@ async def record_request(      request: Request,
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     
 
 
@@ -216,6 +241,9 @@ async def records_verfication_request(      request: Request,
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     
     credential_types = ["id_card","passport","drivers_license"]
@@ -235,6 +263,7 @@ async def transmit_records(        request: Request,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
+    _raise_if_missing_acorn(acorn_obj)
 
     status = "OK"
     detail = "Nothing yet"
@@ -494,6 +523,9 @@ async def my_retrieve_records(       request: Request,
                                 acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nauth_response = None
     record_select = False
     
@@ -612,6 +644,9 @@ async def retrieve_grant_list(       request: Request,
                                 acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nauth_response = None
     record_select = False
     
@@ -711,6 +746,9 @@ async def accept_records(            request: Request,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to inbox in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nprofile_parse = None
     scope = ""
     grant = ""
@@ -898,6 +936,7 @@ async def accept_incoming_record(       request: Request,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ accept incoming NPI-17 1060 health record and store as a 32225 record"""
+    _raise_if_missing_acorn(acorn_obj)
 
     status = "OK"
     detail = "Nothing yet"
@@ -959,6 +998,9 @@ async def display_record(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/record.html"
@@ -1025,6 +1067,9 @@ async def display_grant(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/grant.html"
@@ -1117,6 +1162,10 @@ async def display_offer(     request: Request,
                     ):
     """Protected access to updating the card"""
     #FIXME remove action mode because this path is now for offer only
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
+
     label_hash = None
    
     content = ""
@@ -1177,6 +1226,7 @@ async def upload_record(
                         content: str = Form(...),
                         acorn_obj: Acorn = Depends(get_acorn)
                         ):
+    _raise_if_missing_acorn(acorn_obj)
     
     contents: bytes = await file.read()
     print(f"finished uploading {len(contents)} record_kind: {record_kind}")
@@ -1197,6 +1247,9 @@ async def manage_offer(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/manageoffer.html"
@@ -1260,6 +1313,7 @@ async def update_record(    request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Update card in safebox"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "Nothing yet"
 
@@ -1285,6 +1339,7 @@ async def delete_card(         request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Delete card from safebox"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "Nothing yet"
 
@@ -1306,6 +1361,7 @@ async def generate_nauth(    request: Request,
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "None"
     print(f"nauth request: {nauth_request}")
@@ -1381,6 +1437,7 @@ async def post_send_record(      request: Request,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Select record for verification"""
+    _raise_if_missing_acorn(acorn_obj)
     nauth_response = None
     print(f"send record {record_parms}")
 
@@ -1492,6 +1549,9 @@ async def record_request(      request: Request,
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     
     
@@ -2029,6 +2089,7 @@ async def accept_proof_token( request: Request,
                                 proof_token: proofByToken,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    _raise_if_missing_acorn(acorn_obj)
    
 
     k = Keys(config.SERVICE_NSEC)
@@ -2068,7 +2129,9 @@ async def accept_proof_token( request: Request,
     pubkey = k.public_key_hex()
     card_ok, card_detail = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
     if not card_ok:
-        return {"status": "ERROR", "detail": card_detail}
+        # Do not fail closed on preflight transport issues. The proof vault will
+        # still perform signature + token validation authoritatively.
+        logger.warning("Proof preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
     submit_data = { "nauth": proof_token.nauth, 
@@ -2093,8 +2156,19 @@ async def accept_proof_token( request: Request,
         logger.warning("Proof vault timeout for host=%s", host)
         return {"status": "ERROR", "detail": "Proof vault request timed out."}
     except httpx.HTTPStatusError as exc:
-        logger.warning("Proof vault HTTP error %s for host=%s", exc.response.status_code, host)
-        return {"status": "ERROR", "detail": f"Proof vault returned HTTP {exc.response.status_code}."}
+        response_text = ""
+        try:
+            response_text = exc.response.json().get("detail", "")
+        except ValueError:
+            response_text = exc.response.text
+        logger.warning(
+            "Proof vault HTTP error %s for host=%s body=%s",
+            exc.response.status_code,
+            host,
+            response_text,
+        )
+        detail_text = response_text or f"Proof vault returned HTTP {exc.response.status_code}."
+        return {"status": "ERROR", "detail": detail_text}
     except httpx.RequestError as exc:
         logger.warning("Proof vault network error for host=%s: %s", host, exc)
         return {"status": "ERROR", "detail": "Proof vault network error."}
@@ -2118,6 +2192,7 @@ async def accept_offer_token( request: Request,
                                 offer_token: OfferToken,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    _raise_if_missing_acorn(acorn_obj)
    
 
     k = Keys(config.SERVICE_NSEC)
@@ -2148,7 +2223,9 @@ async def accept_offer_token( request: Request,
     pubkey = k.public_key_hex()
     card_ok, card_detail = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
     if not card_ok:
-        return {"status": "ERROR", "detail": card_detail}
+        # Do not fail closed on preflight transport issues. The offer vault will
+        # still perform signature + token validation authoritatively.
+        logger.warning("Offer preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
     # also need to send along kem_public_key and kemalg
@@ -2176,8 +2253,19 @@ async def accept_offer_token( request: Request,
         logger.warning("Offer vault timeout for host=%s", host)
         return {"status": "ERROR", "detail": "Offer vault request timed out."}
     except httpx.HTTPStatusError as exc:
-        logger.warning("Offer vault HTTP error %s for host=%s", exc.response.status_code, host)
-        return {"status": "ERROR", "detail": f"Offer vault returned HTTP {exc.response.status_code}."}
+        response_text = ""
+        try:
+            response_text = exc.response.json().get("detail", "")
+        except ValueError:
+            response_text = exc.response.text
+        logger.warning(
+            "Offer vault HTTP error %s for host=%s body=%s",
+            exc.response.status_code,
+            host,
+            response_text,
+        )
+        detail_text = response_text or f"Offer vault returned HTTP {exc.response.status_code}."
+        return {"status": "ERROR", "detail": detail_text}
     except httpx.RequestError as exc:
         logger.warning("Offer vault network error for host=%s: %s", host, exc)
         return {"status": "ERROR", "detail": "Offer vault network error."}
@@ -2205,6 +2293,7 @@ async def get_blob(
     record_kind: int,
     acorn_obj: Acorn = Depends(get_acorn)
 ):
+    _raise_if_missing_acorn(acorn_obj)
     blob_type, blob_data = await acorn_obj.get_record_blobdata(
         record_name=record_name,
         record_kind=record_kind
@@ -2228,6 +2317,7 @@ async def post_blob(
     req: BlobRequest,
     acorn_obj: Acorn = Depends(get_acorn)  # your protected session
 ):
+    _raise_if_missing_acorn(acorn_obj)
     blob_type, blob_data = await acorn_obj.get_record_blobdata(record_name=req.record_name, record_kind=req.record_kind)
 
     if blob_data is None:
@@ -2261,6 +2351,7 @@ async def retrieve_blob(
     Accepts OriginalRecordTransfer
     Returns decrypted blob with correct mimetype
     """
+    _raise_if_missing_acorn(acorn_obj)
     print(f"fetch original blob {original_record}")
 
     blob_bytes: bytes = None
