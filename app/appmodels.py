@@ -196,6 +196,11 @@ class nwcVault(BaseModel):
     relays: List[str]|None=None
     sig: str|None = None  
 
+class cardStatusRequest(BaseModel):
+    token: str
+    pubkey: str
+    sig: str
+
 class proofVault(BaseModel):    
     token: str 
     nauth: str

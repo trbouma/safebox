@@ -201,62 +201,6 @@
     margin-top: 10px;
   }
 
-  .numpad-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(2, 5, 15, 0.72);
-    display: none;
-    align-items: flex-end;
-    justify-content: center;
-    z-index: 1100;
-    padding: 12px;
-  }
-
-  .numpad-overlay.is-open {
-    display: flex;
-  }
-
-  .numpad-panel {
-    width: min(420px, 100%);
-    border: 1px solid #3c518b;
-    border-radius: 14px;
-    background: #111935;
-    padding: 12px;
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
-  }
-
-  .numpad-display {
-    width: 100%;
-    margin: 0 0 10px 0;
-    background: #0b1230;
-    border: 1px solid #3c518b;
-    color: #e2e8ff;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
-    text-align: right;
-    min-height: 44px;
-  }
-
-  .numpad-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .numpad-grid button,
-  .numpad-actions button {
-    width: 100%;
-    margin: 0;
-  }
-
-  .numpad-actions {
-    margin-top: 8px;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
   @media (max-width: 700px) {
     .center-text {
       padding: 14px;
@@ -297,6 +241,14 @@
 
   if (onboard=="True") {
   // alert(onboard_msg);
+  }
+
+  function scheduleAccessReload(delayMs = 900) {
+    if (reset_to_home_scheduled) return;
+    reset_to_home_scheduled = true;
+    setTimeout(() => {
+      window.location.href = "/safebox/access";
+    }, delayMs);
   }
 
   async function getEcashStatus(data) {
@@ -680,6 +632,7 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
 
             nfc_token = decoder.decode(record.data);
           }
+          window.scrollTo({ top: 0, behavior: "smooth" });
           // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
         
           
@@ -714,8 +667,19 @@ await fetch('/safebox/requestnfcpayment', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
 body: JSON.stringify(submit_data)         
-})   
-.then((data) => {consoleLog(`done ${data}`)});
+})
+.then((response) => response.json())
+.then(async (data) => {
+  const status = data.status || "INFO";
+  const detail = data.detail || "NFC payment request completed.";
+  userMessage(detail, status);
+  consoleLog(detail);
+  if (status === "ERROR") {
+    document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+  } else {
+    userMessage("Payment request accepted. Waiting for network confirmation...", "INFO");
+  }
+});
 window.scrollTo(0, 0);
 
 // window.location.href="/safebox/access" ;
@@ -794,6 +758,7 @@ async function paytoNFC() {
 
             nfc_token = decoder.decode(record.data);
           }
+          window.scrollTo({ top: 0, behavior: "smooth" });
           
           
           submitNFCPayment(nfc_amount,nfc_currency,nfc_token, nfc_comment)
@@ -865,6 +830,15 @@ async function requestPayment() {
     ux_mode = "wait_invoice";
     }
 
+function clearRequestPaymentFields() {
+  const amountEl = document.getElementById("ln_create_invoice_amount");
+  const memoEl = document.getElementById("ln_request_memo");
+  const nfcEl = document.getElementById("nfc_payment_checkbox");
+  if (amountEl) amountEl.value = "";
+  if (memoEl) memoEl.value = "";
+  if (nfcEl) nfcEl.checked = false;
+}
+
 
 
 
@@ -888,6 +862,7 @@ function checkBalance(balance) {
         img_qr_display_pic.src ="/img/green-check.png";
         
         payment_notification.textContent = "Invoice Paid!";
+        clearRequestPaymentFields();
         
         ux_mode="init";
       }      
@@ -1091,6 +1066,23 @@ function getInvoiceStatus(ln_invoice_status) {
   ws_notify.onopen = () => { console.log("WebSocket for notify connected for: {{ws_url_notify}} ");}
   ws_notify.onmessage = (event) => {
     console.log("Notification received:", event.data);
+    const payload = JSON.parse(event.data);
+    if (payload.action === "nfc_token") {
+      const status = payload.status || "INFO";
+      const detail = payload.detail || "NFC payment update";
+      userMessage(detail, status);
+      if (typeof payload.balance !== "undefined") {
+        checkBalance(Number(payload.balance));
+      }
+      if (status === "OK") {
+        clearRequestPaymentFields();
+        document.getElementById("img_qr_display").src = "/img/green-check.png";
+        setTimeout(() => {
+          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+        }, 2500);
+        scheduleAccessReload(900);
+      }
+    }
 
     }
   ws_notify.onclose = () => { console.log("Notification closed");}
@@ -1118,6 +1110,10 @@ function getInvoiceStatus(ln_invoice_status) {
         document.getElementById("heading_balance").innerText = `(\u20BF${Number(balance).toLocaleString("en-US")})`;
         document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
         document.getElementById("payment_notification").innerText = `${message}`;
+        if (ux_mode === "wait_invoice") {
+          clearRequestPaymentFields();
+          ux_mode = "init";
+        }
         document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
         // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
         // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
@@ -1128,6 +1124,7 @@ function getInvoiceStatus(ln_invoice_status) {
                           console.log("5 seconds passed");
                           document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
                         }, 5000);
+        scheduleAccessReload(900);
       
       } else if (status == "SENT" || status == "PENDING") {
 
@@ -1144,10 +1141,7 @@ function getInvoiceStatus(ln_invoice_status) {
                         }, 5000);
 
       if (status == "SENT" && action_mode === "lninvoice" && !reset_to_home_scheduled) {
-        reset_to_home_scheduled = true;
-        setTimeout(() => {
-          window.location.href = "/safebox/access";
-        }, 1200);
+        scheduleAccessReload(1200);
       }
 
       }
@@ -1198,6 +1192,8 @@ function getInvoiceStatus(ln_invoice_status) {
     {% endif %}
     <button id="ln_scan_button" onclick="scanCode()">Scan</button>
     <br>
+    <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button>
+    <br>
   </div>
 
   {% if action_mode == "lninvoice" %}
@@ -1222,8 +1218,6 @@ function getInvoiceStatus(ln_invoice_status) {
       {% endfor %}
     </select>   
       <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <br>
-      <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
@@ -1390,121 +1384,6 @@ function getInvoiceStatus(ln_invoice_status) {
 
             
 </div>
-
-<div id="numpad_overlay" class="numpad-overlay" aria-hidden="true">
-  <div class="numpad-panel" role="dialog" aria-label="Numeric keypad">
-    <div id="numpad_display" class="numpad-display">0</div>
-    <div class="numpad-grid">
-      <button type="button" data-numpad-key="1">1</button>
-      <button type="button" data-numpad-key="2">2</button>
-      <button type="button" data-numpad-key="3">3</button>
-      <button type="button" data-numpad-key="4">4</button>
-      <button type="button" data-numpad-key="5">5</button>
-      <button type="button" data-numpad-key="6">6</button>
-      <button type="button" data-numpad-key="7">7</button>
-      <button type="button" data-numpad-key="8">8</button>
-      <button type="button" data-numpad-key="9">9</button>
-      <button type="button" data-numpad-key=".">.</button>
-      <button type="button" data-numpad-key="0">0</button>
-      <button type="button" data-numpad-action="backspace">Del</button>
-    </div>
-    <div class="numpad-actions">
-      <button type="button" data-numpad-action="clear">Clear</button>
-      <button type="button" data-numpad-action="done">Done</button>
-    </div>
-  </div>
-</div>
-
-<script>
-let numpadTarget = null;
-let numpadValue = "";
-const isTouchPrimary = window.matchMedia("(pointer: coarse)").matches;
-
-function updateNumpadDisplay(value) {
-  const display = document.getElementById("numpad_display");
-  display.textContent = value && value.length ? value : "0";
-}
-
-function openNumpad(inputEl) {
-  numpadTarget = inputEl;
-  numpadValue = String(inputEl.value || "");
-  const overlay = document.getElementById("numpad_overlay");
-  overlay.classList.add("is-open");
-  overlay.setAttribute("aria-hidden", "false");
-  updateNumpadDisplay(numpadValue);
-}
-
-function closeNumpad() {
-  const overlay = document.getElementById("numpad_overlay");
-  overlay.classList.remove("is-open");
-  overlay.setAttribute("aria-hidden", "true");
-  numpadTarget = null;
-  numpadValue = "";
-}
-
-function syncNumpadTarget() {
-  if (!numpadTarget) return;
-  // Keep trailing decimal in keypad display, but write a valid numeric string to the input.
-  const normalized = numpadValue.endsWith(".") ? numpadValue.slice(0, -1) : numpadValue;
-  numpadTarget.value = normalized;
-}
-
-function applyNumpadKey(key) {
-  if (!numpadTarget) return;
-  if (key === ".") {
-    if (!numpadValue.includes(".")) {
-      numpadValue = numpadValue ? `${numpadValue}.` : "0.";
-    }
-  } else {
-    numpadValue = numpadValue === "0" ? key : `${numpadValue}${key}`;
-  }
-  syncNumpadTarget();
-  updateNumpadDisplay(numpadValue);
-}
-
-function applyNumpadAction(action) {
-  if (!numpadTarget && action !== "done") return;
-  if (action === "backspace") {
-    numpadValue = numpadValue.slice(0, -1);
-    syncNumpadTarget();
-    updateNumpadDisplay(numpadValue);
-    return;
-  }
-  if (action === "clear") {
-    numpadValue = "";
-    syncNumpadTarget();
-    updateNumpadDisplay(numpadValue);
-    return;
-  }
-  if (action === "done") {
-    closeNumpad();
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  if (!isTouchPrimary) return;
-  const numericInputs = document.querySelectorAll('input[type="number"]');
-  numericInputs.forEach((input) => {
-    input.readOnly = true;
-    input.addEventListener("click", () => openNumpad(input));
-    input.addEventListener("focus", () => openNumpad(input));
-  });
-
-  document.querySelectorAll("[data-numpad-key]").forEach((button) => {
-    button.addEventListener("click", () => applyNumpadKey(button.dataset.numpadKey));
-  });
-
-  document.querySelectorAll("[data-numpad-action]").forEach((button) => {
-    button.addEventListener("click", () => applyNumpadAction(button.dataset.numpadAction));
-  });
-
-  document.getElementById("numpad_overlay").addEventListener("click", (event) => {
-    if (event.target.id === "numpad_overlay") {
-      closeNumpad();
-    }
-  });
-});
-</script>
 
 <script>
 setActions(action_mode,action_data);

@@ -49,6 +49,29 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 
+async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str]:
+    """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
+    status_url = f"https://{host}/.well-known/card-status"
+    headers = {"Content-Type": "application/json"}
+    payload = {"token": token, "pubkey": pubkey, "sig": sig}
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            response = await client.post(status_url, json=payload, headers=headers)
+    except httpx.TimeoutException:
+        logger.warning("Card status preflight timeout for host=%s", host)
+        return False, "Card validation timed out."
+    except httpx.RequestError as exc:
+        logger.warning("Card status preflight network error for host=%s: %s", host, exc)
+        return False, "Card validation network error."
+
+    if response.status_code == 200:
+        return True, "Card is active"
+    if response.status_code in (401, 404):
+        return False, "Card is invalid or rotated. Re-issue the NFC card."
+
+    logger.warning("Card status preflight failed host=%s code=%s body=%s", host, response.status_code, response.text)
+    return False, f"Card validation failed with HTTP {response.status_code}."
+
 
 
 @router.get("/issue", tags=["records"]) 
@@ -2032,6 +2055,9 @@ async def accept_proof_token( request: Request,
     
     sig = sign_payload(proof_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
+    card_ok, card_detail = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
+    if not card_ok:
+        return {"status": "ERROR", "detail": card_detail}
 
     # need to send off to the vault for processing
     submit_data = { "nauth": proof_token.nauth, 
@@ -2090,12 +2116,18 @@ async def accept_offer_token( request: Request,
   
     
     token_to_use = offer_token.offer_token
-    
-    token_split = token_to_use.split(':')
-    parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]
+    if not token_to_use:
+        return {"status": "ERROR", "detail": "Missing offer token."}
+
+    try:
+        parsed_nembed = parse_nembed_compressed(token_to_use)
+        host = parsed_nembed["h"]
+        offer_token_to_use = parsed_nembed["k"]
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Invalid NFC offer token payload: %s", exc)
+        return {"status": "ERROR", "detail": "Invalid NFC offer token payload."}
+
     offer_url = f"https://{host}/.well-known/offer"
-    offer_token_to_use = parsed_nembed["k"]
 
     print(f"proof token: {token_to_use}")
 
@@ -2103,6 +2135,9 @@ async def accept_offer_token( request: Request,
     
     sig = sign_payload(offer_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
+    card_ok, card_detail = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
+    if not card_ok:
+        return {"status": "ERROR", "detail": card_detail}
 
     # need to send off to the vault for processing
     # also need to send along kem_public_key and kemalg
@@ -2121,10 +2156,23 @@ async def accept_offer_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"offer url: {offer_url} submit data: {submit_data}")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url=offer_url, json=submit_data, headers=headers)
-        response.raise_for_status()
-        response_json = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=offer_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+    except httpx.TimeoutException:
+        logger.warning("Offer vault timeout for host=%s", host)
+        return {"status": "ERROR", "detail": "Offer vault request timed out."}
+    except httpx.HTTPStatusError as exc:
+        logger.warning("Offer vault HTTP error %s for host=%s", exc.response.status_code, host)
+        return {"status": "ERROR", "detail": f"Offer vault returned HTTP {exc.response.status_code}."}
+    except httpx.RequestError as exc:
+        logger.warning("Offer vault network error for host=%s: %s", host, exc)
+        return {"status": "ERROR", "detail": "Offer vault network error."}
+    except ValueError:
+        logger.warning("Offer vault returned non-JSON response for host=%s", host)
+        return {"status": "ERROR", "detail": "Offer vault returned an invalid response."}
     
     print(f"response from vault: {response_json}")
 
@@ -2135,7 +2183,10 @@ async def accept_offer_token( request: Request,
    
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    return {"status": status, "detail": detail}  
+    return {
+        "status": response_json.get("status", status),
+        "detail": response_json.get("detail", detail),
+    }  
 
 @router.get("/blob")
 async def get_blob(

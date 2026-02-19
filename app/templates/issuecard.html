@@ -128,6 +128,12 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function rotateCardSecret() {
+  var user_confirm = confirm("Rotate card secret now? Existing cards will be invalidated.");
+  if (user_confirm == false) { return; }
+  window.location.href = "/safebox/issuecard?rotate=true";
+}
+
 async function getStatus(return_result) {
 
 
@@ -383,6 +389,14 @@ window.location.href="/safebox/facerec/";
 <div class="center-text">
   <hr>
   Web NFC: Android/Chrome only
+  <br><br>
+  {% if rotated %}
+  <b>Card secret rotated. Previous cards are now invalid.</b>
+  {% else %}
+  Reusing current card secret. You can write this to multiple cards.
+  {% endif %}
+  <br><br>
+  <button onclick="rotateCardSecret()">Rotate Card Secret</button>
   <br><br>
  
   <button onclick="readTag()">Card Read</button>

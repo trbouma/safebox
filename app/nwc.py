@@ -123,6 +123,23 @@ def nwc_lookup_npub_by_secret_pubkey(secret_pubkey_hex: str) -> Optional[str]:
     return None
 
 
+def nwc_lookup_secret_by_pubkey(secret_pubkey_hex: str) -> Optional[NWCSecret]:
+    """
+    Resolve full NWCSecret row by matching a public key derived from nwc_secret.
+    """
+    with Session(engine) as session:
+        secrets = session.exec(select(NWCSecret)).all()
+
+    for each in secrets:
+        try:
+            k = Keys(priv_k=each.nwc_secret)
+            if k.public_key_hex() == secret_pubkey_hex:
+                return each
+        except Exception:
+            continue
+    return None
+
+
 async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_obj, evt: Event):
     print(f"nwc {safebox_found} pay instruction: {instruction_obj['method']}")
     k = Keys(priv_k=safebox_found.nsec)
@@ -614,24 +631,31 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
             
             print(f"we have a new event! {evt.created_at}, {evt.tags}")
             requested_npub = None
+            target_pubkey = None
             try:
-                requested_npub = hex_to_npub(evt.p_tags[0])
+                target_pubkey = evt.p_tags[0]
+                requested_npub = hex_to_npub(target_pubkey)
             except Exception:
                 requested_npub = None
 
-            mapped_npub = nwc_lookup_npub_by_secret_pubkey(evt.pub_key)
-            if mapped_npub and requested_npub and mapped_npub != requested_npub:
-                print("NWC secret mapping mismatch; rejecting event")
+            # NWC target pubkey is in p-tag; sender pubkey can also be a mapped secret in client flows.
+            mapped_target = nwc_lookup_secret_by_pubkey(target_pubkey) if target_pubkey else None
+            mapped_sender = nwc_lookup_secret_by_pubkey(evt.pub_key)
+
+            if mapped_target and mapped_sender and mapped_target.npub != mapped_sender.npub:
+                print("NWC mapping mismatch between sender and target; rejecting event")
                 return
 
-            safebox_npub = mapped_npub or requested_npub
+            mapped = mapped_target or mapped_sender
+            safebox_npub = mapped.npub if mapped else requested_npub
             if not safebox_npub:
                 print("could not determine safebox for incoming nwc event")
                 return
         
             safebox_found = nwc_db_lookup_safebox(safebox_npub)
             if safebox_found:
-                decryptor = NIP4Encrypt(key=Keys(safebox_found.nsec))
+                decrypt_key = mapped.nwc_secret if mapped else safebox_found.nsec
+                decryptor = NIP4Encrypt(key=Keys(decrypt_key))
                 decrypt_event = decryptor.decrypt_event(evt=evt)
                 pay_instruction = json.loads(decrypt_event.content)
                 asyncio.create_task(nwc_handle_instruction(safebox_found, pay_instruction,evt))

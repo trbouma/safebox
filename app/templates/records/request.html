@@ -103,7 +103,8 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       const detail = data.detail || "Proof request did not return a valid response.";
       consoleLog(`${status} ${detail}`);
       setRequestStatus(detail);
-      if (status === "ERROR") {
+      if (status !== "OK") {
+        alert(detail);
         qr_img_func.src = "/img/safebox.png";
       } else {
         qr_img_func.src = "/img/circle-256.gif";
@@ -112,6 +113,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
     } catch (error) {
       consoleLog(`submitProof error: ${error}`);
       setRequestStatus("Unable to submit NFC proof request.");
+      alert("Unable to submit NFC proof request.");
       qr_img_func.src = "/img/safebox.png";
     }
   

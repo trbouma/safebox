@@ -9,7 +9,7 @@ import aioconsole
 import json, requests
 import httpx
 
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Dict, List, Optional, Union, Callable, Awaitable
 from fastapi import WebSocket
 
 from monstr.util import util_funcs
@@ -27,6 +27,7 @@ from app.config import Settings
 from app.rates import get_currency_rate
 
 import time
+import logging
 
 from app.utils import send_zap_receipt
 
@@ -39,6 +40,7 @@ LOGGING_LEVEL=20
 
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine, checkfirst=True)
+logger = logging.getLogger(__name__)
 
 async def periodic_task():
     while True:
@@ -278,10 +280,11 @@ async def handle_payment(   acorn_obj: Acorn,
         print(f"handle payment: {mint}")
         success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
         pass
+    except TimeoutError as exc:
+        logger.info("handle_payment poll timed out quote=%s mint=%s amount=%s", cli_quote.quote, mint, amount)
+        success = False
     except Exception as e:
-        import traceback
-        print(f"[handle_payment] Exception: {e}")
-        traceback.print_exc()
+        logger.exception("handle_payment unexpected exception quote=%s mint=%s amount=%s", cli_quote.quote, mint, amount)
 
     
 
@@ -354,7 +357,13 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
 
     return success
 
-async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None, nonce:str=None ):
+async def handle_ecash(
+    acorn_obj: Acorn,
+    websocket: WebSocket = None,
+    relays: List[str] = None,
+    nonce: str = None,
+    notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
+):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
     start_time = time.time()
@@ -389,6 +398,22 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
                 break
+            if notify_callback:
+                for each in ecash_out:
+                    if each[0] in ["OK", "ADVISORY"]:
+                        payload = {
+                            "status": each[0],
+                            "action": "nfc_token",
+                            "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}",
+                            "balance": acorn_obj.balance,
+                        }
+                        await notify_callback(payload)
+                await notify_callback({
+                    "status": "OK",
+                    "action": "nfc_token",
+                    "detail": "Payment complete!",
+                    "balance": acorn_obj.balance,
+                })
             break
 
          

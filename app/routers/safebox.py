@@ -1,4 +1,5 @@
 import urllib.parse
+from collections import defaultdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 global_websocket: WebSocket = None
+notify_connections: dict[str, set[WebSocket]] = defaultdict(set)
 settings = Settings()
 config = ConfigWithFallback()
 
@@ -63,6 +65,21 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
+
+
+async def notify_user(npub: str, payload: dict) -> None:
+    sockets = list(notify_connections.get(npub, set()))
+    stale: list[WebSocket] = []
+    for ws in sockets:
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            stale.append(ws)
+    for ws in stale:
+        try:
+            notify_connections[npub].remove(ws)
+        except KeyError:
+            pass
 
 
 def get_or_create_nwc_secret(npub: str, rotate: bool = False) -> str:
@@ -88,6 +105,17 @@ def get_or_create_nwc_secret(npub: str, rotate: bool = False) -> str:
             session.add(NWCSecret(nwc_secret=nwc_secret, npub=npub))
             session.commit()
         return nwc_secret
+
+
+def resolve_npub_from_card_secret(token_secret: str) -> str:
+    """
+    Resolve an NFC token secret to safebox npub from active NWCSecret mapping.
+    """
+    with Session(engine) as session:
+        mapped = session.exec(select(NWCSecret).where(NWCSecret.nwc_secret == token_secret)).first()
+        if mapped:
+            return mapped.npub
+    raise ValueError("Card secret is invalid or revoked")
 
 def _welcome_retry_response(request: Request):
     csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
@@ -317,9 +345,8 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
             logger.warning("NFC login host mismatch, redirecting to host=%s", host)
             return RedirectResponse(url=f"https://{host}",status_code=301)
            
-        #FIXME This needs to be changed to look up an ephermeral key
-        k_wallet = Keys(priv_k=decrypted_key)
-        npub = k_wallet.public_key_bech32()
+        # Resolve mapped card secret only.
+        npub = resolve_npub_from_card_secret(decrypted_key)
         logger.info("NFC login matched npub=%s", npub)
     except (IndexError, ValueError, TypeError) as exc:
         logger.warning("NFC login decrypted payload malformed: %s", exc)
@@ -1261,7 +1288,7 @@ async def my_danger_zone(       request: Request,
     my_enc = NIP44Encrypt(k)
 
     secure_pin = generate_secure_pin()
-    plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
+    plaintext_to_encrypt = f"{nwc_secret}:{secure_pin}"
   
     encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
    
@@ -1282,6 +1309,7 @@ async def my_danger_zone(       request: Request,
 
 @router.get("/issuecard", tags=["safebox", "protected"])
 async def issue_card(       request: Request, 
+                        rotate: bool = Query(False),
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to danger zone"""
@@ -1297,7 +1325,7 @@ async def issue_card(       request: Request,
     emergency_code = safebox_found.emergency_code
 
     # Do the nostr wallet connect
-    nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=True)
+    nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=rotate)
     nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # Publish profile
@@ -1319,7 +1347,7 @@ async def issue_card(       request: Request,
     my_enc = NIP44Encrypt(k)
 
     secure_pin = generate_secure_pin()
-    plaintext_to_encrypt = f"{acorn_obj.privkey_hex}:{secure_pin}"
+    plaintext_to_encrypt = f"{nwc_secret}:{secure_pin}"
   
     encrypt_token = my_enc.encrypt(plaintext_to_encrypt, to_pub_k=k.public_key_hex())
     nfc_default = settings.NFC_DEFAULT
@@ -1333,7 +1361,8 @@ async def issue_card(       request: Request,
                                             "emergency_code": emergency_code,
                                             "currencies": settings.SUPPORTED_CURRENCIES,
                                             "payment_token" : payment_token,
-                                            "secure_pin": secure_pin
+                                            "secure_pin": secure_pin,
+                                            "rotated": rotate
 
                                         })
 
@@ -1444,16 +1473,20 @@ async def root_get_user_profile(    request: Request,
 @router.websocket("/ws/notify")
 async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)):
 
-    # This is intended to replace ws/status
-    #TODO write a acorn method that senses state change in the balance and emit the message
+    # Event channel for completion/status notifications.
     await websocket.accept()
-    await websocket.send_json({"notify":"start"})
+    notify_connections[acorn_obj.pubkey_bech32].add(websocket)
+    await websocket.send_json({"notify":"connected"})
     try:
         while True:
-            await websocket.send_json({"notify": "test"})
-            await asyncio.sleep(60)
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=45)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"notify": "heartbeat"})
     except WebSocketDisconnect as e:
         print(f"Client disconnected {e.code}")
+    finally:
+        notify_connections[acorn_obj.pubkey_bech32].discard(websocket)
 
 
 @router.websocket("/ws/status")
@@ -1475,7 +1508,11 @@ async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)
 
     # starting_balance = safebox_found.balance
     await acorn_obj.load_data()
-    starting_balance = acorn_obj.get_balance()
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_found = safeboxes.first()
+        starting_balance = safebox_found.balance if safebox_found else acorn_obj.get_balance()
     # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"
@@ -1494,7 +1531,7 @@ async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)
         
         while time.time() - start_time < duration:
             try:
-                latest_balance = await db_state_change(acorn_obj=acorn_obj)
+                latest_balance = await db_state_change(acorn_obj=acorn_obj, baseline_balance=starting_balance)
 
                 new_balance = latest_balance
                 # print(f"websocket balances: {starting_balance} {test_balance} {new_balance}")
@@ -2056,9 +2093,21 @@ async def request_nfc_payment( request: Request,
     vault_url = f"https://{host}/.well-known/nfcvaultrequestpayment"
     print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
 
+    status_url = f"https://{host}/.well-known/card-status"
+    status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
+        if status_resp.status_code != 200:
+            detail_msg = "Card validation failed"
+            try:
+                detail_msg = status_resp.json().get("detail", detail_msg)
+            except Exception:
+                pass
+            return {"status": "ERROR", "detail": detail_msg}
+
     if nfc_ecash_clearing:
         print("do ecash clearing")
-        detail = "doing the ecash thing";
+        detail = "NFC ecash payment request accepted. Waiting for completion...";
         submit_data = { "ln_invoice": None, 
                         "token": vault_token, 
                         "amount": final_amount,
@@ -2080,7 +2129,12 @@ async def request_nfc_payment( request: Request,
             response_json = response.json()
         print(response_json)
         ecash_relays = response_json.get("ecash_relays", settings.ECASH_RELAYS)
-        task = asyncio.create_task(handle_ecash(acorn_obj=acorn_obj,relays=ecash_relays))
+        async def _notify(payload: dict):
+            await notify_user(acorn_obj.pubkey_bech32, payload)
+
+        task = asyncio.create_task(
+            handle_ecash(acorn_obj=acorn_obj, relays=ecash_relays, notify_callback=_notify)
+        )
 
     else:
         print("do lightning clearing")
@@ -2159,6 +2213,18 @@ async def pay_to_nfc_tag( request: Request,
     pubkey = k.public_key_hex()
     nfc_comment = nfc_pay_out_request.comment
 
+    status_url = f"https://{host}/.well-known/card-status"
+    status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
+        if status_resp.status_code != 200:
+            detail_msg = "Card validation failed"
+            try:
+                detail_msg = status_resp.json().get("detail", detail_msg)
+            except Exception:
+                pass
+            return {"status": "ERROR", "detail": detail_msg}
+
     if nfc_ecash_clearing:
         print("do nfc ecash clearing")
        
@@ -2197,7 +2263,6 @@ async def pay_to_nfc_tag( request: Request,
             nfc_pay_out_request=nfc_pay_out_request,
             final_amount=final_amount
         ))
-
 
     ###
 

@@ -134,13 +134,23 @@ async function deleteOffer() {
 
     consoleLog(`submit nfc_token ${nfc_token} ${nauth}`);
     const submit_data = {"offer_token": nfc_token, "nauth": nauth };
-    await fetch('/records/acceptoffertoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
+    try {
+      const response = await fetch('/records/acceptoffertoken', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_data)
+      });
+      const data = await response.json();
+      const status = data.status || "ERROR";
+      const detail = data.detail || "Offer request failed.";
+      consoleLog(`done ${detail}`);
+      if (status !== "OK") {
+        alert(detail);
+      }
+    } catch (error) {
+      consoleLog(`offer submit error: ${error}`);
+      alert("Offer request failed. Please try again.");
+    }
   
   
   
