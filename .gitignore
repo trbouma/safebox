@@ -11,6 +11,9 @@ __pycache__/
 # Scratch stuff
 scratch
 
+# Temp stuff
+tmp
+
 # Data Stuff
 data/*
 data/database.db

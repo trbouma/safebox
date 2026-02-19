@@ -4,6 +4,140 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .center-text {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre, b, i {
+    color: var(--sb-text-main);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  a {
+    color: #a6beff;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    background: #0d1430;
+    color: #e2e8ff;
+    border: 1px solid #39497a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid var(--sb-brand-blue-1);
+    outline-offset: 1px;
+    border-color: var(--sb-brand-blue-1);
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 800;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2f416d;
+    margin: 16px 0;
+  }
+
+  #nwcKey {
+    display: inline-block;
+    border: 1px solid #3c518b;
+    border-radius: 10px;
+    background: #0d1430;
+    color: #cad9ff;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  #log {
+    border: 1px solid #3c518b;
+    border-radius: 10px;
+    background: #0d1430;
+    color: #cad9ff;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid #3c518b;
+    background: #0d1430;
+  }
+
+  .center-text br {
+    display: block;
+    content: "";
+    margin-top: 8px;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button,
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100% !important;
+    }
+  }
+</style>
+
 
 
 <script>
@@ -88,7 +222,7 @@ async function setCustomHandle() {
     
     var data;
    
-    var owner_currency = document.getElementById("select_currency").value;
+    var owner_currency = document.getElementById("owner_select_currency").value;
 
    
     user_confirm = confirm(`Are you sure you want to proceed with setting ${owner_currency} as your owner currency?`);
@@ -297,7 +431,7 @@ window.location.href="/safebox/attest/";
      <button onclick="setOwnerNpub()">Set Owner Npub</button>
      <br><br>
      Set your owner currency: 
-     <select id="select_currency" name="select_currency">
+     <select id="owner_select_currency" name="select_currency">
       {% for entry in currencies %}
       <option >{{entry}}</option>         
       {% endfor %}
@@ -392,7 +526,7 @@ window.location.href="/safebox/attest/";
         min="0" 
         required
         >
-        <select id="select_currency" name="select_currency">
+        <select id="request_select_currency" name="select_currency">
           <option >SAT</option> 
           {% for entry in currencies %}
           <option >{{entry}}</option>         

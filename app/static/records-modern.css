@@ -1,0 +1,224 @@
+/* Shared modern dark-first theme for /records templates */
+
+:root {
+  --sb-brand-navy: #000060;
+  --sb-brand-light: #f6f6f6;
+  --sb-brand-blue-1: #5267ec;
+  --sb-brand-blue-2: #5369ec;
+  --sb-bg-deep: #090c1a;
+  --sb-bg-mid: #0d1124;
+  --sb-panel: #121a33;
+  --sb-panel-border: #2f3d67;
+  --sb-text-main: #eef2ff;
+  --sb-text-sub: #bcc7ec;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(82, 103, 236, 0.22) 0%, transparent 34%),
+    radial-gradient(circle at 88% 88%, rgba(0, 0, 96, 0.55) 0%, transparent 32%),
+    linear-gradient(145deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+  color: var(--sb-text-main);
+}
+
+.center-text {
+  width: min(96vw, 1120px);
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 18px;
+  border: 1px solid var(--sb-panel-border);
+  border-radius: 16px;
+  background: var(--sb-panel);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+}
+
+/* Consistent vertical rhythm inside records panels */
+.center-text > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.center-text > * + * {
+  margin-top: 12px;
+}
+
+#card-container {
+  width: 100%;
+  max-width: 1120px;
+  margin: 10px auto 0;
+}
+
+.card {
+  border: 1px solid #3b5187;
+  border-radius: 14px;
+  background: #0f1735;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  padding: 14px;
+  margin: 12px auto 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.card-title {
+  color: var(--sb-text-main);
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.card-content {
+  color: #cad9ff;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.original-record-panel {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #3b5187;
+  border-radius: 14px;
+  background: #0f1735;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  padding: 14px;
+  margin: 12px auto 0;
+}
+
+h1, h2, h3, h4, h5, p, span, label, pre, li {
+  color: var(--sb-text-main);
+}
+
+a {
+  color: #a6beff;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #2f416d;
+  margin: 16px 0;
+}
+
+button {
+  background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+  color: #ffffff;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 800;
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  width: 90%;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  min-height: 44px;
+  line-height: 1.2;
+}
+
+button:hover {
+  filter: brightness(1.05);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+textarea,
+select {
+  background: #0d1430;
+  color: #e2e8ff;
+  border: 1px solid #39497a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+}
+
+textarea {
+  min-height: 88px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--sb-brand-blue-1);
+  outline-offset: 1px;
+  border-color: var(--sb-brand-blue-1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #3b5187;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th, td {
+  border-bottom: 1px solid #2f416d;
+  padding: 10px;
+  font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+}
+
+th {
+  background: #111a3a;
+  color: #d7e2ff;
+  font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+  font-weight: 700;
+}
+
+td {
+  background: #0f1735;
+}
+
+pre {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #cad9ff;
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Normalize explicit line-break spacing used in older templates */
+.center-text br {
+  display: block;
+  content: "";
+  margin-top: 8px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+@media (max-width: 700px) {
+  .center-text {
+    padding: 14px;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  textarea,
+  select,
+  button {
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  .center-text {
+    width: min(95vw, 1020px);
+    max-width: 1020px;
+    padding: 16px;
+  }
+
+  #card-container {
+    max-width: 1020px;
+  }
+}

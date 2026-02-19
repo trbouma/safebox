@@ -3,9 +3,17 @@
 {% block title %}Request Record{% endblock %}
 {% block head %}
 {{ super() }}
+<link rel="stylesheet" href="/static/records-modern.css">
 
 
+<script type="module">
+  import * as pdfjsLib from "/js/pdf.mjs";
 
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/js/pdf.worker.mjs";
+
+  window.pdfjsLib = pdfjsLib;  // expose globally if needed
+</script>
 
 
 <script>
@@ -19,12 +27,35 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function buildWsUrl(path) {
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}`;
+}
+
+function setRequestStatus(message) {
+  const statusEl = document.getElementById("span_msg_status");
+  if (statusEl) {
+    statusEl.textContent = message;
+  }
+}
+
+function centerQrImageInView() {
+  const qrImg = document.getElementById("img_qr_display");
+  if (!qrImg) return;
+  qrImg.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+    inline: "nearest"
+  });
+}
+
 async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
    
     var qr_img_func = document.getElementById("img_qr_display");
     // userMessage(`Requesting ${nfc_amount} for ${nfc_currency}, please wait...`);
     const maskedNauth = nauth.slice(0, 7) + '...' + nauth.slice(-7);
     consoleLog(`Requesting by NFC. ${grant_kind} ${nfc_pin} ${maskedNauth}. \n Please wait...`);
+    setRequestStatus("Tap NFC card to request record...");
     
     var nfc_token;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
@@ -33,31 +64,34 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       const ndef = new NDEFReader();
       try {
         await ndef.scan();
-        ndef.onreading = event => {
+        ndef.onreading = async event => {
           const decoder = new TextDecoder();
           for (const record of event.message.records) {
 
             nfc_token = decoder.decode(record.data);
           }
          //  alert(`Present ${grant_kind} ${nfc_token}` );
-         qr_img_func.src = "/img/nfc-check.png";
-        consoleLog(`NFC card read successfully!`);
+         qr_img_func.src = "/img/circle-256.gif";
+         consoleLog(`NFC card read successfully!`);
+         setRequestStatus("Card read. Processing request...");
 
          
 
-         submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
          // alert("submitted"); 
          // qr_img_func.src = "/img/hourglass.png";
-         qr_img_func.src = "/img/circle-256.gif";
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
           
         }
       } catch(error) {
         consoleLog(error);
+        setRequestStatus("NFC read failed. Please try again.");
+        qr_img_func.src = "/img/safebox.png";
       }
     } else {
       consoleLog("Web NFC is not supported.");
+      setRequestStatus("Web NFC is not supported on this device/browser.");
     }
 
 
@@ -73,16 +107,41 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
                             "kind":record_kind,
                             "pin": nfc_pin };
     consoleLog(JSON.stringify(submit_data));
-    await fetch('/records/acceptprooftoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => {   consoleLog(`${data.status} ${data.detail}`);
-                      // qr_img_func.src = "/img/check.png";
-
-                  });
+    try {
+      const response = await fetch('/records/acceptprooftoken', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_data)
+      });
+      const data = await response.json();
+      const status = data.status || "ERROR";
+      const detail = data.detail || "Proof request did not return a valid response.";
+      consoleLog(`${status} ${detail}`);
+      setRequestStatus(detail);
+      if (status !== "OK") {
+        if (detail && detail.toLowerCase().includes("invalid pin")) {
+          const continueWithoutPin = confirm("Invalid PIN. Continue anyway?");
+          if (!continueWithoutPin) {
+            qr_img_func.src = "/img/safebox.png";
+            setRequestStatus("Request cancelled.");
+          } else {
+            qr_img_func.src = "/img/circle-256.gif";
+            setRequestStatus("PIN bypass confirmed. Waiting for records...");
+          }
+        } else {
+          alert(detail);
+          qr_img_func.src = "/img/safebox.png";
+        }
+      } else {
+        qr_img_func.src = "/img/circle-256.gif";
+        setRequestStatus("Request accepted. Waiting for records...");
+      }
+    } catch (error) {
+      consoleLog(`submitProof error: ${error}`);
+      setRequestStatus("Unable to submit NFC proof request.");
+      alert("Unable to submit NFC proof request.");
+      qr_img_func.src = "/img/safebox.png";
+    }
   
   
   
@@ -136,10 +195,11 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
     // qr_img_func.src="/img/circle-256.gif";
     qr_img_func.src = "/safebox/qr/"+ global_nauth;
+    setTimeout(centerQrImageInView, 80);
 
   }
    
-  listenForRecord(global_nauth);
+  listenForPresentation(global_nauth);
 
 
 
@@ -158,8 +218,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
   <br><br>
 
-  <select id="grant_kind" name="grant_kind" style="font-size: 16px;">
-    <option value="99999">Holder</option>
+  <select id="grant_kind" name="grant_kind" style="font-size: 16px;">    
     {% for entry in grant_kinds %}
       <option value="{{ entry[0] }}">{{ entry[1] }}</option>
     {% endfor %}
@@ -259,37 +318,41 @@ window.location.href="/safebox/access" ;
 
 }
 
-async function listenForRecord(nauth) {
+async function listenForPresentation(nauth) {
     
-  console.log(`listen for record presentation ${nauth}`);
+  console.log(`listen for request presentation ${nauth}`);
     
-    const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenforrecord/${nauth}`);  
+    // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
+    const wsUrl = buildWsUrl(`/records/ws/request/${nauth}`);
+    const ws = new WebSocket(wsUrl);
+    console.log(wsUrl);
     
        
-      // alert("listen for records");
+      // alert("listen for request");
       // alert(span_msg_status.textContent)
-      span_msg_status.textContent = "Listening for record...";
+      span_msg_status.textContent = "Listening for request...";
       ws.onopen = () => console.log("WebSocket connected");
       ws.onmessage = (event) => {
-      console.log("Message received for listen record:", event.data);
+      console.log("Message received for listen for request:", event.data);
       const response = JSON.parse(event.data);  
     
       if (response.status == "TIMEOUT")
       {
         alert("Record presentation has timed out. Please retry.");
-        span_msg_status.textContent = "Record presentation has timed out. Please retry.";
+        span_msg_status.textContent = "Request presentation has timed out. Please retry.";
       }
     
       if (response.status == "VERIFIED")
       {
         
-        // alert(`Record has been received! ${JSON.stringify(response.detail)}`);
-        span_msg_status.textContent = "Record has been received!";
+        // alert(`Request has been received! ${JSON.stringify(response.detail)}`);
+        span_msg_status.textContent = "Request has been received!";
         
         for (const rec of response.records) {
           //console.log(rec);
           // addCard(rec.tag, `${response.result}`,rec.payload);
-          addCard(rec.tag,rec.content, rec.verification, rec.picture, rec.is_attested);
+          addCard(rec.tag,rec.content, rec.verification, rec.picture, rec.is_attested, rec.original_record);
+          
           
         }
 
@@ -309,12 +372,6 @@ async function listenForRecord(nauth) {
     
     
     }
-
-
-
-
-
-
 
 
 
@@ -339,9 +396,153 @@ async function listenForRecord(nauth) {
       return str.substring(idx + 1);     // Return everything after the colon
     }
 
+async function fetchOriginalBlob(record, mediaHost) {
+  if (!mediaHost) return;
+  mediaHost.innerHTML = "";
+
+  try {
+    const res = await fetch("/records/originalblob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(record)
+    });
+
+    // 🚫 If not found → show nothing
+    if (!res.ok) {
+      return;
+    }
+
+    const mimeType = (res.headers.get("Content-Type") || "")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
+
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    // 🖼 IMAGE HANDLING
+    if (mimeType.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = objectUrl;
+      img.style.width = "100%";
+      img.style.height = "auto";
+      img.style.display = "block";
+      img.style.marginTop = "10px";
+      mediaHost.appendChild(img);
+
+      return;
+    }
+
+    // 📄 PDF HANDLING (PDF.js)
+    if (mimeType === "application/pdf") {
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: objectUrl,
+        standardFontDataUrl: "/js/standard_fonts/"
+      });
+
+      const pdf = await loadingTask.promise;
+      let currentPage = 1;
+      const totalPages = pdf.numPages;
+
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.flexDirection = "column";
+      controls.style.alignItems = "center";
+      controls.style.justifyContent = "center";
+      controls.style.gap = "6px";
+      controls.style.margin = "8px 0 10px";
+
+      const navRow = document.createElement("div");
+      navRow.style.display = "flex";
+      navRow.style.alignItems = "center";
+      navRow.style.justifyContent = "center";
+      navRow.style.gap = "10px";
+      navRow.style.flexWrap = "nowrap";
+      navRow.style.width = "100%";
+
+      const prevBtn = document.createElement("button");
+      prevBtn.type = "button";
+      prevBtn.textContent = "Prev";
+      prevBtn.style.width = "88px";
+      prevBtn.style.minWidth = "88px";
+      prevBtn.style.padding = "8px 10px";
+      prevBtn.style.margin = "0";
+
+      const pageLabel = document.createElement("span");
+      pageLabel.style.fontSize = "0.9rem";
+      pageLabel.style.color = "#cfd8ff";
+
+      const nextBtn = document.createElement("button");
+      nextBtn.type = "button";
+      nextBtn.textContent = "Next";
+      nextBtn.style.width = "88px";
+      nextBtn.style.minWidth = "88px";
+      nextBtn.style.padding = "8px 10px";
+      nextBtn.style.margin = "0";
+
+      navRow.appendChild(prevBtn);
+      navRow.appendChild(nextBtn);
+      controls.appendChild(navRow);
+      controls.appendChild(pageLabel);
+      mediaHost.appendChild(controls);
+
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      canvas.style.display = "block";
+      canvas.style.marginBottom = "12px";
+      mediaHost.appendChild(canvas);
+
+      async function renderPage(pageNum) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        const hostWidth = Math.max(320, mediaHost.clientWidth || viewport.width);
+        const scale = hostWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: scale });
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+        pageLabel.textContent = `${pageNum}/${totalPages}`;
+        prevBtn.disabled = pageNum <= 1;
+        nextBtn.disabled = pageNum >= totalPages;
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+      }
+
+      prevBtn.addEventListener("click", async () => {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      nextBtn.addEventListener("click", async () => {
+        if (currentPage < totalPages) {
+          currentPage += 1;
+          await renderPage(currentPage);
+        }
+      });
+
+      await renderPage(currentPage);
+
+      return;
+    }
+
+    // Anything else → do nothing
+
+  } catch (err) {
+    console.log("Render error:", err);
+  }
+}
+
 
   // Function to create and add a card
-  function addCard(title, content, verification, picture, is_attested) {
+  function addCard(title, content, verification, picture, is_attested, original_record) {
     // Create a card element
     const card = document.createElement('div');
     card.className = 'card';
@@ -393,6 +594,12 @@ async function listenForRecord(nauth) {
     }
 
     card.appendChild(cardOwnerProfile);
+
+    const cardMedia = document.createElement("div");
+    cardMedia.className = "card-content";
+    cardMedia.style.marginTop = "8px";
+    cardMedia.style.width = "100%";
+    card.appendChild(cardMedia);
   
 
 
@@ -419,14 +626,13 @@ async function listenForRecord(nauth) {
     }
 
 
-    
+    if (original_record != null) {
+      fetchOriginalBlob(original_record, cardMedia);
+    }
 
     
 
-    card.addEventListener('click', () => {
-        alert(`Verified ${title} ${content}`);
-        // window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit&kind={{record_kind}}`;
-      });
+    // Keep cards non-interactive to avoid accidental alerts while paging embedded PDFs.
 
     // Append the card to the container
     const container = document.getElementById('card-container');
@@ -452,24 +658,12 @@ setDarkMode();
 
 
 
-
-
-
-
-
-
 </script>
-   
-
 <div class="center-text">
 
   <button onclick="backToProfile()">Home</button>
   <br>
  
-
-    
-
-
      
         
 </div>

@@ -3,251 +3,408 @@
 {% block title %}User Wallet{% endblock %}
 {% block head %}
 {{ super() }}
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --surface: #101327;
+    --surface-soft: #161b35;
+    --text-primary: #f6f6f6;
+    --text-muted: #b9bfd9;
+    --line: rgba(255, 255, 255, 0.18);
+  }
 
+  #content {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 2rem 1rem 2.25rem;
+  }
+
+  .scan-shell {
+    background: linear-gradient(160deg, rgba(82, 103, 236, 0.15), rgba(0, 0, 96, 0.7));
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.36);
+    padding: 1.25rem;
+    color: var(--text-primary);
+  }
+
+  .scan-title {
+    margin: 0;
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .scan-ref {
+    margin: 0.5rem 0 0;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    word-break: break-word;
+  }
+
+  .scan-actions,
+  .scan-controls,
+  .scan-status {
+    margin-top: 1rem;
+  }
+
+  .stack {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  button,
+  select {
+    width: 90%;
+    max-width: 100%;
+    margin: 0 auto;
+    display: block;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    font-size: 1rem;
+    line-height: 1.2;
+    padding: 0.72rem 0.8rem;
+    box-sizing: border-box;
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: var(--sb-brand-light);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button:hover {
+    filter: brightness(1.05);
+  }
+
+  button.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  select {
+    background: var(--surface-soft);
+    color: var(--text-primary);
+  }
+
+  .video-wrap {
+    margin-top: 1rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.22);
+  }
+
+  #video-container {
+    line-height: 0;
+  }
+
+  #qr-video {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    font-size: 0.92rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.35rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .status-row strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .status-val {
+    text-align: right;
+    word-break: break-word;
+    color: var(--text-primary);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.92rem;
+    color: var(--text-muted);
+  }
+
+  .toggle-row input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    margin: 1.2rem 0 0;
+  }
+
+  #video-container.example-style-1 .scan-region-highlight-svg,
+  #video-container.example-style-1 .code-outline-highlight {
+    stroke: #64a2f3 !important;
+  }
+
+  #video-container.example-style-2 {
+    position: relative;
+    width: max-content;
+    height: max-content;
+    overflow: hidden;
+  }
+
+  #video-container.example-style-2 .scan-region-highlight {
+    border-radius: 30px;
+    outline: rgba(0, 0, 0, 0.25) solid 50vmax;
+  }
+
+  #video-container.example-style-2 .scan-region-highlight-svg {
+    display: none;
+  }
+
+  #video-container.example-style-2 .code-outline-highlight {
+    stroke: rgba(255, 255, 255, 0.5) !important;
+    stroke-width: 15 !important;
+    stroke-dasharray: none !important;
+  }
+
+  #flash-toggle {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    #content {
+      padding: 1rem 0.7rem 1.6rem;
+    }
+
+    .scan-shell {
+      border-radius: 14px;
+      padding: 0.95rem;
+    }
+
+    .scan-title {
+      font-size: 1.35rem;
+    }
+
+    button,
+    select {
+      width: 92%;
+    }
+  }
+</style>
 {% endblock %}
 
 {% block page_content %}
+<section class="scan-shell">
+  <h1 id="header-msg" class="scan-title">Scanning...</h1>
+  <p class="scan-ref">{{ referer }}</p>
 
-<center>
-<h1 id="header-msg">Scanning...</h1>
-{{referer}}
-<br>
+  <div class="scan-actions stack">
+    <button onclick="goBack()">Back</button>
+  </div>
 
+  <div class="video-wrap">
+    <div id="video-container">
+      <video id="qr-video"></video>
+    </div>
+  </div>
 
+  <div class="scan-controls stack">
+    <select id="scan-region-highlight-style-select">
+      <option value="default-style">Highlight: Default style</option>
+      <option value="example-style-1">Highlight: Custom style 1</option>
+      <option value="example-style-2">Highlight: Custom style 2</option>
+    </select>
 
-<button onclick="goBack()">Back</button> 
-<br><br>
-<div id="video-container" >
-    <video id="qr-video" style="width: 90%;"></video>
-</div>
-
-
-<br>
-<br>
-<div>
-    <label>
-        Highlight Style
-        <select id="scan-region-highlight-style-select">
-            <option value="default-style">Default style</option>
-            <option value="example-style-1">Example custom style 1</option>
-            <option value="example-style-2">Example custom style 2</option>
-        </select>
+    <label class="toggle-row" for="show-scan-region">
+      <input id="show-scan-region" type="checkbox">
+      Show scan region canvas
     </label>
-    <label>
-        <input id="show-scan-region" type="checkbox">
-        Show scan region canvas
-    </label>
-</div>
-<div>
+
     <select id="inversion-mode-select">
-        <option value="original">Scan original (dark QR code on bright background)</option>
-        <option value="invert">Scan with inverted colors (bright QR code on dark background)</option>
-        <option value="both">Scan both</option>
+      <option value="original">Scan original (dark QR on bright background)</option>
+      <option value="invert">Scan inverted colors (bright QR on dark background)</option>
+      <option value="both">Scan both</option>
     </select>
-    <br>
-</div>
-<b>Device has camera: </b>
-<span id="cam-has-camera"></span>
-<br>
-<div>
-    <b>Preferred camera:</b>
+
     <select id="cam-list">
-        <option value="environment" selected>Environment Facing (default)</option>
-        <option value="user">User Facing</option>
+      <option value="environment" selected>Camera: Environment facing (default)</option>
+      <option value="user">Camera: User facing</option>
     </select>
-</div>
-<b>Camera has flash: </b>
-<span id="cam-has-flash"></span>
-<div>
-    <button id="flash-toggle">📸 Flash: <span id="flash-state">off</span></button>
-</div>
-<br>
-<b>Detected QR code: </b>
-<span id="cam-qr-result">None</span>
-<br>
-<b>Last detected at: </b>
-<span id="cam-qr-result-timestamp"></span>
-<br>
-<button id="start-button">Start</button>
-<br><br>
-<button id="stop-button">Stop</button>
-<hr>
 
-</center>
+    <button id="flash-toggle" type="button">Flash: <span id="flash-state">off</span></button>
+    <button id="start-button" type="button">Start</button>
+    <button id="stop-button" type="button">Stop</button>
+  </div>
 
-<!--<script src="/src/qr-scanner.umd.min.js"></script>-->
-<!--<script src="/src/qr-scanner.legacy.min.js"></script>-->
+  <div class="scan-status">
+    <div class="status-row"><strong>Device has camera</strong><span id="cam-has-camera" class="status-val"></span></div>
+    <div class="status-row"><strong>Camera has flash</strong><span id="cam-has-flash" class="status-val"></span></div>
+    <div class="status-row"><strong>Detected QR code</strong><span id="cam-qr-result" class="status-val">None</span></div>
+    <div class="status-row"><strong>Last detected at</strong><span id="cam-qr-result-timestamp" class="status-val"></span></div>
+  </div>
+
+  <hr>
+</section>
+
 <script>
-
-async function gotoScanResult(scandata) {
-
-    //alert(scandata);
-
-    const submit_data = {"data": scandata};
+  async function gotoScanResult(scandata) {
+    const submit_data = { data: scandata };
 
     await fetch('/scanner/scanresult', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(submit_data)
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(submit_data)
     }).then((response) => {
-    if (response.redirected) {
-        window.location.href = response.url;  // actually follow redirect in browser
-    }
+      if (response.redirected) {
+        window.location.href = response.url;
+      }
     });
-}
-
+  }
 </script>
 
 <script type="module">
-    import QrScanner from "/src/qr-scanner.min.js";
+  import QrScanner from '/src/qr-scanner.min.js';
 
-    const video = document.getElementById('qr-video');
-    const videoContainer = document.getElementById('video-container');
-    const camHasCamera = document.getElementById('cam-has-camera');
-    const camList = document.getElementById('cam-list');
-    const camHasFlash = document.getElementById('cam-has-flash');
-    const flashToggle = document.getElementById('flash-toggle');
-    const flashState = document.getElementById('flash-state');
-    const camQrResult = document.getElementById('cam-qr-result');
-    const camQrResultTimestamp = document.getElementById('cam-qr-result-timestamp');
-    const fileSelector = document.getElementById('file-selector');
-    const fileQrResult = document.getElementById('file-qr-result');
+  const video = document.getElementById('qr-video');
+  const videoContainer = document.getElementById('video-container');
+  const camHasCamera = document.getElementById('cam-has-camera');
+  const camList = document.getElementById('cam-list');
+  const camHasFlash = document.getElementById('cam-has-flash');
+  const flashToggle = document.getElementById('flash-toggle');
+  const flashState = document.getElementById('flash-state');
+  const camQrResult = document.getElementById('cam-qr-result');
+  const camQrResultTimestamp = document.getElementById('cam-qr-result-timestamp');
+  const fileSelector = document.getElementById('file-selector');
+  const fileQrResult = document.getElementById('file-qr-result');
 
-    function setResult(label, result) {
-        var referer = "{{referer}}";
-        console.log(result.data);
-        label.textContent = result.data;
-        camQrResultTimestamp.textContent = new Date().toString();
-        label.style.color = 'teal';
-        clearTimeout(label.highlightTimeout);
-        label.highlightTimeout = setTimeout(() => label.style.color = 'inherit', 100);
-        // window.location.href="scanner?qr_code=" + result.data + "&wallet_name={{wallet_name}}";
-        // alert("Succesfully scanned! Click OK to continue");
-        var header_msg = document.getElementById('header-msg');
-        header_msg.innerText = "Success! Please wait a moment...";
-        scanner.stop();
-        gotoScanResult(result.data)
-        // window.location.href= `/scanner/scanresult?qr_code=${result.data}&referer=${referer}`;
-        
-    }
+  function setResult(label, result) {
+    console.log(result.data);
+    label.textContent = result.data;
+    camQrResultTimestamp.textContent = new Date().toString();
+    label.style.color = 'teal';
+    clearTimeout(label.highlightTimeout);
+    label.highlightTimeout = setTimeout(() => {
+      label.style.color = 'inherit';
+    }, 100);
 
-    // ####### Web Cam Scanning #######
+    const headerMsg = document.getElementById('header-msg');
+    headerMsg.innerText = 'Success! Please wait a moment...';
+    scanner.stop();
+    gotoScanResult(result.data);
+  }
 
-    const scanner = new QrScanner(video, result => setResult(camQrResult, result), {
-        onDecodeError: error => {
-            camQrResult.textContent = error;
-            camQrResult.style.color = 'inherit';
-        },
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
+  const scanner = new QrScanner(video, (result) => setResult(camQrResult, result), {
+    onDecodeError: (error) => {
+      camQrResult.textContent = error;
+      camQrResult.style.color = 'inherit';
+    },
+    highlightScanRegion: true,
+    highlightCodeOutline: true
+  });
+
+  const updateFlashAvailability = () => {
+    scanner.hasFlash().then((hasFlash) => {
+      camHasFlash.textContent = hasFlash;
+      flashToggle.style.display = hasFlash ? 'block' : 'none';
     });
+  };
 
-    const updateFlashAvailability = () => {
-        scanner.hasFlash().then(hasFlash => {
-            camHasFlash.textContent = hasFlash;
-            flashToggle.style.display = hasFlash ? 'inline-block' : 'none';
-        });
-    };
+  scanner.start().then(() => {
+    updateFlashAvailability();
+    QrScanner.listCameras(true).then((cameras) =>
+      cameras.forEach((camera) => {
+        const option = document.createElement('option');
+        option.value = camera.id;
+        option.text = camera.label;
+        camList.add(option);
+      })
+    );
+  });
 
-    scanner.start().then(() => {
-        updateFlashAvailability();
-        // List cameras after the scanner started to avoid listCamera's stream and the scanner's stream being requested
-        // at the same time which can result in listCamera's unconstrained stream also being offered to the scanner.
-        // Note that we can also start the scanner after listCameras, we just have it this way around in the demo to
-        // start the scanner earlier.
-        QrScanner.listCameras(true).then(cameras => cameras.forEach(camera => {
-            const option = document.createElement('option');
-            option.value = camera.id;
-            option.text = camera.label;
-            camList.add(option);
-        }));
+  QrScanner.hasCamera().then((hasCamera) => {
+    camHasCamera.textContent = hasCamera;
+  });
+
+  window.scanner = scanner;
+
+  document.getElementById('scan-region-highlight-style-select').addEventListener('change', (e) => {
+    videoContainer.className = e.target.value;
+    scanner._updateOverlay();
+  });
+
+  document.getElementById('show-scan-region').addEventListener('change', (e) => {
+    const input = e.target;
+    const label = input.parentNode;
+    label.parentNode.insertBefore(scanner.$canvas, label.nextSibling);
+    scanner.$canvas.style.display = input.checked ? 'block' : 'none';
+  });
+
+  document.getElementById('inversion-mode-select').addEventListener('change', (event) => {
+    scanner.setInversionMode(event.target.value);
+  });
+
+  camList.addEventListener('change', (event) => {
+    scanner.setCamera(event.target.value).then(updateFlashAvailability);
+  });
+
+  flashToggle.addEventListener('click', () => {
+    scanner.toggleFlash().then(() => {
+      flashState.textContent = scanner.isFlashOn() ? 'on' : 'off';
     });
+  });
 
-    QrScanner.hasCamera().then(hasCamera => camHasCamera.textContent = hasCamera);
+  document.getElementById('start-button').addEventListener('click', () => {
+    scanner.start();
+  });
 
-    // for debugging
-    window.scanner = scanner;
+  document.getElementById('stop-button').addEventListener('click', () => {
+    scanner.stop();
+  });
 
-    document.getElementById('scan-region-highlight-style-select').addEventListener('change', (e) => {
-        videoContainer.className = e.target.value;
-        scanner._updateOverlay(); // reposition the highlight because style 2 sets position: relative
+  if (fileSelector && fileQrResult) {
+    fileSelector.addEventListener('change', () => {
+      const file = fileSelector.files[0];
+      if (!file) {
+        return;
+      }
+      QrScanner.scanImage(file, { returnDetailedScanResult: true })
+        .then((result) => setResult(fileQrResult, result))
+        .catch((e) => setResult(fileQrResult, { data: e || 'No QR code found.' }));
     });
-
-    document.getElementById('show-scan-region').addEventListener('change', (e) => {
-        const input = e.target;
-        const label = input.parentNode;
-        label.parentNode.insertBefore(scanner.$canvas, label.nextSibling);
-        scanner.$canvas.style.display = input.checked ? 'block' : 'none';
-    });
-
-    document.getElementById('inversion-mode-select').addEventListener('change', event => {
-        scanner.setInversionMode(event.target.value);
-    });
-
-    camList.addEventListener('change', event => {
-        scanner.setCamera(event.target.value).then(updateFlashAvailability);
-    });
-
-    flashToggle.addEventListener('click', () => {
-        scanner.toggleFlash().then(() => flashState.textContent = scanner.isFlashOn() ? 'on' : 'off');
-    });
-
-    document.getElementById('start-button').addEventListener('click', () => {
-        scanner.start();
-    });
-
-    document.getElementById('stop-button').addEventListener('click', () => {
-        scanner.stop();
-    });
-
-    // ####### File Scanning #######
-
-    fileSelector.addEventListener('change', event => {
-        const file = fileSelector.files[0];
-        if (!file) {
-            return;
-        }
-        QrScanner.scanImage(file, { returnDetailedScanResult: true })
-            .then(result => setResult(fileQrResult, result))
-            .catch(e => setResult(fileQrResult, { data: e || 'No QR code found.' }));
-    });
+  }
 </script>
-<script>
 
-async function goBack() {
+<script>
+  async function goBack() {
     window.history.back();
-}
-async function backToWallet() {
+  }
 
+  async function backToWallet() {
+    const headerMsg = document.getElementById('header-msg');
+    headerMsg.textContent = 'Going back, please wait...';
+    window.location.href = '{{ referer }}';
+  }
 
-    var header_msg = document.getElementById("header-msg");
-    header_msg.textContent = "Going back, please Wait...";
-    window.location.href="{{referer}}";
+  async function backToProfile() {
+    window.location.href = '/safebox/access';
+  }
 
-}
-
-
+  setDarkMode();
 </script>
-
-async function backToProfile() {
-
-
-window.location.href="/safebox/access" ;
-
-}
-</script>
-<script>
-    setDarkMode();
-</script>
-
-
-</body>
-</html>
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-
-
 {% endblock %}

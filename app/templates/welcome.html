@@ -4,57 +4,350 @@
 {% block head %}
 {{ super() }}
 
-<script>
-function consoleLog(data) {
-    var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
-  };
-
-async function loginwithNFC() {
-    consoleLog("waiting for nfc...")
-    var nfc_token;
-    if ("NDEFReader" in window) {
-      const ndef = new NDEFReader();
-      try {
-        await ndef.scan();
-        ndef.onreading = event => {
-          const decoder = new TextDecoder();
-          for (const record of event.message.records) {
-
-            nfc_token = decoder.decode(record.data);
-          }
-          consoleLog(`Acquired ${nfc_token}` );
-          submitToken(nfc_token);
-          
-        }
-      } catch(error) {
-        consoleLog(error);
-      }
-    } else {
-      consoleLog("Web NFC is not supported.");
-    }
-
-
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
   }
 
+  .wb-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(82, 103, 236, 0.22) 0%, transparent 38%),
+      radial-gradient(circle at 85% 82%, rgba(0, 0, 96, 0.55) 0%, transparent 36%),
+      linear-gradient(140deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+    color: var(--sb-text-main);
+  }
+
+  .wb-shell {
+    width: 100%;
+    max-width: 980px;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 22px;
+  }
+
+  .wb-panel {
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 18px;
+    background: var(--sb-panel);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+    padding: 24px;
+  }
+
+  .wb-brand h1 {
+    margin: 0 0 10px;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+    line-height: 1.1;
+    text-align: center;
+    letter-spacing: 0.01em;
+  }
+
+  .wb-brand p {
+    margin: 0 0 18px;
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .wb-badge {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(82, 103, 236, 0.16);
+    color: #d8e0ff;
+    border: 1px solid rgba(82, 103, 236, 0.52);
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+
+  .wb-logo {
+    display: block;
+    width: min(220px, 70%);
+    height: auto;
+    margin: 10px auto 0;
+    border-radius: 14px;
+    background: var(--sb-brand-light);
+    border: 1px solid #d6dcf4;
+    padding: 12px;
+  }
+
+  .wb-card-title {
+    margin: 0 0 14px;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 800;
+    font-size: 1.45rem;
+  }
+
+  .wb-form {
+    margin-bottom: 18px;
+  }
+
+  .wb-label {
+    display: block;
+    margin-bottom: 8px;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+
+  .wb-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #39497a;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    color: #e2e8ff;
+  }
+
+  .wb-input-wrap {
+    position: relative;
+  }
+
+  .wb-input-wrap .wb-input {
+    padding-right: 46px;
+  }
+
+  /* Keep access key width stable when toggling password/text type */
+  .wb-input-wrap input.wb-input,
+  .wb-input-wrap input.wb-input[type="text"],
+  .wb-input-wrap input.wb-input[type="password"] {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  .wb-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: transparent;
+    color: #b8c8ff;
+    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+  }
+
+  .wb-toggle:hover {
+    opacity: 1;
+    background: rgba(158, 195, 216, 0.12);
+  }
+
+  .wb-eye {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+
+  .wb-eye-off {
+    display: none;
+  }
+
+  .wb-toggle[data-visible="true"] .wb-eye-on {
+    display: none;
+  }
+
+  .wb-toggle[data-visible="true"] .wb-eye-off {
+    display: block;
+  }
+
+  .wb-input:focus {
+    outline: 2px solid var(--sb-brand-blue-1);
+    outline-offset: 1px;
+    border-color: var(--sb-brand-blue-1);
+  }
+
+  .wb-checkline {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 10px 0 14px;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 0.92rem;
+    color: var(--sb-text-sub);
+  }
+
+  .wb-code-box {
+    border: 1px solid #3a4f86;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 10px 0 0;
+    margin-bottom: 12px;
+  }
+
+  .wb-code-box .wb-label {
+    margin: 0 12px 8px;
+  }
+
+  .wb-code-box .wb-input,
+  .wb-code-box input.wb-input[type="text"] {
+    width: 100% !important;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .wb-btn {
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .wb-btn-primary {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #fff;
+  }
+
+  .wb-btn-secondary {
+    background: rgba(82, 103, 236, 0.12);
+    color: #d9e2ff;
+    border: 1px solid #435ca1;
+  }
+
+  .wb-actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .wb-actions a {
+    color: #a6beff;
+    text-decoration: none;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 0.93rem;
+  }
+
+  .wb-divider {
+    border: 0;
+    border-top: 1px solid #2f416d;
+    margin: 16px 0;
+  }
+
+  .wb-log {
+    min-height: 72px;
+    border: 1px solid #3c518b;
+    border-radius: 10px;
+    background: #0d1430;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    font-family: "Courier New", monospace;
+    font-size: 0.83rem;
+    color: #cad9ff;
+    overflow-wrap: anywhere;
+  }
+
+  .wb-foot {
+    margin-top: 14px;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 0.86rem;
+    color: #aebbe7;
+    line-height: 1.5;
+  }
+
+  .wb-foot a {
+    color: #a6beff;
+    text-decoration: none;
+  }
+
+  @media (max-width: 900px) {
+    .wb-shell {
+      grid-template-columns: 1fr;
+    }
+    .wb-panel {
+      padding: 20px;
+    }
+  }
+</style>
+
+<script>
+function consoleLog(data) {
+  var logElement = document.getElementById('log');
+  if (!logElement) return;
+  logElement.textContent += data + '\n';
+}
+
+async function loginwithNFC() {
+  consoleLog("Waiting for NFC...");
+  var nfc_token;
+  if ("NDEFReader" in window) {
+    const ndef = new NDEFReader();
+    try {
+      await ndef.scan();
+      ndef.onreading = function(event) {
+        var decoder = new TextDecoder();
+        for (var i = 0; i < event.message.records.length; i++) {
+          nfc_token = decoder.decode(event.message.records[i].data);
+        }
+        consoleLog("Acquired NFC token.");
+        submitToken(nfc_token);
+      };
+    } catch (error) {
+      consoleLog("NFC scan error: " + error);
+    }
+  } else {
+    consoleLog("Web NFC is not supported on this browser/device.");
+  }
+}
+
 async function submitToken(nfc_token) {
+  consoleLog("Submitting token...");
+  var submit_data = {"nembed": nfc_token};
+  try {
+    await fetch("/safebox/loginwithnfc", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(submit_data)
+    });
+    window.location.href = "/safebox/access";
+  } catch (error) {
+    consoleLog("Submit failed: " + error);
+  }
+}
 
-consoleLog(`submitToken  ${nfc_token}`);
-const submit_data = {"nembed": nfc_token};
-
-
-
-await fetch('/safebox/loginwithnfc', {
-method: "POST",
-headers: {"Content-Type": "application/json"},        
-body: JSON.stringify(submit_data)         
-})   
-.then((data) => {consoleLog(`done ${data}`)});
-
-window.location.href="/safebox/access" ;
-
-
-
+function toggleAccessKeyVisibility() {
+  var input = document.getElementById("access_key");
+  var toggle = document.getElementById("access_key_toggle");
+  if (!input || !toggle) return;
+  if (input.type === "password") {
+    input.type = "text";
+    toggle.setAttribute("data-visible", "true");
+    toggle.setAttribute("aria-label", "Hide access key");
+  } else {
+    input.type = "password";
+    toggle.setAttribute("data-visible", "false");
+    toggle.setAttribute("aria-label", "Show access key");
+  }
 }
 
 </script>
@@ -63,57 +356,71 @@ window.location.href="/safebox/access" ;
 {% endblock %}
 
 {% block page_content %}
+<main class="wb-page">
+  <section class="wb-shell">
+    <article class="wb-panel wb-brand">
+      <span class="wb-badge">Nostr + Cashu + Private Records</span>
+      <h1>{{ branding }}</h1>
+      <p>{{ branding_message }}</p>
+      <img class="wb-logo" src="/img/safebox-small.png" alt="Safebox Logo">
+      <div class="wb-foot">
+        Using quantum-safe algorithms from
+        <a href="https://openquantumsafe.org/">Open Quantum Safe Foundation</a>.
+      </div>
+    </article>
 
+    <article class="wb-panel">
+      <form class="wb-form" action="/safebox/login" method="POST" autocomplete="on" hx-boost="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="wb-label" for="access_key">Access Key</label>
+        <div class="wb-input-wrap">
+          <input class="wb-input" type="password" id="access_key" name="access_key" placeholder="Enter your access key" autocomplete="current-password" required>
+          <button class="wb-toggle" id="access_key_toggle" type="button" onclick="toggleAccessKeyVisibility()" aria-label="Show access key" data-visible="false" title="Show or hide access key">
+            <svg class="wb-eye wb-eye-on" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M1.5 12s3.8-6.5 10.5-6.5S22.5 12 22.5 12s-3.8 6.5-10.5 6.5S1.5 12 1.5 12Z" stroke="currentColor" stroke-width="1.8"/>
+              <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <svg class="wb-eye wb-eye-off" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 3l18 18" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M1.5 12s3.8-6.5 10.5-6.5c2.2 0 4.1.7 5.7 1.8M22.5 12s-3.8 6.5-10.5 6.5c-2.2 0-4.1-.7-5.7-1.8" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+          </button>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="wb-btn wb-btn-primary" type="submit">Login</button>
+        </div>
+      </form>
 
+      <hr class="wb-divider">
 
-<div class="center-text">
-    
-        <h1>{{ branding }}</h1>
-        
-        <i><p class="lead">{{branding_message}}</p></i>
-        <img src="img/safebox-small.png">
-        <br><br>
-               
-            <form action="/safebox/login" method="POST">
-                <label for="access_key">Access Key:</label><br>
-                <input type="text" id="access_key" name="access_key" type="password" placeholder="Enter access key" style="width: auto;">
-                <br><br>    
-                <button type="submit">Login</button>
-            </form>
-        </p>
-        <hr>
-            <form action="/onboard/website" method="POST">
-                <label for="invite_code">Invite Code:</label><br>
-                <input type="text" id="invite_code" name="invite_code" style="width: auto;" placeholder="Enter invite code" >
-                <br><br>    
-                <label>
-                    <input type="checkbox" id="non_custodial" name="non_custodial" value="true">
-                    I want a non-custodial private key (Danger!!!)
-                </label>
-                <br><br>
-                <button >Get SafeBox</button>
-                
+      <form class="wb-form" action="/onboard/website" method="POST" autocomplete="off" hx-boost="false">
+        <div class="wb-code-box">
+          <label class="wb-label" for="invite_code">Invite Code</label>
+          <input class="wb-input" type="text" id="invite_code" name="invite_code" placeholder="Enter Invite Code">
+        </div>
+        <label class="wb-checkline" for="non_custodial">
+          <input type="checkbox" id="non_custodial" name="non_custodial" value="true">
+          <span>I want a non-custodial private key (Danger).</span>
+        </label>
+        <button class="wb-btn wb-btn-primary" type="submit">Create Safebox</button>
+      </form>
 
-            </form>
-            <p>
-            <a href="/recover">Recover</a>
-                
-            </p>
-        <hr>
-        <br>
-        <button onclick="loginwithNFC()">Login with NFC</button>
-        <br>
-        <pre id="log"></pre>
-            <hr>
-            <p>Follow the latest blog entries <a href="https://tim-bouma.npub.pro/tag/safebox/">here</a>
-            <p><a href="https://github.com/trbouma">Verify the Code</a></p> 
-            <p><i>This is <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a> <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a></i></p>
-             
+      <button class="wb-btn wb-btn-primary" type="button" onclick="loginwithNFC()">Login with NFC</button>
+      <pre id="log" class="wb-log" aria-live="polite"></pre>
 
+      <div class="wb-foot">
+        Follow updates
+        <a href="https://tim-bouma.npub.pro/tag/safebox/">#safebox</a> and
+        <a href="https://tim-bouma.npub.pro/tag/nostr/">#nostr</a>.
+      </div>
 
-        
-    </div>
-     
+      <div class="wb-actions">
+        <a href="/recover">Recover</a>
+        <a href="https://github.com/trbouma">Verify the Code</a>
+      </div>
+    </article>
+  </section>
+</main>
 
 <script>
     setDarkMode();

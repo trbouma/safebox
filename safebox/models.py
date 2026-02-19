@@ -335,10 +335,45 @@ class TokenV3(BaseModel):
         ).decode()
         return tokenv3_serialized
 
+class EncryptionParms(BaseModel):
+    alg: str|None = None
+    key: str|None = None
+    iv: str|None = None
+    aad: str|None = None
+
+class EncryptionResult(BaseModel):
+    alg: str                     # "AES-256-GCM"
+    cipherbytes: bytes            # encrypted bytes (auth tag included)
+    iv: bytes                    # nonce
+    aad: Optional[bytes] = None
+
+    class Config:
+        arbitrary_types_allowed = True
+        frozen = True
+
 class SafeboxRecord(BaseModel):
     tag: list[str]                     # e.g. ["my_record"]
     type: str                          # e.g. "offer"
     payload: Any                       # can hold any JSON-serializable value
+    blobref: str|None = None
+    blobtype: str|None = None
+    # blobdata: bytes|None = None
+    blobsha256: str|None = None
+    origsha256: str|None = None
+    encryptparms: EncryptionParms|None=None
+
+class OriginalRecordTransfer(BaseModel):
+    origsha256: str
+    origmimetype: str
+    encryptparms: EncryptionParms|None=None
+    blobref: str|None = None
+    blobserver: str|None = None
+    blobsha256: str|None = None
+    blobmimetype:str|None =None
+    blobnsec: str |None=None
+    
+
+  
 
 class ParseRecord(BaseModel):
     tag: List[str]                     # e.g. ["my_record"]

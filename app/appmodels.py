@@ -127,6 +127,8 @@ class transmitConsultation(BaseModel):
     originating_kind: int = 32227
     final_kind: int = 32225
     record_name: str = None
+    kem_public_key: str = None
+    kemalg: str = None
 
 class incomingRecord(BaseModel):
     id: str
@@ -139,13 +141,13 @@ class recoverIdentity(BaseModel):
     new_identity: bool = False
     legacy: bool = False
 
-class sendCredentialParms(BaseModel):
-    nauth: str
-    grant: str = None
 
 class sendRecordParms(BaseModel):
     nauth: str
-    grant: str = None
+    grant_name: str = None
+    grant_kind: int = None
+    kem_public_key: str = None
+    kemalg: str = None
 
 class paymentByToken(BaseModel):
     payment_token: str
@@ -194,6 +196,11 @@ class nwcVault(BaseModel):
     relays: List[str]|None=None
     sig: str|None = None  
 
+class cardStatusRequest(BaseModel):
+    token: str
+    pubkey: str
+    sig: str
+
 class proofVault(BaseModel):    
     token: str 
     nauth: str
@@ -207,6 +214,8 @@ class offerVault(BaseModel):
     nauth: str    
     pubkey:str|None= None
     sig: str|None = None  
+    kem_public_key:str|None = None
+    kemalg:str|None=None
 
 class nfcPayOutVault(BaseModel):
     token: str
@@ -222,7 +231,17 @@ class nfcPayOutVault(BaseModel):
 class attestationOwner(BaseModel):    
     owner_nsec: str
 
+class rootEntity(BaseModel):    
+    root_entities: str|None = None
+
+class wotEntity(BaseModel):    
+    wot_entities: str|None = None
+
 class signedEvent(BaseModel):
     signed_event: dict
+
+class BlobRequest(BaseModel):
+    record_name: str
+    record_kind: int
    
     

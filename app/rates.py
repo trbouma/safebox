@@ -1,13 +1,17 @@
 from pydantic import BaseModel
 from datetime import datetime, timedelta
-import jwt, re, requests, bech32
+import jwt, re, bech32
 from time import sleep
 import asyncio
 import csv
 from zoneinfo import ZoneInfo
+import logging
+import time
+from typing import Any, Dict
 
 from bech32 import bech32_decode, convertbits
 import struct, json
+import httpx
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox, CurrencyRate
@@ -16,24 +20,88 @@ from app.config import Settings
 
 settings = Settings()
 engine = create_engine(settings.DATABASE)
+logger = logging.getLogger(__name__)
+
+CURRENCY_TICKER_URL = "https://blockchain.info/ticker"
+HTTP_TIMEOUT_SECONDS = 10.0
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 0.5
+CIRCUIT_FAILURE_THRESHOLD = 3
+CIRCUIT_COOLDOWN_SECONDS = 60
+_circuit_failures = 0
+_circuit_open_until = 0.0
+_circuit_lock = asyncio.Lock()
 # SQLModel.metadata.create_all(engine, checkfirst=True)
 
+async def _record_success() -> None:
+    global _circuit_failures, _circuit_open_until
+    async with _circuit_lock:
+        _circuit_failures = 0
+        _circuit_open_until = 0.0
+
+async def _record_failure() -> None:
+    global _circuit_failures, _circuit_open_until
+    async with _circuit_lock:
+        _circuit_failures += 1
+        if _circuit_failures >= CIRCUIT_FAILURE_THRESHOLD:
+            _circuit_open_until = time.time() + CIRCUIT_COOLDOWN_SECONDS
+
+async def _ensure_circuit_closed() -> None:
+    async with _circuit_lock:
+        if _circuit_open_until > time.time():
+            remaining = int(_circuit_open_until - time.time())
+            raise RuntimeError(f"currency rate circuit is open for {remaining}s")
+
+async def _fetch_currency_table() -> Dict[str, Any]:
+    await _ensure_circuit_closed()
+    timeout = httpx.Timeout(HTTP_TIMEOUT_SECONDS)
+    last_error: Exception | None = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(CURRENCY_TICKER_URL)
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise ValueError("currency ticker response must be a JSON object")
+                await _record_success()
+                return payload
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, json.JSONDecodeError) as exc:
+            last_error = exc
+            logger.warning(
+                "Currency ticker fetch attempt failed (attempt=%s/%s): %s",
+                attempt,
+                MAX_RETRIES,
+                exc,
+            )
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    await _record_failure()
+    raise RuntimeError("failed to fetch currency ticker after retries") from last_error
+
 async def refresh_currency_rates():
-    refresh_time = datetime.now()
-    print("refresh currency rates:")
-    currency_table = json.loads(requests.get('https://blockchain.info/ticker').text)
+    logger.info("Refreshing currency rates")
+    try:
+        currency_table = await _fetch_currency_table()
+    except RuntimeError as exc:
+        logger.error("Currency rate refresh skipped: %s", exc)
+        return
     
     with Session(engine) as session:
         statement = select(CurrencyRate).where(CurrencyRate.currency_code.in_(settings.SUPPORTED_CURRENCIES))
         results = session.exec(statement).all()
         for record in results:
             try:
-                print(f"{record.currency_code} {currency_table[record.currency_code]['15m']}")
-                record.currency_rate = currency_table[record.currency_code]['15m']
+                rate_obj = currency_table[record.currency_code]
+                record.currency_rate = rate_obj['15m']
                 record.refresh_time = datetime.now()
-                session.commit()
-            except:
-                print(f"Cannot refresh: {record}")
+            except KeyError:
+                logger.warning("No currency ticker rate for %s", record.currency_code)
+            except TypeError as exc:
+                logger.warning("Malformed currency ticker entry for %s: %s", record.currency_code, exc)
+        session.commit()
 
 async def get_currency_rates():
     with Session(engine) as session:
@@ -50,7 +118,7 @@ async def get_currency_rate(currency_code: str)  :
     return result
 
 async def get_online_currency_rates():
-    return json.loads(requests.get('https://blockchain.info/ticker').text)
+    return await _fetch_currency_table()
    
 
 
@@ -99,9 +167,8 @@ async def load_currency_rates_from_csv():
                         currency = CurrencyRate(**data)
                         session.add(currency)
                         session.commit()
-    except Exception as e:
-        # print(f"Exception as {e}")
-        pass
+    except (OSError, ValueError, KeyError) as exc:
+        logger.error("Failed to initialize currency rates from CSV: %s", exc)
         
 
 

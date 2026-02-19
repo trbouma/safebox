@@ -4,6 +4,94 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre {
+    color: var(--sb-text-main);
+  }
+
+  .hint {
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  .actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 800;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .inline-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--sb-text-main);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2f416d;
+    margin: 16px 0;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+
+    button {
+      width: 100%;
+    }
+  }
+</style>
+
 
 
 <script>
@@ -129,12 +217,14 @@ if ("nostr" in window && use_signer.checked) {
 <div class="center-text">
 <h1>Attestation</h1>
 
-  Warning this is experimental!
-  <br><br>
-  <button onclick="attest()">Attest</button> 
-  <br><br>
-  <input type="checkbox" id="use_signer" name="use_signer" checked>
-  Use Signer, if available
+  <p class="hint">Warning this is experimental.</p>
+  <div class="actions">
+    <button onclick="attest()">Attest</button>
+  </div>
+  <label class="inline-check">
+    <input type="checkbox" id="use_signer" name="use_signer" checked>
+    <span>Use signer if available</span>
+  </label>
 
   
 
@@ -149,16 +239,9 @@ if ("nostr" in window && use_signer.checked) {
    
 
 <div class="center-text">
- 
-        
-    <br><br>
-    <button onclick="backToHome()">Home</button>
-      
- 
-
-        
-     
-        
+    <div class="actions">
+      <button onclick="backToHome()">Home</button>
+    </div>
 </div>
      
 <script>

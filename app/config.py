@@ -3,58 +3,23 @@ import pathlib
 from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Tuple
 
 import os
 from pathlib import Path
 
 from monstr.encrypt import Keys
+import oqs
 
 # Project Directories
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-class ConfigWithFallback(BaseSettings):
-    SERVICE_NSEC: str
 
-
-    class Config:
-        case_sensitive = False
-
-    def __init__(self, **kwargs):
-        # Step 1: Ensure data/default.conf exists
-        default_conf_path = Path("data/default.conf")
-        default_conf_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not default_conf_path.exists():
-            k = Keys()
-            default_conf_path.write_text(
-                f"SERVICE_NSEC={k.private_key_bech32()}\n"
-  
-            )
-
-        # Step 2: Load values from default.conf if not in os.environ
-        fallback_values = {}
-        with open(default_conf_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key not in os.environ:
-                        fallback_values[key] = value
-
-        # Step 3: Merge fallback_values with any passed-in kwargs
-        merged_values = {**fallback_values, **kwargs}
-
-        # Step 4: Call super().__init__ with merged values
-        super().__init__(**merged_values)
 
 
 
 class Settings(BaseSettings):
+    APP_ENV: str = "development"
     HOME_RELAY: str = 'wss://relay.getsafebox.app'
     HOME_MINT: str= 'https://mint.getsafebox.app'      
     SERVICE_NAME: str = 'Safebox'
@@ -63,6 +28,8 @@ class Settings(BaseSettings):
     SERVICE_RELAY_DB: str = "data/relay.db"
     TZ: str = "America/New_York"
     ALGORITHM: str = "HS256"
+    PQC_SIGALG: str = "ML-DSA-44"
+    PQC_KEMALG: str = "ML-KEM-512"
     DATABASE: str = "sqlite:///data/database.db"  
     RELAYS: List = ['wss://relay.getsafebox.app']
     ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
@@ -82,9 +49,9 @@ class Settings(BaseSettings):
     INVITE_CODES: List = ["alpha", "rektuser", "earlyaccess"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_SERVICE: bool = False
-    NWC_NSEC: str = 'nsec1wml8qhq2qkmemlceg2fehvg2cefqrsp7ak47rdmc3qxum65wsxaqcvj7d6'
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
+    DM_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
     TRANSMITTAL_KIND: int = 21060
     AUTH_KIND: int = 21061
@@ -93,12 +60,27 @@ class Settings(BaseSettings):
     RECORD_TRANSMITTAL_KIND: int = 21062
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     CURRENCY_CSV: str = 'setup/currency.csv'
+    WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
+    LISTEN_TIMEOUT: int = 120
+    ECASH_LISTEN_TIMEOUT: int = 120
+    BLOSSOM_SERVERS: List[str] = ['https://blossom.getsafebox.app']
+    BLOSSOM_HOME_SERVER: str = 'https://blossom.getsafebox.app'
+    BLOSSOM_XFER_SERVER: str = 'https://nostr.download'
+    CORS_ALLOW_ORIGINS: List[str] = [
+        "https://getsafebox.app",
+        "https://www.getsafebox.app",
+        "http://localhost:7375",
+        "http://127.0.0.1:7375",
+    ]
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "Lax"
+    CSRF_COOKIE_NAME: str = "csrf_token"
 
     # Offer and Grant Kinds
     # Numbering Convention is the offer is odd-number and consecutive even-number is the grant
     # Can be calculated but flexible with defining both offer and grant kinds
     OFFER_KINDS: List =     [  
-                            
+                            [34103, "Shared Note", ["share"]], 
                             [34039, "Community", ["Name", "Family", "Membership","Library Card","Training", "Committee", "Qualification","Title", "Honorific"]], 
                             [34037, "Receipt"],
                             [34001, "Badge", ["Access", "ID"]],
@@ -129,6 +111,7 @@ class Settings(BaseSettings):
                         ]  
  
     GRANT_KINDS: List =     [  
+                            [34104, "Shared Note", ["share"]], 
                             [34040, "Community",["Name", "Family", "Membership", "Library Card", "Training", "Committee", "Qualification", "Title", "Honorific"]],
                             [34038, "Receipt"],
                             [34002, "Badge", ["Access", "ID"]],
@@ -153,8 +136,8 @@ class Settings(BaseSettings):
                             [34034, "Letter"],
                             [34036, "Emergency", ["medical","contact"]],    
                             [34038, "Negotiable Cargo Document"], 
-                            [34042, "Skilled Trade"],                        
-                            [37375, "Personal Note", ["share"]] 
+                            [34042, "Skilled Trade"]                        
+                            
                             
                         ] 
 
@@ -216,6 +199,151 @@ class mapEventKind(BaseModel):
 
 
 settings = Settings()
+
+class ConfigWithFallback(BaseSettings):
+    SERVICE_NSEC: str = "notset"
+    SERVICE_NPUB: str = "notset"
+    NWC_NSEC: str = "notset"
+    PQC_SIG_SECRET_KEY: str = "notset"
+    PQC_SIG_PUBLIC_KEY: str = "notset"
+    PQC_KEM_PUBLIC_KEY: str = "notset"
+    PQC_KEM_SECRET_KEY: str = "notset"
+
+    class Config:
+        case_sensitive = False
+
+    # ---- key generation helpers ----
+
+    @staticmethod
+    def _gen_nostr_keys() -> Dict[str, str]:
+        k = Keys()
+        return {
+            "SERVICE_NSEC": k.private_key_bech32(),
+            "SERVICE_NPUB": k.public_key_bech32(),
+        }
+
+    @staticmethod
+    def _gen_nwc_key() -> Dict[str, str]:
+        k = Keys()
+        return {
+            "NWC_NSEC": k.private_key_bech32(),
+        }
+
+    @staticmethod
+    def _gen_pqc_sig_keys() -> Dict[str, str]:
+        signer = oqs.Signature(settings.PQC_SIGALG)
+        pq_sig_pubkey = signer.generate_keypair()
+        sig_secret_key = signer.export_secret_key()
+        return {
+            "PQC_SIG_SECRET_KEY": sig_secret_key.hex(),
+            "PQC_SIG_PUBLIC_KEY": pq_sig_pubkey.hex(),
+        }
+
+    @staticmethod
+    def _gen_pqc_kem_keys() -> Dict[str, str]:
+        kem = oqs.KeyEncapsulation(settings.PQC_KEMALG)
+        kem_public_key = kem.generate_keypair()
+        kem_secret_key = kem.export_secret_key()
+        return {
+            "PQC_KEM_SECRET_KEY": kem_secret_key.hex(),
+            "PQC_KEM_PUBLIC_KEY": kem_public_key.hex(),
+        }
+
+    @classmethod
+    def _gen_missing_values(cls, missing: set[str]) -> Dict[str, str]:
+        """
+        Generate only what is needed.
+        Note: for paired keys we generate the pair if either is missing.
+        """
+        generated: Dict[str, str] = {}
+
+        # Nostr pair
+        if {"SERVICE_NSEC", "SERVICE_NPUB"} & missing:
+            generated.update(cls._gen_nostr_keys())
+
+        # NWC key
+        if "NWC_NSEC" in missing:
+            generated.update(cls._gen_nwc_key())
+
+        # Signature pair
+        if {"PQC_SIG_SECRET_KEY", "PQC_SIG_PUBLIC_KEY"} & missing:
+            generated.update(cls._gen_pqc_sig_keys())
+
+        # KEM pair
+        if {"PQC_KEM_SECRET_KEY", "PQC_KEM_PUBLIC_KEY"} & missing:
+            generated.update(cls._gen_pqc_kem_keys())
+
+        # Return only the keys that were actually missing (to avoid overwriting existing file values)
+        return {k: v for k, v in generated.items() if k in missing}
+
+    # ---- .conf file helpers ----
+
+    @staticmethod
+    def _read_conf(path: Path) -> Dict[str, str]:
+        values: Dict[str, str] = {}
+        if not path.exists():
+            return values
+
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+        return values
+
+    @staticmethod
+    def _write_conf(path: Path, values: Dict[str, str]) -> None:
+        # Stable order makes diffs cleaner
+        order = [
+            "SERVICE_NSEC",
+            "SERVICE_NPUB",
+            "NWC_NSEC",
+            "PQC_SIG_SECRET_KEY",
+            "PQC_SIG_PUBLIC_KEY",
+            "PQC_KEM_SECRET_KEY",
+            "PQC_KEM_PUBLIC_KEY",
+        ]
+        lines = [f"{k}={values[k]}" for k in order if k in values]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
+    def __init__(self, **kwargs):
+        default_conf_path = Path("data/default.conf")
+        default_conf_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing file values (or empty if none)
+        file_values = self._read_conf(default_conf_path)
+
+        required_keys = {
+            "SERVICE_NSEC",
+            "SERVICE_NPUB",
+            "NWC_NSEC",
+            "PQC_SIG_SECRET_KEY",
+            "PQC_SIG_PUBLIC_KEY",
+            "PQC_KEM_PUBLIC_KEY",
+            "PQC_KEM_SECRET_KEY",
+        }
+
+        # Treat "notset" as missing too (in case a stub got written previously)
+        missing = {
+            k
+            for k in required_keys
+            if (k not in os.environ) and (k not in file_values or file_values.get(k) in (None, "", "notset"))
+        }
+
+        # If anything is missing, generate *only* the missing ones and persist
+        if missing:
+            generated = self._gen_missing_values(missing)
+            if generated:
+                file_values.update(generated)
+                self._write_conf(default_conf_path, file_values)
+
+        # Build fallback values: only those not already in environment
+        fallback_values = {k: v for k, v in file_values.items() if k not in os.environ}
+
+        # Merge precedence: file fallback < kwargs (explicit) ; env is handled by BaseSettings
+        merged_values = {**fallback_values, **kwargs}
+        super().__init__(**merged_values)
 
 if __name__ == "__main__":
     

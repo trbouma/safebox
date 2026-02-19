@@ -4,6 +4,219 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  /* Consistent vertical rhythm */
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 10px;
+  }
+
+  /* Legacy layout uses many direct-child <br> nodes; neutralize them */
+  .center-text > br,
+  .center-text > br + br {
+    margin-top: 0 !important;
+  }
+
+  .center-text form > * + * {
+    margin-top: 8px;
+  }
+
+  .balance-currency-selector {
+    margin-bottom: 12px;
+  }
+
+  #ln_select_invoice_currency,
+  #ln_select_currency {
+    display: block;
+    margin: 10px auto 0;
+  }
+
+  h1, h2, h3, h5, p, span, pre, label, a, b {
+    color: var(--sb-text-main);
+  }
+
+  a {
+    color: #a6beff;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    background: #0d1430;
+    color: #e2e8ff;
+    border: 1px solid #39497a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  .center-text input[type="text"],
+  .center-text input[type="number"],
+  .center-text textarea,
+  .center-text select {
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid var(--sb-brand-blue-1);
+    outline-offset: 1px;
+    border-color: var(--sb-brand-blue-1);
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 800;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  #payment_notification,
+  #pay_to_message,
+  #log,
+  #npub {
+    display: block;
+    border: 1px solid #3c518b;
+    border-radius: 10px;
+    background: #0d1430;
+    color: #cad9ff;
+    padding: 10px 12px;
+    overflow-wrap: anywhere;
+  }
+
+  #payment_notification {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--sb-text-main);
+  }
+
+  /* Keep the top action area compact */
+  .center-text > #payment_notification + #ln_scan_button {
+    margin-top: 0;
+  }
+
+  .center-text > #ln_scan_button + * {
+    margin-top: 12px;
+  }
+
+  #img_qr_display {
+    border-radius: 14px;
+    border: 1px solid #3c518b;
+    background: #0d1430;
+    max-width: 260px;
+    width: 100%;
+    height: auto;
+  }
+
+  .center-text br {
+    display: block;
+    content: "";
+    margin-top: 4px;
+  }
+
+  .center-text button + br {
+    margin-top: 0;
+  }
+
+  .center-text br + button {
+    margin-top: 4px;
+  }
+
+  .center-text button + br + br {
+    margin-top: 0;
+  }
+
+  .center-text button + br + br + button {
+    margin-top: 4px;
+  }
+
+  .center-text > button {
+    margin-top: 6px;
+  }
+
+  .btn-stack {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .btn-stack button {
+    margin-top: 0 !important;
+  }
+
+  .account-box {
+    border: 1px solid #3c518b;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 12px;
+    margin-top: 10px;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button {
+      width: 100%;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100% !important;
+    }
+  }
+</style>
+
 
 
 
@@ -19,6 +232,7 @@
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
+  var reset_to_home_scheduled = false;
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{account_access_key}} \n\nRecovery Phrase (12 words):\n\n{{acorn.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
   var onboard_msg = "Welcome to {{branding}}! \n\nYou are automatically and securely logged in! \n\nWrite down your access key as soon as you can. You can find your access key at the bottom of the page.  \n\nBy pressing OK, you agree to the terms and conditions of this awesome experimental service!";
@@ -27,6 +241,14 @@
 
   if (onboard=="True") {
   // alert(onboard_msg);
+  }
+
+  function scheduleAccessReload(delayMs = 900) {
+    if (reset_to_home_scheduled) return;
+    reset_to_home_scheduled = true;
+    setTimeout(() => {
+      window.location.href = "/safebox/access";
+    }, delayMs);
   }
 
   async function getEcashStatus(data) {
@@ -60,6 +282,12 @@
   async function attest() {
 
   window.location.href="/safebox/attest/";
+
+  } 
+
+    async function trust() {
+
+  window.location.href="/safebox/trust/";
 
   } 
 
@@ -109,7 +337,7 @@ function revealBalance() {
     {
         
         // don't worry about linting
-        heading_balance.textContent = "\u20BF{{"{:,}".format(acorn.balance)}}";
+        heading_balance.textContent = "(\u20BF{{"{:,}".format(acorn.balance)}})";
         fiat_balance.textContent = "TBD";
         reveal_balance = true;
     }
@@ -197,24 +425,6 @@ async function myEcash() {
 
 window.location.href="/safebox/ecash";
 }
-
-async function myCredentials() {
-
-window.location.href="/credentials/present";
-
-}
-
-
-
-async function doHealthConsult() {
-
-window.location.href="/safebox/healthconsult";
-
-}
-
-
-
-
 async function doOfferRecord() {
 
 window.location.href="/records/offerlist";
@@ -271,16 +481,34 @@ alert("Npub copied to clipboard!");
 }
 
 async function useClipboard() {
+  async function submitScanData(rawData) {
+    const tokenData = (rawData || "").trim();
+    if (!tokenData) {
+      userMessage("No token provided.", "ERROR");
+      return;
+    }
+    await fetch('/scanner/scanresult', {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ data: tokenData })
+    }).then((response) => {
+      if (response.redirected) {
+        window.location.href = response.url;
+      }
+    });
+  }
 
-  const clipboard_data = await navigator.clipboard.readText(); 
-  window.location.href="/scanner/scanresult?qr_code=" + clipboard_data; 
-
-
-
-
-
-
-
+  try {
+    const clipboard_data = await navigator.clipboard.readText();
+    await submitScanData(clipboard_data);
+  } catch (error) {
+    const manualPaste = prompt("Clipboard read is blocked by your browser. Paste token here:");
+    if (manualPaste === null) {
+      userMessage("Clipboard read blocked. No token pasted.", "ERROR");
+      return;
+    }
+    await submitScanData(manualPaste);
+  }
 }
 async function copyAddress() {
 
@@ -307,7 +535,7 @@ alert("Lightning invoice copied to clipboard!");
     var data;
    
    
-    var owner_currency = document.getElementById("select_currency").value;
+    var owner_currency = document.getElementById("owner_select_currency").value;
 
     console.log(`owner currency: ${owner_currency}`);
 
@@ -347,6 +575,7 @@ function getCreateInvoiceStatus(ln_invoice_status) {
 
     // alert("Payment: " + parsedObject.status + parsedObject.invoice );
     create_invoice_button.textContent = "Invoice Created! ";
+    window.scrollTo({ top: 0, behavior: "smooth" });
   
 
 }
@@ -389,6 +618,7 @@ async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
 
             nfc_token = decoder.decode(record.data);
           }
+          window.scrollTo({ top: 0, behavior: "smooth" });
           // consoleLog(`Pay ${nfc_amount} with ${nfc_token}` );
         
           
@@ -419,12 +649,27 @@ if (nfc_amount == 0) {
   consoleLog(`Advisory: Since 0 was provided for NFC, your minimun amount will be used`);
 
 }
-await fetch('/safebox/requestnfcpayment', {
-method: "POST",
-headers: {"Content-Type": "application/json"},        
-body: JSON.stringify(submit_data)         
-})   
-.then((data) => {consoleLog(`done ${data}`)});
+try {
+  const response = await fetch('/safebox/requestnfcpayment', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(submit_data)
+  });
+  const data = await response.json();
+  const status = data.status || "INFO";
+  const detail = data.detail || "NFC payment request completed.";
+  userMessage(detail, status);
+  consoleLog(detail);
+  if (status === "ERROR") {
+    document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+  } else {
+    userMessage("Payment request accepted. Waiting for network confirmation...", "INFO");
+  }
+} catch (error) {
+  consoleLog(`NFC request error: ${error}`);
+  userMessage("NFC payment request failed. Please try again.", "ERROR");
+  document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+}
 window.scrollTo(0, 0);
 
 // window.location.href="/safebox/access" ;
@@ -438,6 +683,7 @@ async function submitNFCPayment(nfc_amount,nfc_currency, nfc_token, nfc_comment)
 paytoMessage(`Pay to Token ${nfc_amount} ${nfc_currency}${nfc_comment} ${nfc_token} `);
 
 document.getElementById("payment_notification").innerText = `Processing payment of ${nfc_amount} ${nfc_currency}. Please wait...`;
+document.getElementById("img_qr_display").src = "/img/circle-256.gif";
 
 const submit_data =   { "nembed": nfc_token, 
                         "currency": nfc_currency,
@@ -451,12 +697,27 @@ headers: {"Content-Type": "application/json"},
 body: JSON.stringify(submit_data)         
 }) 
 .then((response) => response.json())
-.then((data) => { paytoMessage(`done ${data}`);
-                  consoleLog(`${data.detail}`);
-                  window.scrollTo(0, 0);
-                  // window.location.href="/safebox/access?action_comment=Complete" ;
-
-
+.then((data) => {
+  const status = data.status || "INFO";
+  const detail = data.detail || "NFC payment request completed.";
+  paytoMessage(detail);
+  userMessage(detail, status);
+  consoleLog(detail);
+  if (status === "OK") {
+    document.getElementById("img_qr_display").src = "/img/green-check.png";
+    setTimeout(() => {
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+    }, 2500);
+  } else {
+    document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+  }
+  window.scrollTo(0, 0);
+  // window.location.href="/safebox/access?action_comment=Complete" ;
+})
+.catch((error) => {
+  consoleLog(`NFC payment error: ${error}`);
+  userMessage("NFC payment failed. Please try again.", "ERROR");
+  document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
 });
 
 
@@ -487,6 +748,7 @@ async function paytoNFC() {
 
             nfc_token = decoder.decode(record.data);
           }
+          window.scrollTo({ top: 0, behavior: "smooth" });
           
           
           submitNFCPayment(nfc_amount,nfc_currency,nfc_token, nfc_comment)
@@ -522,6 +784,9 @@ async function requestPayment() {
   
   
   if (nfc_payment.checked == true) {  
+      if (isNaN(ln_create_invoice_amount) || ln_create_invoice_amount < 0) {
+        ln_create_invoice_amount = 0;
+      }
       alert("Please tap NFC card!");
       await requestbyNFC(ln_create_invoice_amount, ln_currency, ln_comment);
                       return;
@@ -558,6 +823,15 @@ async function requestPayment() {
     ux_mode = "wait_invoice";
     }
 
+function clearRequestPaymentFields() {
+  const amountEl = document.getElementById("ln_create_invoice_amount");
+  const memoEl = document.getElementById("ln_request_memo");
+  const nfcEl = document.getElementById("nfc_payment_checkbox");
+  if (amountEl) amountEl.value = "";
+  if (memoEl) memoEl.value = "";
+  if (nfcEl) nfcEl.checked = false;
+}
+
 
 
 
@@ -577,10 +851,11 @@ function checkBalance(balance) {
 
       if (ux_mode=="wait_invoice"){
         // alert("Invoice Paid!");
-        document.body.style.backgroundColor = "lightgreen";
+        document.body.style.backgroundColor = "#173627";
         img_qr_display_pic.src ="/img/green-check.png";
         
         payment_notification.textContent = "Invoice Paid!";
+        clearRequestPaymentFields();
         
         ux_mode="init";
       }      
@@ -595,7 +870,7 @@ function checkBalance(balance) {
   else
   {
     payment_notification.textContent = "Ready for Payment!" ;
-    document.body.style.backgroundColor = "white";
+    document.body.style.backgroundColor = "#101820";
   }
   if (ux_mode == "init") {
         
@@ -605,7 +880,7 @@ function checkBalance(balance) {
               
       } 
   
-  heading_balance.textContent = "\u20BF" + JSON.stringify(new_balance);
+  heading_balance.textContent = "(\u20BF" + Number(new_balance).toLocaleString("en-US") + ")";
   starting_balance = new_balance;
 
   //alert(JSON.stringify(balance));
@@ -649,10 +924,13 @@ function getlnPayStatus(ln_pay_status) {
   // var ln_pay_button = document.getElementById("ln_pay_button");
     console.log(ln_pay_status);
 
-    var status = JSON.stringify(ln_pay_status["detail"]);
     const parsedObject = JSON.parse(JSON.stringify(ln_pay_status));
-    // alert("Payment " + parsedObject.detail);
-    userMessage(parsedObject.detail);
+    const status = parsedObject.status || "INFO";
+    const detail = parsedObject.detail || "Payment request completed.";
+    userMessage(detail, status);
+    if (status === "OK" && action_mode === "lninvoice") {
+      userMessage("Payment accepted. Waiting for confirmation...", "INFO");
+    }
 
     // location.reload();
   
@@ -695,25 +973,21 @@ async function lnPayAddress() {
   console.log(submit_data);
     // ln_pay_button.textContent = "Please wait...";
 
-      await fetch('/safebox/payaddress', {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},        
-            body: JSON.stringify(submit_data)         
-          })
-        .then((response) => response.json())
-        .then((data) => getlnPayStatus(data));
-        //ln_pay_button.textContent = "Pay to Lightning Address!";
-        //ln_pay_button.disabled = false;
-        
-        // location.reload();
-        //window.location.href="/wallet/"
-
+      try {
+        await fetch('/safebox/payaddress', {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},        
+              body: JSON.stringify(submit_data)         
+            })
+          .then((response) => response.json())
+          .then((data) => getlnPayStatus(data));
+      } catch (error) {
+        userMessage("Payment request failed. Please try again.", "ERROR");
+      } finally {
         pay_button.textContent = old_text;
         pay_button.disabled = false;
-
-        window.location.href="/safebox/access";
-      
-
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
 
 }
 
@@ -740,25 +1014,23 @@ async function lnPayInvoice() {
                        "comment": ln_comment};
 
 
+    const oldText = invoice_pay_button.textContent;
     invoice_pay_button.disabled = true;
     invoice_pay_button.textContent = "Please wait...";
 
+    try {
       await fetch('/safebox/payinvoice', {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},        
-            body: JSON.stringify(submit_data)         
-          })
-        .then((response) => response.json())
-        .then((data) => getlnPayStatus(data));
-        //ln_pay_button.textContent = "Pay to Lightning Address!";
-        //ln_pay_button.disabled = false;
-        
-        // location.reload();
-        
-
-        
-        invoice_pay_button.disabled = false;
-        window.location.href="/safebox/access";
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_data)
+      })
+      .then((response) => response.json())
+      .then((data) => getlnPayStatus(data));
+    } finally {
+      invoice_pay_button.textContent = oldText;
+      invoice_pay_button.disabled = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
       
 
 
@@ -783,11 +1055,40 @@ function getInvoiceStatus(ln_invoice_status) {
 </script>
 
 <script>
+  const ws_notify = new WebSocket("{{ws_url_notify}}");
+  ws_notify.onopen = () => { console.log("WebSocket for notify connected for: {{ws_url_notify}} ");}
+  ws_notify.onmessage = (event) => {
+    console.log("Notification received:", event.data);
+    const payload = JSON.parse(event.data);
+    if (payload.action === "nfc_token") {
+      const status = payload.status || "INFO";
+      const detail = payload.detail || "NFC payment update";
+      userMessage(detail, status);
+      if (typeof payload.balance !== "undefined") {
+        checkBalance(Number(payload.balance));
+      }
+      if (status === "OK") {
+        clearRequestPaymentFields();
+        document.getElementById("img_qr_display").src = "/img/green-check.png";
+        setTimeout(() => {
+          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+        }, 2500);
+        scheduleAccessReload(900);
+      }
+    }
+
+    }
+  ws_notify.onclose = () => { console.log("Notification closed");}
+  
+
+</script>
+
+<script>
   document.addEventListener("touchstart", handleInteraction); 
   //document.addEventListener("click", handleInteraction); 
-  const ws = new WebSocket("wss://{{request.url.hostname}}/safebox/ws");
+  const ws = new WebSocket("{{ws_url}}");
 
-  ws.onopen = () => console.log("WebSocket connected");
+  ws.onopen = () => console.log("WebSocket connected for: {{ws_url}}");
   ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);
@@ -799,14 +1100,24 @@ function getInvoiceStatus(ln_invoice_status) {
 
       if (status == "RECD") {
         
-        document.getElementById("heading_balance").innerText = `\u20BF${balance}`;
+        document.getElementById("heading_balance").innerText = `(\u20BF${Number(balance).toLocaleString("en-US")})`;
         document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
         document.getElementById("payment_notification").innerText = `${message}`;
+        if (ux_mode === "wait_invoice") {
+          clearRequestPaymentFields();
+          ux_mode = "init";
+        }
         document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
         // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
         // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
         // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
         document.getElementById("img_qr_display").src = "/img/green-check.png";
+        setTimeout(() => {
+                          // code to run after 5 seconds
+                          console.log("5 seconds passed");
+                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+                        }, 5000);
+        scheduleAccessReload(900);
       
       } else if (status == "SENT" || status == "PENDING") {
 
@@ -814,6 +1125,17 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
       document.getElementById("img_qr_display").src = "/img/green-check.png";
+
+             
+      setTimeout(() => {
+                          // code to run after 5 seconds
+                          console.log("5 seconds passed");
+                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+                        }, 5000);
+
+      if (status == "SENT" && action_mode === "lninvoice" && !reset_to_home_scheduled) {
+        scheduleAccessReload(1200);
+      }
 
       }
 
@@ -843,29 +1165,29 @@ function getInvoiceStatus(ln_invoice_status) {
 {% block page_content %}
 <div class="center-text">
 
-  
-  <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
-    <select id="select_currency" name="select_currency" onchange="setOwnerCurrency()">
-      {% for entry in currencies %}
-      <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
-      {% endfor %}
-  </select>
-  <br><br>
-  <p  id="heading_balance"style="margin: 0";>{{ "\u20BF" + "{:,}".format(acorn.balance)}}</p>  
-  <br>
+  <div class="account-box">
+    <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
+    <p id="heading_balance" style="margin: 0;">({{ "\u20BF" + "{:,}".format(acorn.balance)}})</p>
+      <select class="balance-currency-selector" id="owner_select_currency" name="select_currency" onchange="setOwnerCurrency()">
+        {% for entry in currencies %}
+        <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
+        {% endfor %}
+    </select>
+    <br>
 
-  <span id="payment_notification">
-    {{ action_comment if action_comment else ""}}
-  </span>  
-  
-  {% if onboard == true %}
-  Welcome! Please see the <a href="#fine-print">fine print</a> below.
-  <br><br>
-  {% endif %}
-  <br><br>
-  <button id="ln_scan_button" onclick="scanCode()">Scan</button>
-  
-  <br><br>
+    <span id="payment_notification">
+      {{ action_comment if action_comment else ""}}
+    </span>  
+    
+    {% if onboard == true %}
+    Welcome! Please see the <a href="#fine-print">fine print</a> below.
+    <br><br>
+    {% endif %}
+    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+    <br>
+    <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button>
+    <br>
+  </div>
 
   {% if action_mode == "lninvoice" %}
     Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
@@ -876,93 +1198,85 @@ function getInvoiceStatus(ln_invoice_status) {
     <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Payment</button> 
     <br><br>
   {% else %}
-    {% if action_mode == "lnaddress" %}
-
-    {% else %}
-    <h2 style="margin: 0;">Receive a Payment</h2>
-      <br>
+    {% if action_mode != "lnaddress" %}
+    <div class="account-box">
+      <h2 style="margin: 0;">Request a Payment</h2>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
-      <br>
-      <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</h3>
-      <br>
-      <input type="number" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount"  value="{{amount}}" size="24" style="width:30%">      
+      <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></h3>
+      <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
       <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
       {% for each in currencies %}     
        <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>   
-      <br><br>
       <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <br><br>              
-      <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button> 
-      <br><br>
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
       Request by NFC
       </label>
       <pre id="log"></pre>
-      <br>
-
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
+    </div>
     
-    {% endif %} 
+    {% endif %}
 
-    <hr>
-    <h2 style="margin: 0;">Make a Payment</h2>
-    <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
-    <datalist id="contacts">
-              <option value="NFC Tag"></option>
-             
-    </datalist>
-    <br>
-   
-    <br><input type="number" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%" value="{{amount}}">
-    
-    <select id="ln_select_currency" name="ln_select_currency"> 
-      <option value="SAT" >SAT</option>            
-      {% for each in currencies %}     
-       <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
-      {% endfor %}
-    </select>
-    <br><br>
-    
-    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
-    <br><br>
-    <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
-    <br><br>
+    <div class="account-box">
+      <h2 style="margin: 0;">Make a Payment</h2>
+      <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
+      <datalist id="contacts">
+                <option value="NFC Tag"></option>
+               
+      </datalist>
+      <br>
+     
+      <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
+      
+      <select id="ln_select_currency" name="ln_select_currency"> 
+        <option value="SAT" >SAT</option>            
+        {% for each in currencies %}     
+         <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
+        {% endfor %}
+      </select>
+      <br>
+      
+      <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <br>
+      <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
+      <br>
 
   
   {% endif %}
 
-  <button id="my_ecash_button" onclick="myEcash()" >Pay with Ecash</button> 
-  <br><br>  
-  <button onclick="doAccountHistory()">Account History</button>
-  <pre id="pay_to_message">Ready.</pre>
+    <div class="btn-stack">
+      <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
+      <button onclick="doAccountHistory()">Account History</button>
+    </div>
+    <pre id="pay_to_message">Ready.</pre>
+  </div>
   
-  <hr>
 
-  <h2>My Records</h2>
-  <button id="my_personal_messages_button" onclick="personalMessages()" >Private Messages</button>
-  <br><br>
-  <button id="my_private_data_button" onclick="privateData()" >My Notes</button>
-  <br><br>
-  <button id="my_personal_records_button" onclick="myRecords()" >My Records</button>
+  <div class="account-box">
+    <h2>My Records</h2>
+    <div class="btn-stack">
+      <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
+      <button id="my_private_data_button" onclick="privateData()">My Notes</button>
+      <button id="my_personal_records_button" onclick="myRecords()">My Records</button>
+    </div>
+  </div>
 
   
-  <hr>
-  <h2>Community</h2>
-  <button id="do_issue_credential" onclick="doOfferRecord()" >Offer Record</button>  
-  <br>
-  <br>
-  <button id="my_credentials_button" onclick="requestRecord()" >Request a Record</button> 
-  <br>
-  <br>
-  <button id="onboard_button" onclick="onboardFriend()" >Onboard a Member</button>
+  <div class="account-box">
+    <h2>Community</h2>
+    <div class="btn-stack">
+      <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
+      <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
+      <button id="onboard_button" onclick="onboardFriend()">Onboard a Member</button>
+    </div>
+  </div>
 
 
-  <hr>
 
   
 
@@ -980,13 +1294,14 @@ function getInvoiceStatus(ln_invoice_status) {
         <label for="amount">Amount:</label>
       <input 
         type="number" 
+        inputmode="decimal"
         id="amount" 
         name="amount" 
-        step="0.01" 
+        step="any" 
         min="0" 
         required
         >
-        <select id="select_currency" name="select_currency">
+        <select id="request_select_currency" name="select_currency">
           <option >SAT</option> 
           {% for entry in currencies %}
           <option >{{entry}}</option>         
@@ -1014,23 +1329,23 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   </div>
-  <hr>
-  <h2>My Account</h2>
-  <p>My access_key: </b></p>
-  <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
-  <p>My recovery phrase: <br> 
-  <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
-  
-  
-  <button id="clipboard_button" onclick="copytoClipboard()" >Backup</button>
-  <br><br>
-  <button id="issue_card" onclick="issueCard()" >Issue Card</button>
-  <br><br>
-  <button onclick="attest()">Attest</button> 
-  <br><br>
-  <button id="logout_button"onclick="logout()" >Logout</button>
+  <div class="account-box">
+    <h2>My Account</h2>
+    <p>My access_key: </b></p>
+    <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
+    <p>My recovery phrase: <br> 
+    <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
+    
+    
+    <div class="btn-stack">
+      <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
+      <button id="issue_card" onclick="issueCard()">Issue Card</button>
+      <button onclick="attest()">Attest</button>
+      <button onclick="trust()">Trust</button>
+      <button id="logout_button" onclick="logout()">Logout</button>
+    </div>
+  </div>
   <br>
-  <hr>
  
  {% if onboard == true %}
  <h2 id="fine-print" >The Fine Print</h2>
@@ -1038,29 +1353,30 @@ function getInvoiceStatus(ln_invoice_status) {
  <p>You are automatically and securely logged in! Write down your access key as soon as you can. You can find your access key and recovery phrase above. By continuing, you have agreed to the terms and conditions of this awesome experimental service! </p>
  {% endif %}
 
-  <h2>Technical Info</h2>
+  <div class="account-box">
+    <h2>Technical Info</h2>
 
-  <br>Mode: {{action_mode}} Data: {{action_data}}
-  <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
-  <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
-  <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
-  <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
-  <br>home relay: {{acorn.home_relay}}
-  <br><br>
-  <a href="/public/rates">Exchange Rates</a>
-  <br><br>
-  <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
-  
-  <br><br>
-  
-  
-  
-  <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
- 
+    <br>Mode: {{action_mode}} Data: {{action_data}}
+    <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+    <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
+    <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
+    <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
+    <br>home relay: {{acorn.home_relay}}
+    <br><br>
+    <a href="/public/rates">Exchange Rates</a>
+    <br><br>
+    <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
+    
+    <br><br>
+    
+    
+    
+    <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+  </div>
+
 
             
 </div>
-
 
 <script>
 setActions(action_mode,action_data);

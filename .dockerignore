@@ -1,0 +1,77 @@
+# ---------------------------
+# VCS / metadata
+# ---------------------------
+.git
+.gitignore
+.gitattributes
+
+# ---------------------------
+# Local environment / secrets
+# ---------------------------
+.env
+.env.*
+
+# ---------------------------
+# Python caches / virtualenvs
+# ---------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.coverage
+.coverage.*
+
+# ---------------------------
+# Build / temp / logs
+# ---------------------------
+build/
+dist/
+tmp/
+*.log
+*.pid
+
+# ---------------------------
+# Editor / OS files
+# ---------------------------
+.vscode/
+.idea/
+.DS_Store
+
+# ---------------------------
+# Dev docs / working assets
+# ---------------------------
+docs/
+scratch/
+scripts/
+setup/
+assets/
+
+# ---------------------------
+# Local runtime state / dumps
+# (mounted at runtime when needed)
+# ---------------------------
+data/
+*.dump
+currency.dump
+output.csv
+
+# ---------------------------
+# Misc project files not needed in image
+# ---------------------------
+BUILD.md
+INSTALL.md
+README.md
+LICENSE
+.python-version
+
+# Removed/legacy project folder
+expmtl/

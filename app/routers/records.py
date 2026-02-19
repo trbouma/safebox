@@ -1,10 +1,12 @@
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import UploadFile, File, Form
 
 from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.templating import Jinja2Templates
 import asyncio,qrcode, io, urllib
+from starlette.websockets import WebSocketDisconnect
 
 from datetime import datetime, timedelta, timezone
 from safebox.acorn import Acorn
@@ -16,19 +18,27 @@ from monstr.encrypt import Keys
 from monstr.event.event import Event
 import ipinfo
 import requests
+import httpx
 from safebox.func_utils import get_profile_for_pub_hex, get_attestation
+from safebox.monstrmore import ExtendedNIP44Encrypt
+from safebox.models import SafeboxRecord, OriginalRecordTransfer
+from monstr.encrypt import NIP44Encrypt
+import oqs
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendCredentialParms, nauthRequest, proofByToken, OfferToken
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
 from app.config import Settings, ConfigWithFallback
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
 
 import logging, jwt
+import mimetypes
+from tempfile import NamedTemporaryFile
 
+logger = logging.getLogger(__name__)
 
 settings = Settings()
 config = ConfigWithFallback()
@@ -40,6 +50,40 @@ router = APIRouter()
 
 engine = create_engine(settings.DATABASE)
 
+def _redirect_if_missing_acorn(acorn_obj: Acorn):
+    if acorn_obj is None:
+        logger.warning("records route called without an active acorn session")
+        return RedirectResponse(url="/", status_code=302)
+    return None
+
+def _raise_if_missing_acorn(acorn_obj: Acorn):
+    if acorn_obj is None:
+        logger.warning("records API called without an active acorn session")
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
+async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
+    """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
+    status_url = f"https://{host}/.well-known/card-status"
+    headers = {"Content-Type": "application/json"}
+    payload = {"token": token, "pubkey": pubkey, "sig": sig}
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            response = await client.post(status_url, json=payload, headers=headers)
+    except httpx.TimeoutException:
+        logger.warning("Card status preflight timeout for host=%s", host)
+        return False, "Card validation timed out.", False
+    except httpx.RequestError as exc:
+        logger.warning("Card status preflight network error for host=%s: %s", host, exc)
+        return False, "Card validation network error.", False
+
+    if response.status_code == 200:
+        return True, "Card is active", True
+    if response.status_code in (401, 404):
+        return False, "Card is invalid or rotated. Re-issue the NFC card.", True
+
+    logger.warning("Card status preflight failed host=%s code=%s body=%s", host, response.status_code, response.text)
+    return False, f"Card validation failed with HTTP {response.status_code}.", True
+
 
 
 @router.get("/issue", tags=["records"]) 
@@ -48,6 +92,9 @@ async def issue_credentials (   request: Request,
                     
                        
                             ):
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     
     profile = acorn_obj.get_profile()
     
@@ -67,6 +114,9 @@ async def offer_list(      request: Request,
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to consulting recods in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nprofile_parse = None
     auth_msg = None
 
@@ -125,6 +175,10 @@ async def offer_list(      request: Request,
     offer_kinds = settings.OFFER_KINDS
     grant_kinds = settings.GRANT_KINDS
     offer_kind_label = get_label_by_id(offer_kinds, kind)
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
 
     # Get correspond grant kind
     grant_kind = get_id_by_label(grant_kinds,offer_kind_label)
@@ -141,82 +195,43 @@ async def offer_list(      request: Request,
                                             "client_nprofile": nprofile,
                                             "client_nprofile_parse": nprofile_parse,
                                             "client_nauth": auth_msg,
-                                            "offer_kinds": offer_kinds
+                                            "offer_kinds": offer_kinds,
+                                            "ws_url": ws_url
 
                                         })
 
 @router.get("/request", tags=["records", "protected"])
-async def record_request(      request: Request,
-                                    private_mode:str = "offer", 
-                                    kind:int = 34003,   
-                                    nprofile:str = None, 
-                                    nauth: str = None,                            
-                                    acorn_obj: Acorn = Depends(get_acorn)
+async def record_request(      request: Request,                                    
+                                kind:int = 34003,                          
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     
-    nprofile_parse = None
-    response_nauth = None
 
 
-    user_records = await acorn_obj.get_user_records(record_kind=kind)
+
+    # user_records = await acorn_obj.get_user_records(record_kind=kind)
+
+    # this is the replacement for records/request.html
+    # const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`); 
     
-    if nprofile:
-        nprofile_parse = parse_nostr_bech32(nprofile)
-        pass
-
-    if nauth:
-        
-        print(f"nauth from do verify {nauth}")
-
-
-        parsed_result = parse_nauth(nauth)
-        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-        nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
-        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
-        transmittal_npub = parsed_result['values'].get("transmittal_npub") # It is the verifier that receives the credential
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
-        scope = parsed_result['values'].get("scope")
-    
-        #TODO  transmittal npub from nauth
-
-        response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
-                                    nonce=nonce,
-                                    auth_kind= auth_kind,
-                                    auth_relays=auth_relays,
-                                    transmittal_npub=acorn_obj.pubkey_bech32,
-                                    transmittal_kind=transmittal_kind,
-                                    transmittal_relays=transmittal_relays,
-                                    name=acorn_obj.handle,
-                                    scope=scope,
-                                    grant=scope.replace("prover","vselect")
-        )
-
-        print(f"do record offer initiator npub: {npub_initiator} and nonce: {nonce} auth relays: {auth_kind} auth kind: {auth_kind} transmittal relays: {transmittal_relays} transmittal kind: {transmittal_kind}")
-
-        
-        # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-
-    else:
-       pass
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/request/"
     
 
     return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
-                                           
-                                            "user_records": user_records,
-                                            "record_kind": kind,
-                                            "private_mode": private_mode,
-                                            "client_nprofile": nprofile,
-                                            "client_nprofile_parse": nprofile_parse,
-                                            "client_nauth": response_nauth,
-                                            "nauth": nauth,
-                                            "grant_kinds": settings.GRANT_KINDS
                                             
+                                            "record_kind": kind,   
+                                            "grant_kinds": settings.GRANT_KINDS,
+                                            "ws_url": ws_url
+
 
                                         })
 @router.get("/verificationrequest", tags=["records", "protected"])
@@ -226,6 +241,9 @@ async def records_verfication_request(      request: Request,
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     
     credential_types = ["id_card","passport","drivers_license"]
@@ -245,20 +263,26 @@ async def transmit_records(        request: Request,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ transmit consultation retreve 32227 records from issuing wallet and send as as 32225 records to nprofile recipient recieving wallet """
+    _raise_if_missing_acorn(acorn_obj)
 
     status = "OK"
     detail = "Nothing yet"
+   
     
     # Need to generalize the parameters below
     # transmit_consultation.originating_kind = 34001
     # transmit_consultation.final_kind = 34002
+    
 
     
-    print(f"transmit nauth: {transmit_consultation.nauth} record name: {transmit_consultation.record_name}")
+    logger.info(
+        "Transmit requested (record_name=%s, originating_kind=%s, final_kind=%s)",
+        transmit_consultation.record_name,
+        transmit_consultation.originating_kind,
+        transmit_consultation.final_kind,
+    )
 
     try:
-
-
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
@@ -282,35 +306,63 @@ async def transmit_records(        request: Request,
         # if safebox_found.session_nonce != nonce:
         #     raise Exception("Invalid session!")
 
+        # PQC Step 2a
+        logger.info("PQC encapsulation start (kemalg=%s)", transmit_consultation.kemalg)
+        if not transmit_consultation.kem_public_key:
+            raise HTTPException(status_code=400, detail="Missing kem_public_key")
 
-        records_to_transmit = await acorn_obj.get_user_records(record_kind=transmit_consultation.originating_kind)
-        for each_record in records_to_transmit:
+        pqc = oqs.KeyEncapsulation(transmit_consultation.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(transmit_consultation.kem_public_key))
+        kem_shared_secret_hex = kem_shared_secret.hex()
+        kem_ciphertext_hex = kem_ciphertext.hex()
 
-            # Issue record here:
-            
-            issued_record: Event  = await acorn_obj.issue_private_record(content=each_record['payload'],holder=transmittal_npub, kind=transmit_consultation.final_kind)
-            
-            issued_record_str = json.dumps(issued_record.data())
-            print(f"issued record here before transmitting: {issued_record_str}")
-            
-            if each_record['tag'][0] == transmit_consultation.record_name:
-                print(f"transmitting: {each_record['tag'][0]} {each_record['payload']}")
+        k_nip44 = Keys(priv_k=kem_shared_secret_hex)
+        my_enc = ExtendedNIP44Encrypt(k_nip44)
 
-                record_obj = { "tag"   : [each_record['tag']],
-                                "type"  : str(transmit_consultation.final_kind),
-                                "payload": issued_record_str,
-                                "timestamp": int(datetime.now(timezone.utc).timestamp()),
-                                "endorsement": acorn_obj.pubkey_bech32
+        #TODO Replace with create_grant
+
+        issued_record: Event
+        original_record: OriginalRecordTransfer
+        issued_record, original_record = await acorn_obj.create_grant_from_offer(   offer_kind=transmit_consultation.originating_kind, 
+        offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex, blossom_xfer_server=settings.BLOSSOM_XFER_SERVER)
+
+        issued_record_str = json.dumps(issued_record.data())
+        pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
+
+        if original_record:           
+            original_record_str = original_record.model_dump_json(exclude_none=True)
+            pqc_encrypted_original = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=original_record_str)
+            
+
+
+        else:
+            pqc_encrypted_original = None
+
+
+        transmittal_obj = { "tag"   : [transmit_consultation.record_name],
+                        "type"  : str(transmit_consultation.final_kind),
+                        "payload": "This record is quantum-safe",
+                        "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                        "endorsement": acorn_obj.pubkey_bech32,
+                        "ciphertext": kem_ciphertext_hex,
+                        "kemalg": transmit_consultation.kemalg,
+                        "pqc_encrypted_payload": pqc_encrypted_payload,
+                        "pqc_encrypted_original": pqc_encrypted_original
                             }
-                print(f"record obj: {record_obj}")
-                # await acorn_obj.secure_dm(npub,json.dumps(record_obj), dm_relays=relay)
-                # 32227 are transmitted as kind 1060
-                
-                msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(record_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
+
+        msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(transmittal_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successfully transmitted kind {transmit_consultation.final_kind} to {transmittal_npub} via {transmittal_relays}"
-        
+
+        return {"status": status, "detail": detail}
+    except HTTPException:
+        raise
+    except (KeyError, ValueError, TypeError) as e:
+        logger.warning("Invalid transmit request payload: %s", e)
+        status = "ERROR"
+        detail = f"Error: invalid transmit request ({e})"
     except Exception as e:
+        logger.exception("Unexpected transmit failure")
         status = "ERROR"
         detail = f"Error: {e}"
     
@@ -322,11 +374,14 @@ async def my_present_records(       request: Request,
                                 nauth: str = None,
                                 nonce: str = None,
                                 record_kind: int = None,
-                                acorn_obj = Depends(get_acorn)
+                                acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
     nauth_response = None
     record_select = False
+    
+    if not acorn_obj:
+        return RedirectResponse("/safebox/access")
     
     grant_kinds = settings.GRANT_KINDS
     if not record_kind:
@@ -355,12 +410,13 @@ async def my_present_records(       request: Request,
             nauth_response = nauth
         
         else:
+            pass
 
         
             # also need to set transmittal npub 
 
-
-            nauth_response = create_nauth(    npub=acorn_obj.pubkey_bech32,
+            
+        nauth_presenter = create_nauth(  npub=acorn_obj.pubkey_bech32,
                                         nonce=nonce,
                                         auth_kind= auth_kind,
                                         auth_relays=auth_relays,
@@ -376,14 +432,18 @@ async def my_present_records(       request: Request,
 
         
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
+        # need to add in the PQC Step 1
+
+        
+
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_presenter,dm_relays=auth_relays,kind=auth_kind)
 
     else:
        pass
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     #FIXME don't need the grant kinds
@@ -396,6 +456,8 @@ async def my_present_records(       request: Request,
     for each in user_records:        
 
         if isinstance(each["payload"], dict):
+
+            
                         
             event_to_validate: Event = Event().load(each["payload"])
             print(f"event to validate tags: {event_to_validate.tags}")
@@ -428,6 +490,14 @@ async def my_present_records(       request: Request,
 
     print("present records")
     record_label = get_label_by_id(grant_kinds, record_kind)
+
+    # FIXME this is what is being replaced in present.html
+    # const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
+
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/present/{nauth}"
     
     return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
@@ -438,7 +508,10 @@ async def my_present_records(       request: Request,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
                                             "record_label": record_label,
-                                            "select_kinds": grant_kinds
+                                            "select_kinds": grant_kinds,
+                                            "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+                                            "kemalg": settings.PQC_KEMALG,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -450,6 +523,9 @@ async def my_retrieve_records(       request: Request,
                                 acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nauth_response = None
     record_select = False
     
@@ -506,7 +582,7 @@ async def my_retrieve_records(       request: Request,
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     print(f"present records: {user_records}")
@@ -537,7 +613,7 @@ async def my_retrieve_records(       request: Request,
 
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
             record["content"] = content
-        except:
+        except Exception as exc:
             record["content"] = record
         present_records = record
     
@@ -568,6 +644,9 @@ async def retrieve_grant_list(       request: Request,
                                 acorn_obj = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nauth_response = None
     record_select = False
     
@@ -625,7 +704,7 @@ async def retrieve_grant_list(       request: Request,
 
     try:
         user_records = await acorn_obj.get_user_records(record_kind=record_kind )
-    except:
+    except Exception as exc:
         user_records = None
     
     #FIXME don't need the grant kinds
@@ -638,6 +717,14 @@ async def retrieve_grant_list(       request: Request,
 
   
     record_label = get_label_by_id(grant_kinds, record_kind)
+
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/offer/{nauth}"
+
+    # this is the hardcoded one from grantlist.html
+    # ws_url = "wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}"
     
     return templates.TemplateResponse(  "records/grantlist.html", 
                                         {   "request": request,
@@ -648,7 +735,8 @@ async def retrieve_grant_list(       request: Request,
                                             "record_select": record_select,
                                             "record_kind": record_kind,
                                             "record_label": record_label,
-                                            "select_kinds": grant_kinds
+                                            "select_kinds": grant_kinds,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -658,6 +746,9 @@ async def accept_records(            request: Request,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to inbox in home relay"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
     nprofile_parse = None
     scope = ""
     grant = ""
@@ -681,6 +772,13 @@ async def accept_records(            request: Request,
     grant_kind_label = ""
     transmittal_kind = 0
 
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/accept?nauth={nauth}"
+
+    
+
     return templates.TemplateResponse(  "records/acceptrecord.html", 
                                         {   "request": request,
                                             
@@ -690,7 +788,8 @@ async def accept_records(            request: Request,
                                             "grant_kind": grant_kind,
                                             "grant_kind_label": grant_kind_label,
                                             "transmittal_kind": transmittal_kind,
-                                            "nauth": nauth
+                                            "nauth": nauth,
+                                            "ws_url": ws_url
 
                                         })
 
@@ -708,6 +807,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     global_websocket = websocket
 
     since_now = int(datetime.now(timezone.utc).timestamp())
+
+    kem_public_key = config.PQC_KEM_PUBLIC_KEY
 
     print("This is the records websocket")
     
@@ -740,8 +841,27 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     )
 
     # send the recipient nauth message
-    msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
-    print("let's poll for the records")
+    # this is PQC Step 1 for KEM key agreement - need to send public key only
+    kemalg = settings.PQC_KEMALG
+    
+    print(f"this is where we add in the ML_KEM key agreement using: {kemalg} {settings.PQC_KEMALG}")
+   
+    # pqc = oqs.KeyEncapsulation(settings.PQC_KEMALG,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+    
+    # pqc_public_key_from_nauth = bytes.fromhex(config.PQC_KEM_PUBLIC_KEY)
+    # ciphertext, shared_secret = pqc.encap_secret(pqc_public_key_from_nauth)
+    # shared_secret_hex = shared_secret.hex()
+    # print(f"pqc shared secret: {shared_secret_hex} ciphertext: {ciphertext.hex()}")
+
+    pqc_to_send = { "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+                    "kemalg": settings.PQC_KEMALG
+    }
+    nembedpqc = create_nembed_compressed(pqc_to_send)
+    response_nauth_with_kem= f"{response_nauth}:{nembedpqc}"
+    print(f"response nauth with kem {response_nauth_with_kem}")
+
+    msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
+    print("accepting.... let's poll for the records")
     # await asyncio.sleep(10)
     #FIXME - add in an ack here using auth relays
 
@@ -768,18 +888,68 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         print(each_record['tag'][0][0],each_record['payload'] )
             # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
             # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
-        record_name = f"{each_record['tag'][0][0]}" 
+        record_name = f"{each_record['tag'][0]}" 
         record_value = each_record['payload']
         record_timestamp = each_record.get("timestamp",0)
         record_endorsement = each_record.get("endorsement","")
         endorse_trunc = record_endorsement[:8] + "..." + record_endorsement[-8:]
         final_record = f"{record_value} \n\n[{datetime.fromtimestamp(record_timestamp)} offered by: {endorse_trunc}]" 
         print(f"record_name: {record_name} record value: {final_record} type: {type}")
+        # PQC Step 3 Accept
+        
+        record_ciphertext = each_record.get("ciphertext", None)
+        record_kemalg = each_record.get("kemalg", None)
+        pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+        print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+        k_pqc = Keys(shared_secret.hex())
+        my_enc = ExtendedNIP44Encrypt(k_pqc)
+        payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
+        if payload_to_decrypt:            
+            decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+            print(f"decrypted payload: {decrypted_payload}")
+            record_value = decrypted_payload
+
+        original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
+
+        if original_record_to_decrpyt:
+            decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+            print(f"decrypted original: {decrypted_original}")   
+
         # Just add in record_value instead of final value
         
         await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
+        # Ingest original recored if there is one
 
-    await websocket.send_json({"status": "OK", "detail":f"all good {acorn_obj.handle} {scope} {grant} {user_records}", "grant_kind": first_type})
+        if original_record_to_decrpyt:
+            blob_result = await acorn_obj.transfer_blob(
+                record_name=record_name,
+                record_kind=type,
+                record_origin=npub_initiator,
+                blobxfer=decrypted_original,
+            )
+            if blob_result.get("status") != "OK":
+                logger.warning(
+                    "Original blob transfer non-fatal status record=%s kind=%s status=%s reason=%s",
+                    record_name,
+                    type,
+                    blob_result.get("status"),
+                    blob_result.get("reason"),
+                )
+
+
+
+
+    try:
+        await websocket.send_json(
+            {
+                "status": "OK",
+                "detail": f"all good {acorn_obj.handle} {scope} {grant} {user_records}",
+                "grant_kind": first_type,
+            }
+        )
+    except WebSocketDisconnect:
+        logger.info("websocket_accept client disconnected before final send")
    
 
 @router.post("/acceptincomingrecord", tags=["records", "protected"])
@@ -788,6 +958,7 @@ async def accept_incoming_record(       request: Request,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """ accept incoming NPI-17 1060 health record and store as a 32225 record"""
+    _raise_if_missing_acorn(acorn_obj)
 
     status = "OK"
     detail = "Nothing yet"
@@ -849,6 +1020,9 @@ async def display_record(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/record.html"
@@ -862,18 +1036,18 @@ async def display_record(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
-
+        #FIXME I don't this is used anymore
         record = await acorn_obj.get_record(record_name=card, record_kind=kind)
         label_hash = await acorn_obj.get_label_hash(label=card)
         template_to_use = "records/recordoffer.html"
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -915,6 +1089,9 @@ async def display_grant(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/grant.html"
@@ -955,7 +1132,7 @@ async def display_grant(     request: Request,
             is_trusted = "TBD"
 
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
@@ -967,7 +1144,7 @@ async def display_grant(     request: Request,
         try:
             #content = record["payload"]
             content = record["payload"]["content"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -1007,20 +1184,24 @@ async def display_offer(     request: Request,
                     ):
     """Protected access to updating the card"""
     #FIXME remove action mode because this path is now for offer only
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
+
     label_hash = None
    
     content = ""
     
 
-    record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+    record: SafeboxRecord = await acorn_obj.get_record_safebox(record_name=card, record_kind=kind)
+    # record = await acorn_obj.get_record(record_name=card, record_kind=kind)
     label_hash = await acorn_obj.get_label_hash(label=card)
     template_to_use = "records/offer.html"
 
-    try:
-        content = record["payload"]
-    except:
-        content = record    
-    
+    print(f"display record: {record}")
+  
+    content = record.payload
+   
 
     
     credential_record = {"card":card, "content": content}
@@ -1031,7 +1212,14 @@ async def display_offer(     request: Request,
     offer_kinds = settings.OFFER_KINDS
     offer_label = get_label_by_id(offer_kinds, kind)
     referer = f"{urllib.parse.urlparse(request.headers.get('referer')).path}?record_kind={kind}"
-   
+
+    #FIXME hard-coded to replace in offer.html
+    # `wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`
+    host = request.url.hostname
+    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
+    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
+    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
+    # need to add in global_nauth in the page
 
     return templates.TemplateResponse(  template_to_use, 
                                         {   "request": request,
@@ -1046,9 +1234,31 @@ async def display_offer(     request: Request,
                                             "label_hash": label_hash,
                                             "action_mode":action_mode,
                                             "content": content,
-                                            "credential_record": credential_record
+                                            "credential_record": credential_record,
+                                            "ws_url": ws_url
                                             
                                         })
+
+
+@router.post("/upload")
+async def upload_record(
+                        file: UploadFile = File(...),                        
+                        record_kind: int = Form(...),
+                        card: str = Form(...),
+                        content: str = Form(...),
+                        acorn_obj: Acorn = Depends(get_acorn)
+                        ):
+    _raise_if_missing_acorn(acorn_obj)
+    
+    contents: bytes = await file.read()
+    print(f"finished uploading {len(contents)} record_kind: {record_kind}")
+
+    record_name = "test_upload"
+    record_value = "test booga"
+    await acorn_obj.put_record(record_name=card,record_kind=record_kind,record_value=content, blob_data=contents)
+
+    return {"status": "OK", "detail": "OK"}
+    
 
 @router.get("/manageoffer", tags=["records", "protected"])
 async def manage_offer(     request: Request, 
@@ -1059,6 +1269,9 @@ async def manage_offer(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     label_hash = None
     template_to_use = "records/manageoffer.html"
@@ -1071,7 +1284,7 @@ async def manage_offer(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record
         
     elif action_mode == 'offer':
@@ -1082,7 +1295,7 @@ async def manage_offer(     request: Request,
 
         try:
             content = record["payload"]
-        except:
+        except Exception as exc:
             content = record    
     
     elif action_mode =='add':
@@ -1122,6 +1335,7 @@ async def update_record(    request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Update card in safebox"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "Nothing yet"
 
@@ -1147,6 +1361,7 @@ async def delete_card(         request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Delete card from safebox"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "Nothing yet"
 
@@ -1168,6 +1383,7 @@ async def generate_nauth(    request: Request,
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to private data stored in home relay"""
+    _raise_if_missing_acorn(acorn_obj)
     status = "OK"
     detail = "None"
     print(f"nauth request: {nauth_request}")
@@ -1232,22 +1448,23 @@ async def generate_nauth(    request: Request,
         print(f"scope: {nauth_request.scope} grant: {nauth_request.grant}")
         print(f"generated nauth: {detail} {len(detail)}")
       
-    except:
+    except Exception as exc:
         detail = "Not created"
 
     return {"status": status, "detail": detail}
 
 @router.post("/sendrecord", tags=["records", "protected"])
 async def post_send_record(      request: Request, 
-                                credential_parms: sendCredentialParms,                                
+                                record_parms: sendRecordParms,                                
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
-    """Select credential for verification"""
+    """Select record for verification"""
+    _raise_if_missing_acorn(acorn_obj)
     nauth_response = None
-    print(f"send credential {credential_parms.nauth}")
+    print(f"send record {record_parms}")
 
-    if credential_parms.nauth:
-        parsed_nauth = parse_nauth(credential_parms.nauth)
+    if record_parms.nauth:
+        parsed_nauth = parse_nauth(record_parms.nauth)
 
         scope = parsed_nauth['values']['scope']
         grant = parsed_nauth['values'].get("grant")
@@ -1263,39 +1480,86 @@ async def post_send_record(      request: Request,
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
 
-        print(f"send credential to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
+        print(f"send record to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
         # Need to inspect scope to determine what to do
         #TODO refactor this code
         if "prover" in scope:
             # this means the presentation has the corresponding record hash
             transmittal_npub = hex_to_npub(transmittal_pubhex)
-            print(f"grant: {credential_parms.grant}")
+            print(f"grant: {record_parms.grant}")
             # record_hash = scope.replace("prover:","")
             # print(f"need to select credential with record hash {record_hash}")
             # record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
-            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=34002)
+            record_out = await acorn_obj.get_record(record_name=record_parms.grant_name, record_kind=verifier_kind)
             
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
             verifier_kind = int(scope.split(":")[1])
-            print(f"grant: {credential_parms.grant}")
-            record_out = await acorn_obj.get_record(record_name=credential_parms.grant, record_kind=verifier_kind)
+            print(f"grant: {record_parms.grant_name}")
+            record_out = await acorn_obj.get_record(record_name=record_parms.grant_name, record_kind=verifier_kind)
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
 
+        
+
+
+        # Add in PQC stuff
+        print(f"PQC Step 2a {record_parms.kem_public_key} {record_parms.kemalg}")
+        pqc = oqs.KeyEncapsulation(record_parms.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(record_parms.kem_public_key))
+        kem_shared_secret_hex = kem_shared_secret.hex()
+        kem_ciphertext_hex = kem_ciphertext.hex()
+
+        k_nip44 = Keys(priv_k=kem_shared_secret_hex)
+        print(f"kem shared secret: {kem_shared_secret_hex} ciphertext: {kem_ciphertext_hex}")
+        try:
+            pass
+            my_enc = ExtendedNIP44Encrypt(k_nip44)
+            print(f"my NIP44 enc: {my_enc}")
+        except Exception as exc:
+            logger.exception("Failed to initialize PQC NIP44 encryptor")
+            raise HTTPException(status_code=500, detail="Encryption initialization failed")
+        # Now add to record
+        record_out['ciphertext']    = kem_ciphertext_hex
+        record_out['kemalg']        = record_parms.kemalg
+
+        payload = record_out['payload']
+        record_out['pqc_encrypted_payload'] =  my_enc.encrypt(payload, to_pub_k=k_nip44.public_key_hex())
+        record_out['payload'] = "This record is quantum-safe"
         print(f"This is the record to be sent for verification:{record_out}")
+        print(f"Let's add in the original record if it exists do the same as /transmit")
+        print("let's get the original record" )
+        issued_record: Event
+        original_record: OriginalRecordTransfer
+        issued_grant, original_record = await acorn_obj.create_request_from_grant(grant_name=record_parms.grant_name,grant_kind=verifier_kind, shared_secret_hex=kem_shared_secret_hex)
+        print(f"grant to present is {issued_grant}")
+       
+        if original_record:           
+            original_record_str = original_record.model_dump_json(exclude_none=True)
+            print(f"now we need to include the original record: ")
+            pqc_encrypted_original = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=original_record_str)
+
+        else:
+            print(f"no original record")
+            pqc_encrypted_original = None
+
+        record_out["pqc_encrypted_original"]= pqc_encrypted_original
+        
         try:
             nembed = create_nembed_compressed(record_out)
-        except:
+        except Exception as exc:
             nembed = create_nembed_compressed({"test": "test"})
         # print(nembed)
 
         #TODO Need to select the right credential and send over the to verifier
         # just send scope for now
 
+        # Need to get the PQC public key of the requestor
+
+        print(f"we are sending a record to verify: {record_out}")
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
 
     return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
@@ -1307,6 +1571,9 @@ async def record_request(      request: Request,
                     ):
     """This function display the verification page"""
     """The page sets up a websocket to listen for the incoming credential"""
+    redirect = _redirect_if_missing_acorn(acorn_obj)
+    if redirect:
+        return redirect
 
     
     
@@ -1326,6 +1593,38 @@ async def ws_record_data( websocket: WebSocket,
     await websocket.accept()
     return
 
+@router.websocket("/ws/present/{nauth}")
+async def ws_record_present( websocket: WebSocket, 
+                                        nauth:str=None, 
+                                        acorn_obj: Acorn = Depends(get_acorn)
+                                        ):
+    print(f"websocket opened for /ws/present {nauth}")
+    since_now = int(datetime.now(timezone.utc).timestamp())
+    requester_nauth = None
+    requester_nembed = None
+    
+    if nauth:
+        parsed_nauth = parse_nauth(nauth) 
+        pubhex_initiator =   parsed_nauth['values'] ['pubhex'] 
+        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
+        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
+        print(f"npub initiator: {hex_to_npub(pubhex_initiator)}")
+    
+    await websocket.accept()
+    
+    print("start listening for requester data")
+    requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind,since=None,relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
+    print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
+    if requester_nembed:
+        parsed_nembed = parse_nembed_compressed(requester_nembed)
+        kem_public_key = parsed_nembed['kem_public_key']
+        kemalg = parsed_nembed['kemalg']
+        print(f"From the requester provided to the presenter: kem public key: {kem_public_key} kemalg {kemalg}")
+        kem_material = {'kem_public_key': kem_public_key, 'kemalg': kemalg}
+        await websocket.send_json(kem_material)
+
+    
+
 @router.websocket("/ws/offer/{nauth}")
 async def ws_record_offer( websocket: WebSocket, 
                                         nauth:str=None, 
@@ -1338,15 +1637,15 @@ async def ws_record_offer( websocket: WebSocket,
     await websocket.accept()
 
     if nauth:
-        parsed_nauth = parse_nauth(nauth)   
+        parsed_nauth = parse_nauth(nauth) 
+        npub_initiator =   parsed_nauth['values'] ['npub'] 
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
-        print(f"ws auth relays: {auth_relays}")
+        print(f"npub initiator: {npub_initiator}")
 
 
 
-    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    # await acorn_obj.load_data()
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth,dm_relays=auth_relays,kind=auth_kind)
 
     naddr = acorn_obj.pubkey_bech32
     nauth_old = None
@@ -1362,8 +1661,8 @@ async def ws_record_offer( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth, presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+                client_nauth, presenter,kem_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1424,7 +1723,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
     start_time = datetime.now()
 
     while True:
-        if datetime.now() - start_time > timedelta(minutes=1):
+        if datetime.now() - start_time > timedelta(seconds=settings.LISTEN_TIMEOUT):
             print("1 minute has passed. Exiting loop.")
             await websocket.send_json({"status":"TIMEOUT"})
             break
@@ -1432,8 +1731,8 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             # Error handling
             
             try:
-                client_nauth, presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+                client_nauth, presenter, ken_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1463,8 +1762,8 @@ async def ws_listen_for_requestor( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/ws/listenforrecord/{nauth}")
-async def ws_record_listen( websocket: WebSocket, 
+@router.websocket("/ws/request/{nauth}")
+async def ws_request_record( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj: Acorn = Depends(get_acorn)
                                         ):
@@ -1474,32 +1773,72 @@ async def ws_record_listen( websocket: WebSocket,
 
     await websocket.accept()
 
+
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
+        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
+        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)  
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
         print(f"ws transmittal relays: {transmittal_relays}")
 
 
-
-    # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
-    # await acorn_obj.load_data()
-
-    naddr = acorn_obj.pubkey_bech32
-    incoming_record_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
     start_time = datetime.now()
+    
 
+
+    
+
+    naddr = acorn_obj.pubkey_bech32
+    incoming_record_old = None
+
+    # Need to:
+    # 1. listen for nauth of presenting safebox
+    # 2. send kem public key and kemalg
+    # 3. listen for incoming records
+
+    
+    print(f"#1 listen for nauth ")
+    presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
+    parsed_nauth = parse_nauth(presenter_nauth)
+
+    
+    print(f"we've got presenter nauth {presenter_nauth}")
+    presenter_nauth_parsed = parse_nauth(presenter_nauth)
+    presenter_npub = hex_to_npub(presenter_nauth_parsed['values']['pubhex'])
+    presenter_auth_kind = presenter_nauth_parsed['values'].get('auth_kind', settings.AUTH_KIND)
+    presenter_auth_relays = presenter_nauth_parsed['values'].get('auth_relays', settings.AUTH_RELAYS)
+    
+    print("we can now send the kem public key and kemalg")
+    #TODO Need to add in additional info for blossom blob transfer
+
+    kem_material = {    'kem_public_key': config.PQC_KEM_PUBLIC_KEY,
+                        'kemalg': settings.PQC_KEMALG
+                        }
+    nembed_to_send = create_nembed_compressed(kem_material)
+    message = f"{nauth}:{nembed_to_send}"
+    print(f"send to presenter npub: {presenter_npub}")
+
+    msg_out = await acorn_obj.secure_transmittal(nrecipient=presenter_npub,message=message,kind=presenter_auth_kind,dm_relays=presenter_auth_relays)
+    print(f"msg out {msg_out}")
+    
+
+
+    print(f"now let's wait for the presenting records...")
     while True:
         if datetime.now() - start_time > timedelta(minutes=1):
             print("1 minute has passed. Exiting loop.")
-            await websocket.send_json({"status":"TIMEOUT"})
+            try:
+                await websocket.send_json({"status":"TIMEOUT"})
+            except WebSocketDisconnect:
+                logger.info("ws_request_record client disconnected before TIMEOUT send")
             break
         try:
             # await acorn_obj.load_data()
             try:
-                incoming_record,presenter = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
+                incoming_record,presenter,kem_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
             except Exception as e:
                 incoming_record=None
             
@@ -1530,9 +1869,55 @@ async def ws_record_listen( websocket: WebSocket,
                 is_presenter = False
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
+                    original_record_to_present_json = None
+                    incoming_original_record = each.get("original_record")
+                    if isinstance(incoming_original_record, dict):
+                        original_record_to_present_json = incoming_original_record
+                    elif isinstance(incoming_original_record, str):
+                        try:
+                            original_record_to_present_json = json.loads(incoming_original_record)
+                        except Exception:
+                            original_record_to_present_json = None
+                    # Add in PQC stuff here
+                    record_ciphertext = each.get("ciphertext", None)
+                    record_kemalg = each.get("kemalg", None) 
+                    if record_ciphertext:
+                        pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                        kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                        kem_shared_secret_hex = kem_shared_secret.hex()
+                        print(f"This is the shared secret: {kem_shared_secret_hex}")
+                        k_pqc = Keys(priv_k=kem_shared_secret_hex)
+                        my_enc = ExtendedNIP44Encrypt(k_pqc)
+                        payload_to_decrypt = each.get("pqc_encrypted_payload", None)
+                        original_record_to_decrpyt = each.get("pqc_encrypted_original", None)
+                        if payload_to_decrypt:            
+                            decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                            print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
+                            each['payload'] = decrypted_payload
+                        if original_record_to_decrpyt:
+                            print("there is an original record in the presentation!")
+                            decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+                            print(f"decrypted original for presentation: {decrypted_original}") 
+                            orignal_record_transfer: OriginalRecordTransfer
+                            try:
+                                original_record_to_present_json = json.loads(decrypted_original)
+                                original_record_transfer = OriginalRecordTransfer(**json.loads(decrypted_original))
+                                print(f"original record transfer {original_record_transfer}")
+                            except Exception as e:
+                                raise Exception(f"could not create original record transfer {e}")
+
+                        
+                    
+
                     print(f"each to present: {each} {presenter}")
+                    try:
+                        payload_to_use = json.loads(each['payload'])
+                    except Exception as exc:
+                        payload_to_use = each['payload']
+
+                    print(f"each ciphertext {each.get('ciphertext','None')}")
                     is_valid = "Cannot Validate"
-                    if isinstance(each["payload"], dict):
+                    if isinstance(payload_to_use, dict):
                         
                         event_to_validate: Event = Event().load(each["payload"])
                         print(f"event to validate tags: {event_to_validate.tags}")
@@ -1554,9 +1939,14 @@ async def ws_record_listen( websocket: WebSocket,
                         
                         is_attested = await get_attestation(owner_npub=tag_owner,safebox_npub=acorn_obj.pubkey_bech32, relays=settings.RELAYS)
                         
-                        authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
-                        print(f"authorities: {authorities} tag owner {tag_owner}")
-                        if tag_owner in authorities:
+                        # authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
+                        # trust_list = "npub1vqddl2xav68jyyg669r8eqnv5akx6n5fgky698tfr3d4vy30enpse34f7m # npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5"
+                        # await acorn_obj.set_trusted_entities(pub_list_str=trust_list)
+                        trusted_entities = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
+                        # trusted_entities = ['06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c', '601adfa8dd668f22111ad1467c826ca76c6d4e894589a29d691c5b56122fccc3']
+
+                        print(f"trusted_entities: {trusted_entities} tag owner {tag_owner}")
+                        if tag_owner in trusted_entities:
                             is_trusted = True
                         else:
                             is_trusted = False
@@ -1566,14 +1956,26 @@ async def ws_record_listen( websocket: WebSocket,
                             is_presenter = True
 
                         print(f"is attested: {is_attested}")
+                        rating = "TBD"
+                        wot_scores = await acorn_obj.get_wot_scores(pub_key_to_score=tag_owner, relays=settings.WOT_RELAYS)
+                        # print(f"rating of owner is: {rating}")
+                        wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
+                        # wot_scores_to_show = "⭐️"
                         content = f"{event_to_validate.content}"
                         each["content"] = content
-                        each["verification"] = f"\n\n{'_'*40}\n\nIssued by: {tag_issuer[:6]}:{tag_issuer[-6:]} \nIssuer: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\nValid:{is_valid}|Attested:{is_attested}|Presenter:{is_presenter}|Trusted:{is_trusted}"
+                        each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_presenter else '❌'} Self-Presented|\n{'✅' if is_attested else '❌'} Attested By Issuer|{'✅' if is_trusted else '❌'} Recognized|\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
+                        each["original_record"] = original_record_to_present_json
+
+                        # PQC Stuff here
+
+            
+                       
+
 
                     else:
-                        each["content"] = each["payload"] 
+                        each["content"] = each["payload"]   
                         each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
                         each["picture"] = None
                         each["is_attested"] = False
@@ -1590,12 +1992,19 @@ async def ws_record_listen( websocket: WebSocket,
                                }
                 # print(f"send {incoming_record} {record_json}") 
                 # print(f"msg out: {msg_out}") 
-                await websocket.send_json(msg_out)
+                try:
+                    await websocket.send_json(msg_out)
+                except WebSocketDisconnect:
+                    logger.info("ws_request_record client disconnected before VERIFIED send")
+                    break
                 incoming_record_old = incoming_record
                 print("incoming record  successful!")
                 break
            
         
+        except WebSocketDisconnect:
+            logger.info("ws_request_record client disconnected")
+            break
         except Exception as e:
             print(f"Websocket message: {e}")
             break
@@ -1605,8 +2014,8 @@ async def ws_record_listen( websocket: WebSocket,
         
     print("websocket connection closed")
 
-@router.websocket("/wslisten/{nauth}")
-async def ws_listen( websocket: WebSocket, 
+@router.websocket("/ws/listenfornauth/{nauth}")
+async def ws_listen_for_nauth( websocket: WebSocket, 
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
@@ -1631,13 +2040,34 @@ async def ws_listen( websocket: WebSocket,
     nauth_old = None
     # since_now = None
     since_now = int(datetime.now(timezone.utc).timestamp())
+    start_time = datetime.now()
 
+    # This is PQC Step 2 in the KEM iteraction 
     while True:
+        if datetime.now() - start_time > timedelta(seconds=settings.LISTEN_TIMEOUT):
+            print("listenfornauth timeout reached. Exiting loop.")
+            try:
+                await websocket.send_json({"status": "TIMEOUT", "detail": "Authentication timed out."})
+            except WebSocketDisconnect:
+                logger.info("ws_listen_for_nauth client disconnected before TIMEOUT send")
+            break
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth,presenter = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-            except:
+                client_nauth,presenter,kem_public_key_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                
+                kem_parsed = parse_nembed_compressed(kem_public_key_nauth)
+                kem_public_key = kem_parsed['kem_public_key']
+                kem_public_key_bytes = bytes.fromhex(kem_public_key)
+
+                kemalg = kem_parsed['kemalg']
+
+
+
+                print(f"this is the kem public key: {kem_public_key} kemalg: {kemalg}")
+                # These paramaters get passed along to Step 2a via the browser
+
+            except Exception as exc:
                 client_nauth=None
             
 
@@ -1667,13 +2097,17 @@ async def ws_listen( websocket: WebSocket,
 
                 ) 
 
-                nprofile = {'nauth': new_nauth, 'name': acorn_obj.handle, 'transmittal_kind': transmittal_kind, "transmittal_relays": transmittal_relays}
+                #FIXME use a better variable name than nprofile. Also some extra parameters not needed.
+                nprofile = {'nauth': new_nauth, 'name': acorn_obj.handle, 'transmittal_kind': transmittal_kind, 'transmittal_relays': transmittal_relays, "kem_public_key": kem_public_key, 'kemalg': kemalg}
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth
                 break
            
         
+        except WebSocketDisconnect:
+            logger.info("ws_listen_for_nauth client disconnected")
+            break
         except Exception as e:
             print(f"Websocket message: {e}")
             break
@@ -1688,6 +2122,7 @@ async def accept_proof_token( request: Request,
                                 proof_token: proofByToken,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    _raise_if_missing_acorn(acorn_obj)
    
 
     k = Keys(config.SERVICE_NSEC)
@@ -1699,14 +2134,20 @@ async def accept_proof_token( request: Request,
     token_to_use = proof_token.proof_token
     label_to_use = proof_token.label
     record_kind_to_use = proof_token.kind
-    
-    
-    token_split = token_to_use.split(':')
-    parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]
+
+    if not token_to_use:
+        return {"status": "ERROR", "detail": "Missing proof token."}
+
+    try:
+        parsed_nembed = parse_nembed_compressed(token_to_use)
+        host = parsed_nembed["h"]
+        proof_token_to_use = parsed_nembed["k"]
+        nfc_default = parsed_nembed.get("n", ["Holder", "default"])
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Invalid NFC proof token payload: %s", exc)
+        return {"status": "ERROR", "detail": "Invalid NFC proof token payload."}
+
     vault_url = f"https://{host}/.well-known/proof"
-    proof_token_to_use = parsed_nembed["k"]
-    nfc_default = parsed_nembed.get("n",["Holder","default"])
 
     print(f"proof token: {token_to_use} acquired pin: {proof_token.pin} record kind {record_kind_to_use} label to use: {label_to_use} nfc default: {nfc_default}")
 
@@ -1719,6 +2160,13 @@ async def accept_proof_token( request: Request,
     
     sig = sign_payload(proof_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
+    if not card_ok:
+        if preflight_definitive:
+            logger.warning("Proof preflight rejected host=%s detail=%s", host, card_detail)
+            return {"status": "ERROR", "detail": card_detail}
+        # On transport-level uncertainty, continue and rely on authoritative vault validation.
+        logger.warning("Proof preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
     submit_data = { "nauth": proof_token.nauth, 
@@ -1734,22 +2182,52 @@ async def accept_proof_token( request: Request,
     headers = { "Content-Type": "application/json"}
     print(f"vault url: {vault_url} submit data: {submit_data}")
 
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=vault_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            vault_response = response.json()
+    except httpx.TimeoutException:
+        logger.warning("Proof vault timeout for host=%s", host)
+        return {"status": "ERROR", "detail": "Proof vault request timed out."}
+    except httpx.HTTPStatusError as exc:
+        response_text = ""
+        try:
+            response_text = exc.response.json().get("detail", "")
+        except ValueError:
+            response_text = exc.response.text
+        logger.warning(
+            "Proof vault HTTP error %s for host=%s body=%s",
+            exc.response.status_code,
+            host,
+            response_text,
+        )
+        detail_text = response_text or f"Proof vault returned HTTP {exc.response.status_code}."
+        return {"status": "ERROR", "detail": detail_text}
+    except httpx.RequestError as exc:
+        logger.warning("Proof vault network error for host=%s: %s", host, exc)
+        return {"status": "ERROR", "detail": "Proof vault network error."}
+    except ValueError:
+        logger.warning("Proof vault returned non-JSON response for host=%s", host)
+        return {"status": "ERROR", "detail": "Proof vault returned an invalid response."}
     
-    print(response.json())
-    vault_response = response.json()
+    print(vault_response)
 
     # add in the polling task here
    
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    return {"status": vault_response['status'], "detail": vault_response['detail']}  
+    return {
+        "status": vault_response.get("status", "ERROR"),
+        "detail": vault_response.get("detail", "Proof vault request completed."),
+    }
 
 @router.post("/acceptoffertoken", tags=["records", "protected"])
 async def accept_offer_token( request: Request, 
                                 offer_token: OfferToken,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    _raise_if_missing_acorn(acorn_obj)
    
 
     k = Keys(config.SERVICE_NSEC)
@@ -1759,12 +2237,18 @@ async def accept_offer_token( request: Request,
   
     
     token_to_use = offer_token.offer_token
-    
-    token_split = token_to_use.split(':')
-    parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]
+    if not token_to_use:
+        return {"status": "ERROR", "detail": "Missing offer token."}
+
+    try:
+        parsed_nembed = parse_nembed_compressed(token_to_use)
+        host = parsed_nembed["h"]
+        offer_token_to_use = parsed_nembed["k"]
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Invalid NFC offer token payload: %s", exc)
+        return {"status": "ERROR", "detail": "Invalid NFC offer token payload."}
+
     offer_url = f"https://{host}/.well-known/offer"
-    offer_token_to_use = parsed_nembed["k"]
 
     print(f"proof token: {token_to_use}")
 
@@ -1772,24 +2256,150 @@ async def accept_offer_token( request: Request,
     
     sig = sign_payload(offer_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
+    if not card_ok:
+        if preflight_definitive:
+            logger.warning("Offer preflight rejected host=%s detail=%s", host, card_detail)
+            return {"status": "ERROR", "detail": card_detail}
+        # On transport-level uncertainty, continue and rely on authoritative vault validation.
+        logger.warning("Offer preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
+    # also need to send along kem_public_key and kemalg
+    kem_public_key = config.PQC_KEM_PUBLIC_KEY
+    kemalg = settings.PQC_KEMALG
+
     submit_data = { "nauth": offer_token.nauth, 
                     "token": offer_token_to_use,                    
                     "pubkey": pubkey,
-                    "sig": sig
+                    "sig": sig,
+                    "kem_public_key": kem_public_key,
+                    "kemalg": kemalg
 
                     }
     print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
     print(f"offer url: {offer_url} submit data: {submit_data}")
 
-    response = requests.post(url=offer_url, json=submit_data, headers=headers)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=offer_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+    except httpx.TimeoutException:
+        logger.warning("Offer vault timeout for host=%s", host)
+        return {"status": "ERROR", "detail": "Offer vault request timed out."}
+    except httpx.HTTPStatusError as exc:
+        response_text = ""
+        try:
+            response_text = exc.response.json().get("detail", "")
+        except ValueError:
+            response_text = exc.response.text
+        logger.warning(
+            "Offer vault HTTP error %s for host=%s body=%s",
+            exc.response.status_code,
+            host,
+            response_text,
+        )
+        detail_text = response_text or f"Offer vault returned HTTP {exc.response.status_code}."
+        return {"status": "ERROR", "detail": detail_text}
+    except httpx.RequestError as exc:
+        logger.warning("Offer vault network error for host=%s: %s", host, exc)
+        return {"status": "ERROR", "detail": "Offer vault network error."}
+    except ValueError:
+        logger.warning("Offer vault returned non-JSON response for host=%s", host)
+        return {"status": "ERROR", "detail": "Offer vault returned an invalid response."}
     
-    print(response.json())
+    print(f"response from vault: {response_json}")
+
+    print("Now need to issue the private records")
+
 
     # add in the polling task here
    
     # task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    return {"status": status, "detail": detail}  
+    return {
+        "status": response_json.get("status", status),
+        "detail": response_json.get("detail", detail),
+    }  
+
+@router.get("/blob")
+async def get_blob(
+    record_name: str,
+    record_kind: int,
+    acorn_obj: Acorn = Depends(get_acorn)
+):
+    _raise_if_missing_acorn(acorn_obj)
+    blob_type, blob_data = await acorn_obj.get_record_blobdata(
+        record_name=record_name,
+        record_kind=record_kind
+    )
+    
+    if not blob_data or not blob_type:
+        raise HTTPException(status_code=404, detail="Blob not available")
+
+    blob_type = blob_type.split(";")[0].strip().lower()
+    print(f"getblob: {record_name} {record_kind} {blob_type}")
+
+    return Response(
+        content=blob_data,
+        media_type=blob_type,
+        headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post("/blob")
+async def post_blob(
+    req: BlobRequest,
+    acorn_obj: Acorn = Depends(get_acorn)  # your protected session
+):
+    _raise_if_missing_acorn(acorn_obj)
+    blob_type, blob_data = await acorn_obj.get_record_blobdata(record_name=req.record_name, record_kind=req.record_kind)
+
+    if blob_data is None:
+        raise HTTPException(status_code=404, detail="Blob data not found")
+
+    if not blob_data or not blob_type:
+        raise HTTPException(status_code=404, detail="Blob not available")
+    
+       
+    
+
+    blob_type = blob_type.split(";")[0].strip()
+
+    print (f"returned blob type: {blob_type} blob data: {type(blob_data)}")
+    return Response(
+        content= blob_data,        # raw bytes
+        media_type=blob_type,      # image/png, application/pdf, etc.
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-store"  # recommended for protected content
+        }
+    )
+
+
+@router.post("/originalblob")
+async def retrieve_blob(
+    original_record: OriginalRecordTransfer,
+    acorn_obj: Acorn = Depends(get_acorn)  # your protected session
+):
+    """
+    Accepts OriginalRecordTransfer
+    Returns decrypted blob with correct mimetype
+    """
+    _raise_if_missing_acorn(acorn_obj)
+    print(f"fetch original blob {original_record}")
+
+    blob_bytes: bytes = None
+    mime_type = "image/jpeq"
+
+    blob_bytes, mime_type = await acorn_obj.get_original_blob(original_record)
+
+    # raise HTTPException(status_code=404, detail="Blob not available")
+
+    # 4️⃣ Return raw bytes
+    return Response(
+        content=blob_bytes,
+        media_type=mime_type
+    )

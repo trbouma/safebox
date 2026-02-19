@@ -125,22 +125,31 @@ async def get_scan_result(  request: Request,
     elif qr_code[:4].lower() == 'lnbc':
         action_mode = 'lninvoice'
         action_data = qr_code
+        action_amount = 0
+        action_comment = ""
         try:
             decode_invoice=bolt11.decode(qr_code)
-            action_amount =decode_invoice.amount_msat//1000
-            action_comment=decode_invoice.description
-            return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}&action_amount={action_amount}&action_comment={action_comment}")
-        except:
+            if decode_invoice.amount_msat:
+                action_amount = decode_invoice.amount_msat // 1000
+            action_comment = decode_invoice.description or ""
+        except Exception:
             pass
+        params = urllib.parse.urlencode(
+            {
+                "action_mode": action_mode,
+                "action_data": action_data,
+                "action_amount": action_amount,
+                "action_comment": action_comment,
+            }
+        )
+        return RedirectResponse(f"/safebox/access?{params}")
     elif qr_code[:6] == "cashuA":
         action_mode = "ecash"
         action_data = qr_code
     
     elif qr_code[:8].lower() == "nprofile":
-            # Go directly to health consultation
             action_mode = "nprofile"
             action_data = qr_code
-            return RedirectResponse(f"/safebox/healthconsult?nprofile={qr_code}")
 
     elif qr_code[:5].lower() == "nauth":
             # Do nauth handling
@@ -168,9 +177,6 @@ async def get_scan_result(  request: Request,
             if referer == "health-data":
                 return RedirectResponse(f"/safebox/health?nauth={qr_code}") 
                   
-            elif referer == "health-consult":
-                return RedirectResponse(f"/safebox/healthconsult?nauth={qr_code}")
-            
             elif referer == "my-credentials":
                 return RedirectResponse(f"/credentials/present?nauth={qr_code}")
             elif referer == "credential-offer":
@@ -193,8 +199,8 @@ async def get_scan_result(  request: Request,
     else:
         return RedirectResponse(f"/safebox/access")
 
-    return RedirectResponse(f"/safebox/access?action_mode={action_mode}&action_data={action_data}&amount={amount}&currency={currency}")
+    params = {"action_mode": action_mode, "action_data": action_data, "amount": amount, "currency": currency}
+    clean_params = {k: v for k, v in params.items() if v is not None}
+    return RedirectResponse(f"/safebox/access?{urllib.parse.urlencode(clean_params)}")
     
       
-
-

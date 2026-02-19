@@ -9,7 +9,9 @@ import io, gzip
 import validators
 from urllib.parse import urlparse
 import secrets
-from fastapi import Depends, Cookie, HTTPException
+import logging
+from fastapi import Depends, Cookie, HTTPException, Request
+from fastapi import Response
 
 from hashlib import sha256
 import base64
@@ -39,6 +41,7 @@ from app.config import Settings, ConfigWithFallback
 
 settings = Settings()
 config = ConfigWithFallback()
+logger = logging.getLogger(__name__)
 # Secret key for signing JWT
 # SECRET_KEY = "foobar"
 # ALGORITHM = "HS256"
@@ -97,6 +100,36 @@ def create_jwt_token(data: dict, expires_delta: timedelta = None):
     
     return encrypted_encoded_jwt
 
+def ensure_csrf_cookie(
+    response: Response,
+    current_token: str | None = None,
+    request: Request | None = None,
+) -> str:
+    if current_token and isinstance(current_token, str) and len(current_token) >= 32:
+        token = current_token
+    else:
+        token = secrets.token_urlsafe(32)
+
+    host = (request.url.hostname if request else "") or ""
+    is_localhost = host in {"localhost", "127.0.0.1"}
+    secure_cookie = settings.COOKIE_SECURE and not is_localhost
+
+    response.set_cookie(
+        key=settings.CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,
+        secure=secure_cookie,
+        samesite=settings.COOKIE_SAMESITE.lower(),
+    )
+    return token
+
+def validate_csrf_token(csrf_form_token: str | None, csrf_cookie_token: str | None) -> None:
+    if not csrf_form_token or not csrf_cookie_token:
+        raise HTTPException(status_code=403, detail="Missing CSRF token")
+
+    if not secrets.compare_digest(csrf_form_token, csrf_cookie_token):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
 def decode_jwt_token(token: str):
     k = Keys(priv_k=config.SERVICE_NSEC)
     my_enc = NIP44Encrypt(k.private_key_bech32())
@@ -140,13 +173,13 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    print(f"from access_token {access_key}")
+    logger.debug("Decoded access token subject")
     try:
         k_from_token = Keys(priv_k=access_key)
-        print(f"we have a private key in the access token! The public key is: {k_from_token.public_key_bech32()}")
+        logger.info("Non-custodial token access detected for npub=%s", k_from_token.public_key_bech32())
         non_custodial = True
-    except:
-        print("just an ordinary access key")
+    except ValueError:
+        logger.debug("Token subject is not an nsec, using access_key lookup")
 
     # Token is valid, now get the safebox
     with Session(engine) as session:
@@ -279,7 +312,7 @@ async def db_lookup_safebox(npub: str) -> RegisteredSafebox:
         safeboxes = session.exec(statement)
         try:
             safebox_found = safeboxes.first()
-        except:
+        except Exception as exc:
             raise HTTPException(status_code=404, detail=f"{npub} not found")
         
     return safebox_found
@@ -363,24 +396,26 @@ async def fetch_balance(id: int):
 
         return safebox_found.balance
 
-async def db_state_change(acorn_obj:Acorn=None ):
+async def db_state_change(acorn_obj: Acorn = None, baseline_balance: int | None = None):
     print(f"db state change for {acorn_obj.handle}")
-    same_state = True
-    
-    if acorn_obj:
-        while same_state:
-            await asyncio.sleep(3)
-            with Session(engine) as session:
+    if not acorn_obj:
+        return 0
 
-                statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-                safeboxes = session.exec(statement)
-                safebox_found = safeboxes.first()
-            balance = acorn_obj.get_balance()    
-            if safebox_found.balance != balance:
-                    print(f"we have a db state change: safebox balance: {safebox_found.balance} acorn balance: {balance}")
-                    same_state = False
-            
-    return safebox_found.balance
+    while True:
+        await asyncio.sleep(1)
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+
+        current_balance = safebox_found.balance if safebox_found else acorn_obj.get_balance()
+        if baseline_balance is None:
+            baseline_balance = current_balance
+            continue
+
+        if current_balance != baseline_balance:
+            print(f"we have a db balance change: baseline={baseline_balance} current={current_balance}")
+            return current_balance
 
 
 
@@ -1057,7 +1092,7 @@ def parse_nembed(encoded_string):
     
     try:
         json_obj = json.loads(decoded_data)  
-    except:
+    except Exception as exc:
         json_obj = {}
 
     return json_obj
@@ -1108,7 +1143,7 @@ def parse_nembed_compressed(encoded_string):
     
     try:
         json_obj = json.loads(decompressed_data.decode())  
-    except:
+    except Exception as exc:
         json_obj = {}
 
     return json_obj
@@ -1206,7 +1241,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
                                     tags=nostr_obj['tags'], 
                                     created_at=nostr_obj['created_at'])
             # print(f"zap receipt tags: {zap_receipt.tags}")
-        except:
+        except Exception as exc:
             print("could not load json object")
 
         #Extract the tags we need
@@ -1245,7 +1280,7 @@ async def send_zap_receipt(nostr:str, lninvoice:str=None):
 
        
         # print("parsed zap receipt!")
-    except:
+    except Exception as exc:
         print("could not parse zap receipt!")
     
     # print(nostr_decode=urllib.parse.unquote(nostr))
@@ -1343,12 +1378,23 @@ def generate_pnr(length=6):
 
 async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
     """This should be records transfer"""
-   
-
+    print(f"listening for request on {kind}")
+    kem_public_key=None
+    #This is for Step 2
     records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
     print(f"listen for request {records_out}")
+
+    response_auth = records_out[0]["payload"]
+    response_auth_split = response_auth.split(':')
+    response_nauth = response_auth_split[0]
+    if len(response_auth_split) == 2:
+        response_kem = response_auth_split[1]
+    else:
+        response_kem = None
+
+    # return nauth, present, and we will add shared secret
     
-    return records_out[0]["payload"], records_out[0]["presenter"],
+    return response_nauth, records_out[0]["presenter"],response_kem
 
 def lnaddress_to_safebox_npub(lnaddress: str):
     relays = []
@@ -1358,12 +1404,12 @@ def lnaddress_to_safebox_npub(lnaddress: str):
         response = requests.get(nip05_url)
         pubkey = response.json()['safebox']
         
-    except:
+    except Exception as exc:
         pubkey = None   
 
     try:
         relays = response.json()['relays']
-    except:
+    except Exception as exc:
         relays = []    
     return pubkey, relays  
 

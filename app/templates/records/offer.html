@@ -3,8 +3,18 @@
 {% block title %}Offer Record{% endblock %}
 {% block head %}
 {{ super() }}
+<link rel="stylesheet" href="/static/records-modern.css">
 
 
+
+<script type="module">
+  import * as pdfjsLib from "/js/pdf.mjs";
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "/js/pdf.worker.mjs";
+
+  window.pdfjsLib = pdfjsLib;  // expose globally if needed
+</script>
 
 <script>
 
@@ -12,7 +22,10 @@ var global_naddr = "";
 var global_transmit_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
-var global_offer_card = "{{card}}";
+var global_offer_card = {{card | tojson}};
+var global_offer_content = {{content | tojson}}
+var global_kem_public_key = "None";
+var global_kemalg = "None";
 
 
 var record_kind = parseInt("{{record_kind}}");
@@ -23,6 +36,44 @@ function consoleLog(data) {
     var logElement = document.getElementById('log');
     logElement.innerHTML += data + '\n';
   };
+
+function buildWsUrl(path) {
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${wsScheme}://${window.location.host}${path}`;
+}
+
+function renderPdfFallback(container, blobUrl, message = "PDF preview unavailable on this browser.") {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.style.padding = "10px";
+  wrap.style.border = "1px solid #3b5187";
+  wrap.style.borderRadius = "12px";
+  wrap.style.background = "#0d1430";
+  wrap.style.textAlign = "center";
+
+  const note = document.createElement("p");
+  note.textContent = message;
+  note.style.margin = "0 0 10px";
+  note.style.color = "#cad9ff";
+  wrap.appendChild(note);
+
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Open/Download Original PDF";
+  link.style.display = "inline-block";
+  link.style.padding = "10px 12px";
+  link.style.border = "1px solid #5267ec";
+  link.style.borderRadius = "10px";
+  link.style.textDecoration = "none";
+  link.style.color = "#eaf0ff";
+  wrap.appendChild(link);
+
+  container.appendChild(wrap);
+}
 
 async function backToProfile() {
 
@@ -77,8 +128,8 @@ async function editOffer() {
     window.location.href=`/records/manageoffer?card={{card}}&action_mode=edit&kind=${global_offer_kind}`;
     
 
-    const submit_data = {"title": {{card|tojson}},
-                          "content": {{content|tojson}},
+    const submit_data = {"title": global_offer_card,
+                          "content": global_offer_content,
                           "kind": global_offer_kind,
                           "final_kind":global_grant_kind };
 
@@ -121,13 +172,23 @@ async function deleteOffer() {
 
     consoleLog(`submit nfc_token ${nfc_token} ${nauth}`);
     const submit_data = {"offer_token": nfc_token, "nauth": nauth };
-    await fetch('/records/acceptoffertoken', {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},        
-    body: JSON.stringify(submit_data)         
-  })
-  .then((response) => response.json())   
-  .then((data) => { consoleLog(`done ${data.detail}`)});
+    try {
+      const response = await fetch('/records/acceptoffertoken', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_data)
+      });
+      const data = await response.json();
+      const status = data.status || "ERROR";
+      const detail = data.detail || "Offer request failed.";
+      consoleLog(`done ${detail}`);
+      if (status !== "OK") {
+        alert(detail);
+      }
+    } catch (error) {
+      consoleLog(`offer submit error: ${error}`);
+      alert("Offer request failed. Please try again.");
+    }
   
   
   
@@ -147,7 +208,7 @@ async function requestbyNFC(offer_kind, nauth) {
       const ndef = new NDEFReader();
       try {
         await ndef.scan();
-        ndef.onreading = event => {
+        ndef.onreading = async event => {
           const decoder = new TextDecoder();
           for (const record of event.message.records) {
 
@@ -159,7 +220,7 @@ async function requestbyNFC(offer_kind, nauth) {
 
          
 
-         submitOffer(nfc_token, nauth);
+         await submitOffer(nfc_token, nauth);
           
           
           // submitToken(nfc_amount, nfc_token, nfc_currency,nfc_comment)
@@ -226,18 +287,27 @@ async function createQRCode() {
 
   }
 
- const ws = new WebSocket(`wss://{{request.url.hostname}}/records/wslisten/${global_nauth}`);
-
+ // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
+ const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
+ const ws = new WebSocket(wsUrl);
+  console.log(wsUrl);
    
-
+  
     ws.onopen = () => console.log("WebSocket connected");
     ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);  
+      if (response.status === "TIMEOUT") {
+        alert(response.detail || "Recipient authentication timed out. Please regenerate the QR code.");
+        qr_img_func.src = "/img/safebox.png";
+        return;
+      }
       global_transmit_nauth = response.nauth;
       client_name = response.name;
       client_transmittal_kind = response.transmittal_kind;
       client_transmittal_relays = response.transmittal_relays;
+      global_kem_public_key = response.kem_public_key;
+      global_kemalg = response.kemalg;
     // client_name = response.name;
     // alert(`Client is authenticated! Ready to transmit files.`); 
     if (global_transmit_nauth) {
@@ -248,11 +318,19 @@ async function createQRCode() {
       qr_img_func.src="/img/safebox.png";
     }
     // ws.close()
+    // alert('Ready to transmit offer');
+    
     offerRecord();
     
     
   };
+  ws.onerror = (event) => {
+    console.log("WebSocket error:", event);
+    alert("Unable to establish authentication channel. Please retry.");
+    qr_img_func.src = "/img/safebox.png";
+  };
   ws.onclose = () => console.log("WebSocket closed");
+  
   
 
 }
@@ -283,7 +361,9 @@ async function offerRecord() {
   const submit_data = { "nauth": nauth_to_transmit,
                         "originating_kind": global_offer_kind,
                         "final_kind": global_grant_kind,
-                        "record_name": global_offer_card
+                        "record_name": global_offer_card,
+                        "kem_public_key": global_kem_public_key,
+                        "kemalg": global_kemalg
    };
 
   console.log(`data to submit: ${submit_data.nauth} ${submit_data.final_kind}`) ;
@@ -302,8 +382,271 @@ async function offerRecord() {
    // window.location.href=referer;
      }
 
+let selectedFile = null;
+
+async function renderSinglePagePdf(pdf, container) {
+  let currentPage = 1;
+  const totalPages = pdf.numPages;
+
+  const controls = document.createElement("div");
+  controls.style.display = "flex";
+  controls.style.flexDirection = "column";
+  controls.style.alignItems = "center";
+  controls.style.justifyContent = "center";
+  controls.style.gap = "6px";
+  controls.style.margin = "8px 0 10px";
+
+  const navRow = document.createElement("div");
+  navRow.style.display = "flex";
+  navRow.style.alignItems = "center";
+  navRow.style.justifyContent = "center";
+  navRow.style.gap = "10px";
+  navRow.style.flexWrap = "nowrap";
+  navRow.style.width = "100%";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.type = "button";
+  prevBtn.textContent = "Prev";
+  prevBtn.style.width = "88px";
+  prevBtn.style.minWidth = "88px";
+  prevBtn.style.padding = "8px 10px";
+  prevBtn.style.margin = "0";
+
+  const nextBtn = document.createElement("button");
+  nextBtn.type = "button";
+  nextBtn.textContent = "Next";
+  nextBtn.style.width = "88px";
+  nextBtn.style.minWidth = "88px";
+  nextBtn.style.padding = "8px 10px";
+  nextBtn.style.margin = "0";
+
+  const pageLabel = document.createElement("span");
+  pageLabel.style.fontSize = "0.9rem";
+  pageLabel.style.color = "#cfd8ff";
+
+  navRow.appendChild(prevBtn);
+  navRow.appendChild(nextBtn);
+  controls.appendChild(navRow);
+  controls.appendChild(pageLabel);
+  container.appendChild(controls);
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  canvas.style.display = "block";
+  canvas.style.width = "100%";
+  canvas.style.maxWidth = "100%";
+  canvas.style.height = "auto";
+  canvas.style.boxSizing = "border-box";
+  canvas.style.marginBottom = "12px";
+  container.appendChild(canvas);
+
+  async function renderPage(pageNum) {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1 });
+    const hostWidth = Math.max(280, (container.clientWidth || viewport.width) - 4);
+    const scale = hostWidth / viewport.width;
+    const scaledViewport = page.getViewport({ scale });
+
+    canvas.width = scaledViewport.width;
+    canvas.height = scaledViewport.height;
+    pageLabel.textContent = `${pageNum}/${totalPages}`;
+    prevBtn.disabled = pageNum <= 1;
+    nextBtn.disabled = pageNum >= totalPages;
+
+    await page.render({
+      canvasContext: context,
+      viewport: scaledViewport
+    }).promise;
+  }
+
+  prevBtn.addEventListener("click", async () => {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      await renderPage(currentPage);
+    }
+  });
+
+  nextBtn.addEventListener("click", async () => {
+    if (currentPage < totalPages) {
+      currentPage += 1;
+      await renderPage(currentPage);
+    }
+  });
+
+  await renderPage(currentPage);
+}
+
+async function handleFileSelected() {
+
+  const input = document.getElementById("file_input");
+  selectedFile = input.files[0];
+
+  if (!selectedFile) return;
+
+  document.getElementById("file_name").innerText =
+    `Selected: ${selectedFile.name} (${selectedFile.size} bytes)`;
+
+  consoleLog(`File selected: ${selectedFile.name}`);
+
+  const img = document.getElementById("dynamic_image");
+  const container = document.getElementById("media_container");
+
+  // Clear previous renders
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
+  }
+
+  if (container) {
+    container.innerHTML = "";
+  }
+
+  // 🖼 IMAGE PREVIEW
+  if (selectedFile.type.startsWith("image/")) {
+
+    const blobUrl = URL.createObjectURL(selectedFile);
+
+    img.src = blobUrl;
+    img.style.width = "90%";
+    img.style.height = "auto";
+    img.style.display = "block";
+
+    return;
+  }
+
+  // 📄 PDF PREVIEW (PDF.js)
+  if (selectedFile.type === "application/pdf") {
+
+    const blobUrl = URL.createObjectURL(selectedFile);
+
+    try {
+      if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+        renderPdfFallback(container, blobUrl);
+        return;
+      }
+      const loadingTask = pdfjsLib.getDocument(blobUrl);
+      const pdf = await loadingTask.promise;
+      await renderSinglePagePdf(pdf, container);
+
+    } catch (err) {
+      consoleLog(`PDF preview error: ${err}`);
+      renderPdfFallback(container, blobUrl);
+    }
+
+    return;
+  }
+
+  consoleLog(`No preview available for type: ${selectedFile.type}`);
+}
+
+async function uploadSelectedFile() {
+
+  if (!selectedFile) {
+    alert("Please choose a file first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile);
+  formData.append("record_kind", global_offer_kind);
+  formData.append("card", global_offer_card);
+  formData.append("content", global_offer_content);
+
+  try {
+    const res = await fetch("/records/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    consoleLog(`Upload complete: ${data.detail}`);
+    alert(data.detail);
+
+    // Refresh from server after upload
+    getBlob();
+
+  } catch (err) {
+    consoleLog(`Upload error: ${err}`);
+  }
+}
 
 
+async function getBlob() {
+
+  const container = document.getElementById("media_container");
+  const img = document.getElementById("dynamic_image");
+  const recordStatus = document.getElementById("original_record_status");
+  if (recordStatus) recordStatus.textContent = "Loading original record...";
+
+  // Clear previous PDF render
+  if (container) container.innerHTML = "";
+
+  // Hide image initially
+  if (img) {
+    img.src = "";
+    img.style.display = "none";
+  }
+
+  const blobUrl = `/records/blob?record_name=${encodeURIComponent(global_offer_card)}&record_kind=${global_offer_kind}`;
+
+  try {
+    const res = await fetch(blobUrl);
+
+    // 🚫 If not found → show nothing
+    if (!res.ok) {
+      if (recordStatus) recordStatus.textContent = "Original Record";
+      return;
+    }
+
+    const mimeType = (res.headers.get("Content-Type") || "")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
+
+    // 🖼 IMAGE HANDLING (use existing img tag)
+    if (mimeType.startsWith("image/") && img) {
+
+      img.src = blobUrl;
+      img.style.width = "90%";      // 90% width
+      img.style.height = "auto";
+      img.style.display = "block";
+      if (recordStatus) recordStatus.textContent = "Original Record";
+
+      return;
+    }
+
+    // 📄 PDF HANDLING (PDF.js)
+    if (mimeType === "application/pdf" && container) {
+      if (!window.pdfjsLib || typeof window.pdfjsLib.getDocument !== "function") {
+        renderPdfFallback(container, blobUrl);
+        if (recordStatus) recordStatus.textContent = "Original Record";
+        return;
+      }
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: blobUrl,
+        standardFontDataUrl: "/js/standard_fonts/"
+        });
+
+      const pdf = await loadingTask.promise;
+      await renderSinglePagePdf(pdf, container);
+      if (recordStatus) recordStatus.textContent = "Original Record";
+
+      return;
+    }
+
+    // Anything else → do nothing
+
+  } catch (err) {
+    console.log("Render error:", err);
+    if (container) renderPdfFallback(container, blobUrl);
+    if (recordStatus) recordStatus.textContent = "Original Record";
+  }
+}
+
+// getBlob();
+document.addEventListener("DOMContentLoaded", () => getBlob());
 </script>
 
 {% endblock %}
@@ -314,6 +657,7 @@ async function offerRecord() {
 
 <div class="center-text">
     <h1>Offer {{offer_label}} Record </h1>
+
 
    
 <div 
@@ -333,9 +677,17 @@ async function offerRecord() {
   onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
   onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.15)';"
 >
-  <h3 style="margin-top: 0;">{{ card }}</h3>
-  <p style="white-space: pre-wrap;">{{ content }}</p>
+  <h3 style="margin-top: 0;">{{ card  }}</h3>
+  <p style="white-space: pre-wrap;">{{ content  }}</p>
 </div>
+    <div class="original-record-panel">
+      <br><span id="original_record_status">Original Record</span><br><br>
+      <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />
+      <br>
+      <iframe id="pdf_viewer" style="display:none; width:100%; height:600px; border:1px solid #ccc;"></iframe>
+      <div id="media_container" style="width:100%; max-width:900px; margin:0 auto;"></div>
+    </div>
+    
     <h2>Offer {{offer_label}} Record to Recipient?</h2>
     Click below to authenticate with {{offer_kind_label}} recipient. 
     <br>Please ask them to scan the generated QR code.
@@ -351,7 +703,16 @@ async function offerRecord() {
     
     <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
     <br><br>
+    <hr>
+    <h3>Manage Original Record</h3>
 
+    <input type="file" id="file_input" style="display: none;" onchange="handleFileSelected()"/>
+    <button onclick="document.getElementById('file_input').click()">Select Original Record</button>
+    <div id="file_name" style="margin-top: 8px; font-style: italic;"></div>    
+    <button onclick="getBlob()">Retrieve Original Record</button>
+    <br><br>
+    <button onclick="uploadSelectedFile()">Upload Original Record</button>
+    <br><br>
     <button onclick= "editOffer()">Edit {{offer_label}} Record Offer</button>
     <br><br>
     <button onclick="deleteOffer()">Delete {{offer_label}} Record Offer</button>

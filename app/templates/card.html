@@ -4,11 +4,143 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre {
+    color: #e8f0f4;
+  }
+
+  input[type="text"],
+  textarea {
+    background: #111c25;
+    color: #dce8f0;
+    border: 1px solid #35506a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  textarea {
+    min-height: 220px;
+    resize: vertical;
+  }
+
+  input[type="text"]:focus,
+  textarea:focus {
+    outline: 2px solid #4f8cb2;
+    outline-offset: 1px;
+    border-color: #5aa0cd;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .hint {
+    color: #b8d8ea;
+    font-style: italic;
+    text-align: center;
+  }
+
+  .preview-box {
+    border: 1px solid #345064;
+    border-radius: 12px;
+    background: #0f1a22;
+    padding: 12px;
+  }
+
+  .preview-title {
+    color: #d5e5ef;
+    margin-bottom: 10px;
+  }
+
+  #dynamic_image {
+    display: none;
+    margin: 0 auto;
+    max-width: 100%;
+    border-radius: 10px;
+  }
+
+  #pdf_viewer {
+    display: none;
+    width: 100%;
+    height: 600px;
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+  }
+
+  #log {
+    border: 1px solid #345064;
+    border-radius: 10px;
+    background: #0f1a22;
+    color: #b8d8ea;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2c3e4b;
+    margin: 16px 0;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button,
+    input[type="text"],
+    textarea {
+      width: 100% !important;
+    }
+    #pdf_viewer {
+      height: 420px;
+    }
+  }
+</style>
 
 
 <script>
 var record_kind = parseInt("{{record_kind}}");
 var referer = "{{referer}}";
+
+const global_record_kind = parseInt("{{record_kind}}")
+const global_card = "{{card}}"
+
 async function backToProfile() {
 
 window.location.href="/safebox/access" ;
@@ -100,6 +232,147 @@ async function deleteCard() {
 
 }      
 
+function consoleLog(data) {
+    var logElement = document.getElementById('log');
+    logElement.innerHTML += data + '\n';
+  };
+
+let selectedFile = null;
+
+function handleFileSelected() {
+  const input = document.getElementById("file_input");
+  selectedFile = input.files[0];
+
+  if (!selectedFile) return;
+
+  document.getElementById("file_name").innerText =
+    `Selected: ${selectedFile.name} (${selectedFile.size} bytes)`;
+
+  consoleLog(`File selected: ${selectedFile.name}`);
+
+  const img = document.getElementById("dynamic_image");
+  const pdf = document.getElementById("pdf_viewer");
+
+  // Clean up old blob URLs
+  if (img.dataset.blobUrl) {
+    URL.revokeObjectURL(img.dataset.blobUrl);
+    img.dataset.blobUrl = "";
+  }
+  if (pdf.dataset.blobUrl) {
+    URL.revokeObjectURL(pdf.dataset.blobUrl);
+    pdf.dataset.blobUrl = "";
+  }
+
+  // Hide both by default
+  img.style.display = "none";
+  pdf.style.display = "none";
+
+  // IMAGE PREVIEW
+  if (selectedFile.type.startsWith("image/")) {
+    const blobUrl = URL.createObjectURL(selectedFile);
+    img.src = blobUrl;
+    img.dataset.blobUrl = blobUrl;
+    img.style.display = "block";
+    return;
+  }
+
+  // PDF PREVIEW
+  if (selectedFile.type === "application/pdf") {
+    const blobUrl = URL.createObjectURL(selectedFile);
+    pdf.src = blobUrl;
+    pdf.dataset.blobUrl = blobUrl;
+    pdf.style.display = "block";
+    return;
+  }
+
+  // Fallback
+  consoleLog(`No preview available for type: ${selectedFile.type}`);
+}
+
+async function uploadSelectedFile() {
+  if (!selectedFile) {
+    alert("Please choose a file first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile); 
+  formData.append("record_kind", global_record_kind);
+  formData.append("card", document.getElementById("input_card_title").value);
+  formData.append("content", document.getElementById("input_card_content").value);
+
+  await fetch("/records/upload", {
+    method: "POST",
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    consoleLog(`Upload complete: ${data.detail}`);
+    alert(data.detail);
+  })
+  .catch(err => {
+    consoleLog(`Upload error: ${err}`);
+  });
+}
+
+async function getBlob() {
+  try {
+    const res = await fetch("/records/blob", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        record_name: global_card,
+        record_kind: global_record_kind
+      })
+    });
+
+    if (!res.ok) {
+      consoleLog(`No blob to fetch (${res.status})`);
+      return;
+    }
+
+    const mimeType = res.headers.get("Content-Type") || "";
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    const img = document.getElementById("dynamic_image");
+    const pdf = document.getElementById("pdf_viewer");
+
+    // Cleanup previous URLs
+    if (img?.dataset.blobUrl) URL.revokeObjectURL(img.dataset.blobUrl);
+    if (pdf?.dataset.blobUrl) URL.revokeObjectURL(pdf.dataset.blobUrl);
+
+    if (img) img.style.display = "none";
+    if (pdf) pdf.style.display = "none";
+
+    if (mimeType.startsWith("image/") && img) {
+      img.src = objectUrl;
+      img.dataset.blobUrl = objectUrl;
+      img.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    if (mimeType === "application/pdf" && pdf) {
+      pdf.src = objectUrl;
+      pdf.dataset.blobUrl = objectUrl;
+      pdf.style.display = "block";
+      consoleLog(`${mimeType} is fetched and rendered!`);
+      return;
+    }
+
+    // Fallback
+    window.open(objectUrl, "_blank");
+
+  } catch (err) {
+    consoleLog(`Error rendering blob: ${err}`);
+  }
+  
+}
+
+getBlob();
 
 
 </script>
@@ -112,19 +385,22 @@ async function deleteCard() {
 
 <div class="center-text">
     <h4>Update Card {{card}}</h4>
-    <button id="ln_scan_button" onclick="scanCode()">Scan Recipient</button>
-    <br><br><input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}" style="width:90%;">
-    <br><br>
-    <textarea id="input_card_content" style="width:90%;" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
-    <br><br>
-    <button onclick="updateCard()">Save Card</button>
-    <br><br>
-    <button onclick="shareCard()">Share Card</button>
-    <br><br>
-    <button onclick="deleteCard()">Delete Card</button>
-    <br><br>
     <button onclick="goBack()">Back</button>
-    <br><br>
+    <input type="text" id="input_card_title"  placeholder= "enter card title" value="{{card}}">
+    <textarea id="input_card_content" placeholder= "enter card content" name="txt_comment" rows="10" cols="24" >{{ content }}</textarea>
+    <h3>Manage Original Record</h3>
+    <input type="file" id="file_input" style="display: none;" onchange="handleFileSelected()"/>
+    <button onclick="document.getElementById('file_input').click()">Select Original Record</button>
+    <div id="file_name" class="hint"></div>
+    <button onclick="getBlob()">Retrieve Original Record</button>
+    <button onclick="uploadSelectedFile()">Upload Original Record</button>
+    <div class="preview-box">
+      <p class="preview-title">Original Record</p>
+      <img id="dynamic_image" alt="" />
+      <iframe id="pdf_viewer"></iframe>
+    </div>
+    <button onclick="updateCard()">Save Card</button>
+    <button onclick="deleteCard()">Delete Card</button>
     <button onclick="backToProfile()">Home</button>
     
 </div>
@@ -132,11 +408,12 @@ async function deleteCard() {
 
    
 
-<div class="center-text">    
-    <hr>
-    {{action_mode}} {{record_kind}}  {{referer}}   
-</div>
 
+<div class="center-text">    
+ 
+    <hr>
+    <pre id="log"></pre>  
+</div>
      
 <script>
   setDarkMode();

@@ -3,6 +3,7 @@
 {% block title %}My Records{% endblock %}
 {% block head %}
 {{ super() }}
+<link rel="stylesheet" href="/static/records-modern.css">
 
 
 
@@ -111,8 +112,9 @@ async function selectRecordKind() {
     .then((response) => response.json())
     .then((data) => getStatus(data));
 
-  const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}`);
-
+  // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}`);
+  const ws = new WebSocket("{{ws_url}}");
+  console.log("{{ws_url}}");
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
   console.log("Message received:", event.data);

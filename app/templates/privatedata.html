@@ -4,6 +4,96 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid #2f3d48;
+    border-radius: 16px;
+    background: #17232d;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, a, label {
+    color: #e8f0f4;
+  }
+
+  .actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  button {
+    background: linear-gradient(135deg, #196c96, #1f8aa8);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  #card-container {
+    max-width: 880px;
+    margin: 14px auto;
+    display: grid;
+    gap: 12px;
+  }
+
+  .card {
+    border: 1px solid #345064;
+    border-radius: 12px;
+    background: #0f1a22;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  }
+
+  .card:hover {
+    border-color: #4f8cb2;
+    background: #13222d;
+    transform: translateY(-1px);
+  }
+
+  .card-title {
+    color: #e8f0f4;
+    font-weight: 700;
+  }
+
+  .card-content {
+    color: #b8d8ea;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .hint {
+    color: #b8d8ea;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button {
+      width: 100%;
+    }
+  }
+</style>
 
 
 <script>
@@ -29,13 +119,11 @@ async function goBack() {
 
 <div class="center-text">
     <h1>Personal Notes</h1>
-
-    <button onclick="backToProfile()">Home</button>
-    <br><br>
-    <button onclick="addCardtoSafebox()">Add Card</button>
-    <br><br>
-    Click on card to edit.    
-    
+    <div class="actions">
+      <button onclick="backToProfile()">Home</button>
+      <button onclick="addCardtoSafebox()">Add Card</button>
+    </div>
+    <p class="hint">Click on a card to edit.</p>
 </div>
 
 <div id="card-container"></div>
@@ -108,22 +196,11 @@ setDarkMode();
    
 
 <div class="center-text">
-    
-
-        
-        
-        
-  <button onclick="addCardtoSafebox()">Add Card</button>
-  <br><br>  
-  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-  <br><br>
-  <button onclick="backToProfile()">Home</button>
-      
- 
-
-        
-     
-        
+  <div class="actions">
+    <button onclick="addCardtoSafebox()">Add Card</button>
+    <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    <button onclick="backToProfile()">Home</button>
+  </div>
 </div>
      
 

@@ -4,6 +4,135 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .rc-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(82, 103, 236, 0.22) 0%, transparent 38%),
+      radial-gradient(circle at 90% 90%, rgba(0, 0, 96, 0.55) 0%, transparent 36%),
+      linear-gradient(145deg, var(--sb-bg-deep) 0%, var(--sb-bg-mid) 100%);
+    color: var(--sb-text-main);
+  }
+
+  .rc-card {
+    width: 100%;
+    max-width: 760px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 18px;
+    background: var(--sb-panel);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+    padding: 24px;
+  }
+
+  .rc-title {
+    margin: 0 0 8px;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.7rem, 2.8vw, 2.3rem);
+  }
+
+  .rc-subtitle {
+    margin: 0 0 16px;
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    line-height: 1.45;
+  }
+
+  .rc-label {
+    display: block;
+    margin: 0 0 8px;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+
+  .rc-input,
+  .rc-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #39497a;
+    border-radius: 12px;
+    background: #0d1430;
+    color: #e2e8ff;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 1rem;
+    padding: 12px 14px;
+  }
+
+  .rc-textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+
+  .rc-input:focus,
+  .rc-textarea:focus {
+    outline: 2px solid var(--sb-brand-blue-1);
+    outline-offset: 1px;
+    border-color: var(--sb-brand-blue-1);
+  }
+
+  .rc-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 12px 0 16px;
+  }
+
+  .rc-check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    color: var(--sb-text-sub);
+    font-size: 0.92rem;
+  }
+
+  .rc-btn {
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  .rc-btn-primary {
+    color: #fff;
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+  }
+
+  .rc-btn-secondary {
+    color: #d9e2ff;
+    background: rgba(82, 103, 236, 0.12);
+    border: 1px solid #435ca1;
+  }
+
+  .rc-divider {
+    border: 0;
+    border-top: 1px solid #2f416d;
+    margin: 18px 0;
+  }
+</style>
 
 
 <script>
@@ -74,50 +203,35 @@ async function recoverSeedPhrase() {
 {% endblock %}
 
 {% block page_content %}
+<main class="rc-page">
+  <section class="rc-card">
+    <h1 class="rc-title">Recover Your Safebox</h1>
+    <p class="rc-subtitle">
+      Restore access using your recovery phrase. Optionally set a home relay, choose a new identity, or use legacy recovery mode.
+    </p>
 
+    <label class="rc-label" for="input_seed_phrase">Recovery Phrase</label>
+    <textarea class="rc-textarea" id="input_seed_phrase" placeholder="Enter recovery phrase"></textarea>
 
+    <label class="rc-label" for="input_home_relay" style="margin-top:12px;">Home Relay (Optional)</label>
+    <input class="rc-input" type="text" id="input_home_relay" placeholder="wss://relay.example.com">
 
-<div class="center-text">
-    <h1>Recover your Safebox</h1>
-
-    Recover
-      <br><br>
-      <textarea id="input_seed_phrase" style="width:80%;" placeholder= "enter recovery phrase" name="txt_comment" rows="3" cols="24"></textarea>
-      <br><br><input type="text" placeholder="enter home relay" id="input_home_relay"   value="" style="width:80%;">
-       <br><br>
-       <label>
-        <input type="checkbox" id="input_new_identity" >
-        New Identity
+    <div class="rc-row">
+      <label class="rc-check" for="input_new_identity">
+        <input type="checkbox" id="input_new_identity">
+        <span>New Identity</span>
       </label>
-             <label>
-        <input type="checkbox" id="input_legacy" >
-        Legacy
+      <label class="rc-check" for="input_legacy">
+        <input type="checkbox" id="input_legacy">
+        <span>Legacy</span>
       </label>
-      <br><br>
-       <button onclick="recoverSeedPhrase()">Recover Safebox</button>
-       <br><br>
-    
-</div>
+    </div>
 
-
-   
-
-<div class="center-text">
-  <hr>
-    
-
-        
-        
-        
-
-    <button onclick="backToProfile()">Home</button>
-      
- 
-
-        
-     
-        
-</div>
+    <button class="rc-btn rc-btn-primary" onclick="recoverSeedPhrase()">Recover Safebox</button>
+    <hr class="rc-divider">
+    <button class="rc-btn rc-btn-secondary" onclick="backToProfile()">Home</button>
+  </section>
+</main>
      
 <script>
   setDarkMode();

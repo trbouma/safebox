@@ -8,301 +8,168 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="description" content="Safebox">
     <meta name="author" content="safebox">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
 
     <title>{% block title %}{% endblock %} Wallet</title>
-    
-
-
-
-
-
     {% endblock %}
 </head>
 
-
-
 <style>
-  /* Light Mode (Default) */
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+
+    --surface: #f7f8fc;
+    --surface-soft: #ffffff;
+    --text-primary: #13182f;
+    --text-muted: #48506f;
+    --line: rgba(19, 24, 47, 0.14);
+    --focus: #5267ec;
+  }
+
+  html.dark-mode {
+    --surface: #0d1124;
+    --surface-soft: #141a34;
+    --text-primary: #f6f6f6;
+    --text-muted: #b9bfd9;
+    --line: rgba(255, 255, 255, 0.18);
+    --focus: #5267ec;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
   body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #ffffff; /* Light mode background */
-    color: #000000; /* Light mode text color */
-  }
-  .container {
-    display: flex;
-    justify-content: center; /* Horizontal alignment */
-    height: 100vh; /* Full viewport height */
-    border: 1px solid #ccc; /* Optional for visualization */
-    background-color: #ffffff;
-    color: #000000;
+    font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--surface);
+    color: var(--text-primary);
+    line-height: 1.4;
   }
 
-  table {
-    width: 90%;
-    border-collapse: collapse; /* optional but often useful */
-    margin: 0 auto; /* optional, centers the table horizontally */
-  } 
-
-
-  button {
-    background-color: #008CBA; /* Blue */
-    border: none;
-    color: white;
-    padding: 15px 32px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    border-radius: 8px;
-    width: 90%;
+  a {
+    color: inherit;
   }
 
-  button:active {
-    background-color: #3e8e41;
-    box-shadow: 0 5px #666;
-    transform: translateY(4px);
+  .wrapper {
+    min-height: 100vh;
   }
 
-  textarea {
-    font-size: 18px; /* Add font size for text input */
-    border: 1px solid #999999;
+  #content {
     width: 100%;
-    margin: 5px 0;
-    padding: 3px;
-    background-color: #ffffff;
-    color: #000000;
-    font-size: 18px; /* Add font size for text input */
+    margin: 0 auto;
   }
 
-  input[type='number'] {
-    font-size: 18px; /* Add font size for text input */
-    width: 80px;
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  input[type='text'] {
-    font-size: 18px; /* Add font size for text input */
-    width: 80px;
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  img {
-    width: 256px;
-    height: auto;
-    border-radius: 8px;
+  .container {
+    background-color: var(--surface);
+    color: var(--text-primary);
   }
 
   .center-text {
     text-align: center;
-    max-width: 600px;
-    margin: auto;
-  }
-
-  #card-container {
-    display: flex;
-    flex-direction: column; /* Stack cards vertically */
-    align-items: center; /* Center cards horizontally */
-    justify-content: center; /* Center content vertically */
-    
-
-    
+    width: min(96vw, 1040px);
+    max-width: 1040px;
+    margin: 0 auto;
   }
 
   .card {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    padding: 16px;
-    margin: 16px;    
-    width: 80%;
-    max-width: 600px;
-    font-family: Arial, sans-serif;
-    background-color: #ffffff;
-    color: #000000;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background-color: var(--surface-soft);
+    color: var(--text-primary);
   }
 
   .card-title {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
   }
 
   .card-content {
-    font-size: 14px;
-    color: #555;
+    color: var(--text-muted);
     white-space: pre-line;
   }
-  
-  .form-field {
-    width: 60%;
-    font-size: 16px;
-    padding: 6px;
-    font-family: inherit;  /* ensures same font as body */
-}
 
-
-  /* Dark Mode */
-  .dark-mode body {
-    background-color: #121212; /* Dark mode background */
-    color: #ffffff; /* Dark mode text color */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
-  .dark-mode .container {
-    background-color: #121212;
-    color: #ffffff;
-    border-color: #444444;
+  button,
+  input,
+  select,
+  textarea {
+    border-radius: 10px;
   }
 
-  .dark-mode .container {
-    background-color: #121212; /* Optional: to ensure container matches the dark mode */
+  input,
+  select,
+  textarea {
+    border: 1px solid var(--line);
+    background: var(--surface-soft);
+    color: var(--text-primary);
   }
 
-  .dark-mode button {
-    background-color: #555555;
-    color: #ffffff;
+  button {
+    border: 1px solid transparent;
+    cursor: pointer;
   }
 
-
-  .dark-mode button:active {
-    background-color: #444444;
-    box-shadow: 0 5px #222;
+  input:focus,
+  select:focus,
+  textarea:focus,
+  button:focus {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
   }
 
-  .dark-mode textarea {
-    font-size: 18px; /* Add font size for text input */
-    width: 80px;
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  .dark-mode input[type='number'] {
-    font-size: 18px; /* Add font size for text input */
-    width: 80px;
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  .dark-mode input[type='text'] {
-    font-size: 18px; /* Add font size for text input */
-    width: 80px;
-    background-color: #ffffff;
-    color: #000000;
-  }
-
-  .dark-mode .card {
-    background-color: #1e1e1e;
-    color: #ffffff;
-    border: 1px solid #444444;
-  }
-
-  .dark-mode .card-content {
-    color: #aaaaaa;
+  .overlay {
+    pointer-events: none;
   }
 </style>
-<style>
-  div {
-      margin-bottom: 16px;
-  }
-
-  #video-container {
-      line-height: 0;
-  }
-
-  #video-container.example-style-1 .scan-region-highlight-svg,
-  #video-container.example-style-1 .code-outline-highlight {
-      stroke: #64a2f3 !important;
-  }
-
-  #video-container.example-style-2 {
-      position: relative;
-      width: max-content;
-      height: max-content;
-      overflow: hidden;
-  }
-  #video-container.example-style-2 .scan-region-highlight {
-      border-radius: 30px;
-      outline: rgba(0, 0, 0, .25) solid 50vmax;
-  }
-  #video-container.example-style-2 .scan-region-highlight-svg {
-      display: none;
-  }
-  #video-container.example-style-2 .code-outline-highlight {
-      stroke: rgba(255, 255, 255, .5) !important;
-      stroke-width: 15 !important;
-      stroke-dasharray: none !important;
-  }
-
-  #flash-toggle {
-      display: none;
-  }
-
-  hr {
-      margin-top: 32px;
-  }
-  input[type="file"] {
-      display: block;
-      margin-bottom: 16px;
-  }
-
-
-</style>
-
 
 <script>
 function toggleDarkMode() {
   document.documentElement.classList.toggle('dark-mode');
-  console.log('Dark mode toggled:', document.documentElement.classList.contains('dark-mode'));
 }
 
-
 function setDarkMode() {
-  document.documentElement.classList.add('dark-mode'); // Apply the dark-mode class
-  document.documentElement.classList.remove('light-mode'); // Remove the light-mode class
+  document.documentElement.classList.add('dark-mode');
+  document.documentElement.classList.remove('light-mode');
 }
 
 function setLightMode() {
-  document.documentElement.classList.add('light-mode'); // Apply the light-mode class
-  document.documentElement.classList.remove('dark-mode'); // Remove the dark-mode class
+  document.documentElement.classList.add('light-mode');
+  document.documentElement.classList.remove('dark-mode');
 }
 
 async function backToHome() {
-
-
-window.location.href="/safebox/access" ;
-
+  window.location.href = '/safebox/access';
 }
-
-
 </script>
 
 <script src="/js/htmx.min.js"></script>
 <script src="/js/fixi-0.9.2.js"></script>
 <script src="/js/extensions.js"></script>
 
-<body hx-boost=""true">
+<body hx-boost="true">
     <div class="wrapper">
-        
-        <!-- Page Content  -->        
-        <div id="content">             
-                    
+        <div id="content">
             {% block page_content %}
             {% endblock %}
         </div>
     </div>
     <div class="overlay"></div>
     <br>
-      
 
     {% block scripts %}
-
-  
     {% endblock %}
-
-    
-
 </body>
 
 </html>

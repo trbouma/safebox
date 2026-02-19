@@ -348,15 +348,19 @@ def pay(amount,lnaddress: str, comment:str):
 @click.argument('label_info', default='hello')
 @click.option('--kind','-k', default=37375)
 @click.option('--origin','-o', default=None)
-def put(label, label_info, kind, origin):
+@click.option('--file','-f', default=None)
+def put(label, label_info, kind, origin, file):
     jsons=None
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     # click.echo(wallet.get_wallet_info())
-    
+    blob_data = None
+    if file:
+        with open(file, 'rb') as f:
+            blob_data = f.read()
 
     if click.confirm('Do you want to continue?'):    
-     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind, record_origin=origin))
+     asyncio.run(acorn_obj.put_record(label, label_info,record_kind=kind, record_origin=origin, blob_data=blob_data))
 
 @click.command("get", help='get a private wallet record')
 @click.argument('label', default = "default")
@@ -369,7 +373,7 @@ def get(label,kind,origin):
     asyncio.run(acorn_obj.load_data())
 
     try:
-        out_info = asyncio.run(acorn_obj.get_wallet_info(label,record_kind=kind,record_origin=origin))
+        out_info = asyncio.run(acorn_obj.get_record_safebox(record_name=label,record_kind=kind,record_origin=origin))
         # safebox_info = wallet_obj.get_record(label)
         pass
 
@@ -377,6 +381,28 @@ def get(label,kind,origin):
         out_info = "No label found!"
     
     click.echo(out_info)
+
+@click.command("get_blob", help='get blob data from private wallet record')
+@click.argument('label', default = "default")
+@click.option('--kind','-k', default=37375)
+@click.option('--origin','-o', default=None)
+def get_blob(label,kind,origin):
+    
+    out_info = "None"
+    blob_type = None
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints= MINTS, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+
+    try:
+        blob_type, blob_data = asyncio.run(acorn_obj.get_record_blobdata(label,record_kind=kind,record_origin=origin))
+        # safebox_info = wallet_obj.get_record(label)
+        pass
+
+    except:
+        click.echo("Error")
+        out_info = "No label found!"
+    
+    click.echo(f"blob type: {blob_type} ")
 
 @click.command("delete", help='get a private wallet record')
 @click.argument('label', default = "default")
@@ -417,11 +443,11 @@ def delete_kind(kind):
     
     click.echo(out_info)
 
-@click.command("getrecords", help='get a private wallet record')
+@click.command("get_user_records", help='get a private wallet record')
 @click.option('--kind','-k', default=37375)
 @click.option('--since','-s', default=None, help='since in hours')
 @click.option('--relays', '-r', default=None, help=RELAYS_HELP)
-def get_records(kind, since, relays):
+def get_user_records(kind, since, relays):
     
     out_info = "None"
     relay_array = None
@@ -450,7 +476,7 @@ def get_records(kind, since, relays):
         out_info = asyncio.run(acorn_obj.get_user_records(record_kind=kind, since=since_adjusted, relays=relay_array_wss))
         
         for each in out_info:
-            click.echo(f"RECORD: {each}")
+            click.echo(f"\nRECORD PAYLOAD: {each['tag']} {each['payload']}")
         click.echo(f"No. of RECORDS: {len(out_info)}" )
 
     except Exception as e:
@@ -485,21 +511,24 @@ def zap(amount:int, event, comment):
     result_out = asyncio.run(acorn_obj.zap(amount,event,comment))    
     click.echo(result_out)
 
-@click.command(help="Accept cashu token")
+@click.command("accept_token", help="Accept cashu token")
 @click.argument('token')
-def accept(token):
+def accept_token(token):
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     # msg_out = wallet_obj.get_proofs()
     # wallet_obj.delete_proofs()
     # click.echo(msg_out)
-    result_out = asyncio.run(acorn_obj.accept_token(token))
-    click.echo(result_out)
+    try:
+        result_out = asyncio.run(acorn_obj.accept_token(token))
+        click.echo(result_out)
+    except Exception as e:
+        click.echo(f"Error: {e}")
 
-@click.command("issue", help="Issue token amount")
+@click.command("issue_token", help="Issue token amount")
 @click.argument('amount', default=1)
-def issue(amount:int):
+def issue_token(amount:int):
     click.echo(f"Issue token amount: {amount}")
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS,mints=MINTS,home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
@@ -630,12 +659,12 @@ def release_lock():
     asyncio.run(acorn_obj.load_data()) 
     asyncio.run(acorn_obj.release_lock()) 
 
-@click.command("issue", help="Issue private record")
+@click.command("issue_record", help="Issue private record")
 @click.argument('content', default="hello")
 @click.option('--tags','-t', default=[])
 @click.option('--kind','-k', default=34002, help="kind for record")
 
-def issue( content:str, tags, kind:int):
+def issue_record(content:str, tags, kind:int):
   
     
     click.echo(f"Issue content: {content}")
@@ -661,9 +690,121 @@ def issue( content:str, tags, kind:int):
     click.echo(f"Even from Record: {event_from_record}")
 
 
-    
+@click.command("set_trusted_entities", help='set trusted_entities')
+@click.argument('trusted_entities', default='default')
+def set_trusted_entities(trusted_entities):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
 
+    if click.confirm('Do you want to set trusted entities?'):    
+     asyncio.run(acorn_obj.set_trusted_entities(pub_list_str=trusted_entities))
     
+@click.command("get_trusted_entities", help='get trusted_entities')
+def get_trusted_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+      
+    record_out = asyncio.run(acorn_obj.get_trusted_entities(relays=RELAYS))
+    click.echo(record_out)
+
+@click.command("get_root_entities", help='get root entities')
+def get_root_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+      
+    record_out = asyncio.run(acorn_obj.get_root_entities(relays=RELAYS))
+    click.echo(record_out)   
+
+@click.command("set_wot_entities", help='set wot entities npub:tag:relay')
+@click.argument('wot_entities', default='default')
+def set_wot_entities(wot_entities):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    if click.confirm(f'Do you want to set wot entities? {wot_entities}'):    
+     asyncio.run(acorn_obj.set_wot_entities(pub_list_str=wot_entities))
+
+@click.command("get_wot_entities", help='get wot entities')
+def get_wot_entities():    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+      
+    record_out = asyncio.run(acorn_obj.get_wot_entities(relays=RELAYS))
+    click.echo(record_out) 
+
+@click.command("get_wot_scores", help='get wot score')
+@click.argument('pubkey', default="pubkey")
+@click.option('--relays','-r', default=[])
+def get_wot_scores(pubkey, relays):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info()) 
+    if relays:
+        relay_list = []
+        for each in relays.split(','):
+            
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each) 
+    click.echo(relay_list)  
+    record_out = asyncio.run(acorn_obj.get_wot_scores(pub_key_to_score=pubkey, relays=relay_list))
+    click.echo(record_out) 
+
+@click.command("create_grant", help='create grant from offer')
+@click.argument('offer_name', type=str)
+@click.argument('holder',type=str )
+@click.option('--offer','-o', type=int, help='offer kind')
+@click.option('--grant','-g' ,type=str, default=None, help='grant kind, if not provided it default to offer_kind+1')
+
+def create_grant_from_offer(offer_name:str, holder:str, offer:int, grant: int):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    # if click.confirm('Do you want to create a grant from an offer?'): 
+    try:   
+        asyncio.run(acorn_obj.create_grant_from_offer(offer_kind=offer,offer_name=offer_name,holder=holder))
+    except Exception as e:
+        click.echo(e)
+
+@click.command("create_request", help='create request from grant')
+@click.argument('grant_name', type=str)
+@click.option('--grant','-g' ,type=int, default=34100, help='grant kind')
+
+def create_request_from_grant(grant_name:str, grant: int):    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info())  
+
+    # if click.confirm('Do you want to create a grant from an offer?'): 
+    try:   
+        asyncio.run(acorn_obj.create_request_from_grant(grant_name=grant_name, grant_kind=grant))
+    except Exception as e:
+        click.echo(e)
+
+@click.command("get_social_profile", help='get wot score')
+@click.argument('npub', default="npub")
+@click.option('--relays','-r', default=[])
+def get_social_profile(npub, relays):   
+    
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    # click.echo(wallet.get_wallet_info()) 
+    if relays:
+        relay_list = []
+        for each in relays.split(','):
+            
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each) 
+    click.echo(relay_list)  
+    click.echo(f"npub: {npub} relay_list: {relay_list}") 
+    record_out = asyncio.run(acorn_obj.get_social_profile(npub, relay_list))
+    
+    click.echo(record_out) 
 
 cli.add_command(info)
 cli.add_command(init)
@@ -681,20 +822,30 @@ cli.add_command(swap)
 cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
+cli.add_command(get_blob)
 cli.add_command(delete_record)
 cli.add_command(delete_kind)
-cli.add_command(get_records)
+cli.add_command(get_user_records)
 cli.add_command(balance)
 cli.add_command(zap)
-cli.add_command(accept)
-cli.add_command(issue)
+cli.add_command(accept_token)
+cli.add_command(issue_token)
 cli.add_command(send)
 cli.add_command(recover)
 cli.add_command(set_owner)
 cli.add_command(dm_recipient)
 cli.add_command(stx_recipient)
 cli.add_command(run)
-cli.add_command(issue)
+cli.add_command(issue_record)
+cli.add_command(set_trusted_entities)
+cli.add_command(get_trusted_entities)
+cli.add_command(get_root_entities)
+cli.add_command(set_wot_entities)
+cli.add_command(get_wot_entities)
+cli.add_command(get_wot_scores)
+cli.add_command(get_social_profile)
+cli.add_command(create_grant_from_offer)
+cli.add_command(create_request_from_grant)
 
 
 if __name__ == "__main__":

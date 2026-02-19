@@ -4,6 +4,120 @@
 {% block head %}
 {{ super() }}
 
+<style>
+  :root {
+    --sb-brand-navy: #000060;
+    --sb-brand-light: #f6f6f6;
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-bg-deep: #090c1a;
+    --sb-bg-mid: #0d1124;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .center-text {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, label, a, pre, b, i {
+    color: var(--sb-text-main);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select {
+    background: #0d1430;
+    color: #e2e8ff;
+    border: 1px solid #39497a;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  }
+
+  input[type="text"]:focus,
+  input[type="number"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid var(--sb-brand-blue-1);
+    outline-offset: 1px;
+    border-color: var(--sb-brand-blue-1);
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 800;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  textarea {
+    width: 90% !important;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+  }
+
+  #log {
+    border: 1px solid #3c518b;
+    border-radius: 10px;
+    background: #0d1430;
+    color: #cad9ff;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid #2f416d;
+    margin: 16px 0;
+  }
+
+  .center-text br {
+    display: block;
+    content: "";
+    margin-top: 8px;
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button,
+    textarea {
+      width: 100% !important;
+    }
+  }
+</style>
 
 
 <script>
@@ -12,6 +126,12 @@ async function backToHome() {
 
 window.location.href="/safebox/access" ;
 
+}
+
+async function rotateCardSecret() {
+  var user_confirm = confirm("Rotate card secret now? Existing cards will be invalidated.");
+  if (user_confirm == false) { return; }
+  window.location.href = "/safebox/issuecard?rotate=true";
 }
 
 async function getStatus(return_result) {
@@ -270,10 +390,18 @@ window.location.href="/safebox/facerec/";
   <hr>
   Web NFC: Android/Chrome only
   <br><br>
+  {% if rotated %}
+  <b>Card secret rotated. Previous cards are now invalid.</b>
+  {% else %}
+  Reusing current card secret. You can write this to multiple cards.
+  {% endif %}
+  <br><br>
+  <button onclick="rotateCardSecret()">Rotate Card Secret</button>
+  <br><br>
  
   <button onclick="readTag()">Card Read</button>
   <br><br>
-  <textarea id="nfc_text" name="nfc_text" rows="8" style="width:90%;">{{payment_token}}</textarea>
+  <textarea id="nfc_text" name="nfc_text" rows="8">{{payment_token}}</textarea>
   <br><br>
   Secure PIN: <b>{{secure_pin}}</b> <i>( Write this down! )</i>
   <br><br>
@@ -283,8 +411,6 @@ window.location.href="/safebox/facerec/";
   <hr>
   <br><br>
   <button onclick="backToHome()">Home</button> 
-  <br><br>
-  <pre id="log"></pre>
  
 </div>
 

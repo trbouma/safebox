@@ -7,8 +7,9 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 import signal, sys, string, cbor2, base64,os
 import aioconsole
 import json, requests
+import httpx
 
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Dict, List, Optional, Union, Callable, Awaitable
 from fastapi import WebSocket
 
 from monstr.util import util_funcs
@@ -26,6 +27,7 @@ from app.config import Settings
 from app.rates import get_currency_rate
 
 import time
+import logging
 
 from app.utils import send_zap_receipt
 
@@ -38,6 +40,7 @@ LOGGING_LEVEL=20
 
 engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine, checkfirst=True)
+logger = logging.getLogger(__name__)
 
 async def periodic_task():
     while True:
@@ -277,10 +280,11 @@ async def handle_payment(   acorn_obj: Acorn,
         print(f"handle payment: {mint}")
         success, lninvoice =  await acorn_obj.poll_for_payment(quote=cli_quote.quote, amount=amount,mint=mint)
         pass
+    except TimeoutError as exc:
+        logger.info("handle_payment poll timed out quote=%s mint=%s amount=%s", cli_quote.quote, mint, amount)
+        success = False
     except Exception as e:
-        import traceback
-        print(f"[handle_payment] Exception: {e}")
-        traceback.print_exc()
+        logger.exception("handle_payment unexpected exception quote=%s mint=%s amount=%s", cli_quote.quote, mint, amount)
 
     
 
@@ -353,13 +357,29 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
 
     return success
 
-async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: List[str]=None, nonce:str=None ):
+async def handle_ecash(
+    acorn_obj: Acorn,
+    websocket: WebSocket = None,
+    relays: List[str] = None,
+    nonce: str = None,
+    notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
+):
     print(f"handle ecash listen for {acorn_obj.handle}")
 
+    def _ecash_detail(each: tuple) -> str:
+        tendered_amount = each[1] if len(each) > 1 else 0
+        tendered_currency = each[2] if len(each) > 2 else "SAT"
+        status_note = each[3] if len(each) > 3 else "Payment update"
+        credited_sats = each[5] if len(each) > 5 else 0
+        return f"Tendered Amount {tendered_amount} {tendered_currency} | Credited {credited_sats} sats | {status_note}"
+
+    last_detail = "Payment complete!"
+
     start_time = time.time()
-    duration = 60  # 1 minutes in seconds
+    # duration = 60  # 1 minutes in seconds
+    ecash_listen_timeout = settings.ECASH_LISTEN_TIMEOUT
     #FIXME Need to add in a nonce so it is listening for the right ecash payment
-    while time.time() - start_time < duration:
+    while time.time() - start_time < ecash_listen_timeout:
         print(f"listen for ecash payment for {acorn_obj.handle} using {relays}") 
         ecash_out = await acorn_obj.get_ecash_latest(relays=relays, nonce=nonce) 
 
@@ -380,13 +400,31 @@ async def handle_ecash(  acorn_obj: Acorn, websocket: WebSocket = None, relays: 
                 for each in ecash_out: 
                     print(f"each for websocket: {each}") 
                     if each[0] in ["OK", "ADVISORY"]:             
-                        await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"Tendered Amount {each[1]} {each[2]} {each[3]}"})
+                        last_detail = _ecash_detail(each)
+                        await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": last_detail})
                         await asyncio.sleep(5)
-                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Payment!"})                       
+                        await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": last_detail})                       
                     else:
                         pass
                         # await websocket.send_json({"status": each[0], "action": "nfc_token", "detail": f"{each[3]}"})
                 break
+            if notify_callback:
+                for each in ecash_out:
+                    if each[0] in ["OK", "ADVISORY"]:
+                        last_detail = _ecash_detail(each)
+                        payload = {
+                            "status": each[0],
+                            "action": "nfc_token",
+                            "detail": last_detail,
+                            "balance": acorn_obj.balance,
+                        }
+                        await notify_callback(payload)
+                await notify_callback({
+                    "status": "OK",
+                    "action": "nfc_token",
+                    "detail": last_detail,
+                    "balance": acorn_obj.balance,
+                })
             break
 
          
@@ -406,11 +444,14 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
                                 final_amount: int
                                 ):
     print("pay to nfc tag")
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    print(f"safebox: {response.json()}")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+    print(f"safebox: {response_json}")
     final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
-    invoice = response.json()["invoice"]
-    payee = response.json()["payee"]
+    invoice = response_json["invoice"]
+    payee = response_json["payee"]
     await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
      
@@ -421,8 +462,11 @@ async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data
     print(f"submit data: {submit_data}")
 
 
-    response = requests.post(url=vault_url, json=submit_data, headers=headers)
-    print(f"response: {response.json()}")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url=vault_url, json=submit_data, headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+    print(f"response: {response_json}")
     pass
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)

@@ -20,7 +20,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent, NWCSecret, cardStatusRequest
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
@@ -63,6 +63,40 @@ def generate_short_code(length: int = 12) -> str:
     return ''.join(random.choice(chars) for _ in range(length))
 
 router = APIRouter()
+
+def _resolve_card_target_npub(token_secret: str) -> tuple[str, str]:
+    """
+    Resolve token secret to safebox npub.
+    mode="mapped" for revocable card secrets stored in NWCSecret.
+    """
+    with Session(engine) as session:
+        mapped = session.exec(select(NWCSecret).where(NWCSecret.nwc_secret == token_secret)).first()
+        if mapped:
+            safebox = session.exec(select(RegisteredSafebox).where(RegisteredSafebox.npub == mapped.npub)).first()
+            if safebox:
+                return mapped.npub, "mapped"
+
+    raise HTTPException(status_code=401, detail="Card secret is invalid or revoked")
+
+
+def _parse_and_validate_card_token(token: str, sig: str, pubkey: str) -> tuple[str, str, str, str]:
+    try:
+        is_verified = verify_payload(token, sig, pubkey)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid signature payload: {exc}")
+    if not is_verified:
+        raise HTTPException(status_code=401, detail="Signature verification failed")
+
+    k = Keys(config.SERVICE_NSEC)
+    my_enc = NIP44Encrypt(k)
+    try:
+        decrypt_token = my_enc.decrypt(token, for_pub_k=k.public_key_hex())
+        token_secret, token_pin = decrypt_token.split(":", 1)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid card payload")
+
+    npub, mode = _resolve_card_target_npub(token_secret)
+    return token_secret, token_pin, npub, mode
 
 
    
@@ -243,7 +277,7 @@ async def ln_pay( amount: float,
         pr = None
         task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS,nonce=nonce) ) 
     else:    
-        cli_quote = acorn_obj.deposit(amount=sat_amount, mint=HOME_MINT) 
+        cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=sat_amount, mint=HOME_MINT)
         pr = cli_quote.invoice 
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
    
@@ -276,17 +310,11 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
 
-   # First, check to see if signature checks out
-    if verify_payload(nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey):
-        print("Payload is verified!")
- 
-
-    k  = Keys(config.SERVICE_NSEC)
-    my_enc = NIP44Encrypt(k)
+    token_secret, token_pin, _, _ = _parse_and_validate_card_token(
+        nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey
+    )
+    k = Keys(config.SERVICE_NSEC)
     my_enc_NIP4 = NIP4Encrypt(k)
-    decrypt_token = my_enc.decrypt(nwc_vault.token, for_pub_k=k.public_key_hex())
-    token_secret = decrypt_token.split(':')[0]
-    token_pin = decrypt_token.split(':')[1]
     
     
     print(f"token secret {token_secret} token pin {token_pin} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
@@ -345,24 +373,39 @@ async def get_settings(request: Request):
     return {"relays": settings.RELAYS,
             "ecash_relays": settings.ECASH_RELAYS}
 
+@router.post("/.well-known/card-status", tags=["public"])
+async def card_status(request: Request, card_status_request: cardStatusRequest):
+    _, _, npub, mode = _parse_and_validate_card_token(
+        card_status_request.token,
+        card_status_request.sig,
+        card_status_request.pubkey,
+    )
+    with Session(engine) as session:
+        safebox = session.exec(select(RegisteredSafebox).where(RegisteredSafebox.npub == npub)).first()
+    if not safebox:
+        raise HTTPException(status_code=404, detail="Safebox not found for card")
+    return {
+        "status": "OK",
+        "detail": "Card is active",
+        "npub": npub,
+        "handle": safebox.handle,
+        "mode": mode,
+        "revocable": mode == "mapped",
+    }
+
+
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"
     detail = "No error"
 
-   # First, check to see if signature checks out
-    if verify_payload(proof_vault.token, proof_vault.sig, proof_vault.pubkey):
-        print("Payload is verified!")
- 
-
-    k  = Keys(config.SERVICE_NSEC)
-    my_enc = NIP44Encrypt(k)
+    token_key, token_pin, _, _ = _parse_and_validate_card_token(
+        proof_vault.token, proof_vault.sig, proof_vault.pubkey
+    )
+    k = Keys(config.SERVICE_NSEC)
     my_enc_NIP4 = NIP4Encrypt(k)
     pin_ok = False
-    token_secret = my_enc.decrypt(proof_vault.token, for_pub_k=k.public_key_hex())
-    token_key = token_secret.split(":")[0]
-    token_pin = token_secret.split(":")[1]
-    print(f"token secret {token_secret} token key {token_key} acquired pin: {proof_vault.pin} token pin {token_pin}")
+    print(f"token key {token_key} acquired pin: {proof_vault.pin} token pin {token_pin}")
     k_nwc = Keys(token_key)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
     if token_pin == proof_vault.pin:
@@ -408,19 +451,13 @@ async def proof_vault(request: Request, proof_vault: proofVault):
 @router.post("/.well-known/offer", tags=["public"])
 async def offer_vault(request: Request, offer_vault: offerVault):
     status = "OK"
-    detail = None
+    detail = "Waiting to send record..."
 
-   # First, check to see if signature checks out
-    if verify_payload(offer_vault.token, offer_vault.sig, offer_vault.pubkey):
-        print("Payload is verified!")
- 
-
-    k  = Keys(config.SERVICE_NSEC)
-    my_enc = NIP44Encrypt(k)
+    token_secret, secure_pin, _, _ = _parse_and_validate_card_token(
+        offer_vault.token, offer_vault.sig, offer_vault.pubkey
+    )
+    k = Keys(config.SERVICE_NSEC)
     my_enc_NIP4 = NIP4Encrypt(k)
-    decrypt_payload = my_enc.decrypt(offer_vault.token, for_pub_k=k.public_key_hex())
-    token_secret = decrypt_payload.split(':')[0]
-    secure_pin = decrypt_payload.split(':')[1]
 
     print(f"token secret: {token_secret} secure pin: {secure_pin}")
     k_nwc = Keys(token_secret)
@@ -430,11 +467,14 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     "method": "offer_record",
     "params": { 
         "nauth": offer_vault.nauth
+
         
 
             }
         }
     
+    print(f"wallet instruction: {wallet_instruction}")
+
     payload_encrypt = my_enc_NIP4.encrypt(plain_text=json.dumps(wallet_instruction),to_pub_k=k_nwc.public_key_hex())
         
     async with ClientPool(settings.NWC_RELAYS) as c:
@@ -460,20 +500,11 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     status = "OK"
     detail = "This from lnaddress nfcpayout"
 
-    # First, check to see if signature checks out
-    if verify_payload(nfc_pay_out.token, nfc_pay_out.sig, nfc_pay_out.pubkey):
-        print("NFC Pay Out Payload is verified!")
-
-    
-    k  = Keys(config.SERVICE_NSEC)
-    my_enc = NIP44Encrypt(k)
-    my_enc_NIP4 = NIP4Encrypt(k)
-    decrypt_token = my_enc.decrypt(nfc_pay_out.token, for_pub_k=k.public_key_hex())
-    
-    token_secret = decrypt_token.split(':')[0]
-    token_pin = decrypt_token.split(':')[1]
+    token_secret, token_pin, npub, _ = _parse_and_validate_card_token(
+        nfc_pay_out.token, nfc_pay_out.sig, nfc_pay_out.pubkey
+    )
     print(f"token secret {token_secret} token pin {token_pin}")
-    k_payout = Keys(token_secret)
+    k_payout = Keys(pub_k=npub)
     
     print(f"vault nfcpayout: {nfc_pay_out.token} amount: {nfc_pay_out.amount} comment: {nfc_pay_out.comment} to npub: {k_payout.public_key_bech32()}")
 
@@ -481,7 +512,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     # Need to instantiate right safebox to create invoice here and then spawn task to monitor payment
     print("instantiate right safebox")
 
-    acorn_obj = await get_acorn_by_npub(k_payout.public_key_bech32())
+    acorn_obj = await get_acorn_by_npub(npub)
 
     print(f"Balance of payout acorn {acorn_obj.handle} is {acorn_obj.balance}")
 
@@ -496,7 +527,7 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
         task_ecash = asyncio.create_task(task_to_accept_ecash(acorn_obj, nfc_pay_out))
     else:
      
-        cli_quote = acorn_obj.deposit(nfc_pay_out.amount, mint=HOME_MINT)
+        cli_quote = await asyncio.to_thread(acorn_obj.deposit, nfc_pay_out.amount, HOME_MINT)
         ln_invoice = cli_quote.invoice
 
         

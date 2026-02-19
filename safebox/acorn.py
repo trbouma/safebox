@@ -13,6 +13,7 @@ import httpx
 import math
 from zoneinfo import ZoneInfo
 from datetime import timezone
+import filetype
 
 from hotel_names import hotel_names
 # from coolname import generate, generate_slug
@@ -20,6 +21,7 @@ from binascii import unhexlify
 import hashlib
 import signal, sys, string, cbor2, base64,os
 from bip_utils import Bip39SeedGenerator, Bip32Slip10Ed25519, Bip32Slip10Secp256k1
+import contextlib
 
 
 
@@ -36,7 +38,7 @@ from monstr.entities import Entities
 from monstr.client.event_handlers import DeduplicateAcceptor
 
 from safebox.monstrmore import KindOtherGiftWrap, ExtendedNIP44Encrypt
-from safebox.func_utils import npub_to_hex
+from safebox.func_utils import npub_to_hex, encrypt_bytes, decrypt_bytes
 
 
 tail = util_funcs.str_tails
@@ -50,9 +52,13 @@ from safebox.models import nostrProfile, SafeboxItem, mintRequest, mintQuote, Bl
 from safebox.models import TokenV3, TokenV3Token, cliQuote, proofsByKeyset, Zevent
 from safebox.models import TokenV4, TokenV4Token
 from safebox.models import WalletConfig, WalletRecord,WalletReservedRecords
-from safebox.models import TxHistory, SafeboxRecord, ParseRecord
+from safebox.models import TxHistory, SafeboxRecord, ParseRecord, EncryptionParms, EncryptionResult, OriginalRecordTransfer
 
 from safebox.func_utils import generate_name_from_hex, name_to_hex, generate_access_key_from_hex,split_proofs_instance
+
+from python_blossom import BlossomClient, Blob as BlossomBlob
+from tempfile import NamedTemporaryFile
+import mimetypes
 
 RECORD_LIMIT: int = 1024
 PROOF_LIMIT: int = 32
@@ -86,6 +92,7 @@ class Acorn:
     privkey_bech32: str 
     seed_phrase: str = ""  
     access_key: str =""
+    pqc_self_secret: str = None
     home_relay: str
     home_mint: str
     known_mints: dict = {}
@@ -94,6 +101,7 @@ class Acorn:
     emergency_contacts: List[str] = None
     authorities: List[str] = None
     providers: List[str] = None
+    trusted_entities: List[str] = None
     user_records = []
     relays: List[str]
     mints: List[str]
@@ -152,6 +160,7 @@ class Acorn:
             self.balance: int = 0
             self.proof_events = proofEvents()
             self.trusted_mints = {}
+            self.trusted_entities = []
             self.home_relay = home_relay
             self.replicate = replicate
             self.wallet_config = None
@@ -219,21 +228,22 @@ class Acorn:
                 if each[0] == "latest_ecash":
                     self.latest_ecash = each[1] 
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as e:
             # await self.set_wallet_info(label="wallet",label_info=json.dumps(self.acorn_tags))
             if force_profile_creation:
-                print("we are going to create a profile!")
+                self.logger.info("op=load_data status=create_profile_on_missing_data relay=%s", self.home_relay)
                 await self.create_instance(keepkey=True)
                 
             else:
-                raise Exception(f"No wallet data on {self.home_relay}!!!")
+                self.logger.error("op=load_data status=failed relay=%s error=%s", self.home_relay, e)
+                raise RuntimeError(f"No wallet data on {self.home_relay}!!!")
 
 
         await self._load_proofs()
         
         
         if len(self.proofs) > PROOF_LIMIT:
-            print("need to reduce proofs")
+            self.logger.info("op=load_data status=reduce_proofs proofs=%s", len(self.proofs))
             await self.swap_multi_each()
             await self.swap_multi_consolidate()
         return
@@ -247,7 +257,7 @@ class Acorn:
             try:
                 npub_obj = Keys(pub_k=npub)
                 update_tags.append(["owner",npub])                
-            except:
+            except (ValueError, TypeError) as exc:
                 raise ValueError("npub is not a valid format")
         if local_currency:
             update_tags.append(["local_currency",local_currency])
@@ -315,7 +325,7 @@ class Acorn:
         n_profile['pubkey'] = self.k.public_key_hex()
         n_profile['relay'] = [self.home_relay]
         n_profile_str = Entities.encode('nprofile', n_profile)
-        print("nprofile_str", n_profile_str)
+        self.logger.debug("op=create_profile status=nprofile_created nprofile=%s", n_profile_str)
 
         nostr_profile = nostrProfile(   name=local_name,
                                         display_name=local_name,
@@ -329,9 +339,9 @@ class Acorn:
         if nostr_profile_create:
             out = asyncio.run(self._async_create_profile(nostr_profile))
             hello_msg = f"Hello World from {local_name}! #introductions"
-            print(hello_msg)
+            self.logger.info("op=create_profile status=hello_post msg=%s", hello_msg)
             asyncio.run(self._async_send_post(hello_msg))
-            print(out)
+            self.logger.debug("op=create_profile status=post_result result=%s", out)
 
         # init_index = "[{\"root\":\"init\"}]"
         init_index["root"] = local_name
@@ -366,7 +376,7 @@ class Acorn:
                 profile = nostr_profile.model_dump_json()
             
                 profile_str = json.dumps(profile)
-                print(profile_str)
+                self.logger.debug("op=create_profile status=profile_json_ready")
                 # this seems to work
                 profile_2 = json.dumps(nostr_profile.model_dump(mode='json'))
                 n_msg = Event(kind=0,
@@ -374,7 +384,8 @@ class Acorn:
                         pub_key=self.pubkey_hex)
                 n_msg.sign(self.privkey_hex)
                 c.publish(n_msg)
-            except:
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                self.logger.warning("op=create_profile status=publish_failed error=%s", exc)
                 out_msg = "error"
         return out_msg
 
@@ -461,8 +472,8 @@ class Acorn:
                     
 
 
-            except Exception as e:   
-                print(f"There is no profile! Error {e}")  
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError) as e:
+                self.logger.warning("op=create_instance status=no_profile error=%s", e)
 
             pass
         return self.privkey_bech32
@@ -508,8 +519,9 @@ class Acorn:
                                 \n{"*"*75}
 
             """
-        except:
-            raise Exception("No profile on relay")
+        except (ValueError, TypeError, KeyError) as exc:
+            self.logger.warning("op=get_profile status=missing_profile error=%s", exc)
+            raise RuntimeError("No profile on relay")
             out_string = f"No profile - seed phrase: {mnemo.to_mnemonic(bytes.fromhex(self.privkey_hex))}"
         return out_string
 
@@ -535,14 +547,14 @@ class Acorn:
 
     async def listen_for_record(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):
         # Listen for a record and return it
-        print("listening for incoming record...")
+        self.logger.info("op=listen_for_record status=start kind=%s", record_kind)
 
         def incoming_handler(the_client: Client, sub_id: str, evt: Event):
-            print(f"handle event {sub_id} {evt.id}")
+            self.logger.debug("op=listen_for_record status=event sub_id=%s event_id=%s", sub_id, evt.id)
             return
 
         url = relays[0]
-        c = Client(url)
+        c = ClientPool(url)
         asyncio.create_task(c.run())
    
         await c.wait_connect()
@@ -552,14 +564,76 @@ class Acorn:
         filters={
             'limit': 1024,
             'kinds': [record_kind],
-            '#p': self.pubkey_hex,
+            '#p': [self.pubkey_hex]
             
         }
         )
-
-        print(f"startt listening for incoming record kind {record_kind} at: {url}")
+        while True:
+            self.logger.debug("op=listen_for_record status=waiting kind=%s relay=%s", record_kind, url)
+            await asyncio.sleep(3)
         return
 
+    async def listen_for_record_sub(
+    self,
+    record_kind: int = 37375,
+    since: int | None = None,
+    reverse: bool = False,
+    relays: List[str] | None = None,
+    timeout: int = 60
+    ):
+        my_gift = GiftWrap(BasicKeySigner(self.k))
+        self.logger.info("op=listen_for_record_sub status=start kind=%s", record_kind)
+
+        loop = asyncio.get_running_loop()
+        record_future = loop.create_future()
+
+        def incoming_handler(the_client: ClientPool, sub_id: str, evt: Event):
+            if not record_future.done():
+                self.logger.debug("op=listen_for_record_sub status=received event_id=%s", evt.id)
+                record_future.set_result(evt)
+
+        # url = relays[0]
+        client = ClientPool(relays)
+
+        # Run client in background
+        client_task = asyncio.create_task(client.run())
+        sub_id = secrets.token_hex(4)
+        await client.wait_connect()
+
+        client.subscribe(
+            sub_id=sub_id,
+            handlers=incoming_handler,
+            filters={
+                "limit": 1,
+                "kinds": [record_kind],
+                "#p": [self.pubkey_hex],
+            },
+        )
+
+        try:
+            # Wait until first record arrives
+            evt = await asyncio.wait_for(record_future, timeout=timeout)
+            unwrapped_event = await my_gift.unwrap(evt)
+            nauth_split = unwrapped_event.content.split(':')
+            nauth = nauth_split[0]
+            if len(nauth_split)>1:
+                nembed = nauth_split[1]
+            else:
+                nembed = None  
+               
+            return nauth, nembed
+        except (asyncio.TimeoutError, ValueError, TypeError) as exc:
+            self.logger.debug("op=listen_for_record_sub status=timeout_or_invalid kind=%s error=%s", record_kind, exc)
+            return None, None
+
+        finally:
+            # Clean shutdown no matter what
+            self.logger.debug("op=listen_for_record_sub status=shutdown")
+            # await client.unsubscribe(sub_id=sub_id)
+            client_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await client_task
+    
     async def get_user_records(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None)->List[Any]:
 
         events_out = []
@@ -613,12 +687,13 @@ class Acorn:
             }]
 
         # print(f"kind: {record_kind} relays to use: {relays_to_use}")
-        self.logger.debug(f"kind: {record_kind} relays to use: {relays_to_use}")
+        self.logger.debug(f"kind: {record_kind} relays to use: {relays_to_use} filter: {FILTER}")
         async with ClientPool(relays_to_use) as c:  
             events = await c.query(FILTER)           
         
         events.sort(reverse=reverse)
 
+        each: Event
         for each in events:
             
             # check to see if record originates from elsewhere
@@ -637,11 +712,11 @@ class Acorn:
                         parsed_record = json.loads(unwrapped_event.content)
                         parsed_record['created_at'] = unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         parsed_record['id']=unwrapped_event.id
+                        parsed_record['sender']=unwrapped_event.pub_key
                         
                         
 
-                    except:
-                
+                    except (json.JSONDecodeError, TypeError) as exc:
                         parsed_record = {   "tag": ["message"],
                                             "type": "dm",
                                             "created_at": unwrapped_event.created_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -652,43 +727,69 @@ class Acorn:
 
                     
                     parsed_record['presenter'] = unwrapped_event.pub_key
+                    parsed_record['sender'] = unwrapped_event.pub_key
+                    parsed_record['social_name'] = None
 
-                except Exception as e:
-                    print(f"error: {e}")
+                except (ValueError, TypeError, RuntimeError) as e:
+                    self.logger.warning("op=get_user_records status=unwrap_failed kind=%s event=%s error=%s", record_kind, each.id, e)
+                    continue
             
+                #Add in sender detais
+                if record_kind in [1059]:
+                    social_profile = await self.get_social_profile(npub=unwrapped_event.pub_key,relays=relays_to_use)
+                    parsed_record['social_name'] = social_profile.get('display_name', None)
+                else:
+                    parsed_record['social_name'] = None
 
 
             else: # otherwise record is self-originating
                 try:
                     decrypt_content = my_enc.decrypt(each.content, self.pubkey_hex)
-                except:
+                except (ValueError, TypeError) as exc:
                     # Try Gift Unwrapping
                     decrypt_event = my_enc.decrypt_event(each)
                     decrypt_content = decrypt_event.content
             
                 try:
                     parsed_record = json.loads(decrypt_content)
-                except:                
-                    parsed_record = {"payload": decrypt_content}
+                except (json.JSONDecodeError, TypeError) as exc:
+                    #It's just a raw string stored - map into the fields    
+                    parsed_record = {}           
+                    parsed_record['payload'] = decrypt_content
+                    #add the extra fields
+                    parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                    parsed_record['id'] = each.id
+                    parsed_record['presenter'] = self.pubkey_hex
+                    parsed_record['sender'] = each.pub_key
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
                     #FIXME not sure if in a list
                     pass
                 else:
+                    #FIXME - I think this logic is in the wrong place
                     parsed_record['created_at'] = each.created_at.strftime("%Y-%m-%d %H:%M:%S")
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
+                    parsed_record['sender'] = each.pub_key
 
             # Convert payload to json
             # See if payload is in stringifed json and convert
                     
-            try:
-                payload_obj = json.loads(parsed_record['payload'])
-                parsed_record['payload'] = payload_obj
-                        
-            except:
-                pass
+            if isinstance(parsed_record, dict) and "payload" in parsed_record:
+                try:
+                    payload_obj = json.loads(parsed_record["payload"])
+                    parsed_record["payload"] = payload_obj
+                except (json.JSONDecodeError, TypeError) as exc:
+                    self.logger.debug(
+                        "Payload is not JSON for event_id=%s",
+                        parsed_record.get("id", "unknown"),
+                    )
+            else:
+                self.logger.debug(
+                    "Skipping payload JSON parse for record_type=%s",
+                    type(parsed_record).__name__,
+                )
 
             #check to see if wallet record and skip
             if isinstance(parsed_record,list):
@@ -696,7 +797,7 @@ class Acorn:
             else:
                 
                 #Inspect Payload and decide what to show
-                print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
+                # print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
                 if isinstance(parsed_record["payload"], dict):
                     # private event so just show context
                     parsed_record["content"] = parsed_record["payload"]["content"]
@@ -724,7 +825,8 @@ class Acorn:
             # print("json_str", json_str)
             # json_obj = json.loads(json_str)
             json_obj = json.loads(json_str)
-        except:
+        except (IndexError, json.JSONDecodeError, TypeError) as exc:
+            self.logger.debug("op=query_client_profile status=missing_or_invalid error=%s", exc)
             {"staus": "could not access profile"}
             pass
        
@@ -734,7 +836,7 @@ class Acorn:
         
     def replicate_safebox(self, replicate_relays = List[str]):
         
-        print("replicate relays:", replicate_relays)
+        self.logger.info("op=replicate_safebox status=start relays=%s", replicate_relays)
 
         FILTER = [{
             'limit': 1,
@@ -745,9 +847,10 @@ class Acorn:
         try:
             profile =asyncio.run(self.async_query_client_profile([self.home_relay],FILTER))
             profile_obj = nostrProfile(**json.loads(profile))
-            print(profile_obj)
+            self.logger.debug("op=replicate_safebox status=profile_loaded")
             asyncio.run(self._async_create_profile(profile_obj, replicate_relays=replicate_relays))
-        except:
+        except (ValueError, TypeError, IndexError, json.JSONDecodeError) as exc:
+            self.logger.warning("op=replicate_safebox status=no_profile error=%s", exc)
             out_string = "No profile found!"
             return out_string
         
@@ -759,7 +862,7 @@ class Acorn:
         # replicate the reserved records
 
         profile = self.get_wallet_info(label="profile")
-        print("replicate profile:", profile)
+        self.logger.debug("op=replicate_safebox status=replicate_profile")
         self.set_wallet_info(label="profile", label_info=profile, replicate_relays=replicate_relays)
 
         self.set_wallet_info(label="home_relay", label_info=json.dumps(self.home_relay), replicate_relays=replicate_relays)
@@ -777,26 +880,26 @@ class Acorn:
         self.set_wallet_info(label="relays", label_info=read_relays, replicate_relays=replicate_relays)
         
         trusted_mints = self.get_wallet_info(label="trusted_mints")
-        print("trusted mints to replicate:", trusted_mints)
+        self.logger.debug("op=replicate_safebox status=trusted_mints")
         self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints), replicate_relays=replicate_relays)
         
         quote = self.get_wallet_info(label="quote")
-        print("quote to replicate:", quote)
+        self.logger.debug("op=replicate_safebox status=quote")
         self.set_wallet_info(label="quote", label_info=quote,replicate_relays=replicate_relays)
         
         index = self.get_wallet_info(label="index")
-        print("index to replicate:", index)
+        self.logger.debug("op=replicate_safebox status=index")
         self.set_wallet_info(label="index", label_info=index, replicate_relays=replicate_relays)
         
         last_dm = self.get_wallet_info(label="last_dm")
-        print("last_dm to replicate:", last_dm)
+        self.logger.debug("op=replicate_safebox status=last_dm")
         self.set_wallet_info(label="last_dm", label_info=last_dm, replicate_relays=replicate_relays)
         
         replicate_proofs = []
         for each in self.proofs:
             each_dump = each.model_dump()
             replicate_proofs.append(each_dump)
-        print("now need to replicate the proofs", replicate_proofs)
+        self.logger.debug("op=replicate_safebox status=proofs count=%s", len(replicate_proofs))
         # self.add_proofs(json.dumps(replicate_proofs), replicate_relays=replicate_relays)
         self.add_proofs_obj(self.proofs, replicate_relays=replicate_proofs)
         return profile 
@@ -805,7 +908,7 @@ class Acorn:
 
         async with ClientPool(relays) as c:
       
-            print(event_content_str)
+            self.logger.debug("op=store_event status=publish kind=%s", event_kind)
       
             n_msg = Event(kind=event_kind,
                         content=event_content_str,
@@ -849,18 +952,20 @@ class Acorn:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                self.logger.debug("op=send_ecash_dm status=resolved_npub npub=%s", npub)
             else:
                 npub = nrecipient
-        except:
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("op=send_ecash_dm status=invalid_recipient recipient=%s error=%s", nrecipient, exc)
             return "error"
         try:
             token_amount = await self.issue_token(amount=amount)
             token_msg = comment +"\n\n" + token_amount
-        except:
+        except (RuntimeError, ValueError, TypeError) as exc:
+            self.logger.warning("op=send_ecash_dm status=issue_failed amount=%s error=%s", amount, exc)
             return "insufficient funds"
         
-        print(f"sending via {ecash_relays}")
+        self.logger.debug("op=send_ecash_dm status=sending relays=%s", ecash_relays)
         out_msg = await self.secure_dm(nrecipient=npub,message=token_msg,dm_relays=ecash_relays)
         # out_msg= asyncio.run(self._async_send_ecash_dm(token_msg,npub, ecash_relays+relays ))
         return out_msg
@@ -872,33 +977,35 @@ class Acorn:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                self.logger.debug("op=send_ecash status=resolved_npub npub=%s", npub)
             else:
                 npub = nrecipient
-        except:
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("op=send_ecash status=invalid_recipient recipient=%s error=%s", nrecipient, exc)
             return "error"
         try:
             token_msg = await self.issue_token(amount=amount)
             # token_msg = comment +"\n\n" + token_amount
-        except:
+        except (RuntimeError, ValueError, TypeError) as exc:
+            self.logger.warning("op=send_ecash status=issue_failed amount=%s error=%s", amount, exc)
             return "insufficient funds"
         
-        print(f"sending via {ecash_relays}")
+        self.logger.debug("op=send_ecash status=sending relays=%s", ecash_relays)
         out_msg = await self.secure_transmittal(nrecipient=npub,message=token_msg,dm_relays=ecash_relays,kind=21401)
         
         return f" {amount} {out_msg}"    
 
     async def _async_send_ecash_dm(self,token_message: str, npub: str, ecash_relays:List[str]):
-        print("npub:", npub)
+        self.logger.debug("op=send_ecash_dm status=npub npub=%s", npub)
         
         my_enc = NIP4Encrypt(self.k)
         k_to_send = Keys(pub_k=npub)
         k_to_send_pubkey_hex = k_to_send.public_key_hex()
-        print("k_to_send:", k_to_send_pubkey_hex)
+        self.logger.debug("op=send_ecash_dm status=to_pubkey pubkey=%s", k_to_send_pubkey_hex)
         ecash_msg = token_message
         # ecash_info_encrypt = my_enc.encrypt(ecash_msg,to_pub_k=k_to_send_pubkey_hex)
 
-        print("are we here?", ecash_relays)
+        self.logger.debug("op=send_ecash_dm status=relays relays=%s", ecash_relays)
         async with ClientPool(ecash_relays) as c:
             n_msg = Event(kind=Event.KIND_ENCRYPT,
                       content=ecash_msg,
@@ -922,12 +1029,11 @@ class Acorn:
         # last_dm = float(self.get_wallet_info("last_dm"))
         try:
             last_dm = float(self.wallet_reserved_records['last_dm'])
-        except:
+        except (KeyError, TypeError, ValueError) as exc:
             last_dm = 0
 
         # last_dm = 0
-        print("last dm in wallet:", last_dm)
-        print(datetime.fromtimestamp(float(last_dm)))
+        self.logger.debug("op=get_ecash_dm status=last_dm last_dm=%s", last_dm)
         #TODO need to figure out why the kind is not 1059
         dm_filter = [{
             
@@ -938,11 +1044,11 @@ class Acorn:
         }]
         final_dm, tokens =await self._async_query_ecash_dm(dm_filter)
         # final_dm, tokens =asyncio.run(self._async_query_secure_ecash_dm(dm_filter))
-        print(tokens)
+        self.logger.debug("op=get_ecash_dm status=tokens_found count=%s", len(tokens))
         for each in  tokens:
             self.accept_token(each)
         
-        print(f"last dm is: {final_dm}")
+        self.logger.debug("op=get_ecash_dm status=final_dm final_dm=%s", final_dm)
         self.set_wallet_info("last_dm", str(final_dm))
         # self.swap_multi_each()
         
@@ -956,26 +1062,28 @@ class Acorn:
         tokens =[]
         try:
             last_dm = self.wallet_reserved_records['last_dm']
-        except:
+        except (KeyError, TypeError, ValueError) as exc:
             last_dm = 0
         
         final_dm = int(last_dm)
-        print("filterxx:", filter)
+        self.logger.debug("op=query_ecash_dm status=filter filter=%s", filter)
         relay_pool = [self.home_relay] + self.relays
-        print(relay_pool)
+        self.logger.debug("op=query_ecash_dm status=relays relays=%s", relay_pool)
         async with ClientPool(relay_pool) as c:
         # async with Client(relay) as c:
             events: List[Event] = await c.query(filter)
-            print("ecash events", events)
+            self.logger.debug("op=query_ecash_dm status=events count=%s", len(events))
             if events:
-                print("we got events!")
+                self.logger.debug("op=query_ecash_dm status=events_present")
                 for each in events:
                     try:
                         decrypt_content = my_enc.decrypt_event(each)
-                    except:
-                        print("no go")
+                    except (ValueError, TypeError) as exc:
+                        self.logger.debug("op=query_ecash_dm status=decrypt_skip")
+                        self.logger.debug("op=query_ecash_dm status=decrypt_failed event=%s error=%s", each.id, exc)
+                        continue
                     
-                    print("message", each.id, each.kind, each.created_at.timestamp(), decrypt_content.content )
+                    self.logger.debug("op=query_ecash_dm status=message event_id=%s kind=%s", each.id, each.kind)
                     # last_dm = each.created_at.timestamp() if each.created_at.timestamp() > last_dm else last_dm
                     # print("last event update", datetime.fromtimestamp(last_dm),)
 
@@ -984,19 +1092,19 @@ class Acorn:
                     final_dm = dm_timestamp if dm_timestamp > final_dm else final_dm
                     print ("final_dm, dm_timestamp:",final_dm, dm_timestamp)
                     array_token = decrypt_content.content.splitlines()
-                    print("array_token:", array_token)
+                    self.logger.debug("op=query_ecash_dm status=token_lines count=%s", len(array_token))
                     
                     for each in array_token:
                         if each.startswith("cashuA"):
-                            print("found")
+                            self.logger.debug("op=query_ecash_dm status=token_found")
                             token = each
                             tokens.append(token)
                             break
             else:
-                print("no events!")    
+                self.logger.debug("op=query_ecash_dm status=no_events")
                 
                 
-        print("last update:", last_dm)    
+        self.logger.debug("op=query_ecash_dm status=complete last_dm=%s", last_dm)
         return final_dm, tokens          
 
     async def _async_query_secure_ecash_dm(self, filter: List[dict]):
@@ -1008,38 +1116,38 @@ class Acorn:
         
         last_dm = self.wallet_reserved_records['last_dm']
         final_dm = int(last_dm)
-        print("secure ecash filterxx:", filter)
+        self.logger.debug("op=query_secure_ecash_dm status=filter filter=%s", filter)
         relay_pool = [self.home_relay]+self.relays
-        print(relay_pool)
+        self.logger.debug("op=query_secure_ecash_dm status=relays relays=%s", relay_pool)
         async with ClientPool(relay_pool) as c:
         # async with Client(relay) as c:
             events: List[Event] = await c.query(filter)
-            print("ecash events", events)
+            self.logger.debug("op=query_secure_ecash_dm status=events count=%s", len(events))
             if events:
-                print("we got events!")
+                self.logger.debug("op=query_secure_ecash_dm status=events_present")
                 for each in events:
                    
                     
-                    print("message", each.id, each.kind, each.created_at.timestamp() )
+                    self.logger.debug("op=query_secure_ecash_dm status=message event_id=%s kind=%s", each.id, each.kind)
                    
             else:
-                print("no events!")    
+                self.logger.debug("op=query_secure_ecash_dm status=no_events")
                 
                 
-        print("last update:", last_dm)    
+        self.logger.debug("op=query_secure_ecash_dm status=complete last_dm=%s", last_dm)
         return final_dm, tokens               
        
     async def delete_dms(self, tags):
          async with ClientPool([self.home_relay]+self.relays) as c:
-            print("hello")
+            self.logger.debug("op=delete_dms status=start")
             n_msg = Event(kind=Event.KIND_DELETE,
                         content=None,
                         pub_key=self.pubkey_hex,
                         tags=tags)
-            print("dm tags",tags)
+            self.logger.debug("op=delete_dms status=tags tags=%s", tags)
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
-            print("hello again")   
+            self.logger.debug("op=delete_dms status=published")
 
             
     async def secure_dm(self,nrecipient:str, message: str, dm_relays: List[str]):
@@ -1051,13 +1159,11 @@ class Acorn:
                 dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
-            raise Exception(f"Could not resove {nrecipient}")
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError(f"Could not resolve {nrecipient}") from exc
         
         npub = hex_to_bech32(npub_hex)
-        print("npub", npub)
-
-        print(f"send to: {nrecipient} {npub_hex}, {npub} {message} using {dm_relays}")
+        self.logger.debug("op=secure_dm status=resolved recipient=%s npub=%s relays=%s", nrecipient, npub, dm_relays)
 
         await self._async_secure_dm(npub_hex=npub_hex, message=message,dm_relays=dm_relays) 
         return "message sent" 
@@ -1085,17 +1191,22 @@ class Acorn:
             c.publish(wrapped_evt)
             await asyncio.sleep(0.2)
                 
-    async def secure_transmittal(self,nrecipient:str, message: str,  dm_relays: List[str],kind: int=1060):
+    async def secure_transmittal(   self,
+                                    nrecipient:str, 
+                                    message: str,  
+                                    dm_relays: List[str],
+                                    kind: int=1060, ):
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                self.logger.debug("op=share_record status=resolved_npub npub=%s", npub)
                 dm_relays = dm_relays
             else:
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
-            return "error"
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("Invalid transmittal recipient=%s error=%s", nrecipient, exc)
+            raise ValueError("invalid transmittal recipient") from exc
         self.logger.debug(f"send to: {nrecipient} {npub_hex}, {message} using {dm_relays}")
 
         await self._async_secure_transmittal(npub_hex=npub_hex, message=message, dm_relays=dm_relays, kind=kind) 
@@ -1291,7 +1402,7 @@ class Acorn:
                  
         label_name_hash = m.digest().hex()
         
-        print(f"set wallet info {label}, {label_info}")
+        # print(f"set wallet info {label}, {label_info}")
         my_enc = NIP44Encrypt(self.k)
         wallet_info_encrypt = my_enc.encrypt(label_info,to_pub_k=self.pubkey_hex)
         # wallet_name_encrypt = my_enc.encrypt(wallet_name,to_pub_k=self.pubkey_hex)
@@ -1364,15 +1475,30 @@ class Acorn:
         }]
 
         # print("are we here?", label_hash)
-        event =await self._async_get_wallet_info(FILTER, label_hash)
+        event = await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            self.logger.debug(
+                "op=get_wallet_info status=missing label=%s kind=%s hash=%s",
+                label,
+                record_kind,
+                label_hash,
+            )
+            return None
         
         # print(event.data())
         try:
             decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
-        except:
-            return f"Could not retrieve info for: {label}. Does a record exist?"
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.warning(
+                "op=get_wallet_info status=decrypt_failed label=%s kind=%s hash=%s error=%s",
+                label,
+                record_kind,
+                label_hash,
+                exc,
+            )
+            return None
         
-
+        
 
         return decrypt_content
     
@@ -1402,11 +1528,13 @@ class Acorn:
         }]
 
         # print("are we here?", label_hash)
-        event =await self._async_get_wallet_info(FILTER, label_hash)
+        event = await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            return f"{label} not found."
         
         # Do the delete here
         tags = [["e", event.id]]
-        print("tags to delete: ", tags)
+        self.logger.debug("op=delete_record status=tags tags=%s", tags)
         async with ClientPool([self.home_relay]) as c:
         
             n_msg = Event(kind=Event.KIND_DELETE,
@@ -1423,43 +1551,58 @@ class Acorn:
     async def _async_get_wallet_info(self, filter: List[dict],label_hash):
     # does a one off query to relay prints the events and exits
         self.logger.debug(f"filter {filter}")
-        my_enc = NIP44Encrypt(self.k)
+        # my_enc = NIP44Encrypt(self.k)
         # target_tag = filter[0]['d']
         target_tag = label_hash
         
-        
         self.logger.debug(f"target tag: {target_tag}")
-        event_select = None
         async with ClientPool([self.home_relay]) as c:
         
             
             events = await c.query(filter)
             
             self.logger.debug(f"no of events: {len(events)}")
+            
+            # print(f"_async event xoxoxo: type: {type(events[0])} data: {events[0].data()}")
 
-            return events[0]
+        if not events:
+            self.logger.debug("No wallet info events found for tag=%s", target_tag)
+            return None
+
+        return events[0]
 
 
     async def set_lock(self, lock: bool):
         pass
 
     async def check_lock(self):
+        lock_value = "FALSE"
         try:
             lock_value = await self.get_wallet_info("lock")
             # print(lock_value)
-        except Exception as e:
-            self.logger.error(f"Check lock error {e}")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            self.logger.debug("Check lock fallback; lock record unavailable: %s", e)
+        if lock_value is None:
+            self.logger.debug("op=check_lock status=missing_lock_record")
+            lock_value = "FALSE"
         
-        return True if lock_value == "TRUE" else False
+        return str(lock_value).upper().strip() == "TRUE"
 
     async def acquire_lock(self, attempts=10):
         loop_count = 0
-        lock_value = await self.get_wallet_info(label="lock")
+        try:
+            lock_value = await self.get_wallet_info(label="lock")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            self.logger.debug("Lock record missing/unreadable; defaulting to unlocked: %s", e)
+            lock_value = "FALSE"
+        if lock_value is None:
+            self.logger.debug("op=acquire_lock status=missing_lock_record")
+            lock_value = "FALSE"
 
         
-        if lock_value.upper().strip() == "TRUE":
+        if str(lock_value).upper().strip() == "TRUE":
             
-            print("already locked, now waiting...")
+            self.logger.debug("op=acquire_lock status=already_locked handle=%s", self.handle)
             
             
             
@@ -1467,38 +1610,249 @@ class Acorn:
                 await asyncio.sleep(1)
                 loop_count +=1
                 if loop_count > attempts:
-                    print("we are going to seize the lock!")
+                    self.logger.warning("op=acquire_lock status=seizing_lock handle=%s attempts=%s", self.handle, attempts)
                     await self.set_wallet_info(label="lock",label_info="FALSE")
                     break
-                    # raise Exception(f"Could not acquire lock after {timeout} attempts")
-                lock_value = await self.get_wallet_info(label="lock")
-                print(f"{lock_value} attempt {loop_count} of {attempts} attempts for {self.handle}")
-                if lock_value.upper().strip() != 'TRUE':
+                    # raise RuntimeError(f"Could not acquire lock after {timeout} attempts")
+                try:
+                    lock_value = await self.get_wallet_info(label="lock")
+                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+                    self.logger.debug("Lock poll failed; assuming unlocked for recovery: %s", e)
+                    lock_value = "FALSE"
+                if lock_value is None:
+                    self.logger.debug("op=acquire_lock status=missing_lock_record_during_poll")
+                    lock_value = "FALSE"
+                self.logger.debug(
+                    "op=acquire_lock status=poll lock_value=%s attempt=%s max_attempts=%s handle=%s",
+                    lock_value,
+                    loop_count,
+                    attempts,
+                    self.handle,
+                )
+                if str(lock_value).upper().strip() != 'TRUE':
                     await self.set_wallet_info(label="lock",label_info="TRUE")
-                    print("we can acquire the lock!")
+                    self.logger.debug("op=acquire_lock status=acquired_after_wait handle=%s", self.handle)
                     break
         else:
-            print("we can acquire the lock!")
+            self.logger.debug("op=acquire_lock status=acquired_immediately handle=%s", self.handle)
             await self.set_wallet_info(label="lock",label_info="TRUE")
        
 
     async def release_lock(self):
-        print("we can release the lock!")
+        self.logger.debug("op=release_lock status=releasing handle=%s", self.handle)
         await self.set_wallet_info(label="lock",label_info="FALSE")
         
         pass  
 
         
     async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None, record_origin:str = None):
-        #FIXME - not sure if this function is used
+        #FIXME - not sure if this function is used - get_wallet_info is doing is
+        
         record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
+        if record_out is None:
+            return None
         try:
             record_obj = json.loads(record_out)
-        except:
+            
+        except (json.JSONDecodeError, TypeError):
             record_obj = record_out
 
         return record_obj
 
+    async def get_record_safebox(self, record_name:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None)->SafeboxRecord:
+        my_enc = NIP44Encrypt(self.k)
+
+        if record_origin:
+            record_name = ':'.join([record_origin,record_name])
+
+        if record_by_hash:
+            label_hash = record_by_hash
+        else:
+            m = hashlib.sha256()
+            m.update(self.privkey_hex.encode())
+            m.update(record_name.encode())
+            label_hash = m.digest().hex()
+        
+        decrypt_content = None
+        
+        # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
+        # a_tag = ["a", label_hash]
+        # print("a_tag:",a_tag)
+       
+        self.logger.debug(f"getting record for: {record_name}")
+        
+        # DEFAULT_RELAY = self.relays[0]
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+            'authors': [self.pubkey_hex],            
+            '#d': [label_hash]   
+            
+            
+        }]
+
+        # print("are we here?", label_hash)
+        event =await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            self.logger.warning(
+                "op=get_record_safebox status=missing record=%s kind=%s hash=%s",
+                record_name,
+                record_kind,
+                label_hash,
+            )
+            raise ValueError(f"No event found for {record_kind} {record_name}")
+
+        try:
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("op=get_record_safebox status=decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            raise ValueError(f"Could not decrypt info for: {record_name}. Does a record exist?") from exc
+        
+        try:
+            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            self.logger.debug(
+                "op=get_record_safebox status=ok record=%s kind=%s blobref=%s",
+                record_name,
+                record_kind,
+                safebox_record.blobref,
+            )
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.warning("op=get_record_safebox status=parse_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            raise ValueError(f"Could create safebox record: {record_name}. Does a record exist?") from exc
+
+        return safebox_record
+    
+    async def get_original_blob(self, orginal_record: OriginalRecordTransfer, delete:bool = True):
+
+        blob_data: bytes = None
+        blob_type:  str = None
+        self.logger.debug("op=get_original_blob status=start")
+        blossom_servers = ['https://blossom.getsafebox.app']
+        client = BlossomClient(nsec=orginal_record.blobnsec, default_servers=blossom_servers)
+        blob_retrieve: BlossomBlob = client.get_blob(server=orginal_record.blobserver,sha256=orginal_record.blobsha256,)
+        self.logger.debug("op=get_original_blob status=mime mime=%s", blob_retrieve.mime_type)
+        if blob_retrieve.mime_type == "application/octet-stream":
+            self.logger.debug("op=get_original_blob status=decrypting")
+            try:
+                blob_data = decrypt_bytes(    cipherbytes=blob_retrieve.get_bytes(),
+                                                        
+                                                        key=bytes.fromhex(orginal_record.encryptparms.key),
+                                                        iv = bytes.fromhex(orginal_record.encryptparms.iv)
+                                                    )
+                blob_type = filetype.guess_mime(blob_data)
+                if delete:
+                    delete_result = client.delete_blob(server=orginal_record.blobserver,sha256=orginal_record.blobsha256)
+                    self.logger.debug("op=get_original_blob status=deleted delete=%s", delete)
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+                self.logger.warning("op=get_original_blob status=decrypt_failed error=%s", e)
+        else:
+            self.logger.debug("op=get_original_blob status=no_decrypt_needed")
+            blob_data = blob_retrieve.get_bytes()
+
+
+        return blob_data, blob_type
+    
+    async def get_record_blobdata(self, record_name:str=None, record_kind:int=37375, record_by_hash: str = None, record_origin: str = None)->bytes:
+        blob_data: bytes = None
+        blob_type:  str = None
+        guessed_blob_type: str = None
+        my_enc = NIP44Encrypt(self.k)
+
+        blossom_servers = ['https://blossom.getsafebox.app']
+        client = BlossomClient(nsec=None, default_servers=blossom_servers)
+
+        
+        if record_origin:
+            record_name = ':'.join([record_origin,record_name])
+
+        self.logger.debug("op=get_record_blobdata record=%s kind=%s", record_name, record_kind)
+
+        if record_by_hash:
+            label_hash = record_by_hash
+        else:
+            m = hashlib.sha256()
+            m.update(self.privkey_hex.encode())
+            m.update(record_name.encode())
+            label_hash = m.digest().hex()
+        
+        decrypt_content = None
+        
+        # d_tag_encrypt = my_enc.encrypt(d_tag,to_pub_k=self.pubkey_hex)
+        # a_tag = ["a", label_hash]
+        # print("a_tag:",a_tag)
+       
+        self.logger.debug(f"getting record for: {record_name}")
+        
+        # DEFAULT_RELAY = self.relays[0]
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+            'authors': [self.pubkey_hex],
+            'kinds': [record_kind],
+            '#d': [label_hash]   
+            
+            
+        }]
+
+        event =await self._async_get_wallet_info(FILTER, label_hash)
+        if not event:
+            self.logger.warning(
+                "op=get_record_blobdata status=missing record=%s kind=%s hash=%s",
+                record_name,
+                record_kind,
+                label_hash,
+            )
+            return None, None
+        
+        # print(event.data())
+        try:
+            decrypt_content = my_enc.decrypt(event.content, self.pubkey_hex)
+        except (ValueError, TypeError) as exc:
+            self.logger.warning("op=get_record_blobdata status=decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            return None, None
+
+        try:
+            safebox_record: SafeboxRecord = SafeboxRecord(**json.loads(decrypt_content))
+            blob_sha256 = safebox_record.blobsha256
+            blob_type = safebox_record.blobtype
+            if blob_type:                
+                server = blossom_servers[0]
+                # meta = client.head_blob(server, blobsha256)
+                blob_retrieve: BlossomBlob = client.get_blob(server=server,sha256=blob_sha256,)
+                
+                if blob_retrieve.mime_type == "application/octet-stream":
+                    try:
+                        blob_data = decrypt_bytes(
+                            cipherbytes=blob_retrieve.get_bytes(),
+                            key=bytes.fromhex(safebox_record.encryptparms.key),
+                            iv=bytes.fromhex(safebox_record.encryptparms.iv),
+                        )
+                    except (ValueError, TypeError) as e:
+                        self.logger.warning("op=get_record_blobdata status=blob_decrypt_failed record=%s kind=%s error=%s", record_name, record_kind, e)
+                else:
+                    blob_data = blob_retrieve.get_bytes()
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.warning("op=get_record_blobdata status=parse_failed record=%s kind=%s error=%s", record_name, record_kind, exc)
+            return None, None
+
+        if blob_data:
+            guessed_blob_type = filetype.guess_mime(blob_data)
+            guessed_extension = '.'+filetype.guess_extension(blob_data)
+            extension = mimetypes.guess_extension(blob_data) or ""
+            # with NamedTemporaryFile(
+            #   mode="wb",
+            #    suffix=guessed_extension,
+            #    dir = './tmp',
+            #    delete=False
+            #) as tmp:
+            #    tmp.write(blob_data)
+            #    tmp_path = tmp.name
+            self.logger.debug(
+                "op=get_record_blobdata status=ok record=%s kind=%s mime=%s",
+                record_name,
+                record_kind,
+                guessed_blob_type,
+            )
+
+        return guessed_blob_type, blob_data
 
    
     def get_proofs(self):
@@ -1516,9 +1870,10 @@ class Acorn:
         if not relays:
                 relays = self.relays
         try:
-            ecash_latest = int(await self.get_wallet_info("ecash_latest", record_kind=37376))
+            ecash_latest_raw = await self.get_wallet_info("ecash_latest", record_kind=37376)
+            ecash_latest = int(ecash_latest_raw) if ecash_latest_raw is not None else 0
             
-            print(f"ecash latest: {ecash_latest}, {relays}")
+            self.logger.debug("op=get_ecash_latest status=start ecash_latest=%s relays=%s", ecash_latest, relays)
            
             
             user_records = await self.get_user_records(record_kind=21401, relays=relays, since=ecash_latest+1, reverse=True)
@@ -1531,48 +1886,58 @@ class Acorn:
                
                 # ecash_out.append(ecash_record)
                 latest_dm = each["timestamp"] 
-                print(f"accept with timestamp {since_now - latest_dm}s old {latest_dm}")
+                self.logger.debug(
+                    "op=get_ecash_latest status=processing age_seconds=%s timestamp=%s",
+                    since_now - latest_dm,
+                    latest_dm,
+                )
                 try:
                     ecash_nembed = parse_nembed_compressed(each["payload"])                    
                     token_to_redeem = ecash_nembed["token"]
                     receive_nonce = ecash_nembed.get("nonce", None)
-                    print(f"token to redeem: {token_to_redeem} and nonces: {receive_nonce} {nonce}")
+                    tendered_amount = ecash_nembed.get("tendered_amount", None)
+                    tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
+                    self.logger.debug(
+                        "op=get_ecash_latest status=parsed_token nonce_match=%s",
+                        bool(nonce and receive_nonce == nonce),
+                    )
                     if nonce and receive_nonce == nonce:
-                        print("this is the corresponding payment transaction")
+                        self.logger.debug("op=get_ecash_latest status=matching_nonce")
                     else:
-                        print("this is another payment transaction")
+                        self.logger.debug("op=get_ecash_latest status=different_nonce")
 
-                    msg_out, token_amount = await  self.accept_token(cashu_token=token_to_redeem, comment=ecash_nembed["comment"])
+                    msg_out, token_amount = await self.accept_token(
+                        cashu_token=token_to_redeem,
+                        comment=ecash_nembed["comment"],
+                        tendered_amount=tendered_amount,
+                        tendered_currency=tendered_currency,
+                    )
 
                     if token_to_redeem == "nsf":
                         pass
-                        print("it was nsf!")
+                        self.logger.info("op=get_ecash_latest status=nsf_token")
                         # tendered_amount = ecash_nembed.get("tendered_amount", None)
                         # tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
                         # ecash_out.append(("ERROR", 0,"SAT"))
                         # await self.add_tx_history(tx_type='X',amount=0, comment="PAYMENT UNSUCCESSFUL", tendered_amount=0, tendered_currency="NSF" )
-                        ecash_out.append(("ADVISORY", 0,"SAT", "NSF"))
+                        ecash_out.append(("ADVISORY", 0, "SAT", "NSF", nonce, 0))
                     else:
-                        print("ok to redeem!")
-                        
-                        tendered_amount = ecash_nembed.get("tendered_amount", None)
-                        tendered_currency = ecash_nembed.get("tendered_currency", "SAT")
-                        
-                        print("add to tx history")
+                        self.logger.info("op=get_ecash_latest status=redeemed_ok")
+                        self.logger.debug("op=get_ecash_latest status=record_payment tendered_currency=%s", tendered_currency)
                         # await self.add_tx_history(tx_type='C',amount=token_amount, comment=ecash_nembed["comment"], tendered_amount=tendered_amount, tendered_currency=tendered_currency )
-                        ecash_out.append(("OK", tendered_amount,tendered_currency, "Payment OK", nonce))
+                        ecash_out.append(("OK", tendered_amount, tendered_currency, "Payment OK", nonce, token_amount))
                     
                     
-                except:
+                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                     ecash_out.append(("ERROR", 0,"SAT", "Redemption"))
                     pass
                 
                    
-        except:
-            print("need to create ecash latest record")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.debug("op=get_ecash_latest status=init_latest_record error=%s", exc)
             await self.set_wallet_info("ecash_latest", "0", record_kind=37376)
             
-        print(f"latest dm: {latest_dm}")
+        self.logger.debug("op=get_ecash_latest status=complete latest_dm=%s", latest_dm)
         if latest_dm > 0:
             await self.set_wallet_info("ecash_latest", str(latest_dm), record_kind=37376)
         # print(f"since now: {since_now} {latest_dm} {since_now-latest_dm}")
@@ -1588,7 +1953,7 @@ class Acorn:
     
     async def _async_set_index_info(self, index_info: str):
         
-        print("the latest index info", index_info)
+        self.logger.debug("op=set_index_info status=update")
         my_enc = NIP44Encrypt(self.k)
         index_info_encrypt = my_enc.encrypt(index_info,to_pub_k=self.pubkey_hex)
     
@@ -1604,7 +1969,7 @@ class Acorn:
             #                         to_pub_k=self.pubkey_hex)
             
             n_msg.sign(self.privkey_hex)
-            print(n_msg.data())
+            self.logger.debug("op=set_index_info status=published event_id=%s", n_msg.id)
             c.publish(n_msg)
             # await asyncio.sleep(1)
 
@@ -1627,7 +1992,7 @@ class Acorn:
             index_obj = json.loads(decrypt_content)
 
             return index_obj
-        except:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             return None
     
     async def _async_get_index_info(self, filter: List[dict]):
@@ -1645,23 +2010,196 @@ class Acorn:
   
             
             return events[0]
+        
+    async def transfer_blob(
+        self,
+        record_name,
+        record_kind: int = 37375,
+        record_origin: str = None,
+        blobxfer: str = None,
+    ) -> Dict[str, Any]:
+        """Transfer source blob to wallet blob store and attach metadata to record."""
+        self.logger.debug("op=transfer_blob status=start record=%s kind=%s", record_name, record_kind)
+        blossom_servers = ['https://blossom.getsafebox.app']
+        blossom_server = 'https://blossom.getsafebox.app'
 
-    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None):
+        if record_origin:
+            record_name = ':'.join([record_origin, record_name])
+
+        if not blobxfer:
+            return {"status": "SKIPPED", "reason": "no_blobxfer"}
+
+        try:
+            blobxfer_obj: OriginalRecordTransfer = OriginalRecordTransfer.model_validate_json(blobxfer)
+        except (ValueError, TypeError) as exc:
+            self.logger.warning(
+                "op=transfer_blob status=invalid_blobxfer record=%s kind=%s error=%s",
+                record_name,
+                record_kind,
+                exc,
+            )
+            return {"status": "INVALID_BLOBXFER", "reason": str(exc)}
+
+        self.logger.debug("op=transfer_blob status=validated record=%s kind=%s", record_name, record_kind)
+        try:
+            client_xfer = BlossomClient(nsec=blobxfer_obj.blobnsec, default_servers=blossom_servers)
+            try:
+                blob_retrieve: BlossomBlob = client_xfer.get_blob(
+                    server=blobxfer_obj.blobserver,
+                    sha256=blobxfer_obj.blobsha256,
+                )
+            except Exception as exc:
+                if exc.__class__.__name__ == "BlobNotFound":
+                    self.logger.info(
+                        "op=transfer_blob status=source_missing record=%s kind=%s sha256=%s",
+                        record_name,
+                        record_kind,
+                        blobxfer_obj.blobsha256,
+                    )
+                    return {"status": "NOT_FOUND", "reason": "source_blob_missing"}
+                self.logger.warning(
+                    "op=transfer_blob status=fetch_failed record=%s kind=%s error=%s",
+                    record_name,
+                    record_kind,
+                    exc,
+                )
+                return {"status": "FETCH_FAILED", "reason": str(exc)}
+
+            try:
+                delete_result = client_xfer.delete_blob(
+                    server=blobxfer_obj.blobserver,
+                    sha256=blobxfer_obj.blobsha256,
+                )
+                self.logger.debug("op=transfer_blob status=source_deleted record=%s result=%s", record_name, delete_result)
+            except Exception as exc:
+                self.logger.warning(
+                    "op=transfer_blob status=source_delete_failed record=%s kind=%s error=%s",
+                    record_name,
+                    record_kind,
+                    exc,
+                )
+
+            if blob_retrieve.mime_type != "application/octet-stream":
+                return {"status": "INVALID_SOURCE_MIME", "reason": blob_retrieve.mime_type}
+
+            try:
+                blob_data = decrypt_bytes(
+                    cipherbytes=blob_retrieve.get_bytes(),
+                    key=bytes.fromhex(blobxfer_obj.encryptparms.key),
+                    iv=bytes.fromhex(blobxfer_obj.encryptparms.iv),
+                )
+            except (ValueError, TypeError) as exc:
+                self.logger.warning("op=transfer_blob status=decrypt_failed record=%s error=%s", record_name, exc)
+                return {"status": "DECRYPT_FAILED", "reason": str(exc)}
+
+            resultsha256 = hashlib.sha256(blob_data).hexdigest()
+            if resultsha256 != blobxfer_obj.origsha256:
+                self.logger.warning(
+                    "op=transfer_blob status=hash_mismatch record=%s expected=%s got=%s",
+                    record_name,
+                    blobxfer_obj.origsha256,
+                    resultsha256,
+                )
+                return {"status": "HASH_MISMATCH", "reason": "transferred_hash_mismatch"}
+
+            guessed_blob_type = filetype.guess_mime(blob_data) or "application/octet-stream"
+            self.logger.debug("op=transfer_blob status=decrypted record=%s mime=%s", record_name, guessed_blob_type)
+
+            safebox_record = await self.get_record_safebox(record_name=record_name, record_kind=record_kind)
+            self.logger.debug("op=transfer_blob status=loaded_record record=%s", record_name)
+
+            blob_key = os.urandom(32)
+            encrypt_result: EncryptionResult = encrypt_bytes(blob_data, blob_key)
+            encrypt_parms = EncryptionParms(
+                alg=encrypt_result.alg,
+                key=blob_key.hex(),
+                iv=encrypt_result.iv.hex(),
+            )
+
+            final_blob_data = encrypt_result.cipherbytes
+            client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
+            upload_result = client.upload_blob(
+                blossom_server,
+                data=final_blob_data,
+                description='Blob to server',
+            )
+            sha256 = upload_result['sha256']
+            blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
+
+            self.logger.debug("op=transfer_blob status=uploaded record=%s sha256=%s", record_name, sha256)
+            updated_safebox_record = SafeboxRecord(
+                tag=safebox_record.tag,
+                type=safebox_record.type,
+                payload=safebox_record.payload,
+                blobref=blob_ref,
+                blobtype=guessed_blob_type,
+                blobsha256=sha256,
+                origsha256=blobxfer_obj.origsha256,
+                encryptparms=encrypt_parms,
+            )
+            record_json_str = updated_safebox_record.model_dump_json()
+
+            await self.update_tags([["user_record", record_name, "generic"]])
+            await self.set_wallet_info(record_name, record_json_str, record_kind=record_kind)
+            await self.set_wallet_config()
+            return {"status": "OK", "blobref": blob_ref, "blobsha256": sha256}
+
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            self.logger.warning(
+                "op=transfer_blob status=processing_failed record=%s kind=%s error=%s",
+                record_name,
+                record_kind,
+                exc,
+            )
+            return {"status": "PROCESSING_FAILED", "reason": str(exc)}
+
+    async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
+
+        blossom_server = "https://blossom.getsafebox.app"
+        mime_type_guess = None
+        origsha256 = None
+        encrypt_parms = None
+
 
         if record_origin:
             record_name = ':'.join([record_origin,record_name])
 
 
 
-        print("reserved records:", self.RESERVED_RECORDS)
+        self.logger.debug("op=put_record status=start record=%s kind=%s", record_name, record_kind)
         if record_name in self.RESERVED_RECORDS:
-            print("careful this is a reserved record.")
+            self.logger.debug("op=put_record status=reserved_record record=%s", record_name)
             await self.set_wallet_info(record_name,record_value,record_kind=record_kind)
             return record_name
         else:
+            blob_ref = None
+            blob_type = None
+            sha256 = None
+            if blob_data:
+                self.logger.debug("op=put_record status=blob_upload_start")
+                origsha256 = hashlib.sha256(blob_data).hexdigest()
+                self.logger.debug("op=put_record status=origsha256")
+                mime_type_guess = filetype.guess(blob_data).mime
+                self.logger.debug("op=put_record status=mime mime=%s", mime_type_guess)
+                blob_key = os.urandom(32)  # 256-bit key
+                
+                encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+        
+                # final_blob_data = blob_data
+                final_blob_data = encrypt_result.cipherbytes
 
-
-            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value)
+                client = BlossomClient(nsec=self.privkey_bech32, default_servers=[blossom_server])
+                upload_result = client.upload_blob(blossom_server, data=final_blob_data,
+                             description='Blob to server')
+                sha256 = upload_result['sha256']
+                blob_ref = upload_result.get('url', f"{blossom_server}/{sha256}")
+                # blob_ref = upload_result['sha256']
+                blob_type = upload_result['type']
+                self.logger.debug("op=put_record status=blob_uploaded sha256=%s", sha256)
+                
+            record_obj = SafeboxRecord(tag=[record_name], type=record_type,payload=record_value, blobref=blob_ref, blobtype=mime_type_guess, blobsha256=sha256, origsha256=origsha256, encryptparms=encrypt_parms)
+            self.logger.debug("op=put_record status=record_serialized")
             record_json_str = record_obj.model_dump_json()
 
             await self.update_tags([["user_record",record_name,record_type]])
@@ -1676,7 +2214,7 @@ class Acorn:
         for tag_value in tag_values:
             if tag_value[0]=="user_record":
                 if tag_value in self.acorn_tags:
-                    print("user record already in!")
+                    self.logger.debug("op=update_tags status=user_record_exists")
                 else:
                     self.acorn_tags.append(tag_value)
             elif tag_value[0]=="balance":
@@ -1697,23 +2235,29 @@ class Acorn:
                         self.acorn_tags[index]=tag_value
             
         
-        print(f"update tags: {self.acorn_tags}")
+        # print(f"update tags: {self.acorn_tags}")
         await self.set_wallet_info(label=self.name,label_info=json.dumps(self.acorn_tags))
 
     async def _mint_proofs(self, quote:str, amount:int, mint:str=None):
         # print("mint proofs")
+        lock_acquired = False
         try:
             await self.acquire_lock()
+            lock_acquired = True
             headers = { "Content-Type": "application/json"}
+            timeout = httpx.Timeout(20.0, connect=5.0)
             if mint:
                 keyset_url = f"https://{mint}/v1/keysets"
             else:
                 keyset_url = f"{self.home_mint}/v1/keysets"
 
-            response = requests.get(keyset_url, headers=headers)
-            keyset = response.json()['keysets'][0]['id']
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(keyset_url, headers=headers)
+                response.raise_for_status()
+                keysets_json = response.json()
 
-            keysets_obj = KeysetsResponse(**response.json())
+                keyset = keysets_json['keysets'][0]['id']
+                keysets_obj = KeysetsResponse(**keysets_json)
 
             if mint:
                 self.known_mints[keysets_obj.keysets[0].id]= f"https://{mint}"
@@ -1730,7 +2274,7 @@ class Acorn:
             for each in powers_of_2:
                 secret = secrets.token_hex(32)
                 B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret))
+                blinded_values.append((B_,r, secret, Y))
                 
                 blinded_messages.append(    BlindedMessage( amount=each,
                                                             id=keyset,
@@ -1754,8 +2298,10 @@ class Acorn:
                             }
             # print(request_body)
             
-            response = requests.post(mint_url, json=request_body, headers=headers)
-            promises = response.json()['signatures']
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(mint_url, json=request_body, headers=headers)
+                response.raise_for_status()
+                promises = response.json()['signatures']
                 # print("promises:", promises)
            
 
@@ -1765,8 +2311,10 @@ class Acorn:
             else:
                 mint_key_url = f"{self.home_mint}/v1/keys/{keyset}"
 
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(mint_key_url, headers=headers)
+                response.raise_for_status()
+                keys = response.json()["keysets"][0]["keys"]
 
             proof_objs = []
             i = 0
@@ -1788,7 +2336,7 @@ class Acorn:
                             id = keyset,
                             secret=blinded_values[i][2],
                             C=C.serialize().hex(),
-                            Y=Y.serialize().hex()
+                            Y=blinded_values[i][3].serialize().hex()
                 )
 
                 proof_objs.append(proof)
@@ -1799,17 +2347,24 @@ class Acorn:
 
             #TODO change this to write_proofs
             await self.add_proofs_obj(proof_objs)
-            await self.release_lock()
-        except Exception as e:
-          raise Exception("Error in mint_proofs {e}")  
+        except (httpx.HTTPError, KeyError, ValueError, TypeError) as e:
+            self.logger.error(
+                "op=mint_proofs quote=%s amount=%s mint=%s error=%s",
+                quote,
+                amount,
+                mint,
+                e,
+            )
+            raise RuntimeError(f"Error in mint_proofs {e}") from e
         
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
         
         return True
 
     async def check_quote(self, quote:str, amount:int, mint:str = None):
-        print(f"check quote: {quote}")
+        self.logger.debug("op=check_quote quote=%s amount=%s mint=%s", quote, amount, mint)
         
         
 
@@ -1824,19 +2379,29 @@ class Acorn:
         self.logger.debug(f"mint quote: {url}")
 
         headers = { "Content-Type": "application/json"}
-        response = requests.get(url, headers=headers)
-           
-        mint_quote = mintQuote(**response.json())
-        if mint_quote.paid == True:
-                print("let's to do the mint!")
-                success_mint = await self._mint_proofs(mint_quote.quote,amount,mint)
-                lninvoice = mint_quote.request
+        timeout = httpx.Timeout(10.0, connect=5.0)
 
-                    
-                    
-                # return mint_quote.paid
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                mint_quote = mintQuote(**response.json())
+        except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+            self.logger.warning(
+                "op=check_quote status=failed quote=%s amount=%s mint=%s error=%s",
+                quote,
+                amount,
+                mint,
+                exc,
+            )
+            return False, None
+
+        if mint_quote.paid == True:
+            self.logger.debug("op=check_quote status=paid quote=%s", quote)
+            success_mint = await self._mint_proofs(mint_quote.quote, amount, mint)
+            lninvoice = mint_quote.request
         else:
-                success_mint = False
+            success_mint = False
       
 
         return success_mint, lninvoice
@@ -1855,15 +2420,28 @@ class Acorn:
        
         headers = { "Content-Type": "application/json"}
         mint_request = mintRequest(amount=amount)
-        mint_request_dump = mint_request.model_dump()
         payload_json = mint_request.model_dump_json()
-        response = requests.post(url, data=payload_json, headers=headers)
-        # print(response.json())
-        mint_quote = mintQuote(**response.json())
-        # print(mint_quote)
-        invoice = response.json()['request']
-        quote = response.json()['quote']
-        print(f"invoice: {invoice}") 
+        timeout = httpx.Timeout(10.0, connect=5.0)
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, data=payload_json, headers=headers)
+                response.raise_for_status()
+                response_json = response.json()
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            self.logger.error(
+                "op=async_deposit amount=%s mint=%s url=%s error=%s",
+                amount,
+                mint,
+                url,
+                exc,
+            )
+            raise RuntimeError(f"Deposit quote request failed: {exc}") from exc
+
+        mint_quote = mintQuote(**response_json)
+        invoice = response_json['request']
+        quote = response_json['quote']
+        self.logger.debug("op=async_deposit quote_received amount=%s mint_url=%s", amount, url)
         # print(self.powers_of_2_sum(int(amount)))
         # add quote as a replaceable event
 
@@ -1895,43 +2473,40 @@ class Acorn:
             # print(mint_quote)
             invoice = response.json()['request']
             quote = response.json()['quote']
-            print(f"invoice: {invoice}") 
+            self.logger.debug("op=deposit status=invoice_received")
             # print(self.powers_of_2_sum(int(amount)))
             # add quote as a replaceable event
 
             wallet_quote_list =[]
             
 
-        except Exception as e:
-            raise Exception(f"The is a error with the deposit {e}")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            raise RuntimeError(f"The is a error with the deposit {e}")
          
         return cliQuote(invoice=invoice, quote=quote, mint_url=url)
         # return f"Please pay invoice \n{invoice} \nfor quote: \n{quote}."
     
     async def poll_for_payment(self, quote:str, amount: int, mint:str=None):
         start_time = time()  # Record the start time
-        end_time = start_time + 120  # Set the loop to run for 60 seconds
+        end_time = start_time + 120  # Set the loop to run for 120 seconds
         success = False
         lninvoice = None
         #FIXME figure out the prefit
-        mint = mint.replace("https://","")
-        try:
-            while time() < end_time:
-                
-                self.logger.debug(f"polling for payment {quote} amount {amount} {mint}")
-                success, lninvoice = await self.check_quote(quote=quote, amount=amount,mint=mint)
-                if success:
-                    self.logger.debug("quote is paid!")
-                    break
-                sleep(3)  # Sleep for 3 seconds
-            
-            self.logger.debug("polling done!")
+        if mint:
+            mint = mint.replace("https://","")
 
-            if time() > end_time:
-                raise Exception(f"Polling has timed out!"
-                                )
-        except Exception as e:
-            raise Exception(f"Error in poll_for_payment {e}")
+        while time() < end_time:
+            self.logger.debug("op=poll_for_payment quote=%s amount=%s mint=%s", quote, amount, mint)
+            success, lninvoice = await self.check_quote(quote=quote, amount=amount, mint=mint)
+            if success:
+                self.logger.info("op=poll_for_payment status=paid quote=%s amount=%s", quote, amount)
+                break
+            await asyncio.sleep(3)
+
+        self.logger.debug("op=poll_for_payment status=done quote=%s", quote)
+        if not success:
+            self.logger.warning("op=poll_for_payment status=timeout quote=%s amount=%s", quote, amount)
+            raise TimeoutError("Polling has timed out.")
         return success, lninvoice
         
     
@@ -1940,12 +2515,6 @@ class Acorn:
         msg_out = self.pay_multi_invoice(lninvoice=lninvoice)
         
         return msg_out
-
-    def add_proofs(self,text, replicate_relays: List[str]=None):
-        # make sure have latest kind
-        print("get rid of this function")
-
-        asyncio.run(self._async_add_proofs(text, replicate_relays))  
 
     async def add_proofs_obj(self,proofs_arg: List[Proof], replicate_relays: List[str]=None):
         
@@ -1970,10 +2539,10 @@ class Acorn:
             #TODO Do some error checking on size of record
 
             record = nip60_proofs.model_dump_json()
-            print(f"Length of proof record: {len(record)} with {len(nip60_proofs.proofs)}")
+            self.logger.debug("op=add_proofs_obj status=record_length length=%s proofs=%s", len(record), len(nip60_proofs.proofs))
 
             if len(record) > self.max_proof_event_size:
-                print(f"WARNING: Record length {len(record)} is greater than max, splitting proofs")
+                self.logger.warning("Record length %s is greater than max, splitting proofs", len(record))
                 self.logger.warning(f"Record length {len(record)} is greater than max, splitting proofs")
                 split_proofs = split_proofs_instance(original=nip60_proofs, num_splits=math.ceil(len(record)/self.max_proof_event_size))
                 
@@ -1996,8 +2565,9 @@ class Acorn:
                     self.logger.debug(f"proof event content {n_msg.kind} {record}")
                     c.publish(n_msg)
                     await asyncio.sleep(0.2)
-        except Exception as e:
-            raise Exception(f"Error {e}")
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            self.logger.error("op=add_proofs_obj status=failed proofs=%s error=%s", len(proofs_arg), e)
+            raise RuntimeError(f"Error writing proofs: {e}") from e
         
         return
 
@@ -2010,18 +2580,30 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         try:
-            
-            await self.delete_proof_events()
+            old_filter = [{
+                'limit': RECORD_LIMIT,
+                'authors': [self.pubkey_hex],
+                'kinds': [7375]
+            }]
+            old_proof_event_ids: List[str] = []
+            async with ClientPool([self.home_relay]) as c:
+                existing_events = await c.query(old_filter)
+                old_proof_event_ids = [event.id for event in existing_events]
+
             # get proofs by keyset
-            all_proofs, amount = self._proofs_by_keyset()
+            all_proofs, _amount = self._proofs_by_keyset()
             
             for key, value in all_proofs.items():
 
                 await self.add_proofs_obj(value) 
+
+            if old_proof_event_ids:
+                await self._async_delete_events_by_ids(old_proof_event_ids, record_kind=7375)
+
             await self._load_proofs()
-        except Exception as e:
-            self.logger.error(f"error writhing proofs {e}")
-            raise Exception(e)
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=write_proofs status=failed error=%s", e)
+            raise RuntimeError(f"error writing proofs: {e}") from e
 
         
         return
@@ -2046,7 +2628,7 @@ class Acorn:
         """
             Example showing how to post a text note (Kind 1) to relay
         """
-        print("length of proof text:", len(text))
+        self.logger.debug("op=add_proofs status=text_length length=%s", len(text))
         my_enc = NIP44Encrypt(self.k)
         payload_encrypt = my_enc.encrypt(text,to_pub_k=self.pubkey_hex)
         
@@ -2137,7 +2719,7 @@ class Acorn:
                             
                             try:
                                 decrypt_content = my_enc.decrypt(each_record.content, self.pubkey_hex)
-                            except:
+                            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                                 decrypt_content = "could not decrpyt"
                                                         
                             reserved_record_label = reverse_hash.get(each_tag[1])
@@ -2197,7 +2779,7 @@ class Acorn:
                         proof_event.proofs.append(each)
                         # print(proof.amount, proof.secret)
                     # self.proof_events.proof_events.append(proof_event)          
-                except:
+                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                     content = each.content
 
                 
@@ -2266,23 +2848,27 @@ class Acorn:
         final_fees = 0
 
         try:
+            timeout = httpx.Timeout(30.0, connect=5.0)
             # await self.acquire_lock()
             callback, safebox, nonce = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
-            print(f"safebox: {safebox} ") 
+            self.logger.debug("op=pay_multi status=lookup lnaddress=%s safebox=%s", lnaddress, safebox)
 
             if safebox:
-                print(f"pay ecash directly to safebox using nonce: {nonce}")
+                self.logger.info("op=pay_multi status=direct_safebox nonce=%s", nonce)
                 ln_parts = lnaddress.split('@')
                 local_part = ln_parts[0]
                 safebox_to_call = f"https://{ln_parts[1]}/.well-known/safebox.json/{ln_parts[0].lower()}"
-                print(f"safebox to call {safebox_to_call}")
-                response = requests.get(safebox_to_call).json()
+                self.logger.debug("op=pay_multi status=resolve_safebox url=%s", safebox_to_call)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(safebox_to_call)
+                    response.raise_for_status()
+                    response = response.json()
                 pubkey = response.get("pubkey",None)
                 nrecipient = hex_to_bech32(pubkey)
                 relays = response.get("relays", None)
                 ecash_relays = response.get("ecash_relays", relays)
-                print(f"transmit ecash directly to ecash relays: {ecash_relays}")
+                self.logger.debug("op=pay_multi status=transmit_ecash relays=%s", ecash_relays)
                 cashu_token = await self.issue_token(amount=amount, comment=comment)
                 pay_obj =   {"token": cashu_token,
                              "amount": amount, 
@@ -2291,7 +2877,7 @@ class Acorn:
                              "tendered_currency": tendered_currency,
                              "nonce": nonce}
                 nembed_to_send = create_nembed_compressed(pay_obj)
-                print(f"acorn nembed to send: {nembed_to_send}")
+                self.logger.debug("op=pay_multi status=nembed_created")
                 
                 
 
@@ -2309,7 +2895,7 @@ class Acorn:
                 # print("available amount:", available_amount)
                 if available_amount < amount:
                     msg_out = f"Insufficient balance to pay {amount} sats. You need more funds!"
-                    raise Exception(msg_out)
+                    raise RuntimeError(msg_out)
                 
                 
                 for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
@@ -2323,7 +2909,7 @@ class Acorn:
                     
                 
                 if multi_path:
-                    raise Exception("Multipath payments are not implemented yet!")
+                    raise RuntimeError("Multipath payments are not implemented yet!")
                     #TODO the remaining code is for multipath
                     amount_multi =0
                     keysets_to_use_for_multi = []
@@ -2337,18 +2923,18 @@ class Acorn:
                         #     print(f"got enough!")
                         #     break
                     
-                    print(f"amount to pay: {amount} with chosen keysets: {chosen_keysets}")
+                    self.logger.debug("op=pay_multi status=mpp_choose amount=%s keysets=%s", amount, chosen_keysets)
                     amount_remaining = amount
                     total_fees = 0
                     total_melt_amount = 0
                     for each_keyset in chosen_keysets:
-                        print(f"amount remaining: {amount_remaining}")
+                        self.logger.debug("op=pay_multi status=mpp_remaining amount_remaining=%s", amount_remaining)
                         # There are three possible use cases
                         if amount_remaining <= 0:
-                            print("we are done!")
+                            self.logger.debug("op=pay_multi status=mpp_done")
                             break
                         elif amount_remaining > keyset_amounts[each_keyset]:
-                            print("use whole keyset amount")
+                            self.logger.debug("op=pay_multi status=mpp_use_full_keyset keyset=%s", each_keyset)
                             amount_to_use = keyset_amounts[each_keyset]
                         else:
                             amount_to_use = amount_remaining
@@ -2362,10 +2948,11 @@ class Acorn:
                                             "options": {"mpp": {"amount": amount_to_use}}
                                     }
                         # print(f"{melt_quote_url, melt_url} {data_to_send}")
-                        
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-                        post_melt_response = PostMeltQuoteResponse(**response.json())
-                        print(f"{self.known_mints[each_keyset]} supports melt response: {post_melt_response}")
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            post_melt_response = PostMeltQuoteResponse(**response.json())
+                        self.logger.debug("op=pay_multi status=mpp_melt_quote keyset=%s", each_keyset)
 
                         # Now need to figure out how much can be paid based on case
                         if amount_remaining > keyset_amounts[each_keyset]:
@@ -2377,33 +2964,41 @@ class Acorn:
                             amount_to_pay = amount_to_use
                             melt_amount = amount_to_use + post_melt_response.fee_reserve
                             if melt_amount >= keyset_amounts[each_keyset]:
-                                print("WARNING")
+                                self.logger.warning("op=pay_multi status=mpp_melt_warning keyset=%s", each_keyset)
                             else:
-                                print(f"melt amount ok")
+                                self.logger.debug("op=pay_multi status=mpp_melt_amount_ok keyset=%s", each_keyset)
 
                         total_melt_amount += melt_amount
                         total_fees += post_melt_response.fee_reserve
                         # amount_paid_by_keyset = amount_to_use - post_melt_response.fee_reserve
-                        print(f"can pay amount {amount_to_pay} from keyset total {keyset_amounts[each_keyset]} with: {post_melt_response.fee_reserve}  melt amount is {melt_amount}")
+                        self.logger.debug(
+                            "op=pay_multi status=mpp_amount_calc keyset=%s amount_to_pay=%s keyset_total=%s fee_reserve=%s melt_amount=%s",
+                            each_keyset,
+                            amount_to_pay,
+                            keyset_amounts[each_keyset],
+                            post_melt_response.fee_reserve,
+                            melt_amount,
+                        )
                         # Redo the melt request
                         data_to_send = {    "request": pr,
                                         "unit": "sat",
                                         "options": {"mpp": {"amount": amount_to_pay}}
                                 }
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
-                        response.raise_for_status()
-                        post_melt_response = PostMeltQuoteResponse(**response.json())
-                        print(f"adjusted post melt response {post_melt_response}")
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            post_melt_response = PostMeltQuoteResponse(**response.json())
+                        self.logger.debug("op=pay_multi status=mpp_adjusted_quote keyset=%s", each_keyset)
                         amount_remaining = amount_remaining - amount_to_pay   
-                        print(f"amount remaining after adjusted {amount_remaining}")                                   
+                        self.logger.debug("op=pay_multi status=mpp_adjusted_remaining amount_remaining=%s", amount_remaining)
                         keysets_to_use_for_multi.append((each_keyset,melt_amount,amount_to_pay,post_melt_response))
 
                     if amount_remaining > 0:
                         raise ValueError(f"There are not sufficient mints to support multipath payments. Try smaller amounts?")
 
                     # Now we have the meltquotes
-                    print(f"keysets to use for multi {keysets_to_use_for_multi}")
-                    print(f"pay amount {amount} total fees: {total_fees}, total melt amount {total_melt_amount}")
+                    self.logger.debug("op=pay_multi status=mpp_requests keysets=%s", keysets_to_use_for_multi)
+                    self.logger.info("op=pay_multi status=mpp_summary amount=%s fees=%s melt_amount=%s", amount, total_fees, total_melt_amount)
                     
                     self._multi_melt(keysets_to_use_for_multi) 
                     
@@ -2421,14 +3016,14 @@ class Acorn:
                     melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
                     melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
 
-                    print(amount, lnaddress)
+                    self.logger.debug("op=pay_multi status=single_keyset amount=%s lnaddress=%s", amount, lnaddress)
                     data_to_send = {    "request": pr,
                                         "unit": "sat"
 
                                     }
-                
-                    response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
-                    response.raise_for_status()
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                        response.raise_for_status()
                     
 
                     # print("post melt response:", response.json())
@@ -2439,7 +3034,7 @@ class Acorn:
                     amount_needed = amount + post_melt_response.fee_reserve
                     self.logger.debug(f"amount needed: {amount_needed}")
                     if amount_needed > keyset_amounts[chosen_keyset]:
-                        print("Insufficient balance in keyset. you need to swap, or use another keyset")
+                        self.logger.warning("op=pay_multi status=single_keyset_insufficient_switching")
                         chosen_keyset = None
                         for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
                             # print(key, keyset_amounts[key])
@@ -2465,8 +3060,9 @@ class Acorn:
                                         "unit": "sat"
 
                                     }
-                        response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers,timeout=30)
-                        response.raise_for_status()
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
                         # print("post melt response:", response.json())
                         post_melt_response = PostMeltQuoteResponse(**response.json())
                         # print("mint response:", post_melt_response)
@@ -2495,9 +3091,9 @@ class Acorn:
                     
                     #FIXME this is the critical error!!!
                     try: 
-                        proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
-                    except Exception as e:
-                        raise Exception(f"ERROR Swap for Payment: {e}. You may need to try the payment again.")
+                        proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+                    except (ValueError, RuntimeError) as e:
+                        raise RuntimeError(f"ERROR Swap for Payment: {e}. You may need to try the payment again.") from e
                         
 
                     # print("proofs remaining:", proofs_remaining)
@@ -2530,10 +3126,11 @@ class Acorn:
                     
                     self.logger.debug(f"lightning payment we are here!: {data_to_send}")
                     try:
-                        response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
-                        response.raise_for_status()
-                    except Exception as e:
-                        raise Exception(f"error: {e}")
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=melt_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                    except httpx.HTTPError as e:
+                        raise RuntimeError(f"payment melt request failed: {e}") from e
                     
                     self.logger.debug(f"response json: {response.json()}")
                     payment_json = response.json()
@@ -2546,7 +3143,7 @@ class Acorn:
                         self.logger.info(f"Lightning payment ok")
                     else:
                         self.logger.info(f"lighting payment did no go through")
-                        raise Exception(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
+                        raise RuntimeError(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
                         # The following code is not necessary
                         # Add back in spend proofs
                         # for each in spend_proofs:   
@@ -2578,22 +3175,28 @@ class Acorn:
                 self.logger.info(msg_out)
                 await self.write_proofs()
                 await self.release_lock()
-                print("all done pay_multi")
-                print(f"add tx history {amount} {comment} {tendered_amount} {tendered_currency}")
+                self.logger.debug("op=pay_multi status=complete amount=%s", amount)
+                self.logger.debug(
+                    "op=pay_multi status=tx_history amount=%s comment=%s tendered_amount=%s tendered_currency=%s",
+                    amount,
+                    comment,
+                    tendered_amount,
+                    tendered_currency,
+                )
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
-        except Exception as e:
+        except (ValueError, RuntimeError, httpx.HTTPError) as e:
             await self.release_lock()
             final_fees = 0
             msg_out = f"There is an error sending the payment. Did it go through?"
-            print(msg_out)
-            raise Exception(msg_out)
+            self.logger.error("%s original_error=%s", msg_out, e)
+            raise RuntimeError(msg_out) from e
         finally:
             await self.release_lock()
     
         
         return msg_out, final_fees
 
-    def _multi_melt(self, keysets_to_use):
+    async def _multi_melt(self, keysets_to_use):
 
         
         headers = { "Content-Type": "application/json"}
@@ -2610,13 +3213,13 @@ class Acorn:
             amount_to_pay = each[2]
             post_melt_response = each[3]
             melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-            print(f"multi melt: {amount_needed}, \nmelt request: {post_melt_response}  \nproofs: {proofs_from_keyset}")
+            self.logger.debug("op=multi_melt status=request amount_needed=%s keyset=%s", amount_needed, chosen_keyset)
             while proof_amount < amount_needed:
                 pay_proof = proofs_from_keyset.pop()
                 proofs_to_use.append(pay_proof)
                 proof_amount += pay_proof.amount
             
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             # proofs_remaining = proofs_to_use
             sum_proofs =0
             spend_proofs = []
@@ -2646,8 +3249,8 @@ class Acorn:
             mpp_mint_melt_request.append((melt_url,data_to_send))
             
         # print(mpp_mint_melt_request)
-        asyncio.run(self._do_mpp_requests(mpp_mint_melt_request)) 
-        print("we are done with the requests")
+        await self._do_mpp_requests(mpp_mint_melt_request)
+        self.logger.debug("op=multi_melt status=requests_complete")
 
 
 
@@ -2658,18 +3261,20 @@ class Acorn:
     async def _do_mpp_requests(self, mpp_requests):
         tasks = []
         for each_request in mpp_requests:
-            print(f"do each request: {each_request}")
-            asyncio.create_task(self._post_request(each_request))
+            self.logger.debug("op=multi_melt status=queue_request request=%s", each_request[0])
+            tasks.append(asyncio.create_task(self._post_request(each_request)))
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         
-        print("tasks have been completed!")
+        self.logger.debug("op=multi_melt status=tasks_completed")
     
     async def _post_request(self,request_item):
-        response = requests.post(url=request_item[0], json=request_item[1])
+        timeout = httpx.Timeout(30.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            self.logger.debug("op=multi_melt status=post_request url=%s", request_item[0])
+            response = await client.post(url=request_item[0], json=request_item[1])
+            response.raise_for_status()
         return
-        async with httpx.AsyncClient() as client:
-            print(f"doing each request: {request_item}")
-            response = client.post(url=request_item[0], json=request_item[1])
-        pass    
 
             
 
@@ -2688,6 +3293,7 @@ class Acorn:
         # decode amount from invoice
         try:
             await self.acquire_lock()
+            timeout = httpx.Timeout(30.0, connect=5.0)
             ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
             payment_hash = bolt11.decode(lninvoice).payment_hash
             description_hash = bolt11.decode(lninvoice).description_hash
@@ -2730,14 +3336,15 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-            response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers, timeout=30)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
             self.logger.debug(f"post melt response: {response.json()}")
             # check reponse for error
             # print(f"mint response: {response.json()}")
             response_json = response.json()
             if response_json.get('code', None) == 11000:
-                raise Exception("mint quote already paid!")
+                raise RuntimeError("mint quote already paid!")
             post_melt_response = PostMeltQuoteResponse(**response.json())
             self.logger.debug(f"mint response: {post_melt_response}")
             proofs_to_use = []
@@ -2773,7 +3380,9 @@ class Acorn:
                                 "unit": "sat"
 
                             }
-                response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
                 self.logger.debug(f"post melt response: {response.json()}")
                 post_melt_response = PostMeltQuoteResponse(**response.json())
                 self.logger.debug(f"mint response: {post_melt_response}")
@@ -2799,7 +3408,7 @@ class Acorn:
             self.logger.debug(f"remaining: {proofs_from_keyset}")
             # Continue implementing from line 818 swap_for_payment may need a parameter
             # Now need to do the melt
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
             
 
             self.logger.debug(f"proofs remaining: {proofs_remaining}")
@@ -2828,12 +3437,12 @@ class Acorn:
             
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers,timeout=30) 
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=melt_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
             self.logger.debug(response.json())  
             payment_json = response.json() 
-            payment_preimage = payment_json.get('payment_preimage', None)
-           
+            payment_preimage = payment_json.get('payment_preimage', None)            
             if payment_json.get("paid",False):        
                     self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
             else:
@@ -2846,7 +3455,7 @@ class Acorn:
                     post_payment_proofs.extend(keyset_proofs[key])
                 self.proofs = post_payment_proofs
 
-                raise Exception(f"Lightning payment not go through! Please try again.")
+                raise RuntimeError(f"Lightning payment not go through! Please try again.")
             # add keep proofs back into selected keyset proofs
             for each in keep_proofs:
                 proofs_from_keyset.append(each)
@@ -2872,16 +3481,17 @@ class Acorn:
             self.logger.info(msg_out)
             await self.write_proofs()
             await self.release_lock()
-        except Exception as e:
+        except (ValueError, RuntimeError, httpx.HTTPError) as e:
             # await self.release_lock()
-            self.logger.error(f"Error in pay_multi_invoice to address {e}")
-            # raise Exception(f"Error There is problem with the invoice payment {e}")
+            self.logger.error("Error in pay_multi_invoice: %s", e)
+            # raise RuntimeError(f"Error There is problem with the invoice payment {e}")
             final_fees = 0
             msg_out = f"There is a problem paying the invoice. {e}"
+            raise RuntimeError(msg_out) from e
         finally:
             await self.release_lock()
-            print("all done pay_multi_invoice!")
-           
+            self.logger.debug("op=pay_multi_invoice status=complete")
+        
         await self.add_tx_history( tx_type='D',
                                         amount=ln_amount,
                                         comment=comment,
@@ -2908,16 +3518,16 @@ class Acorn:
         async with ClientPool([self.home_relay]) as c:  
             events = await c.query(FILTER) 
         
-        print(f"events to delete: {len(events)} {FILTER}")
+        self.logger.debug("op=delete_kind_events status=events_found count=%s kind=%s", len(events), record_kind)
         for each in events:
-            print(each.id)
+            self.logger.debug("op=delete_kind_events status=event_id event_id=%s", each.id)
         
         tags = []
         for each_event in events:
             tags.append(["e",each_event.id])
             
         tags.append(["k",str(record_kind)])
-        print(f"tags for events to delete {tags}")
+        self.logger.debug("op=delete_kind_events status=tags count=%s", len(tags))
         
         
         try:
@@ -2932,9 +3542,9 @@ class Acorn:
                 c.publish(n_msg)
                 # added a delay here so the delete event get published
                 await asyncio.sleep(1)
-                print("should have deleted")
-        except:
-            raise Exception("error deleting proof events")  
+                self.logger.debug("op=delete_kind_events status=published")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            raise RuntimeError("error deleting proof events")  
         
         return f"events of kind {record_kind} deleted on {self.home_relay}" 
 
@@ -2971,8 +3581,29 @@ class Acorn:
                 c.publish(n_msg)
                 # added a delay here so the delete event get published
                 await asyncio.sleep(1)
-        except:
-            raise Exception("error deleting proof events")    
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            raise RuntimeError("error deleting proof events")    
+
+    async def _async_delete_events_by_ids(self, event_ids: List[str], record_kind: int):
+        if not event_ids:
+            return
+
+        tags = []
+        for event_id in event_ids:
+            tags.append(["e", event_id])
+        tags.append(["k", str(record_kind)])
+        self.logger.debug(f"deleting {len(event_ids)} events for kind {record_kind}")
+
+        async with ClientPool([self.home_relay]) as c:
+            n_msg = Event(
+                kind=Event.KIND_DELETE,
+                content=None,
+                pub_key=self.pubkey_hex,
+                tags=tags,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            await asyncio.sleep(1)
 
     async def swap_proofs(self, incoming_swap_proofs: List[Proof]):
         '''This function swaps proofs'''
@@ -2981,11 +3612,14 @@ class Acorn:
         count = 0
         
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         
         #keyset_url = f"{self.mints[0]}/v1/keysets"
         keyset_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(keyset_url, headers=headers)
+            response.raise_for_status()
+            keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/swap"
         swap_proofs = []
@@ -3000,7 +3634,7 @@ class Acorn:
         
         r = PrivateKey()
         powers_of_2 = self.powers_of_2_sum(swap_amount)
-        print("total:", swap_amount,count, powers_of_2) 
+        self.logger.debug("op=swap_proofs status=decompose total=%s proofs=%s", swap_amount, count)
         for each in powers_of_2:
                 secret = secrets.token_hex(32)
                 B_, r, Y = step1_alice(secret)
@@ -3020,15 +3654,15 @@ class Acorn:
             } 
         
         try:
-                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                # print(response.json())
-                promises = response.json()['signatures']
-                # print("promises:", promises)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
+                    promises = response.json()['signatures']
 
-            
-                mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                    mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
                 new_proofs = []
                 i = 0
@@ -3055,8 +3689,8 @@ class Acorn:
                     new_proofs.append(proof)
                     # print(proofs)
                     i+=1
-        except Exception as e:
-                raise Exception(f"Problem with swap {e}")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+                raise RuntimeError(f"Problem with swap {e}")
 
         # need to convert new_proofs into objects
         new_proof_obj_list = []
@@ -3065,123 +3699,11 @@ class Acorn:
 
         return new_proof_obj_list
     
-    def swap(self):
-        #TODO This function is no longer used
-        swap_amount =0
-        count = 0
-        
-        headers = { "Content-Type": "application/json"}
-        
-        keyset_url = f"{self.mints[0]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
-
-        swap_url = f"{self.mints[0]}/v1/swap"
-
-        for each in self.trusted_mints:
-            
-            keyset_each = each
-            keyset_url_each = self.known_mints[each]
-            print(keyset, keyset_url_each)
-
-        
-
-            swap_proofs = []
-            blinded_swap_proofs = []
-            blinded_values =[]
-            blinded_messages = []
-            for each in self.proof_events.proof_events:
-                # print(each.id)
-                for each_proof in each.proofs:
-                    # print(each_proof.amount)
-                    swap_amount+=each_proof.amount
-                    swap_proofs.append(each_proof.model_dump())
-                    
-                    count +=1
-            
-            # print("swap proofs:", swap_proofs)
-            r = PrivateKey()
-
-            # print("create blinded swap proofs")
-            powers_of_2 = self.powers_of_2_sum(swap_amount)
-            print("total:", swap_amount,count, powers_of_2)   
-            for each in powers_of_2:
-                secret = secrets.token_hex(32)
-                B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret))
-                
-                blinded_messages.append(    BlindedMessage( amount=each,
-                                                            id=keyset,
-                                                            B_=B_.serialize().hex(),
-                                                            Y = Y.serialize().hex(),
-                                                            ).model_dump()
-                                        )
-            
-            data_to_send = {
-                            "inputs":   swap_proofs,
-                            "outputs": blinded_messages
-                            
-            }
-        
-            # print(data_to_send)
-            try:
-                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                # print(response.json())
-                promises = response.json()['signatures']
-                # print("promises:", promises)
-
-            
-                mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
-                # print(keys)
-                proofs = []
-                i = 0
-            
-                for each in promises:
-                    pub_key_c = PublicKey()
-                    # print("each:", each['C_'])
-                    pub_key_c.deserialize(unhexlify(each['C_']))
-                    promise_amount = each['amount']
-                    A = keys[str(int(promise_amount))]
-                    # A = keys[str(j)]
-                    pub_key_a = PublicKey()
-                    pub_key_a.deserialize(unhexlify(A))
-                    r = blinded_values[i][1]
-                    # print(pub_key_c, promise_amount,A, r)
-                    C = step3_alice(pub_key_c,r,pub_key_a)
-                    proof = {   "amount": promise_amount,
-                            "id": keyset,
-                            "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex()
-                            }
-                    proofs.append(proof)
-                    # print(proofs)
-                    i+=1
-            
-                # delete old proofs
-                asyncio.run(self._async_delete_proof_events())
-                print("XXXXX swap")
-                self.add_proofs(json.dumps(proofs))
-                self._load_proofs()
-                
-            except:
-                ValueError('test')
-            
-            # print(request_body) 
-            # refresh balance
-            
-            swap_balance = 0
-            for each in self.proofs:
-                swap_balance += each.amount
-            print(len(self.proofs)) 
-        
-        return f"swap ok sats "
-    
     async def swap_multi_consolidate(self):
         #TODO run swap_multi_each first to get rid of any potential doublespends
         #TODO figure out how to catch doublespends in this routine
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
@@ -3199,9 +3721,10 @@ class Acorn:
 
                 # print(mint_verify_url, check)
                 Ys = {"Ys": check}
-                
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
@@ -3254,15 +3777,15 @@ class Acorn:
             
                 # print(data_to_send)
             try:
-                response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                # print(response.json())
-                promises = response.json()['signatures']
-                # print("promises:", promises)
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                    response.raise_for_status()
+                    promises = response.json()['signatures']
 
-            
-                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                    mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
                 proofs = []
                 proof_objs = []
@@ -3298,7 +3821,7 @@ class Acorn:
 
                     # print(proofs)
                     i+=1
-            except:
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                     # don't error the whole swap routine here
                     # duplicate proofs just ignore
                     proofs = []   
@@ -3313,18 +3836,14 @@ class Acorn:
             for each in self.proofs:
                 swap_balance += each.amount
             # print(len(self.proofs))
-            # delete old proofs
-            await self._async_delete_proof_events()
-            # self.add_proofs(json.dumps(combined_proofs))
-
             self.proofs = combined_proof_objs
             await self.write_proofs()
             await self.release_lock()
 
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
-        except Exception as e:
-            raise Exception(f"Error in swap multi {e}")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            raise RuntimeError(f"Error in swap multi {e}")
         
         finally:
             await self.release_lock()
@@ -3335,6 +3854,7 @@ class Acorn:
     async def swap_multi_each(self):
         #FIXME this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
@@ -3350,9 +3870,10 @@ class Acorn:
 
                 # print(mint_verify_url, check)
                 Ys = {"Ys": check}
-                
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
                 proofs_to_check = check_response['states']
                 for each_proof in proofs_to_check:
                     assert each_proof['state'] == "UNSPENT"
@@ -3368,8 +3889,10 @@ class Acorn:
                 each_keyset_url = self.known_mints[each_keyset]
 
                 mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-                response = requests.get(mint_key_url, headers=headers)
-                keys = response.json()["keysets"][0]["keys"]
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
                 # print(each_keyset,each_keyset_url)
                 swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
                 
@@ -3396,9 +3919,10 @@ class Acorn:
                     proof_objs = []
                     
                     try:
-                        response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                        # print(response.json())
-                        promises = response.json()['signatures']
+                        async with httpx.AsyncClient(timeout=timeout) as client:
+                            response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                            response.raise_for_status()
+                            promises = response.json()['signatures']
                         # print("promises:", promises)
                         
                         i = 0
@@ -3432,7 +3956,7 @@ class Acorn:
                                             )
                             proof_objs.append(proof_obj)
                             i+=1
-                    except:
+                    except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                         # Don't error the whole swap routine
                         # Just igore the duplicate proofs
                         proofs = []    
@@ -3451,9 +3975,9 @@ class Acorn:
             await self._load_proofs()
             await self.release_lock()
 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
             await self.release_lock()
-            raise Exception(f"Error in swap {e}")
+            raise RuntimeError(f"Error in swap {e}")
         
         finally:
             await self.release_lock()
@@ -3463,118 +3987,125 @@ class Acorn:
     async def _async_swap(self):
         # This is the async version of swap
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
         
         # Let's check all the proofs before we do anything
 
-        for each_keyset in keyset_proofs:
-            check = []
-            mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
-            for each_proof in keyset_proofs[each_keyset]:
-                check.append(each_proof.Y)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for each_keyset in keyset_proofs:
+                check = []
+                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
+                for each_proof in keyset_proofs[each_keyset]:
+                    check.append(each_proof.Y)
 
-            # print(mint_verify_url, check)
-            Ys = {"Ys": check}
-            try:
-                response = requests.post(url=mint_verify_url,headers=headers,json=Ys)
-                check_response = response.json()
-                proofs_to_check = check_response['states']
-                for each_proof in proofs_to_check:
-                    assert each_proof['state'] == "UNSPENT"
-                    # print(each_proof['state'])
-            except:
-                return f"there is a problem with the mint {self.known_mints[each_keyset]}"
-                
-        # return
-        # All the proofs are verified, we are good to go for the swap   
-        # In multi_each we are going to swap for each proof 
-        
- 
-        for each_keyset in keyset_proofs:
-            
-            each_keyset_url = self.known_mints[each_keyset]
-
-            mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
-            # print(each_keyset,each_keyset_url)
-            swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
-            
-            for each_proof in keyset_proofs[each_keyset]:
-                # print(each_proof.amount)
-                blinded_values =[]
-                blinded_messages = []
-                secret = secrets.token_hex(32)
-                B_, r, Y = step1_alice(secret)
-                blinded_values.append((B_,r, secret,Y))
-                
-                blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
-                                                            id=each_keyset,
-                                                            B_=B_.serialize().hex(),
-                                                            Y = Y.serialize().hex(),
-                                                            ).model_dump()
-                                        )
-                data_to_send = {
-                            "inputs":   [each_proof.model_dump()],
-                            "outputs": blinded_messages
-                            
-                }
-                proofs = []
-                proof_objs = []
+                Ys = {"Ys": check}
                 try:
-                    response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-                    # print(response.json())
-                    promises = response.json()['signatures']
-                    # print("promises:", promises)
+                    response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
+                    response.raise_for_status()
+                    check_response = response.json()
+                    proofs_to_check = check_response["states"]
+                    for each_proof in proofs_to_check:
+                        if each_proof.get("state") != "UNSPENT":
+                            raise ValueError(f"Proof state not spendable: {each_proof.get('state')}")
+                except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                    self.logger.warning(
+                        "op=async_swap status=checkstate_failed mint=%s keyset=%s error=%s",
+                        self.known_mints.get(each_keyset),
+                        each_keyset,
+                        exc,
+                    )
+                    return f"there is a problem with the mint {self.known_mints[each_keyset]}"
+                
+            # return
+            # All the proofs are verified, we are good to go for the swap
+            # In multi_each we are going to swap for each proof
+            for each_keyset in keyset_proofs:
+                mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                try:
+                    response = await client.get(mint_key_url, headers=headers)
+                    response.raise_for_status()
+                    keys = response.json()["keysets"][0]["keys"]
+                except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                    self.logger.error(
+                        "op=async_swap status=key_fetch_failed keyset=%s mint=%s error=%s",
+                        each_keyset,
+                        self.known_mints.get(each_keyset),
+                        exc,
+                    )
+                    raise RuntimeError(f"Unable to fetch keys for keyset {each_keyset}") from exc
+
+                swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
+                
+                for each_proof in keyset_proofs[each_keyset]:
+                    blinded_values =[]
+                    blinded_messages = []
+                    secret = secrets.token_hex(32)
+                    B_, r, Y = step1_alice(secret)
+                    blinded_values.append((B_,r, secret,Y))
                     
-                    i = 0
-            
-                    for each in promises:
-                        pub_key_c = PublicKey()
-                        # print("each:", each['C_'])
-                        pub_key_c.deserialize(unhexlify(each['C_']))
-                        promise_amount = each['amount']
-                        A = keys[str(int(promise_amount))]
-                        # A = keys[str(j)]
-                        pub_key_a = PublicKey()
-                        pub_key_a.deserialize(unhexlify(A))
-                        r = blinded_values[i][1]
-                        Y = blinded_values[i][3]
-                        # print(pub_key_c, promise_amount,A, r)
-                        C = step3_alice(pub_key_c,r,pub_key_a)
-                        proof = {   "amount": promise_amount,
-                            "id": each_keyset,
-                            "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex(),
-                            "Y":    Y.serialize().hex()
-                            }
-                        proofs.append(proof)
-                        # print(proofs)
-                        proof_obj = Proof(amount=promise_amount,
-                                      id=each_keyset,
-                                      secret=blinded_values[i][2],
-                                      C=C.serialize().hex(),
-                                      Y = Y.serialize().hex()
-                                      )
-                        proof_objs.append(proof_obj)
-                        i+=1
+                    blinded_messages.append(    BlindedMessage( amount=each_proof.amount,
+                                                                id=each_keyset,
+                                                                B_=B_.serialize().hex(),
+                                                                Y = Y.serialize().hex(),
+                                                                ).model_dump()
+                                            )
+                    data_to_send = {
+                                "inputs":   [each_proof.model_dump()],
+                                "outputs": blinded_messages
+                                
+                    }
+                    proofs = []
+                    proof_objs = []
+                    try:
+                        response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                        response.raise_for_status()
+                        promises = response.json()['signatures']
                         
-                    
-                    
+                        i = 0
+                
+                        for each in promises:
+                            pub_key_c = PublicKey()
+                            pub_key_c.deserialize(unhexlify(each['C_']))
+                            promise_amount = each['amount']
+                            A = keys[str(int(promise_amount))]
+                            pub_key_a = PublicKey()
+                            pub_key_a.deserialize(unhexlify(A))
+                            r = blinded_values[i][1]
+                            Y = blinded_values[i][3]
+                            C = step3_alice(pub_key_c,r,pub_key_a)
+                            proof = {   "amount": promise_amount,
+                                "id": each_keyset,
+                                "secret": blinded_values[i][2],
+                                "C":    C.serialize().hex(),
+                                "Y":    Y.serialize().hex()
+                                }
+                            proofs.append(proof)
+                            proof_obj = Proof(amount=promise_amount,
+                                          id=each_keyset,
+                                          secret=blinded_values[i][2],
+                                          C=C.serialize().hex(),
+                                          Y = Y.serialize().hex()
+                                          )
+                            proof_objs.append(proof_obj)
+                            i+=1
+                    except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+                        self.logger.warning(
+                            "op=async_swap status=swap_step_failed keyset=%s mint=%s error=%s",
+                            each_keyset,
+                            self.known_mints.get(each_keyset),
+                            exc,
+                        )
+                        continue
 
-                except:
-                    ValueError("duplicate proofs")
-                    print("duplicate proof, ignore")
+                    combined_proofs = combined_proofs + proofs
+                    combined_proof_objs = combined_proof_objs + proof_objs
 
-                combined_proofs = combined_proofs + proofs
-                combined_proof_objs = combined_proof_objs + proof_objs
-
-        await self._async_delete_proof_events()
-        print("XXXXX async swap multi each")
-        # self.add_proofs_obj(combined_proof_objs)
-        await self._async_add_proofs_obj(combined_proof_objs)
+        self.logger.debug("op=async_swap status=write_proofs proofs=%s", len(combined_proof_objs))
+        self.proofs = combined_proof_objs
+        await self.write_proofs()
         
         # self._load_proofs()
         FILTER = [{
@@ -3656,9 +4187,9 @@ class Acorn:
             # print("are we here?")
             response = requests.post(url=swap_url, json=data_to_send, headers=headers)
             
-            print(response.json())
+            self.logger.debug("op=swap_for_payment status=response_received")
             promises = response.json()['signatures']
-            print("promises:", promises)
+            self.logger.debug("op=swap_for_payment status=promises count=%s", len(promises))
 
         
             mint_key_url = f"{self.mints[0]}/v1/keys/{keyset}"
@@ -3670,7 +4201,7 @@ class Acorn:
         
             for each in promises:
                 pub_key_c = PublicKey()
-                print("each:", each['C_'])
+                self.logger.debug("op=swap_for_payment status=promise amount=%s", each.get("amount"))
                 pub_key_c.deserialize(unhexlify(each['C_']))
                 promise_amount = each['amount']
                 A = keys[str(int(promise_amount))]
@@ -3678,7 +4209,7 @@ class Acorn:
                 pub_key_a = PublicKey()
                 pub_key_a.deserialize(unhexlify(A))
                 r = blinded_values[i][1]
-                print(pub_key_c, promise_amount,A, r)
+                self.logger.debug("op=swap_for_payment status=unblind amount=%s", promise_amount)
                 C = step3_alice(pub_key_c,r,pub_key_a)
                 
                 proof = Proof(  amount=promise_amount,
@@ -3689,25 +4220,28 @@ class Acorn:
                 proofs.append(proof)
                 # print(proofs)
                 i+=1
-        except:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             ValueError('test')
         
         for each in proofs:
-            print(each.amount)
+            self.logger.debug("op=swap_for_payment status=proof amount=%s", each.amount)
         # now need break out proofs for payment and proofs remaining
 
         return proofs
 
-    def swap_for_payment_multi(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
+    async def swap_for_payment_multi(self, keyset_to_use:str, proofs_to_use: List[Proof], payment_amount: int)->List[Proof]:
         # create proofs to melt, and proofs_remaining
 
         swap_amount =0
         count = 0
         
         headers = { "Content-Type": "application/json"}
+        timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_url = f"{self.known_mints[keyset_to_use]}/v1/keysets"
-        response = requests.get(keyset_url, headers=headers)
-        keyset = response.json()['keysets'][0]['id']
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(keyset_url, headers=headers)
+            response.raise_for_status()
+            keyset = response.json()['keysets'][0]['id']
 
         swap_url = f"{self.known_mints[keyset_to_use]}/v1/swap"
         checkstate_url = f"{self.known_mints[keyset_to_use]}/v1/checkstate"
@@ -3718,15 +4252,17 @@ class Acorn:
         proofs = []
         checkstate_ys = []
 
-        print("do a check state first")
+        self.logger.debug("op=swap_for_payment_multi status=checkstate_start")
         for each in proofs_to_use:
-            print(each.Y)
+            self.logger.debug("op=swap_for_payment_multi status=checkstate_y")
             checkstate_ys.append(each.Y)
 
         data_to_send = {"Ys": checkstate_ys}  
-        print(f"check state: {data_to_send}")
-        response = requests.post(url=checkstate_url, json=data_to_send, headers=headers)
-        print(response.json())
+        self.logger.debug("op=swap_for_payment_multi status=checkstate_payload")
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url=checkstate_url, json=data_to_send, headers=headers)
+            response.raise_for_status()
+            self.logger.debug("op=swap_for_payment_multi status=checkstate_response")
 
         # Figure out proofs_to_use_amount
         proofs_to_use_amount = 0
@@ -3778,16 +4314,15 @@ class Acorn:
 
         try:
             self.logger.debug("are we here?")
-            response = requests.post(url=swap_url, json=data_to_send, headers=headers)
-            
-            # print(response.json())
-            promises = response.json()['signatures']
-            # print("promises:", promises)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                response.raise_for_status()
+                promises = response.json()['signatures']
 
-        
-            mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
-            response = requests.get(mint_key_url, headers=headers)
-            keys = response.json()["keysets"][0]["keys"]
+                mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
+                response = await client.get(mint_key_url, headers=headers)
+                response.raise_for_status()
+                keys = response.json()["keysets"][0]["keys"]
             # print(keys)
             
             i = 0
@@ -3819,9 +4354,9 @@ class Acorn:
                 proofs.append(proof)
                 # print(proofs)
                 i+=1
-        except Exception as e:
-            print(e)
-            raise Exception(f"ERROR {e}")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            self.logger.warning("op=swap_for_payment_multi status=failed error=%s", e)
+            raise RuntimeError(f"ERROR {e}")
         
         for each in proofs:
             pass
@@ -3936,8 +4471,8 @@ class Acorn:
                 proofs.append(proof)
                 # print(proofs)
                 i+=1
-        except Exception as e:
-            print(e)
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+            self.logger.warning("op=swap_for_payment_inputs status=failed error=%s", e)
         
         for each in proofs:
             pass
@@ -3946,136 +4481,14 @@ class Acorn:
 
         return proofs
             
-    def receive_token(self,cashu_token: str):
-        headers = { "Content-Type": "application/json"}
-        token_amount =0
-        receive_url = f"{self.mints[0]}/v1/mint/quote/bolt11"
-
-        try:
-            token_obj = TokenV3.deserialize(cashu_token)
-        except:
-            return "bad token"
-        for each in token_obj.token:
-            print(each.mint)
-            for each_proof in each.proofs:
-                token_amount += each_proof.amount
-                print("received proof: ", each.mint, each_proof.id, each_proof.amount,each_proof.secret)
-        
-            melt_quote_url = f"{each.mint}/v1/melt/quote/bolt11"
-            melt_url = f"{each.mint}/v1/melt/bolt11"
-
-            print(token_amount,melt_quote_url, melt_url)
-        
-       
-
-
-        # Step 1 - create a mint request from the home mint corresponding to the amount in the token
-        
-        # Step 2 - create  melt quote request from the mint in the token
-            # need to calculate amount to receive based on fee reserve
-        
-        # Step 3 - do steps 1 and 2 again Adjust everything accordingly based on the quotes
-
-        # Step 4 - create the proofs
-        
-        # Step 1 - create mint request
-        mint_request = mintRequest(amount=token_amount)
-        mint_request_dump = mint_request.model_dump()
-        payload_json = mint_request.model_dump_json()
-        response = requests.post(url=receive_url, data=payload_json, headers=headers)
-        
-        mint_quote = mintQuote(**response.json())
-        # print(mint_quote)
-        mint_invoice = response.json()['request']
-        mint_quote = response.json()['quote']
-        print(mint_invoice, mint_quote)
-
-        # Step 2 - create melt request
-        data_to_send = {    "request": mint_invoice,
-                            "unit": "sat"
-
-                        }
-        post_melt_response = requests.post(url=melt_quote_url, json=data_to_send,headers=headers)
-        print("token sending melt response:", post_melt_response.json())
-        post_melt_response_obj = PostMeltQuoteResponse(**post_melt_response.json())
-        
-        
-        print("mint melt response:", post_melt_response_obj)
-
-
-        amount_to_receive = token_amount - post_melt_response_obj.fee_reserve
-        print("amount to receive:", amount_to_receive)
-
-
-        # Step 3 - do steps 1 and 2 again Adjust everything accordingly based on the quotes
-        # Step 1 repeated
-        receive_mint_request = mintRequest(amount=amount_to_receive)
-        receive_mint_request_dump = receive_mint_request.model_dump()
-        receive_payload_json = receive_mint_request.model_dump_json()
-        receive_response = requests.post(url=receive_url, data=receive_payload_json, headers=headers)
-        
-        receive_mint_quote = mintQuote(**receive_response.json())
-        # print(mint_quote)
-        receive_mint_invoice = receive_response.json()['request']
-        receive_mint_quote = receive_response.json()['quote']
-        print("adjusted:", receive_mint_invoice, receive_mint_quote)
-
-        # Step 2 repeated
-        melt_data_to_send = {   "request": receive_mint_invoice,
-                                "unit": "sat"
-
-                        }
-        melt_response = requests.post(url=melt_quote_url, json=melt_data_to_send,headers=headers)
-        print("token sending melt response:", melt_response.json())
-        post_melt_response = PostMeltQuoteResponse(**melt_response.json())
-        print("mint melt response:", post_melt_response.quote)
-
-       
-        check_amount = amount_to_receive + post_melt_response.fee_reserve
-        print("check amount:", check_amount, token_amount)
-        assert(check_amount == token_amount)
-
-        # Step 4 - generate the proofs_to_use
-        token_proofs_to_use = []
-        token_proof_amount = 0
-        
-        for each in token_obj.token:
-            melt_url = f"{each.mint}/v1/melt/bolt11"
-            print(each.mint)
-            for each_proof in each.proofs:
-                token_proofs_to_use.append(each_proof.model_dump())
-         
-            print(f"proofs to use with ", token_proofs_to_use)
-
-            # Step 4a create the outputs to receive
-            powers_of_2_sum = self.powers_of_2_sum(amount_to_receive)
-            powers_of_2_sum_change = self.powers_of_2_sum(token_amount-amount_to_receive)
-            concat_list = powers_of_2_sum + powers_of_2_sum_change
-        
-            print("amount of proofs to melt", powers_of_2_sum, amount_to_receive)
-            print("concatenated list ", concat_list)
-            print("melt url ", melt_url)
-            # Now build the inputs and outputs for the melt_url
-            data_to_send = {    "quote": post_melt_response.quote,
-                                "inputs": token_proofs_to_use }
-        
-            print(data_to_send)
-            # print("we are here!!!")
-            response = requests.post(url=melt_url,json=data_to_send,headers=headers)
-            print(response.json())
-        
-            # Now we need to check the receive mint to issue proofs
-            print("receive mint quote", receive_mint_quote)
-
-            self._mint_proofs(receive_mint_quote,amount_to_receive)
-            
-
-        return "test"
-    
-
-
-    async def accept_token(self,cashu_token: str, comment:str = "ecash deposit"):
-        print("accept token")
+    async def accept_token(
+        self,
+        cashu_token: str,
+        comment: str = "ecash deposit",
+        tendered_amount: float | None = None,
+        tendered_currency: str = "SAT",
+    ):
+        self.logger.debug("op=accept_token status=start comment=%s", comment)
         # asyncio.run(self.nip17_accept(cashu_token))
         # msg_out, token_accepted_amount = await self._async_token_accept(cashu_token)
         # self.set_wallet_info(label="trusted_mints", label_info=json.dumps(self.trusted_mints))
@@ -4084,13 +4497,11 @@ class Acorn:
         
         # return f'Not implemented', 0
         
+        lock_acquired = False
         try:
 
             
-            headers = { "Content-Type": "application/json"}
             token_amount =0
-            receive_url = f"{self.home_mint}/v1/mint/quote/bolt11"
-            old_balance = self.balance
 
             if cashu_token[:6] == "cashuA":
 
@@ -4128,32 +4539,40 @@ class Acorn:
                         token_amount += each_proof.amount
                     self.known_mints[id]=token_obj.mint
             else:
-                return "not a valid token", 0
+                raise ValueError("Not a valid cashu token format")
               
             swap_proofs = await self.swap_proofs(proof_obj_list)
-
-            print(f"token amount for acceptance is: {token_amount} for: {proof_obj_list} and swap proofs {swap_proofs}")
+            self.logger.debug(
+                "op=accept_token status=swapped token_amount=%s input_proofs=%s output_proofs=%s",
+                token_amount,
+                len(proof_obj_list),
+                len(swap_proofs),
+            )
             
             await self.acquire_lock()
+            lock_acquired = True
             await self.add_proofs_obj(swap_proofs)
-            await self.release_lock()
 
         
             
-            self.logger.debug(f"Proofs of {token_amount} are added! ")
-        except Exception as e:
-            self.logger.error(f"ecash accept error {e}")  
-            await self.release_lock()
-            raise Exception(f"Is token already spent? {e}")
+            self.logger.info("op=accept_token status=success token_amount=%s", token_amount)
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=accept_token status=failed error=%s", e)
+            raise RuntimeError(f"Is token already spent? {e}") from e
             
         
         finally:
-            pass
-            
-            await self.release_lock()  
+            if lock_acquired:
+                await self.release_lock()
         self.balance+=token_amount
         # print(f"accept token new balance is: {self.balance}")
-        await self.add_tx_history(tx_type='C', amount=token_amount, comment=comment)
+        await self.add_tx_history(
+            tx_type='C',
+            amount=token_amount,
+            comment=comment,
+            tendered_amount=tendered_amount,
+            tendered_currency=tendered_currency,
+        )
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 
@@ -4164,8 +4583,10 @@ class Acorn:
 
     async def issue_token(self, amount:int, comment:str = "ecash withdrawal"):
 
+        lock_acquired = False
         try:
             await self.acquire_lock()
+            lock_acquired = True
             # print("issue token")
             available_amount = 0
             chosen_keyset = None
@@ -4175,7 +4596,7 @@ class Acorn:
             
             
             
-            self.logger.debug(f"available amount {available_amount} ")
+            self.logger.debug("op=issue_token status=balance amount=%s available=%s", amount, available_amount)
             if available_amount < amount:                
                 raise ValueError("Insufficient balance.")
                 # msg_out = "insufficient balance. you need more funds!"
@@ -4189,8 +4610,8 @@ class Acorn:
                     break
             if not chosen_keyset:
                
-                self.logger.error("insufficient balance in any one keyset, you need to swap!")
-                return   
+                self.logger.error("op=issue_token status=no_single_keyset amount=%s", amount)
+                raise ValueError("Insufficient balance in a single keyset; swap required.")
             
             proofs_to_use = []
             proof_amount = 0
@@ -4199,17 +4620,18 @@ class Acorn:
                 pay_proof = proofs_from_keyset.pop()
                 proofs_to_use.append(pay_proof)
                 proof_amount += pay_proof.amount
-                print(f"pop proof amount of {pay_proof.amount} from {chosen_keyset}")
+                self.logger.debug("op=issue_token selecting_proof keyset=%s amount=%s", chosen_keyset, pay_proof.amount)
                 
-            print("proofs to use:", proofs_to_use)
-            print("remaining", proofs_from_keyset)
-            print("chosen keyset for payment", chosen_keyset)
+            self.logger.debug(
+                "op=issue_token status=prepared keyset=%s proofs_to_use=%s",
+                chosen_keyset,
+                len(proofs_to_use),
+            )
             
-            proofs_remaining = self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
+            proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount)
             
 
-            print("proofs remaining:", proofs_remaining)
-            print(f"amount needed: {amount}")
+            self.logger.debug("op=issue_token status=swap_complete amount=%s proofs_remaining=%s", amount, len(proofs_remaining))
             # Implement from line 824
             sum_proofs =0
             spend_proofs = []
@@ -4238,7 +4660,6 @@ class Acorn:
                 for each_proof in each_proofs:
                     post_payment_proofs.append(each_proof)
             self.proofs = post_payment_proofs
-            await self._async_delete_proof_events()
             
             #TODO change this to write_proof
             await self.write_proofs()
@@ -4253,65 +4674,18 @@ class Acorn:
             
             v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
             # print("proofs remaining:", proofs_remaining)
-            await self.release_lock()
-        except Exception as e:
-            # self.logger(f"issue token error {e}")
-            await self.release_lock()
-            raise Exception(f"Error {e}")
+        except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
+            self.logger.error("op=issue_token status=failed amount=%s error=%s", amount, e)
+            raise RuntimeError(f"Error issuing token: {e}") from e
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
 
         self.balance -= amount
         await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
         
         return v3_token.serialize()   
 
-    def testpay(self, amount:int):
-        amount_needed = amount
-        print("pay from multiple mints")
-        available_amount = 0
-        chosen_keyset = None
-        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
-        for each in keyset_amounts:
-            available_amount += keyset_amounts[each]
-        
-        
-        print("available amount:", available_amount)
-        if available_amount < amount:
-            msg_out = "insufficient balance. you need more funds!"
-            return msg_out
-        
-        for key in sorted(keyset_amounts, key=lambda k: keyset_amounts[k]):
-            print(key, keyset_amounts[key])
-            if keyset_amounts[key] >= amount:
-                chosen_keyset = key
-                break
-        if not chosen_keyset:
-            print("insufficient balance in any one keyset, you need to swap!") 
-            return   
-        
-        print("chosen keyset for payment", chosen_keyset)
-        # Now do the pay routine
-        melt_quote_url = f"{self.known_mints[chosen_keyset]}/v1/melt/quote/bolt11"
-        melt_url = f"{self.known_mints[chosen_keyset]}/v1/melt/bolt11"
-        print(melt_quote_url,melt_url)
-        headers = { "Content-Type": "application/json"}
-        
-        proofs_to_use = []
-        proof_amount = 0
-        proofs_from_keyset = keyset_proofs[chosen_keyset]
-        while proof_amount < amount_needed:
-            pay_proof = proofs_from_keyset.pop()
-            proofs_to_use.append(pay_proof)
-            proof_amount += pay_proof.amount
-            print("pop", pay_proof.amount)
-            
-        print("proofs to use:", proofs_to_use)
-        print("remaining", proofs_from_keyset)
-        
-        return "test"
-
-    
     async def zap(self, amount:int, event_id, comment): 
         out_msg = ""
         prs = []
@@ -4329,14 +4703,14 @@ class Acorn:
                 self.logger.debug(f"npub: {npub}")
                 event_id = npub
             
-        except:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             raise ValueError(f"could not resolve nip05")
             
 
         if event_id.startswith("note"):
             try:
                 event_id = bech32_to_hex(event_id)
-            except:
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                 return "Note id format is invalid. Please check and try again."
             try:
                 zap_filter = [{  
@@ -4344,7 +4718,7 @@ class Acorn:
                 
                 }]
                 prs = await self._async_query_zap(amount, comment,zap_filter)
-            except:
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                 raise ValueError("Could not find event. Try an additional relay?")
                 # return "Could not find event. Try an additional relay?"
             
@@ -4367,7 +4741,7 @@ class Acorn:
             for each_pr in prs:
                 await self.pay_multi_invoice(each_pr)
                 out_msg+=f"\nZapped {amount} to destination: {orig_address}."
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
             out_msg = f"Error {e}"
         
         return out_msg   
@@ -4387,12 +4761,12 @@ class Acorn:
             self.logger.debug(f"json_str: {json_str}")
             # json_obj = json.loads(json_str)
             # json_obj = json.loads(json_str)
-        except:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             {"status": "could not access profile"}
             pass
        
         if event == None:
-            raise Exception("no event")
+            raise RuntimeError("no event")
         
         for each in event.tags:
             if each[0] == "zap":
@@ -4424,7 +4798,7 @@ class Acorn:
                 self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 
-            except:
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                 {"status": "could not access profile"}
                 self.logger.error("could not get profile")
                 pass
@@ -4510,77 +4884,28 @@ class Acorn:
                 prs.append(pr)
                
                 
-            except:
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                 {"status": "could not access profile"}
                 self.logger.error("could not get profile")
                 pass
        
         return prs
     
-    def share_record(self,record: str, nrecipient: str, share_relays:List[str], comment: str ="Sent!"):
-        
-        try:
-            if '@' in nrecipient:
-                npub_hex, relays = nip05_to_npub(nrecipient)
-                npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
-            else:
-                npub = nrecipient
-        except:
-            return "error"
-        
-        # Now let's get the record
-        out_record = self.get_wallet_info(record)
-        dm_msg = f"I've shared with you the record: {record}. The contents are below. \n{out_record}"
-
-        out_msg = f"{nrecipient} {npub}, {npub_hex}, {out_record}"
-
-        # out_msg= asyncio.run(self._async_share_record(record_message=out_record,npub=npub, share_relays=share_relays ))
-        asyncio.run(self._async_secure_dm(npub_hex=npub_hex, message=dm_msg,dm_relays=relays+ share_relays)) 
-        return out_msg
-    
-
-    async def _async_share_record(self,record_message: str, npub: str, share_relays:List[str]):
-        print("npub:", npub)
-        
-        my_enc = NIP4Encrypt(self.k)
-        k_to_send = Keys(pub_k=npub)
-        k_to_send_pubkey_hex = k_to_send.public_key_hex()
-        print("k_to_send:", k_to_send_pubkey_hex)
-        
-       
-
-        print("are we here?", share_relays)
-        async with ClientPool(share_relays) as c:
-            n_msg = Event(kind=Event.KIND_ENCRYPT,
-                      content=record_message,
-                      pub_key=k_to_send_pubkey_hex)
-
-            # print("are we here_async?", ecash_relays)
-            # returns event we to_p_tag and content encrypted
-            n_msg = my_enc.encrypt_event(evt=n_msg,
-                                    to_pub_k=k_to_send_pubkey_hex)
-
-            n_msg.sign(self.privkey_hex)
-            c.publish(n_msg)
-        
-        return f"{record_message}  to {npub} {share_relays}"   
-    
     def monitor(self, nrecipient: str, relays: List[str]=None):
-        print(f"monitor {nrecipient}")
+        self.logger.debug("op=monitor status=start recipient=%s", nrecipient)
         try:
             if '@' in nrecipient:
                 npub_hex, relays = nip05_to_npub(nrecipient)
                 npub = hex_to_bech32(npub_hex)
-                print("npub", npub)
+                self.logger.debug("op=monitor status=resolved_npub npub=%s", npub)
                 
             else:
                 npub = nrecipient
                 npub_hex = bech32_to_hex(nrecipient)
-        except:
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             return "error"
         
-        print(f"monitor {npub}")
+        self.logger.debug("op=monitor status=resolved recipient=%s", npub)
         # url = ['wss://relay.damus.io']
         url = relays
         asyncio.run(self.listen_notes(url, npub))
@@ -4605,7 +4930,7 @@ class Acorn:
         my_gift = GiftWrap(BasicKeySigner(my_k))
         send_k = Keys(pub_k=TO_K)
 
-        print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
+        self.logger.info("op=listen_notes status=running")
 
         # q before printing events
         print_q = asyncio.Queue()
@@ -4635,7 +4960,7 @@ class Acorn:
 
 
         def on_auth(the_client: Client, challenge):
-            print('auth requested')
+            self.logger.debug("op=listen_notes status=auth_requested")
 
 
         # create the client and start it running
@@ -4646,7 +4971,7 @@ class Acorn:
         asyncio.create_task(c.run())
 
         def sigint_handler(signal, frame):
-            print('stopping listener...')
+            self.logger.debug("op=listen_notes status=stopping_listener")
             c.end()
             sys.exit(0)
 
@@ -4666,7 +4991,7 @@ class Acorn:
 
                 for c_event in events:
                     if c_event.created_at.timestamp() > since:
-                        print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
+                        self.logger.debug("op=listen_notes status=event event_id=%s", c_event.id)
                         content = c_event.content
                         array_token = content.splitlines()
                     
@@ -4677,11 +5002,11 @@ class Acorn:
                                 
                                 # print(f"found token! {each}")
                                 msg_out = await self._async_token_accept(each)
-                                print(msg_out)
+                                self.logger.info("op=listen_notes status=token_processed")
                                     
                                 
                             elif each.startswith("creqA"):
-                                print(f"found request {each}")
+                                self.logger.debug("op=listen_notes status=request_found token=%s", each)
                     
 
 
@@ -4724,7 +5049,7 @@ class Acorn:
             #     n_event.sign(as_user.private_key_hex())
             #     client.publish(n_event)
 
-        print('stopping...')
+        self.logger.debug("op=listen_notes status=stopped")
         c.end()
 
     async def listen_nip17(self, url):
@@ -4745,7 +5070,7 @@ class Acorn:
   
 
         # print(f'running as npub{tail(my_k.public_key_bech32()[4:])}, messaging npub{tail(send_k.public_key_bech32()[4:])}')
-        print(f"listening for nip17 as {self.pubkey_bech32} using {url}. \nType 'exit' to stop")
+        self.logger.info("op=listen_nip17 status=running")
 
         # q before printing events
         print_q = asyncio.Queue()
@@ -4775,7 +5100,7 @@ class Acorn:
 
 
         def on_auth(the_client: Client, challenge):
-            print('auth requested')
+            self.logger.debug("op=listen_nip17 status=auth_requested")
 
 
         # create the client and start it running
@@ -4786,7 +5111,7 @@ class Acorn:
         asyncio.create_task(c.run())
 
         def sigint_handler(signal, frame):
-            print('stopping listener...')
+            self.logger.debug("op=listen_nip17 status=stopping_listener")
             c.end()
             sys.exit(0)
 
@@ -4814,7 +5139,7 @@ class Acorn:
                 for c_event in events:
                     if c_event.created_at.timestamp() > since:
                         msg_out =''
-                        print(c_event.id[:4],c_event.pub_key, c_event.created_at, c_event.content)
+                        self.logger.debug("op=listen_nip17 status=event event_id=%s", c_event.id)
                         content = c_event.content                           
 
                         array_token = content.splitlines()                        
@@ -4862,7 +5187,7 @@ class Acorn:
 
            
 
-        print('stopping...')
+        self.logger.debug("op=listen_nip17 status=stopped")
         c.end()
 
        
@@ -4887,14 +5212,14 @@ class Acorn:
         task1 = asyncio.create_task(self._async_task())
        
         await asyncio.sleep(10)
-        print("run")
+        self.logger.debug("op=async_run status=start")
         await task1
 
     async def _async_task(self):
        
      
         await asyncio.sleep(1)
-        print("task")
+        self.logger.debug("op=async_task status=start")
 
     def create_payment_request( self, 
                                 amount:int, 
@@ -4917,7 +5242,7 @@ class Acorn:
 
                                     }
 
-        print(payment_request_dict)
+        self.logger.debug("op=get_payment_request status=payload_ready")
         cbor_data = cbor2.dumps(payment_request_dict)
         base64_encoded_data = base64.b64encode(cbor_data)
         base64_string = base64_encoded_data.decode('utf-8')
@@ -4928,18 +5253,21 @@ class Acorn:
     async def _async_token_accept(self, token:str):
         return
 
-    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002)->Event:
+    async def issue_private_record(self, content:str, holder:str=None, kind:int =34002, origsha256:str = None)->Event:
         """Issue private record"""
         holder_pubhex = ""
         if holder:
             try:
                 holder_key = Keys(pub_k=holder)
                 holder_pubhex = holder_key.public_key_hex()
-            except:
-                pass
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                self.logger.warning("Invalid holder key supplied for private record: %s", exc)
             
         
         tags = [["safebox", self.pubkey_hex], ["safebox_owner", npub_to_hex(self.owner)],["safebox_holder", holder_pubhex]]
+        if origsha256:
+            tags.append(["origsha25",origsha256])
+
         issued_record = Event(  pub_key=self.pubkey_hex,
                                 kind=kind,
                                 tags = tags,
@@ -4948,22 +5276,445 @@ class Acorn:
 
         return issued_record
     
-    async def get_authorities(self,kind:int):
+    async def create_grant_from_offer(self, offer_kind:int, offer_name:str, holder: str, grant_kind:int=None,shared_secret_hex: str=None, relays: List[str]=None, blossom_xfer_server:str=None):
+        """This function creates a corresponding grant for an offer and if an orginal record (blob) exists for the record, it will create the transfer blob"""
+        blob_data: bytes = None
+        blob_type: str = None
+        original_record: OriginalRecordTransfer = None
+        h_pubhex = Keys(pub_k=holder).public_key_hex()
 
-        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
-        authorities = npub_list
-        return authorities
+        blossom_server = "https://blossom.getsafebox.app"
+        if not blossom_xfer_server:
+            blossom_xfer_server = "https://nostr.download"
+        
+        # blossom_xfer_server = "https://blossom.getsafebox.app"
+
+        mime_type_guess = None
+        origsha256 = None
+        encrypt_parms = None
+
+        if not (30000 <= offer_kind < 40000 and offer_kind % 2 == 1):
+            """Create a grant from an offer"""
+            raise ValueError("offer_kind must be an odd integer in the range 30000–39999")
+        
+        # If grant kind is not supplied, the convention is that the grant kind is an increment of 1
+        if not grant_kind:
+            grant_kind = offer_kind +1
+        
+        # Get the offer
+
+        
+        safebox_record: SafeboxRecord = await self.get_record_safebox(record_name=offer_name,record_kind=offer_kind)
+        
+        self.logger.debug("op=create_grant_from_offer status=payload_loaded")
+        blob_type,blob_data = await self.get_record_blobdata(record_name=offer_name,record_kind=offer_kind)
+        
+        issued_private_record: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind)
+        # Need to create original_transfer to tell where to pick up
+
+        if blob_data:
+            
+            self.logger.debug("op=create_grant_from_offer status=blob_found type=%s size=%s", blob_type, len(blob_data))
 
 
-    async def set_authorities(self,kind:int, pub_hex_list: List[str]):
+            self.logger.debug("op=create_grant_from_offer status=encrypt_blob")
+            origsha256 = hashlib.sha256(blob_data).hexdigest()
+            self.logger.debug("op=create_grant_from_offer status=origsha256")
+            origmime_type_guess = filetype.guess(blob_data).mime
+            self.logger.debug("op=create_grant_from_offer status=mime mime=%s", origmime_type_guess)
+            if shared_secret_hex:
+                blob_key = bytes.fromhex(shared_secret_hex)
+                self.logger.debug("op=create_grant_from_offer status=shared_secret_from_kem")
+            else:
+                blob_key = os.urandom(32)  # 256-bit key
+            try:    
+                self.logger.debug("op=create_grant_from_offer status=encrypting")
+                encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+                self.logger.exception("Encryption error while creating grant from offer")
+                raise RuntimeError(f"encryption error while creating grant: {e}") from e
 
-        npub_list = ["06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c"] 
-        authorities = npub_list
-        return authorities
+            # final_blob_data = blob_data
+            final_blob_data = encrypt_result.cipherbytes
+            self.logger.debug("op=create_grant_from_offer status=upload_blob")
+            blob_nsec = Keys().private_key_bech32()
+            client_xfer = BlossomClient(nsec=blob_nsec, default_servers=[blossom_xfer_server])
+            upload_result = client_xfer.upload_blob(blossom_xfer_server, data=final_blob_data,
+                            description='Blob to server')
+            sha256 = upload_result['sha256']
+            blob_ref = upload_result.get('url', f"{blossom_xfer_server}/{sha256}")
+            # blob_ref = upload_result['sha256']
+            blob_type = upload_result['type']
+            self.logger.debug("op=create_grant_from_offer status=blob_uploaded")
+            # await asyncio.sleep(5)
+
+            # Create what is necessary for original record trasfer
+            original_record = OriginalRecordTransfer(   origsha256=origsha256,
+                                                        origmimetype=origmime_type_guess,
+                                                        encryptparms=encrypt_parms,
+                                                        blobserver= blossom_xfer_server,
+                                                        blobsha256=sha256,
+                                                        blobmimetype=blob_type,
+                                                        blobref=blob_ref,
+                                                        blobnsec=blob_nsec
+                                                    )
+
+
+            #TODO Eliminate the delete function once the receiving party can clean it up
+            # delete_result = client_xfer.delete_blob(server=blossom_xfer_server,sha256=sha256)
+            # print(f"Delete result: {delete_result}")
+        else:
+            self.logger.debug("op=create_grant_from_offer status=no_blob offer=%s kind=%s", offer_name, offer_kind)
+
+
+        issued_private_record: Event = await self.issue_private_record(content=safebox_record.payload,holder=h_pubhex,kind=grant_kind, origsha256=origsha256)
+        self.logger.debug("op=create_grant_from_offer status=issued")
+        return issued_private_record, original_record
+    
+    async def create_request_from_grant(self, grant_name:str, grant_kind:int=34102, shared_secret_hex: str=None, relays: List[str]=None, blossom_xfer_server:str=None):
+        """This function creates a request that can be sent for verififcation and if an orginal record (blob) exists for the record, it will create the transfer blob"""
+        blob_data: bytes = None
+        blob_type: str = None
+        original_record: OriginalRecordTransfer = None
         
 
+        blossom_server = "https://blossom.getsafebox.app"
+        if not blossom_xfer_server:
+            blossom_xfer_server = "https://nostr.download"
+        
+        # blossom_xfer_server = "https://blossom.getsafebox.app"
+
+        mime_type_guess = None
+        origsha256 = None
+        encrypt_parms = None
+
+        self.logger.debug("op=create_request_from_grant status=grant_kind kind=%s", grant_kind)
+
+        if not (30000 <= grant_kind < 40000 and grant_kind % 2 == 0):
+            """Create a grant from an offer"""
+            raise ValueError("offer_kind must be an odd integer in the range 30000–39999")
+        
+
+        
+        # Get the grant record to send
+
+        self.logger.debug("op=create_request_from_grant status=load_record grant=%s kind=%s", grant_name, grant_kind)
+        safebox_record: SafeboxRecord = await self.get_record_safebox(record_name=grant_name,record_kind=grant_kind)
+        
+        self.logger.debug("op=create_request_from_grant status=payload_loaded")
+        blob_type,blob_data = await self.get_record_blobdata(record_name=grant_name,record_kind=grant_kind)
+        
+        # issued_private_record: Event = await self.issue_private_record(content=safebox_record.payload,# holder=h_pubhex,kind=grant_kind)
+        # The grant record is a signed event that stored as a serialized payload in the safebox record
+        try:
+            payload_json = json.loads(safebox_record.payload)
+            self.logger.debug("op=create_request_from_grant status=payload_json_loaded")
+            payload_json['pub_key'] = payload_json['pubkey'] 
+            del payload_json['pubkey']
+            issued_grant_record = Event(**payload_json)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            self.logger.exception("Error retrieving grant record")
+            raise ValueError(f"error retrieving grant record {e}") from e
+        # Need to create original_transfer to tell where to pick up
+
+        if blob_data:
+            
+            self.logger.debug("op=create_request_from_grant status=blob_found type=%s size=%s", blob_type, len(blob_data))
+
+
+            self.logger.debug("op=create_request_from_grant status=encrypt_blob")
+            origsha256 = hashlib.sha256(blob_data).hexdigest()
+            self.logger.debug("op=create_request_from_grant status=origsha256")
+            origmime_type_guess = filetype.guess(blob_data).mime
+            self.logger.debug("op=create_request_from_grant status=mime mime=%s", origmime_type_guess)
+            if shared_secret_hex:
+                blob_key = bytes.fromhex(shared_secret_hex)
+                self.logger.debug("op=create_request_from_grant status=shared_secret_from_kem")
+            else:
+                blob_key = os.urandom(32)  # 256-bit key
+            try:    
+                self.logger.debug("op=create_request_from_grant status=encrypting")
+                encrypt_result:EncryptionResult = encrypt_bytes(blob_data, blob_key)
+                encrypt_parms = EncryptionParms(alg=encrypt_result.alg,key=blob_key.hex(),iv=encrypt_result.iv.hex())
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+                self.logger.exception("Encryption error while creating request from grant")
+                raise RuntimeError(f"encryption error while creating request: {e}") from e
+
+            # final_blob_data = blob_data
+            final_blob_data = encrypt_result.cipherbytes
+            self.logger.debug("op=create_request_from_grant status=upload_blob")
+            blob_nsec = Keys().private_key_bech32()
+            client_xfer = BlossomClient(nsec=blob_nsec, default_servers=[blossom_xfer_server])
+            upload_result = client_xfer.upload_blob(blossom_xfer_server, data=final_blob_data,
+                            description='Blob to server')
+            sha256 = upload_result['sha256']
+            blob_ref = upload_result.get('url', f"{blossom_xfer_server}/{sha256}")
+            # blob_ref = upload_result['sha256']
+            blob_type = upload_result['type']
+            self.logger.debug("op=create_request_from_grant status=blob_uploaded")
+            # await asyncio.sleep(5)
+
+            # Create what is necessary for original record trasfer
+            original_record = OriginalRecordTransfer(   origsha256=origsha256,
+                                                        origmimetype=origmime_type_guess,
+                                                        encryptparms=encrypt_parms,
+                                                        blobserver= blossom_xfer_server,
+                                                        blobsha256=sha256,
+                                                        blobmimetype=blob_type,
+                                                        blobref=blob_ref,
+                                                        blobnsec=blob_nsec
+                                                    )
+
+
+            #TODO Eliminate the delete function once the receiving party can clean it up
+            # delete_result = client_xfer.delete_blob(server=blossom_xfer_server,sha256=sha256)
+            # print(f"Delete result: {delete_result}")
+        else:
+            self.logger.debug("op=create_request_from_grant status=no_blob grant=%s kind=%s", grant_name, grant_kind)
+
+
+        # print(f"issued grant: {issued_grant_record.data()}")
+        return issued_grant_record, original_record
+    
+    async def get_trusted_entities(self,kind:int=37376, relays: List[str]=None):
+
+        pubhex_list_out = []
+        try:
+            record_out = await self.get_wallet_info(label="trusted entities", record_kind=kind)
+            if record_out is None:
+                return []
+            record_out_json = json.loads(record_out)
+            pubs_to_process = record_out_json.get("payload", "").split(" ")
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.debug("No trusted entities configured: %s", exc)
+            return []
        
+        for each in pubs_to_process:
+            try:
+                k_to_add = Keys(pub_k=each)
+                # Now we are going to get the followers
+                
+                pubhex_list_out.append(k_to_add.public_key_hex())
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                self.logger.debug("Skipping invalid root entity=%s error=%s", each, exc)
         
+        self.logger.debug("op=get_trusted_entities status=expanded_roots count=%s relays=%s", len(pubhex_list_out), self.relays)
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+            'authors': pubhex_list_out,
+            'kinds': [3]
+        }]
+        async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)
+            if events:
+                for each in events:
+                    self.logger.debug("op=get_trusted_entities status=follow_tags event=%s tags=%s", each.id, each.tags)
+                    for each_tag in each.tags:
+                        if each_tag[0] == "p":
+                            pubhex_list_out.append(each_tag[1])
+        pubhex_list_out = list(set(pubhex_list_out))
+        return pubhex_list_out
+
+    async def get_root_entities(self,kind:int=37376, relays: List[str]=None):
+
+        try:
+            record_out = await self.get_wallet_info(label="trusted entities",record_kind=kind)
+            if record_out is None:
+                return ""
+            record_out_json = json.loads(record_out)
+            final_out = record_out_json.get('payload', "")
+            if not isinstance(final_out, str):
+                final_out = str(final_out)
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.debug("No root entities payload found: %s", exc)
+            final_out = ""
+        return final_out
+
+    async def set_trusted_entities(self,kind:int=37376, pub_list_str: str=None):
+
+        pubs_to_validate = pub_list_str.split()
+        pubs_to_store = ''
+        for each in pubs_to_validate:
+            try:
+                k_to_validate = Keys(pub_k=each)
+                pubs_to_store += k_to_validate.public_key_bech32() + ' '
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                self.logger.debug("Skipping invalid trusted entity npub=%s error=%s", each, exc)
+
+        
+        
+        await self.put_record(record_name="trusted entities", record_value=pubs_to_store, record_kind=kind, record_type="internal")
+        
+        
+        return True
+        
+    async def set_wot_entities(self,kind:int=37376, pub_list_str: str=None):
+
+        pubs_to_validate = pub_list_str.split()
+        self.logger.debug("op=set_wot_entities status=validate_input count=%s", len(pubs_to_validate))
+        pubs_to_store = ''
+        for each in pubs_to_validate:
+            each_component = each.split(":")
+            self.logger.debug("op=set_wot_entities status=parse_component component=%s", each_component)
+            each_npub = each_component[0]
+            part_2 = ':'+ each_component[1] if len(each_component)>=2 else ''
+            part_3 = ':'+ each_component[2] if len(each_component)>=3 else ''
+           
+
+            try:
+                k_to_validate = Keys(pub_k=each_npub)
+                pubs_to_store += f"{k_to_validate.public_key_bech32()}{part_2}{part_3}" + ' '
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                self.logger.debug("Skipping invalid wot entity npub=%s error=%s", each_npub, exc)
+
+        
+        
+        await self.put_record(record_name="wot entities", record_value=pubs_to_store, record_kind=kind, record_type="internal")
+        
+        
+        return True
+    
+    async def get_wot_entities(self,kind:int=37376, relays: List[str]=None):
+
+        pubhex_list_out = []    
+        try:
+            record_out = await self.get_wallet_info(label="wot entities",record_kind=kind)
+            if not record_out:
+                return []
+            record_out_json = json.loads(record_out)
+            pubs_to_process = record_out_json.get('payload', '').split(' ')
+            self.logger.debug("op=get_wot_entities status=processing count=%s", len(pubs_to_process))
+        
+            for each in pubs_to_process:
+                each_component = each.split(":")   
+                self.logger.debug("op=get_wot_entities status=parse_component component=%s", each_component)
+                each_npub = each_component[0]
+                if len(each_component)>=2:
+                    part_2 = ':'+each_component[1] 
+                else: 
+                    part_2 = ''
+                if len(each_component)>=3:
+                    part_3 = ':'+each_component[2] 
+                else: 
+                    part_3 = ''
+
+
+                    
+                
+                try:
+                    k_to_add = Keys(pub_k=each_npub)
+                    final_entry = f"{k_to_add.public_key_bech32()}{part_2}{part_3}"
+                    self.logger.debug("op=get_wot_entities status=valid_entry entry=%s", final_entry)
+                    
+                    pubhex_list_out.append(final_entry)
+                   
+                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                    self.logger.debug("Skipping malformed wot score entity=%s error=%s", each, exc)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.debug("Could not load wot entities: %s", exc)
+            return []
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.warning("Could not load wot entities: %s", exc)
+            return []
+        
+       
+
+        return pubhex_list_out
+    
+    async def get_wot_scores(self, pub_key_to_score: str, relays: List[str]=None):
+        rank = '0'
+        scores_out = []
+        try:
+            k_to_use = Keys(pub_k=pub_key_to_score)
+            pubhex = k_to_use.public_key_hex()
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            return "invalid npub"
+        
+
+        
+        wot_entities = await self.get_wot_entities()
+        for each_wot in wot_entities:
+            each_wot_npub, each_wot_tag, each_wot_relay = (each_wot.split(':') + [None, None, None])[:3]
+            each_wot_relay = each_wot_relay if not each_wot_relay or each_wot_relay.startswith("wss://") else f"wss://{each_wot_relay}"
+            self.logger.debug("op=get_wot_scores status=processing_entity npub=%s", each_wot_npub)
+            FILTER = [{
+            'limit': RECORD_LIMIT,
+             '#d': [pubhex],                       
+            'authors': [Keys(pub_k=each_wot_npub).public_key_hex()],
+            'kinds': [30382]
+            }]
+            self.logger.debug("op=get_wot_scores status=query_filter")
+            each_event: Event
+            try:
+                async with ClientPool(clients=[each_wot_relay],timeout=3) as c:  
+                    events = await c.query(FILTER)
+                    if events:
+                        self.logger.debug("op=get_wot_scores status=events count=%s", len(events))
+                        for each_event  in events:
+                            self.logger.debug("op=get_wot_scores status=event_tags pubkey=%s", each_event.pub_key)
+                            for each_tag in each_event.tags:
+                                if each_tag[0] == each_wot_tag:
+                                    score = 0
+                                    score = each_tag[1]
+                                    scores_out.append([each_wot_tag,score])
+            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                self.logger.warning("Failed querying wot score relay=%s error=%s", each_wot_relay, exc)
+        
+
+        return scores_out
+
+        try:
+            k_to_use = Keys(pub_k=pub_key_to_score)
+            pubhex = k_to_use.public_key_hex()
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            pubhex = None
+
+        FILTER = [{
+            'limit': RECORD_LIMIT,
+             '#d': [pubhex],                       
+            'authors': wot_entities,
+            'kinds': [30382]
+        }]
+
+        # print(f"FILTER {FILTER} with relays: {relays}")
+        each: Event
+        async with ClientPool(relays) as c:  
+            events = await c.query(FILTER)
+            if events:
+                # print(f"total events: {len(events)}")
+                for each  in events:
+                    # print(f"tags from {each.pub_key} {each.tags}")
+                    for each_tag in each.tags:
+                        if each_tag[0] == 'rank':
+                            rank = each_tag[1]
+
+                        
+        
+
+
+        return rank
+       
+    async def get_social_profile(self,npub: str, relays: List[str]=None):
+        try:
+            pubhex = Keys(pub_k=npub).public_key_hex()
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            raise ValueError("Invalid public key")
+        
+        FILTER = [{
+                'limit': 1,                                
+                'authors': [pubhex],
+                'kinds': [0]
+                }]
+        
+        async with ClientPool(relays) as c:  
+                    event: Event
+                    events = await c.query(FILTER)
+                    if events:
+                        event = events[0]
+                        social_profile = json.loads(event.content)
+
+        return social_profile       
         
 if __name__ == "__main__":
     
