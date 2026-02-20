@@ -33,10 +33,10 @@
 
   .wb-shell {
     width: 100%;
-    max-width: 980px;
+    max-width: 620px;
     display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    gap: 22px;
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .wb-panel {
@@ -47,52 +47,40 @@
     padding: 24px;
   }
 
-  .wb-brand h1 {
-    margin: 0 0 10px;
-    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-weight: 900;
-    font-size: clamp(1.8rem, 3.2vw, 2.6rem);
-    line-height: 1.1;
-    text-align: center;
-    letter-spacing: 0.01em;
-  }
-
-  .wb-brand p {
-    margin: 0 0 18px;
-    color: var(--sb-text-sub);
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
-    line-height: 1.5;
-    text-align: center;
-  }
-
-  .wb-badge {
-    display: inline-block;
-    padding: 8px 14px;
-    border-radius: 999px;
-    background: rgba(82, 103, 236, 0.16);
-    color: #d8e0ff;
-    border: 1px solid rgba(82, 103, 236, 0.52);
-    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
-    font-size: 0.85rem;
-    margin-bottom: 16px;
-  }
-
-  .wb-logo {
-    display: block;
-    width: min(220px, 70%);
-    height: auto;
-    margin: 10px auto 0;
-    border-radius: 14px;
-    background: var(--sb-brand-light);
-    border: 1px solid #d6dcf4;
-    padding: 12px;
-  }
-
   .wb-card-title {
     margin: 0 0 14px;
     font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     font-weight: 800;
     font-size: 1.45rem;
+  }
+
+  .wb-brand-title {
+    margin: 0 0 8px;
+    font-family: "Inter", "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.65rem, 3vw, 2.2rem);
+    line-height: 1.1;
+    text-align: center;
+    letter-spacing: 0.01em;
+  }
+
+  .wb-brand-subtitle {
+    margin: 0 0 16px;
+    color: var(--sb-text-sub);
+    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    line-height: 1.45;
+    text-align: center;
+  }
+
+  .wb-brand-logo {
+    display: block;
+    width: min(180px, 56%);
+    height: auto;
+    margin: 0 auto 12px;
+    border-radius: 12px;
+    background: var(--sb-brand-light);
+    border: 1px solid #d6dcf4;
+    padding: 10px;
   }
 
   .wb-form {
@@ -281,9 +269,6 @@
   }
 
   @media (max-width: 900px) {
-    .wb-shell {
-      grid-template-columns: 1fr;
-    }
     .wb-panel {
       padding: 20px;
     }
@@ -358,18 +343,11 @@ function toggleAccessKeyVisibility() {
 {% block page_content %}
 <main class="wb-page">
   <section class="wb-shell">
-    <article class="wb-panel wb-brand">
-      <span class="wb-badge">Nostr + Cashu + Private Records</span>
-      <h1>{{ branding }}</h1>
-      <p>{{ branding_message }}</p>
-      <img class="wb-logo" src="/img/safebox-small.png" alt="Safebox Logo">
-      <div class="wb-foot">
-        Using quantum-safe algorithms from
-        <a href="https://openquantumsafe.org/">Open Quantum Safe Foundation</a>.
-      </div>
-    </article>
-
     <article class="wb-panel">
+      <h1 class="wb-brand-title">{{ branding }}</h1>
+      <img class="wb-brand-logo" src="/img/safebox-small.png" alt="Safebox Logo">
+      <p class="wb-brand-subtitle">{{ branding_message }}</p>
+
       <form class="wb-form" action="/safebox/login" method="POST" autocomplete="on" hx-boost="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label class="wb-label" for="access_key">Access Key</label>
