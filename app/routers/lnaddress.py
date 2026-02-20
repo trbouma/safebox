@@ -38,11 +38,14 @@ from app.config import Settings, ConfigWithFallback
 from app.db import engine
 from app.branding import build_templates
 from app.rates import get_currency_rate
+from sqlalchemy.exc import IntegrityError
+import logging
 
 settings = Settings()
 config = ConfigWithFallback()
 templates = build_templates()
 password_hasher = PasswordHasher()
+logger = logging.getLogger(__name__)
 
 # RELAYS = ['wss://relay.getsafebox.app']
 RELAYS = settings.RELAYS
@@ -772,6 +775,19 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
             
             npub = safebox_found.npub
             nsec = safebox_found.nsec
+            # Postgres-safe path: update existing wallet row instead of inserting duplicate npub.
+            safebox_found.handle = handle
+            safebox_found.access_key = access_key
+            safebox_found.home_relay = relay_url
+            safebox_found.nsec = nsec
+            safebox_found.onboard_code = onboard_code
+            session.add(safebox_found)
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                logger.exception("Recover update failed due to unique constraint")
+                return {"status": "ERROR", "detail": "Identity conflict while updating recovered safebox."}
 
         else:
             acorn_obj = Acorn(nsec=nsec_recover, relays=RELAYS, mints=MINTS, home_relay=relay_url, logging_level=LOGGING_LEVEL)
@@ -793,22 +809,27 @@ async def recover_safebox(request: Request, recover: recoverIdentity):
             nsec = acorn_obj.privkey_bech32  
             
             
-        register_safebox = RegisteredSafebox(   handle=handle,
-                                                    npub=npub,
-                                                    nsec=nsec,
-                                                    home_relay=relay_url,
-                                                    onboard_code=onboard_code,
-                                                    access_key=access_key
-                                            )
-        session.add(register_safebox)
-        
-        session.commit()
+            register_safebox = RegisteredSafebox(
+                handle=handle,
+                npub=npub,
+                nsec=nsec,
+                home_relay=relay_url,
+                onboard_code=onboard_code,
+                access_key=access_key,
+            )
+            session.add(register_safebox)
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                logger.exception("Recover insert failed due to unique constraint")
+                return {"status": "ERROR", "detail": "Identity conflict while creating recovered safebox."}
 
             # raise HTTPException(status_code=404, detail=f"{npub} not found")
 
     detail = f"Your {mode} handle: {handle} Your access key: {access_key}"
 
-    return {"status": status, "detail": detail}
+    return {"status": status, "detail": detail, "access_key": access_key, "handle": handle, "mode": mode}
 
 
 

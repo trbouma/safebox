@@ -33,7 +33,7 @@
 
   .rc-card {
     width: 100%;
-    max-width: 760px;
+    max-width: 860px;
     border: 1px solid var(--sb-panel-border);
     border-radius: 18px;
     background: var(--sb-panel);
@@ -57,10 +57,15 @@
 
   .rc-label {
     display: block;
-    margin: 0 0 8px;
+    margin: 0;
     font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     font-weight: 700;
     font-size: 0.92rem;
+  }
+
+  .rc-form {
+    display: grid;
+    gap: 12px;
   }
 
   .rc-input,
@@ -92,7 +97,7 @@
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
-    margin: 12px 0 16px;
+    margin: 0;
   }
 
   .rc-check {
@@ -113,7 +118,7 @@
     font-size: 1rem;
     font-weight: 800;
     cursor: pointer;
-    margin-top: 8px;
+    margin: 0;
   }
 
   .rc-btn-primary {
@@ -130,7 +135,7 @@
   .rc-divider {
     border: 0;
     border-top: 1px solid #2f416d;
-    margin: 18px 0;
+    margin: 12px 0;
   }
 </style>
 
@@ -147,16 +152,21 @@ async function getStatus(return_result) {
 
 
 parsedResult = JSON.parse(JSON.stringify(return_result));
-// alert(`${parsedResult.status} ${parsedResult.detail} ${parsedResult.access_key}`);
-
+if (parsedResult.status !== "OK" || !parsedResult.access_key) {
+  alert(parsedResult.detail || "Recovery failed.");
+  return;
+}
 
   await fetch(`/safebox/loginwithkey?access_key=${parsedResult.access_key}`, {
         method: "POST",
         headers: {"Content-Type": "application/json"}        
                 
        })
-    .then((response) => {})
-    .then((data) => {});
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Login failed after recovery.");
+      }
+    });
     window.location.href="/safebox/access";
 
 
@@ -170,8 +180,6 @@ parsedResult = JSON.parse(JSON.stringify(return_result));
 
 async function recoverSeedPhrase() {
     
-    var data;
-   
     var input_seed_phrase = document.getElementById("input_seed_phrase");
     var input_home_relay = document.getElementById("input_home_relay");
     var input_new_identity = document.getElementById("input_new_identity");
@@ -188,16 +196,25 @@ async function recoverSeedPhrase() {
                             "legacy": input_legacy.checked
                           };
 
-   await fetch('/recoversafebox', {
+   try {
+     await fetch('/recoversafebox', {
         method: "POST",
         headers: {"Content-Type": "application/json"},        
         body: JSON.stringify(submit_data)         
        })
-    .then((response) => response.json())
-    .then((data) => getStatus(data));
-
-
+      .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Recover request failed with HTTP ${response.status}`);
       }
+      return response.json();
+      })
+      .then((data) => getStatus(data));
+   } catch (error) {
+      alert(error.message || "Recovery failed.");
+   }
+
+
+}
 </script>
 
 {% endblock %}
@@ -209,27 +226,28 @@ async function recoverSeedPhrase() {
     <p class="rc-subtitle">
       Restore access using your recovery phrase. Optionally set a home relay, choose a new identity, or use legacy recovery mode.
     </p>
+    <div class="rc-form">
+      <label class="rc-label" for="input_seed_phrase">Recovery Phrase</label>
+      <textarea class="rc-textarea" id="input_seed_phrase" placeholder="Enter recovery phrase"></textarea>
 
-    <label class="rc-label" for="input_seed_phrase">Recovery Phrase</label>
-    <textarea class="rc-textarea" id="input_seed_phrase" placeholder="Enter recovery phrase"></textarea>
+      <label class="rc-label" for="input_home_relay">Home Relay (Optional)</label>
+      <input class="rc-input" type="text" id="input_home_relay" placeholder="wss://relay.example.com">
 
-    <label class="rc-label" for="input_home_relay" style="margin-top:12px;">Home Relay (Optional)</label>
-    <input class="rc-input" type="text" id="input_home_relay" placeholder="wss://relay.example.com">
+      <div class="rc-row">
+        <label class="rc-check" for="input_new_identity">
+          <input type="checkbox" id="input_new_identity">
+          <span>New Identity</span>
+        </label>
+        <label class="rc-check" for="input_legacy">
+          <input type="checkbox" id="input_legacy">
+          <span>Legacy</span>
+        </label>
+      </div>
 
-    <div class="rc-row">
-      <label class="rc-check" for="input_new_identity">
-        <input type="checkbox" id="input_new_identity">
-        <span>New Identity</span>
-      </label>
-      <label class="rc-check" for="input_legacy">
-        <input type="checkbox" id="input_legacy">
-        <span>Legacy</span>
-      </label>
+      <button class="rc-btn rc-btn-primary" onclick="recoverSeedPhrase()">Recover Safebox</button>
+      <hr class="rc-divider">
+      <button class="rc-btn rc-btn-secondary" onclick="backToProfile()">Home</button>
     </div>
-
-    <button class="rc-btn rc-btn-primary" onclick="recoverSeedPhrase()">Recover Safebox</button>
-    <hr class="rc-divider">
-    <button class="rc-btn rc-btn-secondary" onclick="backToProfile()">Home</button>
   </section>
 </main>
      
