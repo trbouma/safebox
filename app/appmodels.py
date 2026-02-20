@@ -79,10 +79,10 @@ class lnPOSInvoice(BaseModel):
     amount: float
     currency: str = "SAT"
     comment: str = "Please Pay!"
-    access_token: str
+    access_token: str | None = None
 
 class lnPOSInfo(BaseModel):   
-    access_token: str
+    access_token: str | None = None
 
 class ecashRequest(BaseModel):
     amount: int 

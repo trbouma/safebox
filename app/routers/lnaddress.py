@@ -310,7 +310,7 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
 
-    token_secret, token_pin, _, _ = _parse_and_validate_card_token(
+    token_secret, token_pin, npub, _ = _parse_and_validate_card_token(
         nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey
     )
     k = Keys(config.SERVICE_NSEC)
@@ -320,6 +320,18 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     print(f"token secret {token_secret} token pin {token_pin} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
     k_nwc = Keys(token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
+
+    # Fast-fail for insufficient payer balance so requestor gets clear feedback.
+    if nwc_vault.amount is not None:
+        try:
+            payer_acorn = await get_acorn_by_npub(npub)
+            if int(nwc_vault.amount) > int(payer_acorn.balance):
+                detail = "Insufficient balance for this payment request."
+                return {"status": "ERROR", "detail": detail}
+        except HTTPException:
+            raise
+        except Exception as exc:
+            print(f"nfc_request_payment balance check failed: {exc}")
 
     #FIXME determine right relays
     if nwc_vault.nfc_ecash_clearing:

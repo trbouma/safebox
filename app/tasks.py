@@ -485,7 +485,16 @@ async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
 
     pass  
 
-async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:str, tendered_amount: float, tendered_currency: str, websocket: WebSocket|None=None):
+async def task_pay_multi(
+    acorn_obj: Acorn,
+    amount: int,
+    lnaddress: str,
+    comment: str,
+    tendered_amount: float,
+    tendered_currency: str,
+    websocket: WebSocket | None = None,
+    notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
+):
     fiat_currency = await get_currency_rate(acorn_obj.local_currency)
     currency_code  = fiat_currency.currency_code
     currency_rate = fiat_currency.currency_rate
@@ -500,8 +509,17 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
                 await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
             except:
                 pass
+    if notify_callback:
+        await notify_callback({
+            "status": "PENDING",
+            "action": "payment",
+            "detail": "Payment in progress",
+            "balance": acorn_obj.balance,
+            "fiat_balance": fiat_balance,
+        })
 
     status = "SENT"
+    msg_out = "Payment sent."
     try:
         msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
 
@@ -510,14 +528,29 @@ async def task_pay_multi(acorn_obj: Acorn, amount: int, lnaddress: str, comment:
         status = "ERROR"
         print(msg_out, status)
     finally:
+        fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:
             #FIXME - may not need this refernce
             try:
                 await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
             except:
                 pass
+        if notify_callback:
+            await notify_callback({
+                "status": status,
+                "action": "payment",
+                "detail": msg_out,
+                "balance": acorn_obj.balance,
+                "fiat_balance": fiat_balance,
+            })
    
-async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, websocket: WebSocket|None=None):
+async def task_pay_multi_invoice(
+    acorn_obj: Acorn,
+    lninvoice: str,
+    comment: str,
+    websocket: WebSocket | None = None,
+    notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
+):
     fiat_currency = await get_currency_rate(acorn_obj.local_currency)
     currency_code  = fiat_currency.currency_code
     currency_rate = fiat_currency.currency_rate
@@ -530,8 +563,17 @@ async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, 
                 await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": "Payment in progress", "status": "PENDING"})
             except:
                 pass
+    if notify_callback:
+        await notify_callback({
+            "status": "PENDING",
+            "action": "payment",
+            "detail": "Payment in progress",
+            "balance": acorn_obj.balance,
+            "fiat_balance": fiat_balance,
+        })
 
     status = "SENT"
+    msg_out = "Payment sent."
     try:
         # msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
 
@@ -542,12 +584,21 @@ async def task_pay_multi_invoice(acorn_obj: Acorn, lninvoice: str, comment:str, 
         status = "ERROR"
         print(msg_out, status)
     finally:
+        fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:
             #FIXME - may not need this refernce
             try:
                 await websocket.send_json({"balance":acorn_obj.balance,"fiat_balance":fiat_balance, "message": msg_out, "status": status})
             except:
                 pass
+        if notify_callback:
+            await notify_callback({
+                "status": status,
+                "action": "payment",
+                "detail": msg_out,
+                "balance": acorn_obj.balance,
+                "fiat_balance": fiat_balance,
+            })
     
 
     

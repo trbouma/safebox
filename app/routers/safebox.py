@@ -461,6 +461,12 @@ async def protected_route(    request: Request,
                         action_data: str = None,
                         action_amount: int = None,
                         action_comment: str = None,
+                        invoice: str | None = None,
+                        invoice_amount: int | None = None,
+                        invoice_comment: str | None = None,
+                        lnaddress: str | None = None,
+                        ecash: str | None = None,
+                        nprofile: str | None = None,
                         amount: float = 0,
                         currency: str = 'SAT',
                         acorn_obj = Depends(get_acorn)
@@ -473,9 +479,24 @@ async def protected_route(    request: Request,
         data = await request.json()
         print(f"data from post {data}")
         action_data = data.get("data", None)
-        
-    if action_data:    
-        # action_data = action_data.replace(' ', '+')
+
+    # Preferred explicit query parameters.
+    if invoice:
+        action_mode = "lninvoice"
+        action_data = invoice
+        action_amount = invoice_amount
+        action_comment = invoice_comment
+    elif lnaddress:
+        action_mode = "lnaddress"
+        action_data = lnaddress
+    elif ecash:
+        action_mode = "ecash"
+        action_data = ecash
+    elif nprofile:
+        action_mode = "nprofile"
+        action_data = nprofile
+
+    if action_data:
         action_data = unquote(action_data)
 
 
@@ -574,7 +595,7 @@ async def ln_pay_address(   request: Request,
     if sat_amount > acorn_obj.balance:
         return {
             "status": "ERROR",
-            "detail": f"Insufficient balance. Requested {sat_amount} sats, available {acorn_obj.balance} sats.",
+            "detail": "Insufficient balance for this payment.",
         }
 
     # check to see if address is local only  
@@ -613,6 +634,7 @@ async def ln_pay_address(   request: Request,
                 comment=ln_pay.comment + tendered,
                 tendered_amount=ln_pay.amount,
                 tendered_currency=ln_pay.currency,
+                notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
             )
         )
 
@@ -669,10 +691,7 @@ async def ln_pay_invoice(   request: Request,
         if invoice_amount_sat > 0 and invoice_amount_sat > acorn_obj.balance:
             return {
                 "status": "ERROR",
-                "detail": (
-                    f"Insufficient balance. Invoice requires {invoice_amount_sat} sats, "
-                    f"available {acorn_obj.balance} sats."
-                ),
+                "detail": "Insufficient balance for this invoice.",
             }
 
         task2 = asyncio.create_task(
@@ -680,6 +699,7 @@ async def ln_pay_invoice(   request: Request,
                 acorn_obj=acorn_obj,
                 lninvoice=ln_invoice.invoice,
                 comment=ln_invoice.comment,
+                notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
             )
         )
         msg_out = "Payment request accepted."
@@ -2089,13 +2109,31 @@ async def request_nfc_payment( request: Request,
     
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url=vault_url, json=submit_data, headers=headers)
-        response.raise_for_status()
-        response_json = response.json()
-    print(response_json)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=vault_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+    except httpx.TimeoutException:
+        return {"status": "ERROR", "detail": "NFC vault request timed out."}
+    except httpx.HTTPStatusError as exc:
+        detail_msg = f"NFC vault returned HTTP {exc.response.status_code}."
+        try:
+            detail_msg = exc.response.json().get("detail", detail_msg)
+        except ValueError:
+            if exc.response.text:
+                detail_msg = exc.response.text
+        return {"status": "ERROR", "detail": detail_msg}
+    except httpx.RequestError:
+        return {"status": "ERROR", "detail": "NFC vault network error."}
+    except ValueError:
+        return {"status": "ERROR", "detail": "NFC vault returned invalid response."}
 
-    return {"status": status, "detail": detail}  
+    print(response_json)
+    return {
+        "status": response_json.get("status", status),
+        "detail": response_json.get("detail", detail),
+    }  
 
 @router.post("/paytonfctag", tags=["safebox", "protected"])
 async def pay_to_nfc_tag( request: Request, 

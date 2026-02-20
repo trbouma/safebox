@@ -19,9 +19,11 @@
   }
 
   .center-text {
+    width: min(96vw, 880px);
     max-width: 880px;
     margin: 0 auto;
     padding: 18px;
+    box-sizing: border-box;
     border: 1px solid var(--sb-panel-border);
     border-radius: 16px;
     background: var(--sb-panel);
@@ -109,7 +111,7 @@
     color: #ffffff;
     border: 0;
     border-radius: 12px;
-    font-weight: 800;
+    font-weight: 600;
     font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     width: 90%;
     display: block;
@@ -199,6 +201,16 @@
     background: #0d1430;
     padding: 12px;
     margin-top: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .request-qr-output {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 10px;
+    overflow-x: auto;
   }
 
   @media (max-width: 700px) {
@@ -232,6 +244,8 @@
   var onboard = "{{onboard}}";
   var action_mode = "{{action_mode}}";
   var action_data = "{{action_data}}";
+  var action_amount = "{{action_amount if action_amount is not none else ''}}";
+  var action_comment = "{{action_comment if action_comment else ''}}";
   var reset_to_home_scheduled = false;
   var clipboard_data = "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{account_access_key}} \n\nRecovery Phrase (12 words):\n\n{{acorn.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***"
   var backup_message = "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ";
@@ -918,6 +932,24 @@ function setActions(local_action_mode,local_action_data) {
       //alert(local_action_mode  + local_action_data);
      
   }
+  if (local_action_mode=="lninvoice"){
+      const invoicePanel = document.getElementById("invoice_pay_panel");
+      const invoiceInput = document.getElementById("ln_invoice_input");
+      const invoiceSummary = document.getElementById("ln_invoice_summary");
+      if (invoicePanel && invoiceInput) {
+        invoicePanel.style.display = "block";
+        invoiceInput.value = local_action_data || "";
+        const summaryParts = [];
+        if (action_amount) summaryParts.push(`${Number(action_amount).toLocaleString("en-US")} sats`);
+        if (action_comment) summaryParts.push(action_comment);
+        invoiceSummary.textContent = summaryParts.length ? `Invoice details: ${summaryParts.join(" | ")}` : "";
+        userMessage("Invoice loaded. Review and authorize payment.", "INFO");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+  }
+  if ((local_action_mode || "").length > 0 && window.history && window.history.replaceState) {
+      window.history.replaceState({}, "", "/safebox/access");
+  }
 }
 
 function getlnPayStatus(ln_pay_status) {
@@ -928,7 +960,7 @@ function getlnPayStatus(ln_pay_status) {
     const status = parsedObject.status || "INFO";
     const detail = parsedObject.detail || "Payment request completed.";
     userMessage(detail, status);
-    if (status === "OK" && action_mode === "lninvoice") {
+    if (status === "OK") {
       userMessage("Payment accepted. Waiting for confirmation...", "INFO");
     }
 
@@ -994,15 +1026,20 @@ async function lnPayAddress() {
 async function lnPayInvoice() {
   // const recipient_address = document.getElementById("ln_recipient_address");
   // const recipient_amount = document.getElementById("ln_recipient_amount");
-  const recipient_memo = document.getElementById("ln_recipient_memo");
+  const recipient_memo = document.getElementById("ln_invoice_memo");
+  const invoice_input = document.getElementById("ln_invoice_input");
   const invoice_pay_button = document.getElementById("ln_invoice_pay_button");
   //var ln_address = recipient_address.value;
   //var ln_amount = parseInt(recipient_amount.value);
   var ln_comment = recipient_memo.value;
   // alert("Pay! " + ln_address + " " + ln_amount + " with comment "+ ln_comment);
   
-  ln_amount = parseInt("{{action_amount}}");
-  ln_invoice ="{{action_data}}";
+  ln_invoice = (invoice_input?.value || "").trim();
+
+  if (!ln_invoice) {
+    userMessage("No lightning invoice loaded.", "ERROR");
+    return;
+  }
 
   // await alert("pay invoice " + ln_invoice);
   
@@ -1076,8 +1113,24 @@ function getInvoiceStatus(ln_invoice_status) {
         scheduleAccessReload(900);
       }
     }
-
+    if (payload.action === "payment") {
+      const status = payload.status || "INFO";
+      const detail = payload.detail || "Payment update";
+      userMessage(detail, status);
+      if (typeof payload.balance !== "undefined") {
+        checkBalance(Number(payload.balance));
+      }
+      if (typeof payload.fiat_balance !== "undefined") {
+        document.getElementById("fiat_balance").innerText = `${payload.fiat_balance}`;
+      }
+      if (status === "SENT") {
+        document.getElementById("img_qr_display").src = "/img/green-check.png";
+        if (!reset_to_home_scheduled) {
+          scheduleAccessReload(1200);
+        }
+      }
     }
+  };
   ws_notify.onclose = () => { console.log("Notification closed");}
   
 
@@ -1133,7 +1186,7 @@ function getInvoiceStatus(ln_invoice_status) {
                           document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
                         }, 5000);
 
-      if (status == "SENT" && action_mode === "lninvoice" && !reset_to_home_scheduled) {
+      if (status == "SENT" && !reset_to_home_scheduled) {
         scheduleAccessReload(1200);
       }
 
@@ -1189,28 +1242,18 @@ function getInvoiceStatus(ln_invoice_status) {
     <br>
   </div>
 
-  {% if action_mode == "lninvoice" %}
-    Pay lightning invoice: {{ action_amount}} sats {{action_comment}}
-    <br><br>
-    <h5>Memo:</h5>
-    <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
-    <br><br>
-    <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Payment</button> 
-    <br><br>
-  {% else %}
-    {% if action_mode != "lnaddress" %}
     <div class="account-box">
       <h2 style="margin: 0;">Request a Payment</h2>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></h3>
-      <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24" style="width:30%">      
+      <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24">      
     <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
       <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
       {% for each in currencies %}     
        <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
       {% endfor %}
     </select>   
-      <textarea id="ln_request_memo" style="width:80%;" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <textarea id="ln_request_memo" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
       <!-- New checkbox for NFC payment -->
       <label>
       <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
@@ -1219,19 +1262,24 @@ function getInvoiceStatus(ln_invoice_status) {
       <pre id="log"></pre>
       <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
     </div>
-    
-    {% endif %}
 
     <div class="account-box">
       <h2 style="margin: 0;">Make a Payment</h2>
-      <input style="width:80%;" type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
+      <div id="invoice_pay_panel" style="display:none;">
+        <h3 style="margin:0 0 8px;">Pay Scanned Invoice</h3>
+        <input type="text" id="ln_invoice_input" placeholder="Lightning invoice" autocomplete="off">
+        <p id="ln_invoice_summary" style="margin: 6px 0 0;"></p>
+        <textarea id="ln_invoice_memo" placeholder="Enter optional comment" name="txt_invoice_comment" rows="3" cols="24"></textarea>
+        <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Invoice Payment</button>
+      </div>
+      <input type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
       <datalist id="contacts">
                 <option value="NFC Tag"></option>
                
       </datalist>
       <br>
      
-      <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8", style="width:30%">
+      <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8">
       
       <select id="ln_select_currency" name="ln_select_currency"> 
         <option value="SAT" >SAT</option>            
@@ -1241,13 +1289,10 @@ function getInvoiceStatus(ln_invoice_status) {
       </select>
       <br>
       
-      <textarea id="ln_recipient_memo" style="width:80%;" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
+      <textarea id="ln_recipient_memo" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
       <br>
       <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
       <br>
-
-  
-  {% endif %}
 
     <div class="btn-stack">
       <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
@@ -1281,7 +1326,7 @@ function getInvoiceStatus(ln_invoice_status) {
   
 
   <br>
-  <div class="center-text">
+  <div class="account-box">
   
  
     <h2> Reusable Payment Request </h2> 
@@ -1321,7 +1366,7 @@ function getInvoiceStatus(ln_invoice_status) {
         <button type="submit">Generate Payment Request</button></form>
     <br>   
   
-    <div id="request_qr" class="center-text"></div>
+    <div id="request_qr" class="request-qr-output"></div>
         
 
     
@@ -1356,7 +1401,6 @@ function getInvoiceStatus(ln_invoice_status) {
   <div class="account-box">
     <h2>Technical Info</h2>
 
-    <br>Mode: {{action_mode}} Data: {{action_data}}
     <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
     <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
     <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
@@ -1364,6 +1408,8 @@ function getInvoiceStatus(ln_invoice_status) {
     <br>home relay: {{acorn.home_relay}}
     <br><br>
     <a href="/public/rates">Exchange Rates</a>
+    <br><br>
+    <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
     <br><br>
     <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
     

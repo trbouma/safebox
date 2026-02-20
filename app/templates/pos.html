@@ -2,450 +2,640 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>POS Keypad - Sale</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safebox POS</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
+    :root {
+      --bg: #070b16;
+      --panel: #121f3f;
+      --panel-2: #0f1a35;
+      --text: #e8eeff;
+      --text-dim: #9eb0dd;
+      --brand-1: #4d6fff;
+      --brand-2: #2f4fd7;
+      --border: #2b3f77;
+      --shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
       margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 10px;
+      min-height: 100%;
+      font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, #1c2d59 0, transparent 46%),
+        radial-gradient(circle at bottom left, #1d2d58 0, transparent 42%),
+        var(--bg);
     }
 
-    .pin-input {
-    width: 4ch; /* width of 4 character units */
-    }
-
-    .pos-container {
-      background: white;
-      border-radius: 20px;
-      padding: 20px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 360px;
-      box-sizing: border-box;
+    .top-invoice {
+      width: min(96vw, 1100px);
+      margin: 12px auto 0;
       text-align: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(165deg, var(--panel), var(--panel-2));
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+
+    .shell {
+      width: min(96vw, 1100px);
+      margin: 12px auto 26px;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1.3fr 1fr;
+    }
+
+    .panel {
+      background: linear-gradient(165deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+
+    .title-row {
       display: flex;
-      flex-direction: column;
-    }
-
-    .pos-heading {
-      font-size: 28px;
-      font-weight: bold;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
       margin-bottom: 10px;
     }
 
-    .total-display {
-      font-size: 20px;
-      font-weight: normal;
-      margin-bottom: 10px;
-      text-align: right;
+    .title {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 700;
     }
 
-    .display {
-      font-size: 32px;
-      padding: 10px;
-      border: 2px solid #ccc;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      text-align: right;
-      background: #f8f8f8;
-      min-height: 50px;
+    .status-pill {
+      font-size: 0.86rem;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      max-width: 52%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .display-wrap {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #0b142b;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .label {
+      display: block;
+      font-size: 0.84rem;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+
+    .value {
+      font-variant-numeric: tabular-nums;
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       overflow-x: auto;
+    }
+
+    .entry {
+      font-size: 1.6rem;
+      min-height: 2rem;
+      text-align: right;
+    }
+
+    .total {
+      font-size: 2rem;
+      text-align: right;
+      color: #fff;
+      margin-top: 8px;
     }
 
     .keypad {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+      gap: 8px;
+      margin-bottom: 10px;
     }
 
-    .keypad button {
-      padding: 18px 0;
-      font-size: 20px;
-      border: none;
-      border-radius: 10px;
-      background: #e0e0e0;
+    button {
+      border: 0;
+      border-radius: 11px;
+      min-height: 46px;
+      padding: 10px 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      background: #233664;
       cursor: pointer;
-      transition: background 0.2s;
-      touch-action: manipulation;
+      width: 100%;
     }
 
-    .keypad button:hover {
-      background: #ccc;
+    .btn-muted { background: #31436f; }
+    .btn-primary { background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); }
+    .btn-success { background: linear-gradient(135deg, #2f9e57, #1f7f43); }
+    .btn-danger { background: linear-gradient(135deg, #cf3d44, #a92b32); }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
     }
 
-    .action {
-      background-color: #4caf50;
-      color: white;
-    }
+    .stack { display: grid; gap: 8px; }
 
-    .ok {
-      background-color: #2196f3;
-      color: white;
-    }
-
-    .reset {
-      background-color: #f44336;
-      color: white;
-      font-size: 18px;
-      margin-top: 20px;
-      padding: 12px 20px;
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
       border-radius: 10px;
-      border: none;
-      width: 100%;
+      background: #0b142b;
+      color: var(--text);
+      padding: 10px 11px;
+      font-size: 0.96rem;
+      font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
     }
 
-    .pay {
-      background-color: #4caf50;
-      color: white;
-      font-size: 20px;
-      padding: 16px;
-      border: none;
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .meta {
+      font-size: 0.86rem;
+      color: var(--text-dim);
+      margin: 2px 0 0;
+    }
+
+    .qr {
+      text-align: center;
+      border: 1px dashed var(--border);
       border-radius: 12px;
-      margin-top: 15px;
-      width: 100%;
+      padding: 12px;
+      background: #0a1226;
+      max-width: 320px;
+      margin: 0 auto;
     }
 
-    .empty {
-      visibility: hidden;
+    .qr img {
+      width: min(100%, 280px);
+      border-radius: 8px;
+      border: 1px solid #36529a;
+      background: #fff;
+      display: block;
+      margin: 0 auto 10px;
     }
 
-    /* 🌙 Dark Mode Styles */
-    .dark-mode {
-      background-color: #121212;
-      color: #ffffff;
+    .paid-caption {
+      margin: 4px 0 0;
+      font-weight: 700;
+      color: #9ae6b0;
+      letter-spacing: 0.3px;
     }
 
-    .dark-mode body {
-      background-color: #121212;
+    .hidden { display: none !important; }
+
+    .success-flash {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: rgba(56, 201, 109, 0.22);
+      opacity: 0;
+      transition: opacity 180ms ease;
+      z-index: 9998;
     }
 
-    .dark-mode .pos-container {
-      background-color: #1e1e1e;
-      color: #f1f1f1;
-      box-shadow: 0 0 15px rgba(255,255,255,0.05);
+    .success-flash.show {
+      opacity: 1;
+      transition: opacity 120ms ease;
     }
 
-    .dark-mode .display {
-      background-color: #2c2c2c;
-      border-color: #444;
-      color: #fff;
+    #confettiCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
     }
 
-    .dark-mode .keypad button {
-      background-color: #333;
-      color: #fff;
-    }
-
-    .dark-mode .keypad button:hover {
-      background-color: #444;
-    }
-
-    .dark-mode .action {
-      background-color: #388e3c;
-    }
-
-    .dark-mode .ok {
-      background-color: #1976d2;
-    }
-
-    .dark-mode .reset {
-      background-color: #c62828;
-    }
-
-    .dark-mode .pay {
-      background-color: #2e7d32;
-    }
-
-    .dark-mode .pos-heading,
-    .dark-mode .total-display {
-      color: #ffffff;
+    @media (max-width: 920px) {
+      .shell { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-<script>
-  const ws = new WebSocket("wss://{{request.url.hostname}}/pos/ws");
-  const access_key = localStorage.getItem("access_key");
-  console.log(access_key); // "myValue"
+  <canvas id="confettiCanvas" class="hidden"></canvas>
+  <div id="successFlash" class="success-flash"></div>
 
-  ws.onopen = () => { 
-    console.log("WebSocket connected"); 
-    // Example JSON message to send when the socket opens
-
-   // getStoredKey();
-    getStoredHandle();
-    
-
-
-  }
-  ws.onmessage = (event) => {
-    console.log("Message received:", event.data);
-    parsedObject = JSON.parse(event.data);
-    const heading = document.getElementById("heading");
-    
-    heading.textContent = parsedObject.status + " " + parsedObject.detail;
-
-    if (parsedObject.status == "OK") {
-
-      if (parsedObject.action == "nfc_token") {
-        heading.textContent = parsedObject.detail;
-
-      }
-      
-      else {
-         heading.textContent = parsedObject.detail;
-      }
-
-
-      // alert(`OK ${parsedObject.detail}`);
-    }
-
-    
-
-  };
-
-  
-
-  ws.onclose = () => console.log("WebSocket closed");
-
-
-
-</script>
-
-<div class="pos-container">
-  <div id="heading" class="pos-heading">Please Pay</div>
-  <div class="pos-heading" id="totalDisplay">0</div>
-  <div id="display" class="display">0</div>
-  <div class="keypad">
-    <button onclick="press('7')">7</button>
-    <button onclick="press('8')">8</button>
-    <button onclick="press('9')">9</button>
-    <button onclick="clearDisplay()">C</button>
-
-    <button onclick="press('4')">4</button>
-    <button onclick="press('5')">5</button>
-    <button onclick="press('6')">6</button>
-    <button onclick="addItem()">+</button>
-
-    <button onclick="press('1')">1</button>
-    <button onclick="press('2')">2</button>
-    <button onclick="press('3')">3</button>
-    <button onclick="removeLast()">←</button>
-
-    <button onclick="press('0')">0</button>
-    <button class="ok" onclick="showAlert()">OK</button>
-    <button class="action" onclick="calculateTotal()">Total</button>
-    <div class="empty"></div>
+  <div class="top-invoice hidden" id="invoiceTop">
+    <span class="label" style="margin-bottom: 8px;">Current Invoice</span>
+    <div class="qr">
+      <img id="invoiceQr" alt="Lightning invoice QR" src="">
+      <p id="invoicePaidCaption" class="paid-caption hidden">Paid</p>
+      <button class="btn-muted" id="btnCopyInvoice" style="margin-top: 8px;">Copy Invoice</button>
+    </div>
   </div>
 
-  <button class="reset" onclick="resetTotal()">Reset Total</button>
-  <button class="pay" onclick="payNow()">Pay</button>
-  <button class="pay" onclick="getBalance()">Balance</button>
-  <button class="pay" onclick="payWithNFC()">Pay with NFC</button>
-  <br>
-  Enter PIN: <center><input type="password" class="pin-input "id="pinInput" maxlength="4" size="4" placeholder="PIN" /></center>
-  <button class="pay" onclick="setAccessKey()">Set Access Key</button>
-  <button class="pay" onclick="setHandle()">Set Handle</button>
-</div>
+  <main class="shell">
+    <section class="panel">
+      <div class="title-row">
+        <h1 class="title">Safebox POS</h1>
+        <div id="statusPill" class="status-pill">Connecting...</div>
+      </div>
 
-<script>
-  let rawInput = '';
-  let total = 0;
+      <div class="display-wrap">
+        <span class="label">Current Entry (sats)</span>
+        <div id="display" class="value entry">0</div>
+        <span class="label" style="margin-top: 10px;">Total (sats)</span>
+        <div id="totalDisplay" class="value total">0</div>
+      </div>
 
-  function press(digit) {
-    if (rawInput.length >= 9) return;
-    rawInput += digit;
-    updateDisplay(formatAsCurrency(rawInput));
-  }
+      <div class="keypad" aria-label="numeric keypad">
+        <button data-key="7">7</button>
+        <button data-key="8">8</button>
+        <button data-key="9">9</button>
+        <button class="btn-muted" id="btnClear">C</button>
 
-  function updateDisplay(val) {
-    document.getElementById('display').innerText = val || '0';
-  }
+        <button data-key="4">4</button>
+        <button data-key="5">5</button>
+        <button data-key="6">6</button>
+        <button class="btn-primary" id="btnAdd">Add</button>
 
-  function clearDisplay() {
-    rawInput = '';
-    updateDisplay('0');
-  }
+        <button data-key="1">1</button>
+        <button data-key="2">2</button>
+        <button data-key="3">3</button>
+        <button class="btn-muted" id="btnBack">⌫</button>
 
-  function removeLast() {
-    rawInput = rawInput.slice(0, -1);
-    updateDisplay(rawInput);
-  }
+        <button data-key="0">0</button>
+        <button class="btn-primary" id="btnTotal">Total</button>
+        <button class="btn-danger" id="btnReset">Reset</button>
+        <button class="btn-success" id="btnNfc">Pay NFC</button>
+      </div>
 
-  function formatAsCurrency(str) {
-    let num = parseInt(str || '0', 10);
-    return `${num}`;
-  }
+      <div class="btn-row">
+        <button class="btn-primary" id="btnCreateInvoice">Create Invoice</button>
+        <button class="btn-muted" id="btnBalance">Get Balance</button>
+      </div>
 
-  function addItem() {
-    const value = parseInt(rawInput || '0', 10);
-    total += value;
-    rawInput = '';
-    updateDisplay('0');
-    updateTotalDisplay();
-  }
+      <p class="meta" id="statusText">Waiting for wallet connection.</p>
+    </section>
 
-  function calculateTotal() {
-    addItem();
-  }
+    <section class="panel stack">
+      <h2 class="title" style="font-size: 1.1rem; margin-bottom: 2px;">Payment Options</h2>
+      <p class="meta">This POS uses your current logged-in Safebox session.</p>
 
-  function updateTotalDisplay() {
-    document.getElementById('totalDisplay').innerText = `${(total )}`;
-  }
+      <label class="label" for="pinInput">NFC PIN (optional)</label>
+      <input id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="PIN">
 
-  function resetTotal() {
-    total = 0;
-    updateTotalDisplay();
-  }
+      <label class="label" for="memoInput">Invoice / NFC Comment</label>
+      <textarea id="memoInput" placeholder="Paid from POS"></textarea>
+    </section>
+  </main>
 
-  function showAlert() {
-    const amount = formatAsCurrency(rawInput);
-    alert(`Current input amount: ${amount}`);
-  }
+  <script>
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${wsScheme}://${window.location.host}/pos/ws`);
+    const wsStatus = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/status`);
 
-  function payNow() {
-    alert(`Proceeding to pay $${(total / 100).toFixed(2)}`);
-  }
+    let rawInput = "";
+    let total = 0;
+    let currentInvoice = "";
+    let invoicePending = false;
+    let nfcPaymentPending = false;
 
-  function getBalance() {
+    const displayEl = document.getElementById("display");
+    const totalEl = document.getElementById("totalDisplay");
+    const statusTextEl = document.getElementById("statusText");
+    const statusPillEl = document.getElementById("statusPill");
+    const pinInputEl = document.getElementById("pinInput");
+    const memoInputEl = document.getElementById("memoInput");
+    const invoiceTopEl = document.getElementById("invoiceTop");
+    const invoiceQrEl = document.getElementById("invoiceQr");
+    const successFlashEl = document.getElementById("successFlash");
+    const confettiCanvasEl = document.getElementById("confettiCanvas");
+    const confettiCtx = confettiCanvasEl.getContext("2d");
+    const invoicePaidCaptionEl = document.getElementById("invoicePaidCaption");
 
-   
-          const message = {
-    action: "get_balance"
+    memoInputEl.value = "Paid from POS";
 
-  };
-
-  ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-  }
-
-  async function setAccessKey(){
-    let accessKey = prompt("Please enter your access key:");
-    // alert("You entered: " + accessKey);
-
-    const storedKey = localStorage.getItem("access_key");
-    console.log(storedKey); // "stored key"
-
-    const message = {
-                      action: "access_key",
-                      value: accessKey,
-
-                          };
-    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-    localStorage.setItem("access_key", accessKey);
-
-
+    function setStatus(message, type = "info") {
+      statusTextEl.textContent = message;
+      statusPillEl.textContent = message;
+      if (type === "error") {
+        statusPillEl.style.borderColor = "#8a2d34";
+      } else if (type === "ok") {
+        statusPillEl.style.borderColor = "#2a7a48";
+      } else {
+        statusPillEl.style.borderColor = "var(--border)";
       }
-
-    async function setHandle(){
-    let handle = prompt("Please enter your handle:");
-    // alert("You entered: " + accessKey);
-
-    const storedHandle = localStorage.getItem("handle");
-    console.log(storedHandle); // "stored handle"
-
-    const message = {
-                      action: "handle",
-                      value: handle,
-
-                          };
-    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-    localStorage.setItem("handle", handle);
-
-
-      }
-
-  async function getStoredKey(){
-
-    const storedKey = localStorage.getItem("access_key");
-    console.log(storedKey); // "stored key"
-
-    const message = {
-                      action: "access_key",
-                      value: storedKey,
-
-                          };
-    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-   
-
-
-      }
-
-    async function getStoredHandle(){
-
-    const storedHandle = localStorage.getItem("handle");
-    console.log('stored handle ' + storedHandle); // "stored handle"
-
-    const message = {
-                      action: "handle",
-                      value: storedHandle,
-
-                          };
-    ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-   
-
-
-      }
- 
-  async function payWithNFC() {
-    alert(`Pay with NFC`);
-    var nfc_token;
-    var nfc_pin = document.getElementById("pinInput").value;
-    var amount_to_pay = parseInt(document.getElementById('totalDisplay').innerText);
-    var comment = "Paid from POS!";
-    
-    document.getElementById("pinInput").value = ""; // clear it
-
-    if ("NDEFReader" in window) {
-      const ndef = new NDEFReader();
-      try {
-        await ndef.scan();
-        ndef.onreading = event => {
-          const decoder = new TextDecoder();
-          for (const record of event.message.records) {
-
-            nfc_token = decoder.decode(record.data);
-            
-            const message = {
-                      "action": "nfc_token",
-                      "value": nfc_token,
-                      "amount": amount_to_pay,
-                      "pin": nfc_pin,
-                      "currency": "SAT",
-                      "comment": comment
-
-                          };
-            ws.send(JSON.stringify(message));  // 👈 Send JSON as string
-            // alert(nfc_token);
-          }
-          
-          
-        }
-      } catch(error) {
-        console.log(error);
-      }
-    } else {
-      console.log("Web NFC is not supported.");
     }
 
+    function formatSat(value) {
+      const n = Number(value) || 0;
+      return n.toLocaleString("en-US");
+    }
 
-  }
-  
- 
+    function updateDisplay() {
+      displayEl.textContent = rawInput ? formatSat(rawInput) : "0";
+    }
 
-  function setDarkMode() {
-    document.documentElement.classList.add('dark-mode');
-    document.documentElement.classList.remove('light-mode');
-    localStorage.setItem('theme', 'dark');
-  }
+    function updateTotal() {
+      totalEl.textContent = formatSat(total);
+    }
 
-  setDarkMode(); // Apply dark mode on load
-</script>
+    function addEntryToTotal() {
+      const value = parseInt(rawInput || "0", 10);
+      if (Number.isFinite(value) && value > 0) {
+        total += value;
+      }
+      rawInput = "";
+      updateDisplay();
+      updateTotal();
+    }
 
+    function sendWs(payload) {
+      if (ws.readyState !== WebSocket.OPEN) {
+        setStatus("WebSocket not connected.", "error");
+        return;
+      }
+      ws.send(JSON.stringify(payload));
+    }
+
+    function markInvoicePaid() {
+      if (!invoicePending) return;
+      invoicePending = false;
+      invoiceQrEl.src = "/img/green-check.png";
+      invoicePaidCaptionEl.classList.remove("hidden");
+      setStatus("Invoice paid.", "ok");
+      celebrateSuccess();
+      total = 0;
+      rawInput = "";
+      currentInvoice = "";
+      updateDisplay();
+      updateTotal();
+      setTimeout(() => {
+        invoiceTopEl.classList.add("hidden");
+        invoicePaidCaptionEl.classList.add("hidden");
+      }, 1800);
+    }
+
+    function markNfcPaymentSuccess(detail = "NFC payment successful.") {
+      if (!nfcPaymentPending) return;
+      nfcPaymentPending = false;
+      setStatus(detail, "ok");
+      celebrateSuccess();
+      total = 0;
+      rawInput = "";
+      updateDisplay();
+      updateTotal();
+    }
+
+    function celebrateSuccess() {
+      successFlashEl.classList.add("show");
+      setTimeout(() => successFlashEl.classList.remove("show"), 160);
+      setTimeout(() => successFlashEl.classList.add("show"), 220);
+      setTimeout(() => successFlashEl.classList.remove("show"), 420);
+      runConfettiBurst();
+    }
+
+    function runConfettiBurst() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      confettiCanvasEl.width = w;
+      confettiCanvasEl.height = h;
+      confettiCanvasEl.classList.remove("hidden");
+
+      const colors = ["#4d6fff", "#7de2ff", "#9ae6b0", "#ffe08a", "#ffffff"];
+      const pieces = Array.from({ length: 110 }, () => ({
+        x: w * (0.15 + Math.random() * 0.7),
+        y: h * (0.15 + Math.random() * 0.18),
+        vx: (Math.random() - 0.5) * 5.2,
+        vy: -Math.random() * 5.2 - 1.2,
+        size: 4 + Math.random() * 5,
+        rot: Math.random() * Math.PI * 2,
+        vr: (Math.random() - 0.5) * 0.3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        life: 60 + Math.random() * 30,
+      }));
+
+      let frame = 0;
+      const gravity = 0.15;
+
+      function draw() {
+        confettiCtx.clearRect(0, 0, w, h);
+        let alive = 0;
+        for (const p of pieces) {
+          if (p.life <= 0) continue;
+          alive += 1;
+          p.vy += gravity;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.rot += p.vr;
+          p.life -= 1;
+          confettiCtx.save();
+          confettiCtx.translate(p.x, p.y);
+          confettiCtx.rotate(p.rot);
+          confettiCtx.fillStyle = p.color;
+          confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          confettiCtx.restore();
+        }
+        frame += 1;
+        if (alive > 0 && frame < 110) {
+          requestAnimationFrame(draw);
+        } else {
+          confettiCtx.clearRect(0, 0, w, h);
+          confettiCanvasEl.classList.add("hidden");
+        }
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    async function createInvoice() {
+      if (total <= 0) {
+        setStatus("Enter an amount before creating invoice.", "error");
+        return;
+      }
+      try {
+        const response = await fetch("/pos/invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: total,
+            currency: "SAT",
+            comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`Invoice request failed (${response.status})`);
+        }
+        const data = await response.json();
+        if (!data.invoice) {
+          throw new Error("No invoice returned.");
+        }
+        currentInvoice = data.invoice;
+        invoicePending = true;
+        invoiceQrEl.src = `/safebox/qr/${currentInvoice}`;
+        invoicePaidCaptionEl.classList.add("hidden");
+        invoiceTopEl.classList.remove("hidden");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setStatus("Invoice created. Awaiting customer payment.", "ok");
+      } catch (err) {
+        setStatus(err.message || "Failed to create invoice.", "error");
+      }
+    }
+
+    async function payWithNfc() {
+      if (total <= 0) {
+        setStatus("Enter an amount before NFC payment.", "error");
+        return;
+      }
+      if (!("NDEFReader" in window)) {
+        setStatus("Web NFC not supported on this device/browser.", "error");
+        return;
+      }
+
+      setStatus("Tap NFC card/tag now...", "info");
+      const ndef = new NDEFReader();
+
+      try {
+        await ndef.scan();
+        ndef.onreading = (event) => {
+          const decoder = new TextDecoder();
+          for (const record of event.message.records) {
+            const nfcToken = decoder.decode(record.data);
+            sendWs({
+              action: "nfc_token",
+              value: nfcToken,
+              amount: total,
+              pin: pinInputEl.value || "",
+              currency: "SAT",
+              comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
+            });
+            nfcPaymentPending = true;
+            setStatus("NFC payment submitted. Waiting for confirmation...", "info");
+            pinInputEl.value = "";
+            break;
+          }
+        };
+      } catch (error) {
+        setStatus(`NFC error: ${error.message || error}`, "error");
+      }
+    }
+
+    async function copyInvoice() {
+      if (!currentInvoice) {
+        setStatus("No invoice to copy.", "error");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(currentInvoice);
+        setStatus("Invoice copied to clipboard.", "ok");
+      } catch {
+        setStatus("Clipboard copy failed.", "error");
+      }
+    }
+
+    ws.onopen = () => {
+      setStatus("POS channel connected.", "ok");
+      sendWs({ action: "get_balance" });
+    };
+
+    ws.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      const status = payload.status || "INFO";
+      const detail = String(payload.detail || "");
+
+      if (payload.action === "get_balance" && status === "OK") {
+        setStatus(`Balance: ${formatSat(detail)} sats`, "ok");
+        return;
+      }
+
+      if (payload.action === "nfc_token" && status === "OK") {
+        setStatus(detail || "NFC payment complete.", "ok");
+        if (/payment ok|success|complete|redeemed|credited|received/i.test(detail)) {
+          markNfcPaymentSuccess(detail || "NFC payment successful.");
+        }
+        return;
+      }
+
+      if (payload.action === "nfc_token" && status === "ERROR") {
+        nfcPaymentPending = false;
+      }
+
+      if (status === "ERROR") {
+        setStatus(detail || "Request failed.", "error");
+        return;
+      }
+
+      setStatus(detail || status, status === "OK" ? "ok" : "info");
+    };
+
+    wsStatus.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (invoicePending && payload.status === "RECD") {
+          markInvoicePaid();
+          return;
+        }
+        if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
+          markNfcPaymentSuccess("NFC payment successful.");
+        }
+      } catch {
+        // ignore non-json frames
+      }
+    };
+
+    ws.onclose = () => setStatus("POS channel disconnected.", "error");
+    ws.onerror = () => setStatus("POS channel error.", "error");
+
+    document.querySelectorAll("[data-key]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (rawInput.length >= 9) return;
+        rawInput += btn.dataset.key;
+        updateDisplay();
+      });
+    });
+
+    document.getElementById("btnClear").addEventListener("click", () => {
+      rawInput = "";
+      updateDisplay();
+    });
+
+    document.getElementById("btnBack").addEventListener("click", () => {
+      rawInput = rawInput.slice(0, -1);
+      updateDisplay();
+    });
+
+    document.getElementById("btnAdd").addEventListener("click", addEntryToTotal);
+    document.getElementById("btnTotal").addEventListener("click", addEntryToTotal);
+
+    document.getElementById("btnReset").addEventListener("click", () => {
+      total = 0;
+      rawInput = "";
+      currentInvoice = "";
+      invoicePending = false;
+      nfcPaymentPending = false;
+      updateDisplay();
+      updateTotal();
+      invoiceTopEl.classList.add("hidden");
+      invoicePaidCaptionEl.classList.add("hidden");
+      setStatus("Total reset.", "info");
+    });
+
+    document.getElementById("btnBalance").addEventListener("click", () => sendWs({ action: "get_balance" }));
+    document.getElementById("btnCreateInvoice").addEventListener("click", createInvoice);
+    document.getElementById("btnNfc").addEventListener("click", payWithNfc);
+    document.getElementById("btnCopyInvoice").addEventListener("click", copyInvoice);
+
+    updateDisplay();
+    updateTotal();
+  </script>
 </body>
 </html>
