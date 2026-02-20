@@ -1412,6 +1412,9 @@ function getInvoiceStatus(ln_invoice_status) {
     <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
     <br><br>
     <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
+    <p id="branding_probe" style="margin:10px 0 0; font-size:0.82rem; color:var(--text-muted); word-break:break-word;">
+      {{ request.url.hostname }}: {{ branding_message }}
+    </p>
     
     <br><br>
     

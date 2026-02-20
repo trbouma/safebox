@@ -5,6 +5,7 @@ import bolt11
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from app.branding import build_templates
 
 from app.config import Settings
 from app.utils import check_ln_address, decode_lnurl, parse_nauth
@@ -13,7 +14,7 @@ settings = Settings()
 logger = logging.getLogger(__name__)
 
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 
 router = APIRouter()
 

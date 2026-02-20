@@ -41,6 +41,7 @@ from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
+from app.branding import build_templates, get_branding_for_request
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 
@@ -59,7 +60,7 @@ config = ConfigWithFallback()
 HOME_MINT = settings.HOME_MINT
 MINTS = settings.MINTS
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 
 
 router = APIRouter()
@@ -120,13 +121,14 @@ def resolve_npub_from_card_secret(token_secret: str) -> str:
 def _welcome_retry_response(request: Request):
     csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
     csrf_token = csrf_cookie if csrf_cookie and len(csrf_cookie) >= 32 else secrets.token_urlsafe(32)
+    branding = get_branding_for_request(request)
     response = templates.TemplateResponse(
         "welcome.html",
         {
             "request": request,
             "title": "Welcome Page",
-            "branding": settings.BRANDING,
-            "branding_message": settings.BRANDING_RETRY,
+            "branding": branding["branding"],
+            "branding_message": branding["branding_retry"],
             "csrf_token": csrf_token,
         },
     )
@@ -560,7 +562,6 @@ async def protected_route(    request: Request,
                                             "ws_url": ws_url,
                                             "ws_url_notify": ws_url_notify,
                                             "lnurl": final_lnurl,
-                                            "branding": settings.BRANDING,
                                             "onboard": onboard,
                                             "action_mode": action_mode,
                                             "action_data": action_data,

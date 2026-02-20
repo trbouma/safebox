@@ -32,6 +32,7 @@ from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
+from app.branding import build_templates
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
 
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 settings = Settings()
 config = ConfigWithFallback()
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 
 
 router = APIRouter()

@@ -13,6 +13,7 @@ from safebox.acorn import Acorn
 from app.appmodels import RegisteredSafebox, paymentByToken, lnPOSInvoice, lnPOSInfo
 from app.config import Settings
 from app.db import engine
+from app.branding import build_templates
 from app.rates import get_currency_rate
 from app.tasks import handle_payment
 from app.utils import create_jwt_token, fetch_safebox, extract_leading_numbers, get_acorn
@@ -22,7 +23,7 @@ from app.utils import create_jwt_token, fetch_safebox, extract_leading_numbers, 
 settings = Settings()
 logger = logging.getLogger(__name__)
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 
 
 router = APIRouter()

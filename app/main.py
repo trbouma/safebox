@@ -18,6 +18,7 @@ from monstr.encrypt import Keys, DecryptionException
 
 from app.config import Settings, ConfigWithFallback
 from app.db import engine as DB_ENGINE, ensure_registeredsafebox_uniqueness
+from app.branding import build_templates, ensure_branding_bootstrap
 from app.routers import     (   lnaddress, 
                                 safebox, 
                                 scanner, 
@@ -112,6 +113,7 @@ async def lifespan(app: FastAPI):
     global nwc_task_handle
     global relay_task
     _install_loop_exception_filter()
+    ensure_branding_bootstrap()
     try:
         SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
         ensure_registeredsafebox_uniqueness()
@@ -221,7 +223,7 @@ app.include_router(public.router, prefix="/public")
 
 app.include_router(records.router, prefix="/records")
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 app.mount("/src", StaticFiles(directory="app/src"), name="src")
 app.mount("/js", StaticFiles(directory="app/js"), name="js")
 app.mount("/img", StaticFiles(directory="app/img"), name="img")
@@ -250,8 +252,6 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
         {
             "request": request,
             "title": "Welcome Page",
-            "branding": SETTINGS.BRANDING,
-            "branding_message": SETTINGS.BRANDING_MESSAGE,
             "csrf_token": csrf_token,
         },
     )

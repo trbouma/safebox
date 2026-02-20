@@ -19,6 +19,7 @@ from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord
 from app.config import Settings
 from app.db import engine
+from app.branding import build_templates
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 
 import logging, jwt
@@ -26,7 +27,7 @@ import logging, jwt
 
 settings = Settings()
 
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 
 
 router = APIRouter()

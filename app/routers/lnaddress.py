@@ -36,11 +36,12 @@ from app.utils import ( create_jwt_token,
 
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
+from app.branding import build_templates
 from app.rates import get_currency_rate
 
 settings = Settings()
 config = ConfigWithFallback()
-templates = Jinja2Templates(directory="app/templates")
+templates = build_templates()
 password_hasher = PasswordHasher()
 
 # RELAYS = ['wss://relay.getsafebox.app']
@@ -563,7 +564,6 @@ async def onboard_safebox(  request: Request,
         return templates.TemplateResponse(  "welcome.html", 
                                         {   "request": request, 
                                             "title": "Welcome Page", 
-                                            "branding": settings.BRANDING,
                                             "branding_message": message})
     
     
