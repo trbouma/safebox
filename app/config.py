@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     PQC_SIGALG: str = "ML-DSA-44"
     PQC_KEMALG: str = "ML-KEM-512"
     DATABASE: str = "sqlite:///data/database.db"  
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_POOL_TIMEOUT_SECONDS: int = 30
     RELAYS: List = ['wss://relay.getsafebox.app']
     ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']

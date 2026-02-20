@@ -12,13 +12,13 @@ from sqlmodel import Field, SQLModel
 
 class RegisteredSafebox(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    handle: str
+    handle: str = Field(index=True, unique=True, nullable=False)
     custom_handle: Optional[str] = Field(default=None,unique=True, nullable=True)
-    npub: str
+    npub: str = Field(index=True, unique=True, nullable=False)
     nsec: Optional[str] = Field(default=None, nullable=True)  # Made nullable
     home_relay: str 
     onboard_code: str 
-    access_key: Optional[str] = Field(default=None, nullable=True)  # Made nullable 
+    access_key: Optional[str] = Field(default=None, index=True, unique=True, nullable=True)  # Made nullable 
     balance: int = 0
     owner: Optional[str] = None
     session_nonce: Optional[str] = None

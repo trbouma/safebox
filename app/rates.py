@@ -12,14 +12,15 @@ from typing import Any, Dict
 from bech32 import bech32_decode, convertbits
 import struct, json
 import httpx
+from sqlalchemy import text
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox, CurrencyRate
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 from app.config import Settings
+from app.db import engine
 
 settings = Settings()
-engine = create_engine(settings.DATABASE)
 logger = logging.getLogger(__name__)
 
 CURRENCY_TICKER_URL = "https://blockchain.info/ticker"
@@ -130,43 +131,54 @@ async def init_currency_rates():
 
 # Routine to load CSV into the CurrencyRate table
 async def load_currency_rates_from_csv():
-    # Setup database engine and session
-
     try:
         with Session(engine) as session:
-            csv_path = "setup/currency.csv"
+            csv_path = settings.CURRENCY_CSV
+            logger.info("Initializing currency rates from CSV path=%s", csv_path)
+            inserted = 0
             with open(csv_path, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
-                
                 for row in reader:
                     currency_code = row['currency_code']                    
-                    # session.exec("BEGIN EXCLUSIVE;")
-                    statement = select(CurrencyRate).where(CurrencyRate.currency_code==currency_code)
-                    result = session.exec(statement).first()
-
-                    if result:
-                        print("already record!")
-                        break
-
-                    else:
-                        print("let add record!")
-
-
-                        # Convert and prepare data
-                        data = {
-                            "currency_code": currency_code,
-                            "currency_rate": float(row['currency_rate']) if row['currency_rate'] else None,
-                            "currency_symbol": row['currency_symbol'],
-                            "currency_description": row['currency_description'],
-                            "refresh_time": None,
-                            "fractional_unit": row['fractional_unit'],
-                            "number_to_base": int(row['number_to_base']) if row['number_to_base'] else None,
-                        }
-            
-                        # print(data)
-                        currency = CurrencyRate(**data)
-                        session.add(currency)
-                        session.commit()
+                    data = {
+                        "currency_code": currency_code,
+                        "currency_rate": float(row['currency_rate']) if row['currency_rate'] else None,
+                        "currency_symbol": row['currency_symbol'],
+                        "currency_description": row['currency_description'],
+                        "refresh_time": None,
+                        "fractional_unit": row['fractional_unit'],
+                        "number_to_base": int(row['number_to_base']) if row['number_to_base'] else None,
+                    }
+                    # Safe for concurrent startup workers on SQLite/Postgres.
+                    result = session.exec(
+                        text(
+                            """
+                            INSERT INTO currencyrate (
+                                currency_code,
+                                currency_rate,
+                                currency_symbol,
+                                currency_description,
+                                refresh_time,
+                                fractional_unit,
+                                number_to_base
+                            ) VALUES (
+                                :currency_code,
+                                :currency_rate,
+                                :currency_symbol,
+                                :currency_description,
+                                :refresh_time,
+                                :fractional_unit,
+                                :number_to_base
+                            )
+                            ON CONFLICT (currency_code) DO NOTHING
+                            """
+                        ),
+                        params=data,
+                    )
+                    if result.rowcount and result.rowcount > 0:
+                        inserted += result.rowcount
+                session.commit()
+            logger.info("Currency CSV initialization completed inserted=%s", inserted)
     except (OSError, ValueError, KeyError) as exc:
         logger.error("Failed to initialize currency rates from CSV: %s", exc)
         

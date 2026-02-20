@@ -22,10 +22,11 @@ import bolt11
 from typing import Optional
 
 from app.appmodels import RegisteredSafebox, NWCEvent, NWCSecret
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 from sqlalchemy.exc import IntegrityError
 
 from app.tasks import handle_payment, safe_handle_payment, handle_nwc_payment
+from app.db import engine
 
 import os
 from app.config import Settings, ConfigWithFallback
@@ -42,8 +43,6 @@ config = ConfigWithFallback()
 RELAYS = settings.RELAYS
 TIMEDELTA_SECONDS = 60
 SERVICE_NWC_KEYS: Keys | None = Keys(config.NWC_NSEC) if config.NWC_NSEC else None
-
-engine = create_engine(settings.DATABASE)
 
 import asyncio
 import logging

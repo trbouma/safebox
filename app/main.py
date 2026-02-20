@@ -1,4 +1,4 @@
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 from fastapi import FastAPI, Request, BackgroundTasks, Cookie, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -17,6 +17,7 @@ import oqs
 from monstr.encrypt import Keys, DecryptionException
 
 from app.config import Settings, ConfigWithFallback
+from app.db import engine as DB_ENGINE, ensure_registeredsafebox_uniqueness
 from app.routers import     (   lnaddress, 
                                 safebox, 
                                 scanner, 
@@ -44,7 +45,6 @@ previous_loop_exception_handler = None
 
 # Create Settings:
 SETTINGS = Settings()
-DB_ENGINE = create_engine(SETTINGS.DATABASE)
 
 
 def _is_expected_monstr_ws_close(context: dict) -> bool:
@@ -114,8 +114,12 @@ async def lifespan(app: FastAPI):
     _install_loop_exception_filter()
     try:
         SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
+        ensure_registeredsafebox_uniqueness()
     except SQLAlchemyError:
         logger.exception("Database initialization failed during startup")
+        raise
+    except RuntimeError:
+        logger.exception("Database integrity check failed during startup")
         raise
     
     #TODO add in current rates    

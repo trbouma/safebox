@@ -11,7 +11,7 @@ from datetime import timedelta
 import qrcode, io, urllib, json
 import hashlib, secrets
 
-from sqlmodel import Field, Session, SQLModel, create_engine, select, update
+from sqlmodel import Field, Session, SQLModel, select, update
 from argon2 import PasswordHasher
 import requests
 
@@ -35,6 +35,7 @@ from app.utils import ( create_jwt_token,
                         verify_payload)
 
 from app.config import Settings, ConfigWithFallback
+from app.db import engine
 from app.rates import get_currency_rate
 
 settings = Settings()
@@ -53,7 +54,6 @@ HOME_MINT = settings.HOME_MINT
 
 service_key_obj = Keys(priv_k=config.SERVICE_NSEC)
 
-engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine, checkfirst=True)
 
 

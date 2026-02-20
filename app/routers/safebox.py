@@ -37,9 +37,10 @@ from urllib.parse import quote, unquote
 
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret
 from app.config import Settings, ConfigWithFallback
+from app.db import engine
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 
@@ -63,7 +64,6 @@ templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter()
 
-engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 
 

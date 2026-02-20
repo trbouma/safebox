@@ -34,8 +34,9 @@ from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException
 from app.appmodels import RegisteredSafebox
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 from app.config import Settings, ConfigWithFallback
+from app.db import engine
 
 
 
@@ -45,7 +46,6 @@ logger = logging.getLogger(__name__)
 # Secret key for signing JWT
 # SECRET_KEY = "foobar"
 # ALGORITHM = "HS256"
-engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 timezone = ZoneInfo(settings.TZ)
 # Function to generate JWT token

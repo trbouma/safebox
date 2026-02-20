@@ -2,7 +2,7 @@ from time import sleep, time
 import asyncio
 
 from safebox.acorn import Acorn
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, select
 
 import signal, sys, string, cbor2, base64,os
 import aioconsole
@@ -24,6 +24,7 @@ from app.appmodels import RegisteredSafebox, PaymentQuote, nfcPayOutRequest, nfc
 from safebox.acorn import Acorn
 from safebox.models import cliQuote
 from app.config import Settings
+from app.db import engine
 from app.rates import get_currency_rate
 
 import time
@@ -38,7 +39,6 @@ RELAYS = settings.RELAYS
 MINTS = settings.MINTS
 LOGGING_LEVEL=20
 
-engine = create_engine(settings.DATABASE)
 # SQLModel.metadata.create_all(engine, checkfirst=True)
 logger = logging.getLogger(__name__)
 

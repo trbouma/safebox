@@ -27,3 +27,8 @@ Section convention used across current Safebox specs:
 - [WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md](./WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md) - Record persistence formats for plaintext and structured signed records.
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
+
+## Test Plans
+
+- [SCALABILITY-TEST-PLAN.md](./SCALABILITY-TEST-PLAN.md) - Load, stress, soak, and failure-injection strategy for Safebox HTTP, websocket, NFC, and POS flows.
+- [RESILIENCY-TEST-PLAN.md](./RESILIENCY-TEST-PLAN.md) - Data-protection and failover validation plan for relay/Blossom outages, DoS scenarios, and recovery integrity checks.

@@ -57,6 +57,7 @@ acorn = "safebox.cli_acorn:cli"
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
 pyinstaller = "^6.10.0"
+alembic = "^1.14.1"
 
 [build-system]
 requires = ["poetry-core"]

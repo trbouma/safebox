@@ -7,11 +7,12 @@ from fastapi import Depends, Request, APIRouter, Form, WebSocket, WebSocketDisco
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
 
 from safebox.acorn import Acorn
 from app.appmodels import RegisteredSafebox, paymentByToken, lnPOSInvoice, lnPOSInfo
 from app.config import Settings
+from app.db import engine
 from app.rates import get_currency_rate
 from app.tasks import handle_payment
 from app.utils import create_jwt_token, fetch_safebox, extract_leading_numbers, get_acorn
@@ -25,8 +26,6 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 router = APIRouter()
-
-engine = create_engine(settings.DATABASE)
 
 class POSAccessKey(BaseModel):
     access_key: str
