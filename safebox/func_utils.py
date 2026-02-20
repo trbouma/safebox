@@ -128,7 +128,6 @@ def name_to_hex(name):
 
 def recover_nsec_from_seed(seed_phrase: str, legacy: bool = False):
     mnemo = Mnemonic("english")
-    print(f"legacy: {legacy}")
     seed = Bip39SeedGenerator(seed_phrase).Generate()
     if legacy:
         bip32_ctx = Bip32Slip10Ed25519.FromSeed(seed)

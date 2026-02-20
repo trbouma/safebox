@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from contextlib import contextmanager
 
 from sqlalchemy.engine.url import make_url
 from sqlmodel import Session, create_engine
@@ -25,11 +26,33 @@ else:
     engine_kwargs["pool_timeout"] = settings.DB_POOL_TIMEOUT_SECONDS
 
 engine = create_engine(database_url, **engine_kwargs)
+DB_BACKEND = url.get_backend_name()
+POSTGRES_SCHEMA_LOCK_KEY = 841_337_001
 
 
 def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
         yield session
+
+
+@contextmanager
+def schema_init_lock() -> Generator[None, None, None]:
+    """
+    Serialize schema initialization across workers.
+    Uses PostgreSQL advisory lock for networked DBs.
+    """
+    if DB_BACKEND.startswith("postgresql"):
+        conn = engine.connect()
+        try:
+            conn.exec_driver_sql(f"SELECT pg_advisory_lock({POSTGRES_SCHEMA_LOCK_KEY})")
+            yield
+        finally:
+            try:
+                conn.exec_driver_sql(f"SELECT pg_advisory_unlock({POSTGRES_SCHEMA_LOCK_KEY})")
+            finally:
+                conn.close()
+        return
+    yield
 
 
 def ensure_registeredsafebox_uniqueness() -> None:

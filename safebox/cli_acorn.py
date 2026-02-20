@@ -490,7 +490,15 @@ def get_user_records(kind, since, relays):
 def balance():
     
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, home_relay=HOME_RELAY, mints=MINTS, logging_level=LOGGING_LEVEL)
-    asyncio.run(acorn_obj.load_data())
+    try:
+        asyncio.run(acorn_obj.load_data())
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "No wallet data on" in msg:
+            raise click.ClickException(
+                f"{msg} Run 'acorn recover \"<seed phrase>\" --homerelay <relay>' with the relay that holds your wallet events."
+            )
+        raise click.ClickException(f"Unable to load wallet data: {msg}")
 
     click.echo(f"{acorn_obj.get_balance()} sats in {len(acorn_obj.proofs)} proofs.")
 
@@ -614,7 +622,17 @@ def run(relays):
 @click.option('--homerelay','-h', default=HOME_RELAY)
 @click.option('--legacy', is_flag=True, default=False, help='Use legacy key derivation (default: False)')
 def recover(seedphrase, homerelay, legacy):
-    nsec = recover_nsec_from_seed(seed_phrase=seedphrase, legacy=legacy)
+    if not seedphrase:
+        raise click.ClickException("Missing seed phrase. Usage: acorn recover \"word1 word2 ...\"")
+
+    normalized_seedphrase = " ".join(seedphrase.strip().split())
+    try:
+        nsec = recover_nsec_from_seed(seed_phrase=normalized_seedphrase, legacy=legacy)
+    except ValueError as exc:
+        raise click.ClickException(
+            f"Invalid recovery phrase: {exc}. "
+            "Check spelling and ensure you entered the exact BIP39 words in order."
+        )
    
     
 
@@ -628,13 +646,23 @@ def recover(seedphrase, homerelay, legacy):
         else:
             home_relay = f"wss://{homerelay}"
     
-    if click.confirm(f"Do you want to recover to this wallet using {homerelay}?"):
+    if click.confirm(f"Do you want to recover to this wallet using {home_relay}?"):
+        wallet_obj = Acorn(nsec=nsec, relays=RELAYS, home_relay=home_relay, logging_level=LOGGING_LEVEL)
+        try:
+            asyncio.run(wallet_obj.load_data())
+        except RuntimeError as exc:
+            msg = str(exc)
+            if "No wallet data on" in msg:
+                raise click.ClickException(
+                    f"{msg} Try again with --homerelay set to the relay where this wallet was created."
+                )
+            raise click.ClickException(f"Unable to verify recovered wallet data: {msg}")
+
         click.echo(f"Recover seed phrase {nsec}")
-        NSEC=nsec
-        config_obj['home_relay']=homerelay
-        config_obj['nsec']=nsec
+        NSEC = nsec
+        config_obj['home_relay'] = home_relay
+        config_obj['nsec'] = nsec
         write_config()
-        wallet_obj = Acorn(nsec=nsec, relays=RELAYS, home_relay=homerelay, logging_level=LOGGING_LEVEL)
 
 @click.command("checklock", help='acquire lock')
 def check_lock():

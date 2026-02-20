@@ -14,6 +14,8 @@ Section convention used across current Safebox specs:
 - `Implementation References`
 
 - [TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md](./TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md) - Transport model, TLS assumptions, and hybrid npub/address routing.
+- [BRANDING-AND-HOST-RESOLUTION.md](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
+- [DATABASE-BACKENDS-AND-MIGRATIONS.md](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
 - [ACCEPTANCE-MODEL.md](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
 - [NAUTH-PROTOCOL.md](./NAUTH-PROTOCOL.md) - Authorization envelope used to coordinate cross-party record flows.
 - [RECORD-PRESENTATION-NAUTH-STRATEGY.md](./RECORD-PRESENTATION-NAUTH-STRATEGY.md) - Generalized record presentation over QR/NFC with separate secure transfer channels.
@@ -32,3 +34,4 @@ Section convention used across current Safebox specs:
 
 - [SCALABILITY-TEST-PLAN.md](./SCALABILITY-TEST-PLAN.md) - Load, stress, soak, and failure-injection strategy for Safebox HTTP, websocket, NFC, and POS flows.
 - [RESILIENCY-TEST-PLAN.md](./RESILIENCY-TEST-PLAN.md) - Data-protection and failover validation plan for relay/Blossom outages, DoS scenarios, and recovery integrity checks.
+- [NEW-WALLET-CHECKLIST.md](./NEW-WALLET-CHECKLIST.md) - Operational checklist for creating and validating a new wallet in a fresh or migrated environment.

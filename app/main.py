@@ -17,7 +17,7 @@ import oqs
 from monstr.encrypt import Keys, DecryptionException
 
 from app.config import Settings, ConfigWithFallback
-from app.db import engine as DB_ENGINE, ensure_registeredsafebox_uniqueness
+from app.db import engine as DB_ENGINE, ensure_registeredsafebox_uniqueness, schema_init_lock
 from app.branding import build_templates, ensure_branding_bootstrap
 from app.routers import     (   lnaddress, 
                                 safebox, 
@@ -115,8 +115,9 @@ async def lifespan(app: FastAPI):
     _install_loop_exception_filter()
     ensure_branding_bootstrap()
     try:
-        SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
-        ensure_registeredsafebox_uniqueness()
+        with schema_init_lock():
+            SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
+            ensure_registeredsafebox_uniqueness()
     except SQLAlchemyError:
         logger.exception("Database initialization failed during startup")
         raise
