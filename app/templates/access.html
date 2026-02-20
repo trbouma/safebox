@@ -205,6 +205,30 @@
     overflow: hidden;
   }
 
+  .branding-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 auto 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #3c518b;
+    background: rgba(82, 103, 236, 0.12);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.25;
+    word-break: break-word;
+    max-width: 90%;
+  }
+
+  .branding-badge .branding-message {
+    font-style: italic;
+  }
+
+  .branding-badge .branding-domain {
+    margin-top: 2px;
+  }
+
   .request-qr-output {
     width: 100%;
     max-width: 100%;
@@ -1217,6 +1241,10 @@ function getInvoiceStatus(ln_invoice_status) {
 
 {% block page_content %}
 <div class="center-text">
+  <p id="branding_probe" class="branding-badge">
+    <span class="branding-message">{{ branding_message }}</span>
+    <span class="branding-domain">{{ request.url.hostname }}</span>
+  </p>
 
   <div class="account-box">
     <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
@@ -1412,9 +1440,6 @@ function getInvoiceStatus(ln_invoice_status) {
     <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
     <br><br>
     <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
-    <p id="branding_probe" style="margin:10px 0 0; font-size:0.82rem; color:var(--text-muted); word-break:break-word;">
-      {{ request.url.hostname }}: {{ branding_message }}
-    </p>
     
     <br><br>
     
