@@ -295,6 +295,8 @@
 
       <label class="label" for="memoInput">Invoice / NFC Comment</label>
       <textarea id="memoInput" placeholder="Paid from POS"></textarea>
+
+      <button class="btn-primary" id="btnBackToAccess">Back to Wallet</button>
     </section>
   </main>
 
@@ -633,6 +635,9 @@
     document.getElementById("btnCreateInvoice").addEventListener("click", createInvoice);
     document.getElementById("btnNfc").addEventListener("click", payWithNfc);
     document.getElementById("btnCopyInvoice").addEventListener("click", copyInvoice);
+    document.getElementById("btnBackToAccess").addEventListener("click", () => {
+      window.location.href = "/safebox/access";
+    });
 
     updateDisplay();
     updateTotal();
