@@ -23,6 +23,7 @@
     html, body {
       margin: 0;
       min-height: 100%;
+      overflow-x: hidden;
       font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
       color: var(--text);
       background:
@@ -64,6 +65,7 @@
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 10px;
+      min-width: 0;
     }
 
     .title {
@@ -79,6 +81,8 @@
       border-radius: 999px;
       padding: 4px 10px;
       max-width: 52%;
+      flex: 0 1 52%;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -330,8 +334,10 @@
     memoInputEl.value = "Paid from POS";
 
     function setStatus(message, type = "info") {
+      const safeMessage = String(message || "");
+      const pillMessage = safeMessage.length > 48 ? `${safeMessage.slice(0, 45)}...` : safeMessage;
       statusTextEl.textContent = message;
-      statusPillEl.textContent = message;
+      statusPillEl.textContent = pillMessage;
       if (type === "error") {
         statusPillEl.style.borderColor = "#8a2d34";
       } else if (type === "ok") {
