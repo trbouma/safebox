@@ -659,15 +659,19 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
                 return
 
             mapped = mapped_target or mapped_sender
-            safebox_npub = mapped.npub if mapped else requested_npub
+            if not mapped:
+                print("missing mapped NWC secret for event; rejecting")
+                return
+
+            safebox_npub = mapped.npub
             if not safebox_npub:
                 print("could not determine safebox for incoming nwc event")
                 return
         
             safebox_found = nwc_db_lookup_safebox(safebox_npub)
             if safebox_found:
-                decrypt_key = mapped.nwc_secret if mapped else safebox_found.nsec
-                decryptor = NIP4Encrypt(key=Keys(decrypt_key))
+                decrypt_key = mapped.nwc_secret
+                decryptor = NIP4Encrypt(key=Keys(priv_k=decrypt_key))
                 decrypt_event = decryptor.decrypt_event(evt=evt)
                 pay_instruction = json.loads(decrypt_event.content)
                 asyncio.create_task(nwc_handle_instruction(safebox_found, pay_instruction,evt))

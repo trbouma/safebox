@@ -423,9 +423,6 @@ async def create_qr(qr_text: str):
 @router.get("/nwcqr", tags=["public"])
 async def create_nwc_qr(request: Request,
                         acorn_obj: Acorn= Depends(get_acorn)):
-
-    safebox_found = await db_lookup_safebox(acorn_obj.pubkey_bech32)
-
     nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
     qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 

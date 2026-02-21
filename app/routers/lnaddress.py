@@ -9,7 +9,7 @@ import string
 import asyncio
 from datetime import timedelta
 import qrcode, io, urllib, json
-import hashlib, secrets
+import secrets
 
 from sqlmodel import Field, Session, SQLModel, select, update
 from argon2 import PasswordHasher
@@ -322,7 +322,7 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     
     
     print(f"token secret {token_secret} token pin {token_pin} nfc_ecash_clearing: {nwc_vault.nfc_ecash_clearing}")
-    k_nwc = Keys(token_secret)
+    k_nwc = Keys(priv_k=token_secret)
     print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
     # Fast-fail for insufficient payer balance so requestor gets clear feedback.
@@ -422,7 +422,7 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     my_enc_NIP4 = NIP4Encrypt(k)
     pin_ok = False
     print(f"token key {token_key} acquired pin: {proof_vault.pin} token pin {token_pin}")
-    k_nwc = Keys(token_key)
+    k_nwc = Keys(priv_k=token_key)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
     if token_pin == proof_vault.pin:
         status = "OK"
@@ -476,7 +476,7 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     my_enc_NIP4 = NIP4Encrypt(k)
 
     print(f"token secret: {token_secret} secure pin: {secure_pin}")
-    k_nwc = Keys(token_secret)
+    k_nwc = Keys(priv_k=token_secret)
     # print(f"send {nwc_vault.ln_invoice} invoice to: {k_nwc.public_key_hex()}")
 
     wallet_instruction = {
@@ -588,8 +588,6 @@ async def onboard_safebox(  request: Request,
     await acorn_obj.put_record("medical emergency card", medical_emergency_info, record_kind=32226)
     profile_info = acorn_obj.get_profile()
 
-    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
-
     if non_custodial:
         nsec = None
         access_key = None
@@ -603,8 +601,7 @@ async def onboard_safebox(  request: Request,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=invite_code,
                                             access_key=access_key,
-                                            emergency_code= generate_pnr(),
-                                            nwc_secret=hex_secret
+                                            emergency_code= generate_pnr()
                                             )
     
     with Session(engine) as session:
@@ -685,16 +682,13 @@ async def onboard_friend(   request: Request,
 
     await acorn_obj.put_record("medical emergency card", medical_emergency_info)
 
-    hex_secret = hashlib.sha256(acorn_obj.privkey_hex.encode()).hexdigest()
-    
     register_safebox = RegisteredSafebox(   handle=acorn_obj.handle,
                                             npub=acorn_obj.pubkey_bech32,
                                             nsec=acorn_obj.privkey_bech32,
                                             home_relay=acorn_obj.home_relay,
                                             onboard_code=friend_handle,
                                             access_key=acorn_obj.access_key,
-                                            emergency_code= generate_pnr(),
-                                            nwc_secret=hex_secret
+                                            emergency_code= generate_pnr()
                                            
                                             )
     
