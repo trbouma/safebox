@@ -14,6 +14,7 @@ Section convention used across current Safebox specs:
 - `Implementation References`
 
 - [TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md](./TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md) - Transport model, TLS assumptions, and hybrid npub/address routing.
+- [FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md](./FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md) - Operator fiduciary/compliance considerations for payments, records stewardship, private-key responsibility, and lawful process handling.
 - [BRANDING-AND-HOST-RESOLUTION.md](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
 - [DATABASE-BACKENDS-AND-MIGRATIONS.md](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
 - [ACCEPTANCE-MODEL.md](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
@@ -30,8 +31,14 @@ Section convention used across current Safebox specs:
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
 
+## Release Notes
+
+- [PRODUCTION-CHANGE-SUMMARY-LATEST-MAIN-MERGE.md](./PRODUCTION-CHANGE-SUMMARY-LATEST-MAIN-MERGE.md) - Production-focused summary of major enhancements, reliability fixes, and architectural changes from the latest major merge wave.
+
 ## Test Plans
 
 - [SCALABILITY-TEST-PLAN.md](./SCALABILITY-TEST-PLAN.md) - Load, stress, soak, and failure-injection strategy for Safebox HTTP, websocket, NFC, and POS flows.
 - [RESILIENCY-TEST-PLAN.md](./RESILIENCY-TEST-PLAN.md) - Data-protection and failover validation plan for relay/Blossom outages, DoS scenarios, and recovery integrity checks.
+- [SECURITY-TEST-PLAN.md](./SECURITY-TEST-PLAN.md) - Pre-production security validation plan covering auth/session controls, NFC/POS/payment integrity, rollback/recovery behavior, and go-live security gates.
+- [COMMUNITY-ACCEPTANCE-TEST-PLAN.md](./COMMUNITY-ACCEPTANCE-TEST-PLAN.md) - CLRK-oriented acceptance framework for community governance fit, stewardship workflows, trust validation, and production readiness.
 - [NEW-WALLET-CHECKLIST.md](./NEW-WALLET-CHECKLIST.md) - Operational checklist for creating and validating a new wallet in a fresh or migrated environment.
