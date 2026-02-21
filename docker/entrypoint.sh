@@ -23,6 +23,32 @@ else:
         print(f"DB target: unable to parse DATABASE env var ({exc})")
 '
 
+# Legacy bootstrap compatibility:
+# If schema tables already exist but Alembic tracking table does not,
+# mark current DB as baseline so upgrade head can proceed.
+legacy_schema_detected=0
+if python -c '
+import os
+from sqlalchemy import create_engine, inspect
+
+db = os.getenv("DATABASE")
+if not db:
+    raise SystemExit(1)
+
+engine = create_engine(db)
+insp = inspect(engine)
+has_alembic = insp.has_table("alembic_version")
+has_app_tables = insp.has_table("registeredsafebox") or insp.has_table("currencyrate")
+raise SystemExit(0 if (has_app_tables and not has_alembic) else 1)
+'; then
+  legacy_schema_detected=1
+fi
+
+if [ "$legacy_schema_detected" -eq 1 ]; then
+  echo "Detected existing schema without Alembic version table; stamping baseline head..."
+  alembic stamp head
+fi
+
 max_retries="${ALEMBIC_MAX_RETRIES:-30}"
 retry_interval="${ALEMBIC_RETRY_INTERVAL:-2}"
 attempt=1
