@@ -18,6 +18,7 @@ Section convention used across current Safebox specs:
 - [BRANDING-AND-HOST-RESOLUTION.md](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
 - [DATABASE-BACKENDS-AND-MIGRATIONS.md](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
 - [ACCEPTANCE-MODEL.md](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
+- [THREAT-MODEL.md](./THREAT-MODEL.md) - Safebox threat boundaries, key risks, mitigations, and residual risk considerations.
 - [NAUTH-PROTOCOL.md](./NAUTH-PROTOCOL.md) - Authorization envelope used to coordinate cross-party record flows.
 - [RECORD-PRESENTATION-NAUTH-STRATEGY.md](./RECORD-PRESENTATION-NAUTH-STRATEGY.md) - Generalized record presentation over QR/NFC with separate secure transfer channels.
 - [NEMBED-PROTOCOL.md](./NEMBED-PROTOCOL.md) - Compact bech32 extension format for embedded secure payloads.
@@ -30,6 +31,21 @@ Section convention used across current Safebox specs:
 - [WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md](./WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md) - Record persistence formats for plaintext and structured signed records.
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
+
+## Operations
+
+- [INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md](./INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md) - Incident classification, containment, recovery, and key-compromise response procedures.
+- [BACKUP-AND-RECOVERY-PLAN.md](./BACKUP-AND-RECOVERY-PLAN.md) - Backup tiers, restore validation, and disaster recovery operating model.
+- [DATA-RETENTION-AND-DELETION-POLICY.md](./DATA-RETENTION-AND-DELETION-POLICY.md) - Data minimization, retention classes, deletion lifecycle, and legal-hold alignment.
+- [MONITORING-AND-ALERTING-PLAN.md](./MONITORING-AND-ALERTING-PLAN.md) - Telemetry signals, alert severities, escalation routing, and runbook linkage.
+- [OPERATIONAL-SLO-SLA.md](./OPERATIONAL-SLO-SLA.md) - Reliability objectives, service commitments, error budgets, and response targets.
+- [CHANGE-MANAGEMENT-AND-RELEASE-PROCESS.md](./CHANGE-MANAGEMENT-AND-RELEASE-PROCESS.md) - Change lifecycle, release gates, risk tiers, and rollback expectations.
+- [INTEROPERABILITY-AND-COMPATIBILITY-MATRIX.md](./INTEROPERABILITY-AND-COMPATIBILITY-MATRIX.md) - Browser/device/proxy/protocol compatibility matrix and fallback expectations.
+
+## Governance and Compliance
+
+- [OPERATOR-COMPLIANCE-PLAYBOOK.md](./OPERATOR-COMPLIANCE-PLAYBOOK.md) - Practical compliance controls for operators covering governance, policy, evidence, and legal readiness.
+- [COMMUNITY-GOVERNANCE-TEMPLATE-PACK.md](./COMMUNITY-GOVERNANCE-TEMPLATE-PACK.md) - Reusable governance templates for community chartering, trust, stewardship, and dispute handling.
 
 ## Release Notes
 
