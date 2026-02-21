@@ -37,6 +37,8 @@ warnings.filterwarnings("ignore", message="coroutine.*was never awaited", catego
 
 import oqs
 
+logger = logging.getLogger(__name__)
+
 settings = Settings()
 config = ConfigWithFallback()
 
@@ -414,6 +416,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']
+        kem_public_key = instruction_obj['params'].get("kem_public_key", config.PQC_KEM_PUBLIC_KEY)
+        kemalg = instruction_obj['params'].get("kemalg", settings.PQC_KEMALG)
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
@@ -424,10 +428,6 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
-
-
-        kem_public_key = config.PQC_KEM_PUBLIC_KEY
-        kemalg = settings.PQC_KEMALG
 
 
         print(f"nwc offer_record scope: {scope} grant: {grant}")
@@ -445,8 +445,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                     grant=grant
         )
         print(f"nwc response send to : {npub_initiator}")
-        pqc_to_send = { "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
-                    "kemalg": settings.PQC_KEMALG
+        pqc_to_send = { "kem_public_key": kem_public_key,
+                    "kemalg": kemalg
         }
         nembedpqc = create_nembed_compressed(pqc_to_send)
         response_nauth_with_kem= f"{response_nauth}:{nembedpqc}"
@@ -484,7 +484,6 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         grant_kind = int(grant.replace("record:",""))
         offer_kind_label = get_label_by_id(settings.OFFER_KINDS,offer_kind)
         grant_kind_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
-        user_records_with_label = []
         for each_record in user_records:
             type = int(each_record['type'])
             print(f"incoming record: {each_record} type: {type}")
@@ -507,43 +506,48 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             
             record_ciphertext = each_record.get("ciphertext", None)
             record_kemalg = each_record.get("kemalg", None)
-            pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-            shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-            print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
-            k_pqc = Keys(shared_secret.hex())
-            my_enc = ExtendedNIP44Encrypt(k_pqc)
-            payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
-            if payload_to_decrypt:            
-                decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
-                print(f"decrypted payload: {decrypted_payload}")
-                record_value = decrypted_payload
+            my_enc = None
+            if record_ciphertext and record_kemalg:
+                pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+                k_pqc = Keys(shared_secret.hex())
+                my_enc = ExtendedNIP44Encrypt(k_pqc)
+                payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
+                if payload_to_decrypt:            
+                    decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                    print(f"decrypted payload: {decrypted_payload}")
+                    record_value = decrypted_payload
 
             original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
 
-            if original_record_to_decrpyt:
+            if original_record_to_decrpyt and my_enc:
                 decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
                 print(f"decrypted original: {decrypted_original}")   
 
-        # Just add in record_value instead of final value
-        
-        await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
-        # Ingest original recored if there is one
-
-        if original_record_to_decrpyt:
-            blob_result = await acorn_obj.transfer_blob(
+            # Persist each incoming record (multi-record support).
+            await acorn_obj.put_record(
                 record_name=record_name,
+                record_value=record_value,
                 record_kind=type,
                 record_origin=npub_initiator,
-                blobxfer=decrypted_original,
             )
-            if blob_result.get("status") != "OK":
-                print(
-                    "transfer_blob non-fatal status",
-                    record_name,
-                    type,
-                    blob_result.get("status"),
-                    blob_result.get("reason"),
+            # Ingest original record if present.
+            if original_record_to_decrpyt and my_enc:
+                blob_result = await acorn_obj.transfer_blob(
+                    record_name=record_name,
+                    record_kind=type,
+                    record_origin=npub_initiator,
+                    blobxfer=decrypted_original,
                 )
+                if blob_result.get("status") != "OK":
+                    logger.warning(
+                        "transfer_blob non-fatal status record=%s kind=%s status=%s reason=%s",
+                        record_name,
+                        type,
+                        blob_result.get("status"),
+                        blob_result.get("reason"),
+                    )
     
         print(f"records finished added")
         # Not sure if I need the following line
@@ -741,8 +745,8 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
         
         
 
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:
+        logger.exception("NWC event handler failed")
 
 
 

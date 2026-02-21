@@ -482,7 +482,9 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     wallet_instruction = {
     "method": "offer_record",
     "params": { 
-        "nauth": offer_vault.nauth
+        "nauth": offer_vault.nauth,
+        "kem_public_key": offer_vault.kem_public_key,
+        "kemalg": offer_vault.kemalg
 
         
 

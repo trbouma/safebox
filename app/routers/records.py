@@ -868,8 +868,15 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
 
     # This is the same acceptance code that has to go into NWC relay offer_record
 
+    wait_start = datetime.now(timezone.utc)
+    wait_timeout = timedelta(seconds=max(10, settings.LISTEN_TIMEOUT))
     while user_records == []:
         user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays,since=since_now)
+        if user_records:
+            break
+        if datetime.now(timezone.utc) - wait_start > wait_timeout:
+            await websocket.send_json({"status": "TIMEOUT", "detail": "Record offer timed out before transmittal arrived."})
+            return
         await asyncio.sleep(1)
 
     if user_records == []:
