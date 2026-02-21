@@ -64,6 +64,10 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock /app/
 RUN poetry install --only main --no-root --no-interaction
 COPY . /app
+RUN chmod +x /app/docker/entrypoint.sh
+
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
+CMD ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:7375/ >/dev/null || exit 1

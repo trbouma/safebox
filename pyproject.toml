@@ -46,6 +46,7 @@ pyserial = "^3.5"
 liboqs-python = "^0.14.1"
 python-blossom = "^1.0.2"
 filetype = "^1.2.0"
+alembic = "^1.14.1"
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
@@ -57,7 +58,6 @@ acorn = "safebox.cli_acorn:cli"
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
 pyinstaller = "^6.10.0"
-alembic = "^1.14.1"
 
 [build-system]
 requires = ["poetry-core"]

@@ -9,6 +9,7 @@ import logging
 import inspect
 from contextlib import asynccontextmanager
 from filelock import FileLock, Timeout
+from sqlalchemy import inspect
 from sqlalchemy.exc import SQLAlchemyError
 from aiohttp.client_exceptions import WSMessageTypeError
 
@@ -17,7 +18,12 @@ import oqs
 from monstr.encrypt import Keys, DecryptionException
 
 from app.config import Settings, ConfigWithFallback
-from app.db import engine as DB_ENGINE, ensure_registeredsafebox_uniqueness, schema_init_lock
+from app.db import (
+    DB_BACKEND,
+    engine as DB_ENGINE,
+    ensure_registeredsafebox_uniqueness,
+    schema_init_lock,
+)
 from app.branding import build_templates, ensure_branding_bootstrap
 from app.routers import     (   lnaddress, 
                                 safebox, 
@@ -116,7 +122,17 @@ async def lifespan(app: FastAPI):
     ensure_branding_bootstrap()
     try:
         with schema_init_lock():
-            SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
+            if DB_BACKEND.startswith("sqlite"):
+                SQLModel.metadata.create_all(DB_ENGINE, checkfirst=True)
+            else:
+                inspector = inspect(DB_ENGINE)
+                required_tables = ("registeredsafebox", "currencyrate")
+                missing_tables = [name for name in required_tables if not inspector.has_table(name)]
+                if missing_tables:
+                    raise RuntimeError(
+                        "PostgreSQL schema is not initialized. Run `alembic upgrade head` before starting the app. "
+                        f"Missing tables: {', '.join(missing_tables)}"
+                    )
             ensure_registeredsafebox_uniqueness()
     except SQLAlchemyError:
         logger.exception("Database initialization failed during startup")
