@@ -19,6 +19,7 @@ nav:
   - Specs:
       - Acceptance Model: specs/ACCEPTANCE-MODEL.md
       - NAuth Protocol: specs/NAUTH-PROTOCOL.md
+      - NAuth Extensible Handshake: specs/NAUTH-EXTENSIBLE-HANDSHAKE.md
       - NEmbed Protocol: specs/NEMBED-PROTOCOL.md
       - OAE Protocol: specs/OAE-PROTOCOL.md
       - NWC NFC Vault Extension: specs/NWC-NFC-VAULT-EXTENSION.md

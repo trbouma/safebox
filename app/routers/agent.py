@@ -327,6 +327,7 @@ async def agent_onboard(payload: AgentOnboardRequest, request: Request):
         logger.exception("Agent onboard wallet initialization failed")
         raise HTTPException(status_code=500, detail=f"Unable to initialize wallet: {exc}")
 
+    emergency_code = generate_pnr()
     register_safebox = RegisteredSafebox(
         handle=acorn_obj.handle,
         npub=acorn_obj.pubkey_bech32,
@@ -334,7 +335,7 @@ async def agent_onboard(payload: AgentOnboardRequest, request: Request):
         home_relay=acorn_obj.home_relay,
         onboard_code=invite_code,
         access_key=acorn_obj.access_key,
-        emergency_code=generate_pnr(),
+        emergency_code=emergency_code,
     )
 
     with Session(engine) as session:
@@ -363,7 +364,7 @@ async def agent_onboard(payload: AgentOnboardRequest, request: Request):
             "home_relay": acorn_obj.home_relay,
             "balance": acorn_obj.balance,
             "seed_phrase": acorn_obj.seed_phrase,
-            "emergency_code": register_safebox.emergency_code,
+            "emergency_code": emergency_code,
         },
         "session": {
             "access_token": access_token,

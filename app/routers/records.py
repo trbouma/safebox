@@ -61,6 +61,19 @@ def _raise_if_missing_acorn(acorn_obj: Acorn):
         logger.warning("records API called without an active acorn session")
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
 
+
+def _nonce_matches(expected_nonce: str | None, candidate_nauth: str | None) -> bool:
+    if not expected_nonce:
+        return True
+    if not candidate_nauth:
+        return False
+    try:
+        parsed = parse_nauth(candidate_nauth)
+        candidate_nonce = parsed["values"].get("nonce")
+    except Exception:
+        return False
+    return candidate_nonce == expected_nonce
+
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
     status_url = f"https://{host}/.well-known/card-status"
@@ -1641,6 +1654,7 @@ async def ws_record_offer( websocket: WebSocket,
 
     print(f"ws nauth: {nauth}")
     auth_relays = None
+    expected_nonce = None
 
     await websocket.accept()
 
@@ -1649,6 +1663,7 @@ async def ws_record_offer( websocket: WebSocket,
         npub_initiator =   parsed_nauth['values'] ['npub'] 
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
+        expected_nonce = parsed_nauth['values'].get("nonce")
         print(f"npub initiator: {npub_initiator}")
 
 
@@ -1681,6 +1696,11 @@ async def ws_record_offer( websocket: WebSocket,
             
 
             if client_nauth != nauth_old: 
+                if not _nonce_matches(expected_nonce, client_nauth):
+                    logger.warning("ws_record_offer ignoring nonce mismatch for candidate response")
+                    nauth_old = client_nauth
+                    await asyncio.sleep(1)
+                    continue
                 parsed_nauth = parse_nauth(client_nauth)
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
@@ -1710,6 +1730,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
     """After presenting a QR code, listen for verifier reponse using nauth parameters"""
     print(f"ws nauth: {nauth}")
     auth_relays = None
+    expected_nonce = None
 
     await websocket.accept()
 
@@ -1717,6 +1738,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
+        expected_nonce = parsed_nauth['values'].get("nonce")
         print(f"ws auth relays: {auth_relays}")
 
 
@@ -1747,6 +1769,11 @@ async def ws_listen_for_requestor( websocket: WebSocket,
 
 
             if client_nauth != nauth_old: 
+                if not _nonce_matches(expected_nonce, client_nauth):
+                    logger.warning("ws_listen_for_requestor ignoring nonce mismatch for candidate response")
+                    nauth_old = client_nauth
+                    await asyncio.sleep(1)
+                    continue
                 parsed_nauth = parse_nauth(client_nauth)
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
@@ -2032,6 +2059,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
 
     print(f"ws nauth: {nauth}")
     auth_relays = None
+    expected_nonce = None
 
     await websocket.accept()
 
@@ -2039,6 +2067,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'].get('auth_kind',   settings.AUTH_KIND)
         auth_relays = parsed_nauth['values'].get("auth_relays", settings.AUTH_RELAYS)
+        expected_nonce = parsed_nauth['values'].get("nonce")
         print(f"ws auth relays: {auth_relays}")
 
 
@@ -2089,6 +2118,11 @@ async def ws_listen_for_nauth( websocket: WebSocket,
             
 
             if client_nauth != nauth_old: 
+                if not _nonce_matches(expected_nonce, client_nauth):
+                    logger.warning("ws_listen_for_nauth ignoring nonce mismatch for candidate response")
+                    nauth_old = client_nauth
+                    await asyncio.sleep(1)
+                    continue
                 parsed_nauth = parse_nauth(client_nauth)
                 pubhex = parsed_nauth['values'].get('pubhex')
                 transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
