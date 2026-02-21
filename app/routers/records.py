@@ -806,7 +806,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     
     global_websocket = websocket
 
-    since_now = int(datetime.now(timezone.utc).timestamp())
+    # Look back slightly to avoid missing same-second events.
+    since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
 
     kem_public_key = config.PQC_KEM_PUBLIC_KEY
 
@@ -1688,7 +1689,7 @@ async def ws_record_offer( websocket: WebSocket,
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         
         
         
@@ -1719,7 +1720,8 @@ async def ws_listen_for_requestor( websocket: WebSocket,
     naddr = acorn_obj.pubkey_bech32
     nauth_old = None
     # since_now = None
-    since_now = int(datetime.now(timezone.utc).timestamp())
+    # Look back slightly to avoid missing same-second events.
+    since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
     start_time = datetime.now()
 
     while True:
@@ -1757,7 +1759,7 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
      
         
     print("websocket connection closed")
@@ -1784,7 +1786,8 @@ async def ws_request_record( websocket: WebSocket,
 
 
     # since_now = None
-    since_now = int(datetime.now(timezone.utc).timestamp())
+    # Look back slightly to avoid missing same-second events.
+    since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
     start_time = datetime.now()
     
 
@@ -2009,7 +2012,7 @@ async def ws_request_record( websocket: WebSocket,
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
      
         
     print("websocket connection closed")
@@ -2039,7 +2042,8 @@ async def ws_listen_for_nauth( websocket: WebSocket,
     naddr = acorn_obj.pubkey_bech32
     nauth_old = None
     # since_now = None
-    since_now = int(datetime.now(timezone.utc).timestamp())
+    # Look back slightly to avoid missing same-second events.
+    since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
     start_time = datetime.now()
 
     # This is PQC Step 2 in the KEM iteraction 
@@ -2112,7 +2116,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         
         
     print("websocket connection closed")    

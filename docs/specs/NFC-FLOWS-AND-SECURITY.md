@@ -44,6 +44,92 @@ This document defines how Safebox NFC works today for:
 
 It also describes the active-secret security model and failure behavior.
 
+## Resiliency Overview for NFC Payments
+
+NFC payment execution in Safebox is intentionally designed as a loosely-coupled, asynchronous workflow across multiple independently failing components:
+
+- Browser/NFC runtime
+- Safebox web/API service
+- Vault endpoints (`/.well-known/*`)
+- NWC relay messaging
+- Wallet settlement logic (Cashu/Lightning)
+- Optional blob/record relay paths for related flows
+
+Because these components do not share a single transactional boundary, resiliency depends on explicit coordination states and compensating behavior rather than synchronous request/response assumptions.
+
+### Why Loose Coupling Is Required
+
+NFC interactions are short-lived, local trigger events, while settlement and secure messaging may complete later and across different services. Attempting strict coupling would make the system brittle to:
+
+- mobile/browser backgrounding
+- relay jitter or temporary partition
+- vault endpoint timeout/retry conditions
+- asynchronous wallet settlement latency
+
+Safebox therefore treats NFC as an initiation signal and drives completion via asynchronous status channels.
+
+### Coordination Strategy
+
+Safebox coordinates loosely-coupled services with these core patterns:
+
+1. Canonical staged lifecycle:
+   - accepted (`PENDING`)
+   - processing
+   - terminal (`OK` or `ERROR`)
+2. Explicit terminal signaling:
+   - settlement completion/failure is sent on notify/status channels
+   - UI should never treat initial acceptance as final success
+3. Authoritative endpoint model:
+   - preflight checks can be advisory for resilience
+   - final trust decision remains at authoritative vault validation
+4. Time-bounded waiting:
+   - no indefinite waits in critical loops
+   - bounded listener and settlement timeouts with explicit error outcomes
+5. Timing-window tolerance:
+   - short lookback windows for relay subscription (`since = now - small delta`)
+   - reduces missed-event stalls from timestamp granularity
+6. Compensating actions for uncertain delivery:
+   - rollback/recovery records when ecash delivery confirmation is uncertain
+   - preserves recoverability rather than silent proof loss
+
+### Delay and Failure Handling Model
+
+Each leg of the flow should be treated as potentially delayed, duplicated, or dropped.
+
+- Delayed:
+  - continue processing within bounded timeout windows
+  - keep UI in explicit in-progress state
+- Dropped:
+  - surface terminal error and preserve artifacts needed for retry/recovery
+- Duplicated:
+  - rely on idempotent/guarded processing where available
+- Partitioned:
+  - fail fast where security requires certainty
+  - otherwise continue to authoritative validation and report advisory degradation
+
+### Operational Resiliency Requirements
+
+Production NFC operation should include:
+
+- independent relay and vault health monitoring
+- retry/backoff on networked calls
+- structured logs with correlation for stage transitions
+- explicit timeout values per stage
+- recovery runbook for uncertain delivery states
+- user-facing status language that distinguishes:
+  - request accepted
+  - settlement in progress
+  - settlement complete/failed
+
+### Resulting System Properties
+
+With the above strategy, Safebox NFC payment flows aim to provide:
+
+- graceful degradation under partial outages
+- bounded failure rather than indefinite hanging
+- recovery paths for uncertain transfer states
+- consistent user semantics despite asynchronous backend coordination
+
 ## Core Security Model
 
 Safebox uses an application-layer card token model:
@@ -386,6 +472,114 @@ Outcome:
 
 - Older browsers/devices (for example older Chromebook builds) can still access original records.
 - Record exchange remains functional even when inline PDF preview is unsupported.
+
+## Stall Conditions and Mitigations
+
+NFC flows are asynchronous and cross multiple systems (browser NFC, websocket channels, relays, vault endpoints, and wallet settlement loops). Stalls are typically caused by timing windows or transport-layer interruption, not cryptographic validation failures.
+
+### A. UI waits on non-terminal status
+
+Condition:
+
+- Client receives `PENDING`/intermediate status but never receives terminal status (`OK` or `ERROR`) on the same channel.
+
+Observed impact:
+
+- UI remains in states such as "Awaiting wallet confirmation..." even though payment or record processing completed.
+
+Mitigations:
+
+- Canonical status lifecycle documented and enforced (`PENDING` -> processing -> terminal).
+- POS/NFC flows now emit explicit terminal notify events on settlement completion/failure.
+- UI includes fallback completion logic from balance/status deltas when notify delivery is delayed.
+
+### B. Same-second event miss in relay listeners
+
+Condition:
+
+- Listener starts with `since=now` and misses events created in the same second due to timestamp granularity and ordering.
+
+Observed impact:
+
+- Offer/request/grant websocket listeners appear to "hang" until timeout.
+
+Mitigations:
+
+- Listener start now uses a short lookback window (`since = now - 5s`) in critical NFC/record paths.
+- Poll cadence reduced (for example from 5s to 1s in record websocket loops) for faster progression.
+
+### C. Unbounded wait loops in record offer handling
+
+Condition:
+
+- NWC `offer_record` path waited indefinitely for transmittal records with no timeout.
+
+Observed impact:
+
+- Card-driven offer flow appears stalled forever if no matching transmittal event arrives.
+
+Mitigations:
+
+- Added hard timeout using `LISTEN_TIMEOUT`-based bound.
+- On timeout, flow fails explicitly instead of hanging indefinitely.
+
+### D. Slow payment settlement polling
+
+Condition:
+
+- Settlement polling at fixed coarse intervals increases post-payment latency.
+
+Observed impact:
+
+- Users perceive NFC as slow even when remote wallet confirms quickly.
+
+Mitigations:
+
+- Adaptive poll schedule in payment settlement:
+  - fast early window (1s)
+  - moderate middle window (2s)
+  - slower late window (3s)
+- Preserves reliability while reducing average confirmation latency.
+
+### E. Preflight transport fragility
+
+Condition:
+
+- Card-status preflight fails due to timeout/proxy/network while card is actually valid.
+
+Observed impact:
+
+- Flow aborts before authoritative validation endpoint is reached.
+
+Mitigations:
+
+- For record NFC paths, preflight is advisory and authoritative vault endpoints remain the source of truth.
+- Upstream vault error detail is propagated so operator/user can distinguish network issues vs card invalidity.
+
+### F. Websocket mixed-content and browser policy mismatch
+
+Condition:
+
+- HTTPS page attempts `ws://` connection in stricter browsers.
+
+Observed impact:
+
+- Authentication/listener websocket never opens, resulting in apparent stall.
+
+Mitigations:
+
+- Browser-side websocket URL normalization enforces `wss://` on HTTPS pages.
+- Maintains compatibility for localhost (`ws://`) and deployed HTTPS (`wss://`) environments.
+
+### Operator Diagnostics for Stall Triage
+
+When diagnosing a suspected stall, check these in order:
+
+1. Browser console: websocket connect/open errors, mixed-content blocks, NFC API errors.
+2. Vault endpoint logs: `/.well-known/card-status`, `/.well-known/offer`, `/.well-known/proof`, `/.well-known/nfcvaultrequestpayment`.
+3. NWC listener logs: instruction receipt (`present_record`, `offer_record`, `pay_invoice`, `pay_ecash`) and completion/timeout.
+4. Relay timing: event timestamps around listener start (`since`) boundaries.
+5. UI terminal state path: verify notify/status terminal events are received (`OK`/`ERROR`).
 
 ## User Experience Requirements
 

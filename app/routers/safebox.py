@@ -2043,117 +2043,113 @@ async def request_nfc_payment( request: Request,
 
     status_url = f"https://{host}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
-        if status_resp.status_code != 200:
-            detail_msg = "Card validation failed"
-            try:
-                detail_msg = status_resp.json().get("detail", detail_msg)
-            except Exception:
-                pass
-            return {"status": "ERROR", "detail": detail_msg}
-
-    if nfc_ecash_clearing:
-        print("do ecash clearing")
-        detail = "NFC ecash payment request accepted. Waiting for completion...";
-        submit_data = { "ln_invoice": None, 
-                        "token": vault_token, 
-                        "amount": final_amount,
-                        "tendered_amount": payment_token.amount,
-                        "tendered_currency": payment_token.currency,                    
-                        "pubkey": pubkey, 
-                        "nfc_ecash_clearing": nfc_ecash_clearing,
-                        "recipient_pubkey": acorn_obj.pubkey_hex,
-                        "relays": settings.RELAYS,
-                        "sig": sig, 
-                        "comment": payment_token.comment  
-                        }
-        #FIXME Need to get relays to listen
-        pass
-        settings_url = f"https://{host}/.well-known/settings"
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url=settings_url)
-            response.raise_for_status()
-            response_json = response.json()
-        print(response_json)
-        ecash_relays = response_json.get("ecash_relays", settings.ECASH_RELAYS)
-        async def _notify(payload: dict):
-            await notify_user(acorn_obj.pubkey_bech32, payload)
-
-        task = asyncio.create_task(
-            handle_ecash(acorn_obj=acorn_obj, relays=ecash_relays, notify_callback=_notify)
-        )
-
-    else:
-        print("do lightning clearing")
-        
-        cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=final_amount, mint=HOME_MINT)
-      
-
-        # need to send off to the vault for processing
-        submit_data = { "ln_invoice": cli_quote.invoice, 
-                        "token": vault_token, 
-                        "amount": final_amount,
-                        "tendered_amount": payment_token.amount,
-                        "tendered_currency": payment_token.currency,                    
-                        "pubkey": pubkey, 
-                        "nfc_ecash_clearing": nfc_ecash_clearing,
-                        "sig": sig, 
-                        "comment": payment_token.comment  
-                        }
-        print(f"data: {submit_data}")
-       
-        # add in the polling task here
-        async def _watch_lightning_settlement() -> None:
-            try:
-                settled = await handle_payment(
-                    acorn_obj=acorn_obj,
-                    cli_quote=cli_quote,
-                    amount=final_amount,
-                    tendered_amount=payment_token.amount,
-                    tendered_currency=payment_token.currency,
-                    mint=HOME_MINT,
-                    comment=payment_token.comment,
-                )
-                if settled:
-                    await notify_user(
-                        acorn_obj.pubkey_bech32,
-                        {
-                            "status": "OK",
-                            "action": "nfc_token",
-                            "detail": (
-                                f"Tendered Amount {payment_token.amount} {payment_token.currency} | "
-                                f"Credited {final_amount} sats | Payment complete"
-                            ),
-                            "balance": acorn_obj.balance,
-                        },
-                    )
-                else:
-                    await notify_user(
-                        acorn_obj.pubkey_bech32,
-                        {
-                            "status": "ERROR",
-                            "action": "nfc_token",
-                            "detail": "Payment not confirmed before timeout.",
-                            "balance": acorn_obj.balance,
-                        },
-                    )
-            except Exception as exc:
-                logger.exception("NFC lightning settlement watcher failed")
-                await notify_user(
-                    acorn_obj.pubkey_bech32,
-                    {
-                        "status": "ERROR",
-                        "action": "nfc_token",
-                        "detail": f"Payment processing error: {exc}",
-                        "balance": acorn_obj.balance,
-                    },
-                )
-
-        asyncio.create_task(_watch_lightning_settlement())
-
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
+            if status_resp.status_code != 200:
+                detail_msg = "Card validation failed"
+                try:
+                    detail_msg = status_resp.json().get("detail", detail_msg)
+                except Exception:
+                    pass
+                return {"status": "ERROR", "detail": detail_msg}
+
+            if nfc_ecash_clearing:
+                print("do ecash clearing")
+                detail = "NFC ecash payment request accepted. Waiting for completion...";
+                submit_data = { "ln_invoice": None, 
+                                "token": vault_token, 
+                                "amount": final_amount,
+                                "tendered_amount": payment_token.amount,
+                                "tendered_currency": payment_token.currency,                    
+                                "pubkey": pubkey, 
+                                "nfc_ecash_clearing": nfc_ecash_clearing,
+                                "recipient_pubkey": acorn_obj.pubkey_hex,
+                                "relays": settings.RELAYS,
+                                "sig": sig, 
+                                "comment": payment_token.comment  
+                                }
+                settings_url = f"https://{host}/.well-known/settings"
+                response = await client.get(url=settings_url)
+                response.raise_for_status()
+                response_json = response.json()
+                print(response_json)
+                ecash_relays = response_json.get("ecash_relays", settings.ECASH_RELAYS)
+                async def _notify(payload: dict):
+                    await notify_user(acorn_obj.pubkey_bech32, payload)
+
+                asyncio.create_task(
+                    handle_ecash(acorn_obj=acorn_obj, relays=ecash_relays, notify_callback=_notify)
+                )
+
+            else:
+                print("do lightning clearing")
+                
+                cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=final_amount, mint=HOME_MINT)
+            
+
+                # need to send off to the vault for processing
+                submit_data = { "ln_invoice": cli_quote.invoice, 
+                                "token": vault_token, 
+                                "amount": final_amount,
+                                "tendered_amount": payment_token.amount,
+                                "tendered_currency": payment_token.currency,                    
+                                "pubkey": pubkey, 
+                                "nfc_ecash_clearing": nfc_ecash_clearing,
+                                "sig": sig, 
+                                "comment": payment_token.comment  
+                                }
+                print(f"data: {submit_data}")
+            
+                # add in the polling task here
+                async def _watch_lightning_settlement() -> None:
+                    try:
+                        settled = await handle_payment(
+                            acorn_obj=acorn_obj,
+                            cli_quote=cli_quote,
+                            amount=final_amount,
+                            tendered_amount=payment_token.amount,
+                            tendered_currency=payment_token.currency,
+                            mint=HOME_MINT,
+                            comment=payment_token.comment,
+                        )
+                        if settled:
+                            await notify_user(
+                                acorn_obj.pubkey_bech32,
+                                {
+                                    "status": "OK",
+                                    "action": "nfc_token",
+                                    "detail": (
+                                        f"Tendered Amount {payment_token.amount} {payment_token.currency} | "
+                                        f"Credited {final_amount} sats | Payment complete"
+                                    ),
+                                    "balance": acorn_obj.balance,
+                                },
+                            )
+                        else:
+                            await notify_user(
+                                acorn_obj.pubkey_bech32,
+                                {
+                                    "status": "ERROR",
+                                    "action": "nfc_token",
+                                    "detail": "Payment not confirmed before timeout.",
+                                    "balance": acorn_obj.balance,
+                                },
+                            )
+                    except Exception as exc:
+                        logger.exception("NFC lightning settlement watcher failed")
+                        await notify_user(
+                            acorn_obj.pubkey_bech32,
+                            {
+                                "status": "ERROR",
+                                "action": "nfc_token",
+                                "detail": f"Payment processing error: {exc}",
+                                "balance": acorn_obj.balance,
+                            },
+                        )
+
+                asyncio.create_task(_watch_lightning_settlement())
+
             response = await client.post(url=vault_url, json=submit_data, headers=headers)
             response.raise_for_status()
             response_json = response.json()

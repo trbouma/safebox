@@ -2501,7 +2501,14 @@ class Acorn:
             if success:
                 self.logger.info("op=poll_for_payment status=paid quote=%s amount=%s", quote, amount)
                 break
-            await asyncio.sleep(3)
+            elapsed = time() - start_time
+            # Faster polling in the early window for better UX, then taper.
+            if elapsed < 20:
+                await asyncio.sleep(1)
+            elif elapsed < 60:
+                await asyncio.sleep(2)
+            else:
+                await asyncio.sleep(3)
 
         self.logger.debug("op=poll_for_payment status=done quote=%s", quote)
         if not success:

@@ -451,7 +451,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         nembedpqc = create_nembed_compressed(pqc_to_send)
         response_nauth_with_kem= f"{response_nauth}:{nembedpqc}"
 
-        since_now = int(datetime.now(timezone.utc).timestamp())
+        # Use a small lookback to avoid missing same-second arrivals.
+        since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
         
@@ -461,10 +462,21 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         # single_record = await acorn_obj.listen_for_record(record_kind=transmittal_kind, relays=transmittal_relays)
         user_records = []
+        wait_start = datetime.now(timezone.utc)
+        wait_timeout = timedelta(seconds=max(10, settings.LISTEN_TIMEOUT))
         while user_records == []:
-            user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays, since=since_now )
-            await asyncio.sleep(0.1)
-            print("done sleep")
+            user_records = await acorn_obj.get_user_records(
+                record_kind=transmittal_kind,
+                relays=transmittal_relays,
+                since=since_now,
+            )
+            if user_records:
+                break
+            if datetime.now(timezone.utc) - wait_start > wait_timeout:
+                raise TimeoutError(
+                    f"offer_record timed out waiting for transmittal kind={transmittal_kind}"
+                )
+            await asyncio.sleep(0.25)
 
 
         # print(f"user records: {user_records}")
