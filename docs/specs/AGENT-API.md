@@ -316,10 +316,31 @@ Response (example):
 - `401` - Missing/invalid API key
 - `403` - Invalid invite code (onboarding)
 - `409` - Wallet registration conflict during onboarding
+- `429` - Rate limit exceeded (`Retry-After` header included)
 - `400` - Invalid payload or payment failure
 - `500` - Wallet load failure or internal processing error
 
 Responses include a `detail` field for actionable errors where available.
+
+## Rate Limiting
+
+Agent routes support built-in in-memory rate limiting controlled by `Settings`:
+
+- `AGENT_RATE_LIMIT_ENABLED` (default: `true`)
+- `AGENT_RPM` (default: `60`)
+- `AGENT_BURST` (default: `20`)
+- `AGENT_ONBOARD_RPM` (default: `10`)
+- `AGENT_ONBOARD_BURST` (default: `5`)
+
+Enforcement model:
+
+- Authenticated `/agent/*` calls: limited by `X-Access-Key` (falls back to client IP when key missing).
+- `/agent/onboard`: separately limited by client IP to reduce invite abuse.
+
+When limit is exceeded:
+
+- API returns `429`
+- `Retry-After` response header indicates when to retry
 
 ## Security Considerations
 
@@ -337,6 +358,7 @@ Responses include a `detail` field for actionable errors where available.
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/routers/agent.py`
-- `/Users/trbouma/projects/safebox-2/app/main.py`
-- `/Users/trbouma/projects/safebox-2/app/appmodels.py`
+- `app/routers/agent.py`
+- `app/main.py`
+- `app/appmodels.py`
+- `skills/agent-api/SKILL.md`

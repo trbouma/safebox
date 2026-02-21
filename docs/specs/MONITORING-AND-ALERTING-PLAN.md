@@ -40,6 +40,6 @@ Each critical alert must map to a runbook entry with triage, mitigation, and rec
 - Protect telemetry endpoints and dashboards with strict access controls.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/OPERATIONAL-SLO-SLA.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/RESILIENCY-TEST-PLAN.md`
+- `docs/specs/OPERATIONAL-SLO-SLA.md`
+- `docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`
+- `docs/specs/RESILIENCY-TEST-PLAN.md`

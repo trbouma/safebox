@@ -182,7 +182,7 @@ This provides an additional factor for stolen-card risk reduction without requir
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/nwc.py`
-- `/Users/trbouma/projects/safebox-2/app/routers/lnaddress.py`
-- `/Users/trbouma/projects/safebox-2/app/routers/safebox.py`
-- `/Users/trbouma/projects/safebox-2/app/appmodels.py`
+- `app/nwc.py`
+- `app/routers/lnaddress.py`
+- `app/routers/safebox.py`
+- `app/appmodels.py`

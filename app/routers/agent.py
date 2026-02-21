@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +20,7 @@ from safebox.acorn import Acorn
 router = APIRouter()
 logger = logging.getLogger(__name__)
 settings = Settings()
+_RATE_LIMIT_WINDOWS: dict[str, deque[float]] = defaultdict(deque)
 
 
 class AgentInvoiceRequest(BaseModel):
@@ -78,7 +81,45 @@ def _resolve_wallet_by_access_key(access_key: str | None) -> RegisteredSafebox:
     raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-async def _agent_get_acorn(x_access_key: str | None = Header(default=None)) -> Acorn:
+def _extract_client_ip(request: Request) -> str:
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    client = request.client.host if request.client else ""
+    return client or "unknown"
+
+
+def _enforce_rate_limit(scope_key: str, rpm: int, burst: int) -> None:
+    if not settings.AGENT_RATE_LIMIT_ENABLED:
+        return
+
+    now = time.monotonic()
+    window_seconds = 60.0
+    max_requests = max(1, int(rpm) + int(burst))
+    q = _RATE_LIMIT_WINDOWS[f"agent:{scope_key}"]
+
+    while q and (now - q[0]) > window_seconds:
+        q.popleft()
+
+    if len(q) >= max_requests:
+        retry_after = max(1, int(window_seconds - (now - q[0])))
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    q.append(now)
+
+
+async def _agent_get_acorn(
+    request: Request,
+    x_access_key: str | None = Header(default=None),
+) -> Acorn:
+    ip = _extract_client_ip(request)
+    limit_key = (x_access_key or "").strip().lower() or f"ip:{ip}"
+    _enforce_rate_limit(limit_key, settings.AGENT_RPM, settings.AGENT_BURST)
+
     wallet = _resolve_wallet_by_access_key(x_access_key)
     if not wallet.nsec:
         raise HTTPException(status_code=500, detail="Wallet is missing nsec")
@@ -254,7 +295,14 @@ async def agent_accept_ecash(
 
 
 @router.post("/onboard", tags=["agent"])
-async def agent_onboard(payload: AgentOnboardRequest):
+async def agent_onboard(payload: AgentOnboardRequest, request: Request):
+    onboard_key = f"onboard-ip:{_extract_client_ip(request)}"
+    _enforce_rate_limit(
+        onboard_key,
+        settings.AGENT_ONBOARD_RPM,
+        settings.AGENT_ONBOARD_BURST,
+    )
+
     invite_code = _validate_invite_code(payload.invite_code)
 
     private_key = Keys()

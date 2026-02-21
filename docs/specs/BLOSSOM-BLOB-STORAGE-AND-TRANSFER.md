@@ -7,9 +7,9 @@ Wallet records store metadata and encrypted blob references; raw blob bytes live
 
 Core implementation is in:
 
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py`
-- `/Users/trbouma/projects/safebox-2/safebox/func_utils.py`
-- `/Users/trbouma/projects/safebox-2/app/routers/records.py`
+- `safebox/acorn.py`
+- `safebox/func_utils.py`
+- `app/routers/records.py`
 
 ## Scope
 

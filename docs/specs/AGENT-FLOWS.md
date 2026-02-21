@@ -86,8 +86,8 @@ In practical terms:
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/routers/agent.py`
-- `/Users/trbouma/projects/safebox-2/docs/specs/AGENT-API.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/NFC-FLOWS-AND-SECURITY.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
-- `/Users/trbouma/projects/safebox-2/skills/agent-api/SKILL.md`
+- `app/routers/agent.py`
+- `docs/specs/AGENT-API.md`
+- `docs/specs/NFC-FLOWS-AND-SECURITY.md`
+- `docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
+- `skills/agent-api/SKILL.md`

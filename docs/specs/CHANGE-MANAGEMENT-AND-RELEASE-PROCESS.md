@@ -37,6 +37,6 @@ This document defines how Safebox changes are proposed, reviewed, tested, and pr
 - No emergency production patch without audit trail and postmortem.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/SECURITY-TEST-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/SCALABILITY-TEST-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/DATABASE-BACKENDS-AND-MIGRATIONS.md`
+- `docs/specs/SECURITY-TEST-PLAN.md`
+- `docs/specs/SCALABILITY-TEST-PLAN.md`
+- `docs/specs/DATABASE-BACKENDS-AND-MIGRATIONS.md`

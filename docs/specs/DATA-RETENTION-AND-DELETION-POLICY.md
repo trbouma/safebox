@@ -40,6 +40,6 @@ This policy defines how Safebox operators retain, minimize, and delete data acro
 - Verify backups and replicas respect deletion and expiry controls.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/BACKUP-AND-RECOVERY-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/SECURITY-TEST-PLAN.md`
+- `docs/specs/BACKUP-AND-RECOVERY-PLAN.md`
+- `docs/specs/FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md`
+- `docs/specs/SECURITY-TEST-PLAN.md`

@@ -113,4 +113,4 @@ That makes it a practical extension to the Nostr Bech32 object family for Safebo
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/utils.py`
+- `app/utils.py`

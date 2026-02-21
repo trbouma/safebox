@@ -102,7 +102,7 @@ Safebox is therefore neither “DNS-only” nor “key-only”; it is deliberate
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/main.py`
-- `/Users/trbouma/projects/safebox-2/app/routers/lnaddress.py`
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py`
-- `/Users/trbouma/projects/safebox-2/app/nwc.py`
+- `app/main.py`
+- `app/routers/lnaddress.py`
+- `safebox/acorn.py`
+- `app/nwc.py`

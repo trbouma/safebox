@@ -48,6 +48,6 @@ This document identifies key Safebox threats, trust boundaries, and mitigations 
 - Security tests must map directly to threat categories and residual risks.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/NFC-FLOWS-AND-SECURITY.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/SECURITY-TEST-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/RECORD-PRESENTATION-NAUTH-STRATEGY.md`
+- `docs/specs/NFC-FLOWS-AND-SECURITY.md`
+- `docs/specs/SECURITY-TEST-PLAN.md`
+- `docs/specs/RECORD-PRESENTATION-NAUTH-STRATEGY.md`

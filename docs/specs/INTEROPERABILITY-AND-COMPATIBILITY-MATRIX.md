@@ -35,6 +35,6 @@ This document tracks supported environments, protocol integrations, and fallback
 - Require explicit user-visible status when falling back from secure flows.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/NFC-FLOWS-AND-SECURITY.md`
+- `docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
+- `docs/specs/PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md`
+- `docs/specs/NFC-FLOWS-AND-SECURITY.md`

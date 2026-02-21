@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     INVITE_CODES: List = ["alpha", "rektuser", "earlyaccess"]
     AUTH_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_SERVICE: bool = False
+    AGENT_RATE_LIMIT_ENABLED: bool = True
+    AGENT_RPM: int = 60
+    AGENT_BURST: int = 20
+    AGENT_ONBOARD_RPM: int = 10
+    AGENT_ONBOARD_BURST: int = 5
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     DM_RELAYS: List = ['wss://relay.getsafebox.app']

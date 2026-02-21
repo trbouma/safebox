@@ -32,6 +32,6 @@ This pack defines reusable governance templates communities can adopt when deplo
 - Access/control role definitions should align with least-privilege principles.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/COMMUNITY-ACCEPTANCE-TEST-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/ACCEPTANCE-MODEL.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/OPERATOR-COMPLIANCE-PLAYBOOK.md`
+- `docs/specs/COMMUNITY-ACCEPTANCE-TEST-PLAN.md`
+- `docs/specs/ACCEPTANCE-MODEL.md`
+- `docs/specs/OPERATOR-COMPLIANCE-PLAYBOOK.md`

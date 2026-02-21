@@ -41,6 +41,6 @@ This specification defines service objectives and externally communicated servic
 - Maintain tamper-evident incident timelines.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/MONITORING-AND-ALERTING-PLAN.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/RESILIENCY-TEST-PLAN.md`
+- `docs/specs/MONITORING-AND-ALERTING-PLAN.md`
+- `docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`
+- `docs/specs/RESILIENCY-TEST-PLAN.md`

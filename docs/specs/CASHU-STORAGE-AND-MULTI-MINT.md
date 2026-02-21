@@ -118,7 +118,7 @@ Safebox may trigger proof consolidation when proof count or keyset fragmentation
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py`
+- `safebox/acorn.py`
   - storage/load: `add_proofs_obj`, `write_proofs`, `_load_proofs`
   - balance/keyset: `get_balance`, `_proofs_by_keyset`
   - mint/deposit: `deposit`, `poll_for_payment`, `_mint_proofs`

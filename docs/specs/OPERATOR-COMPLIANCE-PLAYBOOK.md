@@ -35,6 +35,6 @@ This playbook provides practical controls for Safebox operators to meet legal, f
 - Minimize sensitive data exposure in compliance reporting.
 
 ## Implementation References
-- `/Users/trbouma/projects/safebox-2/docs/specs/FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/DATA-RETENTION-AND-DELETION-POLICY.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`
+- `docs/specs/FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md`
+- `docs/specs/DATA-RETENTION-AND-DELETION-POLICY.md`
+- `docs/specs/INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md`

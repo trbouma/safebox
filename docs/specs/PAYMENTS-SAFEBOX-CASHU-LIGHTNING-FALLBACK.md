@@ -128,8 +128,8 @@ No Safebox-specific secure ecash messaging is required.
 
 ## Relevant Implementation Files
 
-- `/Users/trbouma/projects/safebox-2/app/routers/safebox.py` (`/payaddress`)
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py` (`pay_multi`, `secure_transmittal`, `get_ecash_latest`)
-- `/Users/trbouma/projects/safebox-2/safebox/lightning.py` (`lightning_address_pay`)
-- `/Users/trbouma/projects/safebox-2/app/routers/lnaddress.py` (`/.well-known/lnurlp/{name}`, `/lnpay/{name}`)
-- `/Users/trbouma/projects/safebox-2/app/tasks.py` (`task_pay_multi`, `handle_ecash`)
+- `app/routers/safebox.py` (`/payaddress`)
+- `safebox/acorn.py` (`pay_multi`, `secure_transmittal`, `get_ecash_latest`)
+- `safebox/lightning.py` (`lightning_address_pay`)
+- `app/routers/lnaddress.py` (`/.well-known/lnurlp/{name}`, `/lnpay/{name}`)
+- `app/tasks.py` (`task_pay_multi`, `handle_ecash`)

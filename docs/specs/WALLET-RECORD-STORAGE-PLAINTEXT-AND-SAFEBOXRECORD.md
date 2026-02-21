@@ -32,7 +32,7 @@ All wallet records follow the same envelope mechanics:
 
 Relevant implementation:
 
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py` (`set_wallet_info`, `get_wallet_info`)
+- `safebox/acorn.py` (`set_wallet_info`, `get_wallet_info`)
 
 ## Mode 1: Plaintext/String Records
 
@@ -103,12 +103,12 @@ This means the grant record in wallet storage is a structured Safebox wrapper wh
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/safebox/acorn.py`
+- `safebox/acorn.py`
   - `set_wallet_info`, `get_wallet_info`
   - `get_record`, `get_record_safebox`
   - `put_record`
   - `issue_private_record`
   - `create_grant_from_offer`
   - `create_request_from_grant`
-- `/Users/trbouma/projects/safebox-2/safebox/models.py`
+- `safebox/models.py`
   - `SafeboxRecord`
