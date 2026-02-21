@@ -161,6 +161,33 @@ Failure mode:
 
 - If card secret is stale/rotated, vault rejects early and request fails immediately.
 
+### Payment Transaction Lifecycle and Status Semantics
+
+Safebox NFC payment processing is asynchronous and should be interpreted as a staged lifecycle rather than a single atomic HTTP response.
+
+#### Canonical Stages
+
+1. Request accepted:
+   - The initiating endpoint accepts the NFC request and returns `PENDING`.
+   - Meaning: the request is authorized and queued, not settled.
+2. Card wallet confirmation:
+   - Card-side wallet receives and validates the instruction.
+   - UI guidance: "Awaiting card wallet confirmation..."
+3. Processing:
+   - Wallet executes settlement path (ecash transfer or invoice path).
+   - UI guidance: "Processing payment..."
+4. Settlement complete:
+   - Completion is signaled by notify/status events (`OK`/`ADVISORY`) and balance update.
+   - UI may render final success.
+5. Settlement failed:
+   - Errors are surfaced as `ERROR` with detail; request should not be marked complete.
+
+#### POS/NFC Status Handling
+
+- POS should not mark payment complete on initial NFC request acceptance.
+- POS should treat initial response as `PENDING`.
+- POS should finalize only on asynchronous settlement notifications (`action=nfc_token` with terminal status).
+
 ### B. Send Payment (Sender Reads Recipient Card)
 
 Client/API endpoint:
@@ -184,6 +211,32 @@ Flow:
 Failure mode:
 
 - Stale/rotated card secret fails before payout processing.
+
+### Ecash Delivery Safety, Rollback, and Recovery
+
+To reduce proof-loss risk during network interruption or UI refresh, Safebox applies delivery safeguards in ecash send paths.
+
+#### Problem Addressed
+
+In ecash workflows, a token can be issued (spending sender proofs) before remote delivery confirms. If transport fails at that point, funds can appear lost unless explicitly recovered.
+
+#### Implemented Guardrails
+
+1. Delivery confirmation check:
+   - After token issuance, Safebox attempts remote delivery and tracks confirmation.
+2. Best-effort rollback on delivery failure:
+   - If delivery is not confirmed, Safebox attempts local self-accept (`accept_token`) of the same token to restore wallet state.
+3. Recovery record on rollback uncertainty:
+   - If rollback cannot be confirmed, Safebox persists a recovery artifact record (`ecash-recovery-*`) containing:
+     - token payload
+     - amount and comment
+     - destination metadata (vault URL or recipient/relays)
+     - timestamp
+
+#### Operational Outcome
+
+- Most transient delivery failures recover automatically through rollback.
+- Remaining uncertain cases are explicitly recoverable using stored recovery artifacts instead of silent proof loss.
 
 ## NFC Record Flows
 
