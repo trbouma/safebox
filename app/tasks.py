@@ -456,20 +456,60 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
     await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
      
 async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data: object, headers: object):
-    cashu_token = await acorn_obj.issue_token(amount=submit_data["amount"], comment=submit_data["comment"])
+    amount = int(submit_data["amount"])
+    comment = str(submit_data.get("comment", "ecash transfer"))
+    cashu_token = await acorn_obj.issue_token(amount=amount, comment=comment)
     submit_data["cashu_token"] = cashu_token
-    
-    print(f"submit data: {submit_data}")
 
+    logger.info("task_to_send_along_ecash start amount=%s vault=%s", amount, vault_url)
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url=vault_url, json=submit_data, headers=headers)
-        response.raise_for_status()
-        response_json = response.json()
-    print(f"response: {response_json}")
-    pass
+    delivery_confirmed = False
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response = await client.post(url=vault_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+        logger.info("task_to_send_along_ecash delivered status=%s", response_json.get("status"))
+        delivery_confirmed = True
+    except Exception as exc:
+        logger.warning("task_to_send_along_ecash delivery failed: %s", exc)
+
+    if not delivery_confirmed:
+        # Best-effort rollback: if delivery failed before redemption, accept our own token back.
+        try:
+            rollback_msg, rollback_amount = await acorn_obj.accept_token(
+                cashu_token=cashu_token,
+                comment=f"rollback undelivered nfc ecash: {comment}",
+            )
+            logger.warning(
+                "task_to_send_along_ecash rollback_ok amount=%s msg=%s",
+                rollback_amount,
+                rollback_msg,
+            )
+        except Exception as rollback_exc:
+            logger.error("task_to_send_along_ecash rollback_failed: %s", rollback_exc)
+            try:
+                recovery_label = f"ecash-recovery-{int(time.time())}"
+                await acorn_obj.put_record(
+                    record_name=recovery_label,
+                    record_value=json.dumps(
+                        {
+                            "type": "ecash_delivery_uncertain",
+                            "amount": amount,
+                            "comment": comment,
+                            "vault_url": vault_url,
+                            "cashu_token": cashu_token,
+                            "created_at": int(time.time()),
+                        }
+                    ),
+                    record_kind=37375,
+                )
+                logger.error("task_to_send_along_ecash recovery_record_saved label=%s", recovery_label)
+            except Exception as record_exc:
+                logger.critical("task_to_send_along_ecash recovery_record_failed: %s", record_exc)
+
     with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_update = safeboxes.first()
         safebox_update.balance = acorn_obj.get_balance()

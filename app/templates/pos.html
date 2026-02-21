@@ -306,6 +306,7 @@
     const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${wsScheme}://${window.location.host}/pos/ws`);
     const wsStatus = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/status`);
+    const wsNotify = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/notify`);
 
     let rawInput = "";
     let total = 0;
@@ -530,7 +531,7 @@
               comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
             });
             nfcPaymentPending = true;
-            setStatus("NFC payment submitted. Waiting for confirmation...", "info");
+            setStatus("Awaiting card wallet confirmation...", "info");
             pinInputEl.value = "";
             break;
           }
@@ -569,15 +570,19 @@
       }
 
       if (payload.action === "nfc_token" && status === "OK") {
-        setStatus(detail || "NFC payment complete.", "ok");
-        if (/payment ok|success|complete|redeemed|credited|received/i.test(detail)) {
-          markNfcPaymentSuccess(detail || "NFC payment successful.");
-        }
+        setStatus("Awaiting card wallet confirmation...", "info");
+        return;
+      }
+
+      if (payload.action === "nfc_token" && status === "PENDING") {
+        setStatus("Awaiting card wallet confirmation...", "info");
         return;
       }
 
       if (payload.action === "nfc_token" && status === "ERROR") {
         nfcPaymentPending = false;
+        setStatus(detail || "NFC payment failed.", "error");
+        return;
       }
 
       if (status === "ERROR") {
@@ -595,8 +600,29 @@
           markInvoicePaid();
           return;
         }
-        if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
-          markNfcPaymentSuccess("NFC payment successful.");
+      } catch {
+        // ignore non-json frames
+      }
+    };
+
+    wsNotify.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (!nfcPaymentPending || payload.action !== "nfc_token") return;
+        const status = String(payload.status || "");
+        const detail = String(payload.detail || "");
+
+        if (status === "OK" || status === "ADVISORY") {
+          markNfcPaymentSuccess(detail || "NFC payment successful.");
+          return;
+        }
+        if (status === "PENDING") {
+          setStatus("Processing payment...", "info");
+          return;
+        }
+        if (status === "ERROR") {
+          nfcPaymentPending = false;
+          setStatus(detail || "NFC payment failed.", "error");
         }
       } catch {
         // ignore non-json frames

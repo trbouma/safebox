@@ -550,7 +550,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         # Need to create the nembed object
         try:
             cashu_token = await acorn_obj.issue_token(amount=amount, comment=comment)
-        except:
+        except Exception:
             cashu_token = "nsf"
             
         pay_obj =   {"token": cashu_token,
@@ -562,12 +562,57 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         nembed_to_send = create_nembed_compressed(pay_obj)
         print(f"nwc nembed to send: {nembed_to_send} using {relays}")
         
-               
+        delivery_confirmed = False
+        if cashu_token != "nsf":
+            try:
+                await acorn_obj.secure_transmittal(
+                    nrecipient=hex_to_npub(recipient_pubkey),
+                    message=nembed_to_send,
+                    dm_relays=relays,
+                    kind=21401,
+                )
+                delivery_confirmed = True
+            except Exception as exc:
+                print(f"pay_ecash secure_transmittal failed: {exc}")
 
-        await acorn_obj.secure_transmittal(nrecipient=hex_to_npub(recipient_pubkey),message=nembed_to_send,dm_relays=relays,kind=21401)
-        if cashu_token == "nsf":
-            pass
-            await acorn_obj.add_tx_history(tx_type='X', amount=0, comment="Failed due to NSF",tendered_amount=0,tendered_currency="NAN")
+            if not delivery_confirmed:
+                # Best-effort rollback: re-accept locally if transmittal failed.
+                try:
+                    await acorn_obj.accept_token(
+                        cashu_token=cashu_token,
+                        comment=f"rollback undelivered nwc ecash: {comment}",
+                    )
+                    print("pay_ecash rollback accepted locally")
+                except Exception as rollback_exc:
+                    print(f"pay_ecash rollback failed: {rollback_exc}")
+                    try:
+                        recovery_label = f"ecash-recovery-{int(datetime.now(timezone.utc).timestamp())}"
+                        await acorn_obj.put_record(
+                            record_name=recovery_label,
+                            record_value=json.dumps(
+                                {
+                                    "type": "ecash_delivery_uncertain",
+                                    "amount": amount,
+                                    "comment": comment,
+                                    "recipient_pubkey": recipient_pubkey,
+                                    "relays": relays,
+                                    "cashu_token": cashu_token,
+                                    "created_at": int(datetime.now(timezone.utc).timestamp()),
+                                }
+                            ),
+                            record_kind=37375,
+                        )
+                        print(f"pay_ecash recovery record saved: {recovery_label}")
+                    except Exception as rec_exc:
+                        print(f"pay_ecash failed to save recovery record: {rec_exc}")
+        else:
+            await acorn_obj.add_tx_history(
+                tx_type='X',
+                amount=0,
+                comment="Failed due to NSF",
+                tendered_amount=0,
+                tendered_currency="NAN",
+            )
 
     elif instruction_obj['method'] == 'accept_ecash':
         print("we gotta accept ecash!")

@@ -2007,8 +2007,8 @@ async def request_nfc_payment( request: Request,
 
     k = Keys(config.SERVICE_NSEC) # This is for the trusted service
 
-    status = "OK"
-    detail = "done"
+    status = "PENDING"
+    detail = "Request accepted. Waiting for payment settlement..."
     cli_quote: cliQuote
    
     nfc_ecash_clearing = settings.NFC_ECASH_CLEARING
@@ -2128,9 +2128,13 @@ async def request_nfc_payment( request: Request,
         return {"status": "ERROR", "detail": "NFC vault returned invalid response."}
 
     print(response_json)
+    response_status = response_json.get("status", "ERROR")
+    response_detail = response_json.get("detail", detail)
+    if response_status == "OK":
+        return {"status": "PENDING", "detail": detail}
     return {
-        "status": response_json.get("status", status),
-        "detail": response_json.get("detail", detail),
+        "status": response_status,
+        "detail": response_detail,
     }  
 
 @router.post("/paytonfctag", tags=["safebox", "protected"])
