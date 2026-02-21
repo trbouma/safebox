@@ -600,6 +600,11 @@
           markInvoicePaid();
           return;
         }
+        // Fallback path: if notify channel is delayed/missed, settle NFC UI on balance delta.
+        if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
+          markNfcPaymentSuccess("NFC payment settled.");
+          return;
+        }
       } catch {
         // ignore non-json frames
       }

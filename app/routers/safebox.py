@@ -2104,8 +2104,53 @@ async def request_nfc_payment( request: Request,
         print(f"data: {submit_data}")
        
         # add in the polling task here
-    
-        task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=final_amount, tendered_amount=payment_token.amount, tendered_currency=payment_token.currency, mint=HOME_MINT, comment=payment_token.comment))
+        async def _watch_lightning_settlement() -> None:
+            try:
+                settled = await handle_payment(
+                    acorn_obj=acorn_obj,
+                    cli_quote=cli_quote,
+                    amount=final_amount,
+                    tendered_amount=payment_token.amount,
+                    tendered_currency=payment_token.currency,
+                    mint=HOME_MINT,
+                    comment=payment_token.comment,
+                )
+                if settled:
+                    await notify_user(
+                        acorn_obj.pubkey_bech32,
+                        {
+                            "status": "OK",
+                            "action": "nfc_token",
+                            "detail": (
+                                f"Tendered Amount {payment_token.amount} {payment_token.currency} | "
+                                f"Credited {final_amount} sats | Payment complete"
+                            ),
+                            "balance": acorn_obj.balance,
+                        },
+                    )
+                else:
+                    await notify_user(
+                        acorn_obj.pubkey_bech32,
+                        {
+                            "status": "ERROR",
+                            "action": "nfc_token",
+                            "detail": "Payment not confirmed before timeout.",
+                            "balance": acorn_obj.balance,
+                        },
+                    )
+            except Exception as exc:
+                logger.exception("NFC lightning settlement watcher failed")
+                await notify_user(
+                    acorn_obj.pubkey_bech32,
+                    {
+                        "status": "ERROR",
+                        "action": "nfc_token",
+                        "detail": f"Payment processing error: {exc}",
+                        "balance": acorn_obj.balance,
+                    },
+                )
+
+        asyncio.create_task(_watch_lightning_settlement())
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
