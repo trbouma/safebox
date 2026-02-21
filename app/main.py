@@ -31,7 +31,7 @@ from app.routers import     (   lnaddress,
                                 emergency, 
                                 pos, 
                                 public, 
-                                
+                                agent,
                                 records )
 
 from app.tasks import periodic_task
@@ -237,6 +237,7 @@ app.include_router(scanner.router, prefix="/scanner")
 app.include_router(emergency.router) 
 app.include_router(pos.router, prefix="/pos")
 app.include_router(public.router, prefix="/public")
+app.include_router(agent.router, prefix="/agent")
 
 app.include_router(records.router, prefix="/records")
 

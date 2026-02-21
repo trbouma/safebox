@@ -22,6 +22,7 @@ nav:
       - NEmbed Protocol: specs/NEMBED-PROTOCOL.md
       - OAE Protocol: specs/OAE-PROTOCOL.md
       - NWC NFC Vault Extension: specs/NWC-NFC-VAULT-EXTENSION.md
+      - Agent API: specs/AGENT-API.md
       - NFC Flows and Security: specs/NFC-FLOWS-AND-SECURITY.md
       - Payments (Cashu + Lightning Fallback): specs/PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md
       - Cashu Storage and Multi-Mint: specs/CASHU-STORAGE-AND-MULTI-MINT.md
