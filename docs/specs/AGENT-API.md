@@ -48,7 +48,7 @@ Base prefix:
 ## Curl Quickstart
 
 ```bash
-BASE_URL="https://dev.safebox.dev"
+BASE_URL="https://skills.example.com"
 API_KEY="your-wallet-access-key"
 ```
 
