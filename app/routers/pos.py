@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from fastapi import Depends, Request, APIRouter, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -32,6 +33,29 @@ class POSAccessKey(BaseModel):
     access_key: str
 
 
+def _to_two_decimals(value: float | int | str) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+async def _wallet_currency_context(acorn_obj: Acorn) -> tuple[str, str]:
+    currency_code = "SAT"
+    currency_symbol = "₿"
+    with Session(engine) as session:
+        safebox = session.exec(
+            select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
+        ).first()
+        if safebox and safebox.currency_code:
+            currency_code = safebox.currency_code.upper()
+    if currency_code != "SAT":
+        try:
+            rate = await get_currency_rate(currency_code)
+            if rate and rate.currency_symbol:
+                currency_symbol = rate.currency_symbol
+        except Exception:
+            logger.debug("POS currency symbol lookup failed for %s", currency_code)
+    return currency_code, currency_symbol
+
+
 
 @router.get("/", tags=["pos"]) 
 async def pos_main (    request: Request, 
@@ -39,7 +63,16 @@ async def pos_main (    request: Request,
                     ):
     if not acorn_obj:
         return RedirectResponse(url="/")
-    return templates.TemplateResponse("pos.html", {"request": request, "expression": ""})
+    currency_code, currency_symbol = await _wallet_currency_context(acorn_obj)
+    return templates.TemplateResponse(
+        "pos.html",
+        {
+            "request": request,
+            "expression": "",
+            "pos_currency": currency_code,
+            "pos_currency_symbol": currency_symbol,
+        },
+    )
 
 @router.post("/calculate", response_class=HTMLResponse)
 async def calculate(request: Request, expression: str = Form(...)):
@@ -115,12 +148,23 @@ async def ln_invoice_payment(   request: Request,
         logger.warning("POS invoice wallet auth failed: %s", exc)
         return {"status": "ERROR", "detail": "Unable to authenticate POS wallet."}
 
-    if ln_invoice.currency == "SAT":
-        sat_amount = int(ln_invoice.amount)
+    try:
+        amount_dec = _to_two_decimals(ln_invoice.amount)
+    except (InvalidOperation, ValueError):
+        return {"status": "ERROR", "detail": "Invalid amount format."}
+
+    currency_code = (ln_invoice.currency or "SAT").upper()
+    if currency_code == "SAT":
+        sat_amount = int(amount_dec.to_integral_value(rounding=ROUND_HALF_UP))
     else:
-        local_currency = await get_currency_rate(ln_invoice.currency.upper())
+        local_currency = await get_currency_rate(currency_code)
         logger.debug("POS invoice currency rate=%s", local_currency.currency_rate)
-        sat_amount = int(ln_invoice.amount* 1e8 // local_currency.currency_rate)
+        if not local_currency or not local_currency.currency_rate:
+            return {"status": "ERROR", "detail": f"Unsupported currency: {currency_code}"}
+        sat_amount = int(
+            (amount_dec * Decimal("100000000") / Decimal(str(local_currency.currency_rate)))
+            .to_integral_value(rounding=ROUND_HALF_UP)
+        )
     
     if sat_amount <= 0:
         return {"status": "ERROR", "detail": "Amount must be greater than zero."}
@@ -136,8 +180,8 @@ async def ln_invoice_payment(   request: Request,
             acorn_obj=acorn_obj,
             cli_quote=cli_quote,
             amount=sat_amount,
-            tendered_amount=ln_invoice.amount,
-            tendered_currency=ln_invoice.currency,
+            tendered_amount=float(amount_dec),
+            tendered_currency=currency_code,
             comment=ln_invoice.comment,
             mint=settings.HOME_MINT,
         )
@@ -165,10 +209,15 @@ async def info(   request: Request,
         return {"status": "ERROR", "detail": "Not found"}
        
     
-    return {    "status": "OK", 
-                "detail": "Found", 
-                "handle": acorn_obj.handle,
-                "balance": acorn_obj.balance}
+    currency_code, currency_symbol = await _wallet_currency_context(acorn_obj)
+    return {
+        "status": "OK",
+        "detail": "Found",
+        "handle": acorn_obj.handle,
+        "balance": acorn_obj.balance,
+        "currency": currency_code,
+        "currency_symbol": currency_symbol,
+    }
 
 
 @router.websocket("/ws")

@@ -250,9 +250,9 @@
       </div>
 
       <div class="display-wrap">
-        <span class="label">Current Entry (sats)</span>
+        <span class="label">Current Entry (<span id="currencyCodeLabel">{{ pos_currency if pos_currency else "SAT" }}</span>)</span>
         <div id="display" class="value entry">0</div>
-        <span class="label" style="margin-top: 10px;">Total (sats)</span>
+        <span class="label" style="margin-top: 10px;">Total (<span id="currencyCodeLabel2">{{ pos_currency if pos_currency else "SAT" }}</span>)</span>
         <div id="totalDisplay" class="value total">0</div>
       </div>
 
@@ -273,7 +273,7 @@
         <button class="btn-muted" id="btnBack">⌫</button>
 
         <button data-key="0">0</button>
-        <button class="btn-primary" id="btnTotal">Total</button>
+        <button class="btn-primary" id="btnDot">.</button>
         <button class="btn-danger" id="btnReset">Reset</button>
         <button class="btn-success" id="btnNfc">Pay NFC</button>
       </div>
@@ -301,6 +301,8 @@
   </main>
 
   <script>
+    const POS_CURRENCY = "{{ pos_currency if pos_currency else 'SAT' }}";
+    const POS_CURRENCY_SYMBOL = "{{ pos_currency_symbol if pos_currency_symbol else '₿' }}";
     const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${wsScheme}://${window.location.host}/pos/ws`);
     const wsStatus = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/status`);
@@ -338,23 +340,30 @@
       }
     }
 
-    function formatSat(value) {
+    function formatAmount(value) {
       const n = Number(value) || 0;
-      return n.toLocaleString("en-US");
+      return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function parseEntryToTwoDecimals(value) {
+      const n = Number(value || 0);
+      if (!Number.isFinite(n) || n <= 0) return 0;
+      return Math.round(n * 100) / 100;
     }
 
     function updateDisplay() {
-      displayEl.textContent = rawInput ? formatSat(rawInput) : "0";
+      const shown = rawInput ? parseEntryToTwoDecimals(rawInput) : 0;
+      displayEl.textContent = `${POS_CURRENCY_SYMBOL} ${formatAmount(shown)}`;
     }
 
     function updateTotal() {
-      totalEl.textContent = formatSat(total);
+      totalEl.textContent = `${POS_CURRENCY_SYMBOL} ${formatAmount(total)}`;
     }
 
     function addEntryToTotal() {
-      const value = parseInt(rawInput || "0", 10);
-      if (Number.isFinite(value) && value > 0) {
-        total += value;
+      const value = parseEntryToTwoDecimals(rawInput);
+      if (value > 0) {
+        total = Math.round((total + value) * 100) / 100;
       }
       rawInput = "";
       updateDisplay();
@@ -470,7 +479,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: total,
-            currency: "SAT",
+            currency: POS_CURRENCY,
             comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
           })
         });
@@ -517,7 +526,7 @@
               value: nfcToken,
               amount: total,
               pin: pinInputEl.value || "",
-              currency: "SAT",
+              currency: POS_CURRENCY,
               comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
             });
             nfcPaymentPending = true;
@@ -555,7 +564,7 @@
       const detail = String(payload.detail || "");
 
       if (payload.action === "get_balance" && status === "OK") {
-        setStatus(`Balance: ${formatSat(detail)} sats`, "ok");
+        setStatus(`Balance: ${Number(detail || 0).toLocaleString("en-US")} sats`, "ok");
         return;
       }
 
@@ -599,10 +608,17 @@
 
     document.querySelectorAll("[data-key]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (rawInput.length >= 9) return;
+        if (rawInput.includes(".") && rawInput.split(".")[1].length >= 2) return;
+        if (rawInput.length >= 12) return;
         rawInput += btn.dataset.key;
         updateDisplay();
       });
+    });
+
+    document.getElementById("btnDot").addEventListener("click", () => {
+      if (rawInput.includes(".")) return;
+      rawInput = rawInput ? `${rawInput}.` : "0.";
+      updateDisplay();
     });
 
     document.getElementById("btnClear").addEventListener("click", () => {
@@ -616,7 +632,6 @@
     });
 
     document.getElementById("btnAdd").addEventListener("click", addEntryToTotal);
-    document.getElementById("btnTotal").addEventListener("click", addEntryToTotal);
 
     document.getElementById("btnReset").addEventListener("click", () => {
       total = 0;
