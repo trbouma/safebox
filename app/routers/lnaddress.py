@@ -410,6 +410,23 @@ async def card_status(request: Request, card_status_request: cardStatusRequest):
     }
 
 
+@router.post("/.well-known/card-balance", tags=["public"])
+async def card_balance(request: Request, card_status_request: cardStatusRequest):
+    _, _, npub, _ = _parse_and_validate_card_token(
+        card_status_request.token,
+        card_status_request.sig,
+        card_status_request.pubkey,
+    )
+    acorn_obj = await get_acorn_by_npub(npub)
+    if not acorn_obj:
+        raise HTTPException(status_code=404, detail="Safebox not found for card")
+
+    return {
+        "status": "OK",
+        "balance_sats": int(acorn_obj.balance),
+    }
+
+
 @router.post("/.well-known/proof", tags=["public"])
 async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"

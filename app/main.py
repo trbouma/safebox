@@ -281,6 +281,18 @@ async def read_root(request: Request, access_token: str = Cookie(default=None)):
 async def get_npub(request: Request): 
     return {"npub": config.SERVICE_NPUB}
 
+
+@app.get("/mybalance", tags=["public"])
+@app.get("/mybalance/", tags=["public"])
+async def mybalance_alias(request: Request):
+    return await public.my_balance_page(request)
+
+
+@app.post("/mybalance/check", tags=["public"])
+@app.post("/mybalance/check/", tags=["public"])
+async def mybalance_check_alias(request: Request, payload: public.MyBalanceRequest):
+    return await public.my_balance_check(request, payload)
+
 # Define a npub endpoint
 @app.get("/pqc", tags=["public"])
 async def get_pqc(request: Request): 

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ request.url.hostname }}</title>
+  <style>
+    :root {
+      --bg: #0d1124;
+      --panel: #141a34;
+      --line: rgba(255, 255, 255, 0.16);
+      --text: #f6f6f6;
+      --muted: #b9bfd9;
+      --focus: #5267ec;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at top right, #1c2d59 0, transparent 46%), var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", sans-serif;
+    }
+    .wrap {
+      width: min(96vw, 560px);
+      margin: 16px auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+    .label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    select, button {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0f1631;
+      color: var(--text);
+      padding: 10px;
+      font-size: 1rem;
+    }
+    button {
+      margin-top: 10px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #4d6fff, #2f4fd7);
+      border: 1px solid transparent;
+      font-weight: 600;
+    }
+    .result {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0f1631;
+      text-align: center;
+    }
+    .main-amount {
+      font-size: 1.7rem;
+      font-weight: 700;
+      margin: 4px 0;
+      word-break: break-word;
+    }
+    .sat-amount {
+      font-size: 1rem;
+      color: var(--muted);
+      margin: 2px 0 0;
+      word-break: break-word;
+    }
+    .status {
+      margin-top: 10px;
+      min-height: 1.2rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .public-note {
+      margin-top: 0;
+      margin-bottom: 12px;
+      min-height: unset;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text);
+      text-align: center;
+      line-height: 1.3;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="public-note">
+      This is a public page. Only your balance is shown here.
+    </div>
+    <label class="label" for="currency">Currency</label>
+    <select id="currency" name="currency">
+      {% for code in currencies %}
+      <option value="{{ code }}" {% if code == "SAT" %}selected{% endif %}>{{ code }}</option>
+      {% endfor %}
+    </select>
+    <button id="scanBtn" type="button">Scan NFC Card</button>
+
+    <section class="result">
+      <div id="mainAmount" class="main-amount">0 SAT</div>
+      <div id="satAmount" class="sat-amount">(0 sats)</div>
+    </section>
+    <div id="status" class="status"></div>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const mainAmountEl = document.getElementById("mainAmount");
+    const satAmountEl = document.getElementById("satAmount");
+    const currencyEl = document.getElementById("currency");
+
+    function setStatus(message) {
+      statusEl.textContent = String(message || "");
+    }
+
+    function formatMainAmount(amount, currency, symbol) {
+      const n = Number(amount || 0);
+      if (currency === "SAT") {
+        return `${Math.round(n).toLocaleString("en-US")} SAT`;
+      }
+      return `${symbol || ""}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+    }
+
+    async function scanAndFetchBalance() {
+      if (!("NDEFReader" in window)) {
+        setStatus("Web NFC is not supported on this browser/device.");
+        return;
+      }
+
+      setStatus("Waiting for NFC card...");
+      try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+
+        ndef.onreading = async ({ message }) => {
+          try {
+            let nembed = "";
+            for (const record of message.records) {
+              const decoder = new TextDecoder(record.encoding || "utf-8");
+              nembed = decoder.decode(record.data);
+              break;
+            }
+            if (!nembed) {
+              setStatus("No NFC payload found.");
+              return;
+            }
+
+            setStatus("Reading balance...");
+            const response = await fetch("/public/mybalance/check", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                nembed: nembed,
+                currency: currencyEl.value
+              })
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== "OK") {
+              throw new Error(data.detail || "Unable to read card balance.");
+            }
+
+            mainAmountEl.textContent = formatMainAmount(
+              data.selected_amount,
+              data.selected_currency,
+              data.currency_symbol
+            );
+            satAmountEl.textContent = `(${Number(data.balance_sats || 0).toLocaleString("en-US")} sats)`;
+            setStatus("");
+          } catch (err) {
+            setStatus(err.message || "Unable to read card balance.");
+          }
+        };
+      } catch (err) {
+        setStatus(err.message || "NFC scan failed.");
+      }
+    }
+
+    document.getElementById("scanBtn").addEventListener("click", scanAndFetchBalance);
+  </script>
+</body>
+</html>

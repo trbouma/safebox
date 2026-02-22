@@ -23,6 +23,8 @@
     html, body {
       margin: 0;
       min-height: 100%;
+      width: 100%;
+      max-width: 100%;
       overflow-x: hidden;
       font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
       color: var(--text);
@@ -34,6 +36,7 @@
 
     .top-invoice {
       width: min(96vw, 1100px);
+      max-width: calc(100vw - 16px);
       margin: 12px auto 0;
       text-align: center;
       border: 1px solid var(--border);
@@ -45,10 +48,12 @@
 
     .shell {
       width: min(96vw, 1100px);
+      max-width: calc(100vw - 16px);
       margin: 12px auto 26px;
       display: grid;
       gap: 14px;
       grid-template-columns: 1.3fr 1fr;
+      min-width: 0;
     }
 
     .panel {
@@ -57,6 +62,8 @@
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       padding: 14px;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .title-row {
@@ -72,6 +79,8 @@
       margin: 0;
       font-size: 1.3rem;
       font-weight: 700;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .status-pill {
@@ -86,6 +95,14 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .meta,
+    .label,
+    .value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .display-wrap {
