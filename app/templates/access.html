@@ -132,6 +132,7 @@
     color: #cad9ff;
     padding: 10px 12px;
     overflow-wrap: anywhere;
+    margin: 0;
   }
 
   #payment_notification {
@@ -203,6 +204,50 @@
     margin-top: 10px;
     box-sizing: border-box;
     overflow: hidden;
+  }
+
+  .account-box > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .account-box > * + * {
+    margin-top: 8px;
+  }
+
+  .section-label {
+    margin: 0 0 6px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sb-text-sub);
+  }
+
+  .section-anchor {
+    display: inline-block;
+    text-decoration: none;
+  }
+
+  .section-anchor:hover {
+    text-decoration: underline;
+  }
+
+  .helper-note {
+    margin-top: 4px;
+    font-size: 0.84rem;
+    color: var(--sb-text-sub);
+    text-align: center;
+  }
+
+  .balance-updated {
+    font-size: 0.8rem;
+    color: var(--sb-text-sub);
+    text-align: center;
+  }
+
+  .danger-button {
+    background: linear-gradient(135deg, #b63b4f, #90293a);
   }
 
   .branding-badge {
@@ -291,9 +336,9 @@
 
   async function getEcashStatus(data) {
 
-    var status = JSON.stringify(data["status"]);
-    var detail = JSON.stringify(data["detail"]);
-    alert(detail);
+    const status = data?.status || "INFO";
+    const detail = data?.detail || "Ecash token processed.";
+    userMessage(detail, status);
     window.location.href="/safebox/access";
     
 
@@ -502,7 +547,7 @@ window.location.href="/safebox/txhistory";
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(clipboard_data);
-alert(backup_message);
+userMessage(backup_message, "INFO");
 
 
 // ln_invoice_status.textContent = "Lightning Invoice Copied to Clipboard!";
@@ -511,7 +556,7 @@ alert(backup_message);
 async function copyNpub() {
 
 await navigator.clipboard.writeText("{{acorn.pubkey_bech32}}");
-alert("Npub copied to clipboard!");
+userMessage("Npub copied to clipboard!", "INFO");
 
 
 
@@ -551,7 +596,7 @@ async function useClipboard() {
 async function copyAddress() {
 
 await navigator.clipboard.writeText("{{lightning_address}}");
-alert("{{lightning_address}}"+ " copied to clipboard!");
+userMessage("{{lightning_address}} copied to clipboard!", "INFO");
 
 
 
@@ -561,7 +606,7 @@ alert("{{lightning_address}}"+ " copied to clipboard!");
 async function copyInvoicetoClipoboard(invoice_data) {
 
 await navigator.clipboard.writeText(lighting_invoice_data);
-alert("Lightning invoice copied to clipboard!");
+userMessage("Lightning invoice copied to clipboard!", "INFO");
 
 
 
@@ -626,11 +671,15 @@ function consoleLog(data) {
   async function userMessage(data, status="INFO"){
     var logElement = document.getElementById('payment_notification');
     logElement.innerHTML = data ;
-    if (status=="ERROR") {
-      alert(data);
-    }
    
   };
+
+  function markBalanceUpdated() {
+    const el = document.getElementById("balance_last_updated");
+    if (!el) return;
+    const now = new Date();
+    el.textContent = `Last updated: ${now.toLocaleTimeString()}`;
+  }
 
   function paytoMessage(data) {
     var logElement = document.getElementById('pay_to_message');
@@ -772,7 +821,6 @@ async function paytoNFC() {
   var nfc_currency = document.getElementById("ln_select_currency").value;
 
   
-  alert(`Pay to NFC`);
       // var nfc_amount = document.getElementById("input_nfc_amount").value;
       userMessage(`Pay to NFC tag`);
     var nfc_token;
@@ -825,7 +873,7 @@ async function requestPayment() {
       if (isNaN(ln_create_invoice_amount) || ln_create_invoice_amount < 0) {
         ln_create_invoice_amount = 0;
       }
-      alert("Please tap NFC card!");
+      userMessage("Please tap NFC card.", "INFO");
       await requestbyNFC(ln_create_invoice_amount, ln_currency, ln_comment);
                       return;
   }
@@ -834,7 +882,7 @@ async function requestPayment() {
  
   if (ln_create_invoice_amount <=0 || isNaN(ln_create_invoice_amount)){
     // create_invoice_button.textContent = "Need Amount ";
-    alert("Please enter invoice amount.");
+    userMessage("Please enter invoice amount.", "ERROR");
     return;
 
   }
@@ -919,6 +967,7 @@ function checkBalance(balance) {
       } 
   
   heading_balance.textContent = "(\u20BF" + Number(new_balance).toLocaleString("en-US") + ")";
+  markBalanceUpdated();
   starting_balance = new_balance;
 
   //alert(JSON.stringify(balance));
@@ -1106,7 +1155,7 @@ function getInvoiceStatus(ln_invoice_status) {
     var status = JSON.stringify(ln_invoice_status["detail"]);
 
     const parsedObject = JSON.parse(JSON.stringify(ln_invoice_status));
-    alert("Payment " + parsedObject.detail);
+    userMessage("Payment " + parsedObject.detail, "INFO");
   
 
 }
@@ -1147,6 +1196,7 @@ function getInvoiceStatus(ln_invoice_status) {
       if (typeof payload.fiat_balance !== "undefined") {
         document.getElementById("fiat_balance").innerText = `${payload.fiat_balance}`;
       }
+      markBalanceUpdated();
       if (status === "SENT") {
         document.getElementById("img_qr_display").src = "/img/green-check.png";
         if (!reset_to_home_scheduled) {
@@ -1180,6 +1230,7 @@ function getInvoiceStatus(ln_invoice_status) {
         document.getElementById("heading_balance").innerText = `(\u20BF${Number(balance).toLocaleString("en-US")})`;
         document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
         document.getElementById("payment_notification").innerText = `${message}`;
+        markBalanceUpdated();
         if (ux_mode === "wait_invoice") {
           clearRequestPaymentFields();
           ux_mode = "init";
@@ -1201,6 +1252,7 @@ function getInvoiceStatus(ln_invoice_status) {
 
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
+      markBalanceUpdated();
       document.getElementById("img_qr_display").src = "/img/green-check.png";
 
              
@@ -1223,7 +1275,7 @@ function getInvoiceStatus(ln_invoice_status) {
   async function sendMessage() {
       
       // ws.send("App is touched");
-      alert("Coming soon!");
+      userMessage("Coming soon!", "INFO");
       
   }
 
@@ -1246,15 +1298,15 @@ function getInvoiceStatus(ln_invoice_status) {
     <span class="branding-domain">{{ request.url.hostname }}</span>
   </p>
 
-  <div class="account-box">
+  <div class="account-box" id="overview">
     <h1  id="fiat_balance" style="margin: 0;">{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}</h1>
     <p id="heading_balance" style="margin: 0;">({{ "\u20BF" + "{:,}".format(acorn.balance)}})</p>
+    <p id="balance_last_updated" class="balance-updated"></p>
       <select class="balance-currency-selector" id="owner_select_currency" name="select_currency" onchange="setOwnerCurrency()">
         {% for entry in currencies %}
         <option value="{{entry}}" {% if entry == currency_code %}selected{% endif %}>{{entry}}</option>         
         {% endfor %}
     </select>
-    <br>
 
     <span id="payment_notification">
       {{ action_comment if action_comment else ""}}
@@ -1262,37 +1314,25 @@ function getInvoiceStatus(ln_invoice_status) {
     
     {% if onboard == true %}
     Welcome! Please see the <a href="#fine-print">fine print</a> below.
-    <br><br>
     {% endif %}
-    <button id="ln_scan_button" onclick="scanCode()">Scan</button>
-    <br>
-    <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button>
-    <br>
+    <div class="btn-stack">
+      <button id="ln_scan_button" onclick="scanCode()">Scan</button>
+      <p class="helper-note">Scan QR code</p>
+      <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
+      <p class="helper-note">Receive payments in person</p>
+      <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button>
+      <p class="helper-note">For invoices or ecash tokens</p>
+    </div>
   </div>
 
-    <div class="account-box">
-      <h2 style="margin: 0;">Request a Payment</h2>
+    <div class="account-box" id="payment-address">
+      <p class="section-label"><a class="section-label section-anchor" href="#payment-address">My Payment Address</a></p>
       <img id="img_qr_display"  src="/safebox/qr/{{lnurl}}">
       <h3 id="ln_address_text" onclick="copyAddress()"><b>{{lightning_address}}</b></h3>
-      <input type="number" inputmode="decimal" step="any" placeholder="enter  amount" id="ln_create_invoice_amount" name="ln_create_invoice_amount" size="24">      
-    <select id="ln_select_invoice_currency" name="ln_select_invoice_currency"> 
-      <option value="SAT" {% if currency == "SAT" %}selected{% endif %}>SAT</option>            
-      {% for each in currencies %}     
-       <option value="{{each}}" {% if currency == each %}selected{% endif %}>{{each}}</option>        
-      {% endfor %}
-    </select>   
-      <textarea id="ln_request_memo" placeholder= "Enter optional comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <!-- New checkbox for NFC payment -->
-      <label>
-      <input type="checkbox" id="nfc_payment_checkbox" name="nfc_payment_checkbox">
-      Request by NFC
-      </label>
-      <pre id="log"></pre>
-      <button id="ln_create_invoice_button" onclick="requestPayment()">Request Payment</button>
     </div>
 
-    <div class="account-box">
-      <h2 style="margin: 0;">Make a Payment</h2>
+    <div class="account-box" id="make-payment">
+      <p class="section-label"><a class="section-label section-anchor" href="#make-payment">Make a Payment</a></p>
       <div id="invoice_pay_panel" style="display:none;">
         <h3 style="margin:0 0 8px;">Pay Scanned Invoice</h3>
         <input type="text" id="ln_invoice_input" placeholder="Lightning invoice" autocomplete="off">
@@ -1305,9 +1345,7 @@ function getInvoiceStatus(ln_invoice_status) {
                 <option value="NFC Tag"></option>
                
       </datalist>
-      <br>
-     
-      <br><input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8">
+      <input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8">
       
       <select id="ln_select_currency" name="ln_select_currency"> 
         <option value="SAT" >SAT</option>            
@@ -1315,23 +1353,20 @@ function getInvoiceStatus(ln_invoice_status) {
          <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
         {% endfor %}
       </select>
-      <br>
       
       <textarea id="ln_recipient_memo" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <br>
-      <button id="ln_pay_button" onclick="lnPayAddress()">Pay to Recipient</button> 
-      <br>
+      <button id="ln_pay_button" onclick="lnPayAddress()">Send Payment</button> 
 
     <div class="btn-stack">
-      <button id="my_ecash_button" onclick="myEcash()">Pay with Ecash</button>
+      <button id="my_ecash_button" onclick="myEcash()">Redeem Ecash</button>
       <button onclick="doAccountHistory()">Account History</button>
     </div>
     <pre id="pay_to_message">Ready.</pre>
   </div>
   
 
-  <div class="account-box">
-    <h2>My Records</h2>
+  <div class="account-box" id="my-records">
+    <p class="section-label"><a class="section-label section-anchor" href="#my-records">My Records</a></p>
     <div class="btn-stack">
       <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
       <button id="my_private_data_button" onclick="privateData()">My Notes</button>
@@ -1340,8 +1375,8 @@ function getInvoiceStatus(ln_invoice_status) {
   </div>
 
   
-  <div class="account-box">
-    <h2>Community</h2>
+  <div class="account-box" id="community">
+    <p class="section-label"><a class="section-label section-anchor" href="#community">Community</a></p>
     <div class="btn-stack">
       <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
       <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
@@ -1350,14 +1385,10 @@ function getInvoiceStatus(ln_invoice_status) {
   </div>
 
 
-
-  
-
-  <br>
-  <div class="account-box">
+  <div class="account-box" id="reusable-request">
   
  
-    <h2> Reusable Payment Request </h2> 
+    <p class="section-label"><a class="section-label section-anchor" href="#reusable-request">Reusable Payment Request</a></p>
   
     <form fx-action="/safebox/requestqr" 
         fx-method="get" 
@@ -1380,7 +1411,6 @@ function getInvoiceStatus(ln_invoice_status) {
           <option >{{entry}}</option>         
           {% endfor %}
         </select>
-        <br><br>
         <label for="desc">Description:</label>
         <input 
           type="text" 
@@ -1389,10 +1419,8 @@ function getInvoiceStatus(ln_invoice_status) {
           maxlength="25" 
           placeholder="Enter text (optional)"
         >
-        <br><br>
 
         <button type="submit">Generate Payment Request</button></form>
-    <br>   
   
     <div id="request_qr" class="request-qr-output"></div>
         
@@ -1402,11 +1430,11 @@ function getInvoiceStatus(ln_invoice_status) {
   
   
   </div>
-  <div class="account-box">
-    <h2>My Account</h2>
+  <div class="account-box" id="my-account">
+    <p class="section-label"><a class="section-label section-anchor" href="#my-account">My Account</a></p>
     <p>My access_key: </b></p>
     <p id="access_key_reveal_text" onclick="revealAccessKey()">*********</p>   
-    <p>My recovery phrase: <br> 
+    <p>My recovery phrase:</p>
     <p id="seed_phrase_reveal_text" onclick="revealSeedPhrase()">*********</p>
     
     
@@ -1418,7 +1446,6 @@ function getInvoiceStatus(ln_invoice_status) {
       <button id="logout_button" onclick="logout()">Logout</button>
     </div>
   </div>
-  <br>
  
  {% if onboard == true %}
  <h2 id="fine-print" >The Fine Print</h2>
@@ -1426,28 +1453,17 @@ function getInvoiceStatus(ln_invoice_status) {
  <p>You are automatically and securely logged in! Write down your access key as soon as you can. You can find your access key and recovery phrase above. By continuing, you have agreed to the terms and conditions of this awesome experimental service! </p>
  {% endif %}
 
-  <div class="account-box">
-    <h2>Technical Info</h2>
-
-    <br>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}
+  <div class="account-box" id="technical-info">
+    <p class="section-label"><a class="section-label section-anchor" href="#technical-info">Technical Info</a></p>
+    <p>npub: {{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</p>
     <pre id="npub"onclick="copyNpub()">{{acorn.pubkey_bech32[:10]}}...{{acorn.pubkey_bech32[-8:]}}</pre>
-    <br>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}
-    <br>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}
-    <br>home relay: {{acorn.home_relay}}
-    <br><br>
+    <p>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}</p>
+    <p>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}</p>
+    <p>home relay: {{acorn.home_relay}}</p>
     <a href="/public/rates">Exchange Rates</a>
-    <br><br>
     <a href="/mybalance" hx-boost="false">My Balance (NFC)</a>
-    <br><br>
-    <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
-    <br><br>
-    <button id="danger_zone"onclick="dangerZone()" >Danger Zone!</button>
-    
-    <br><br>
-    
-    
-    
-    <br><br><a href="https://github.com/trbouma/safebox">Source Code</a>
+    <button id="danger_zone" class="danger-button" onclick="dangerZone()">Danger Zone!</button>
+    <a href="https://github.com/trbouma/safebox">Source Code</a>
   </div>
 
 

@@ -334,6 +334,9 @@
     let currentInvoice = "";
     let invoicePending = false;
     let nfcPaymentPending = false;
+    let walletBalanceSats = null;
+    let invoiceBaselineSats = null;
+    let invoicePollTimer = null;
 
     const displayEl = document.getElementById("display");
     const totalEl = document.getElementById("totalDisplay");
@@ -405,6 +408,7 @@
     function markInvoicePaid() {
       if (!invoicePending) return;
       invoicePending = false;
+      stopInvoicePolling();
       invoiceQrEl.src = "/img/green-check.png";
       invoicePaidCaptionEl.classList.remove("hidden");
       setStatus("Invoice paid.", "ok");
@@ -418,6 +422,51 @@
         invoiceTopEl.classList.add("hidden");
         invoicePaidCaptionEl.classList.add("hidden");
       }, 1800);
+    }
+
+    function stopInvoicePolling() {
+      if (invoicePollTimer) {
+        clearInterval(invoicePollTimer);
+        invoicePollTimer = null;
+      }
+    }
+
+    function startInvoicePolling() {
+      stopInvoicePolling();
+      invoicePollTimer = setInterval(async () => {
+        if (!invoicePending) {
+          stopInvoicePolling();
+          return;
+        }
+        try {
+          const response = await fetch("/safebox/poll");
+          if (!response.ok) return;
+          const data = await response.json();
+          const balance = Number(data.balance);
+          if (Number.isFinite(balance)) {
+            walletBalanceSats = balance;
+            if (invoiceBaselineSats !== null && balance > invoiceBaselineSats) {
+              markInvoicePaid();
+            }
+          }
+        } catch {
+          // best-effort fallback; ignore transient errors
+        }
+      }, 2000);
+    }
+
+    async function hydrateBalanceBaseline() {
+      try {
+        const response = await fetch("/safebox/poll");
+        if (!response.ok) return;
+        const data = await response.json();
+        const balance = Number(data.balance);
+        if (Number.isFinite(balance)) {
+          walletBalanceSats = balance;
+        }
+      } catch {
+        // best effort only
+      }
     }
 
     function markNfcPaymentSuccess(detail = "NFC payment successful.") {
@@ -516,12 +565,15 @@
         }
         currentInvoice = data.invoice;
         invoicePending = true;
+        invoiceBaselineSats = Number.isFinite(walletBalanceSats) ? walletBalanceSats : null;
         invoiceQrEl.src = `/safebox/qr/${currentInvoice}`;
         invoicePaidCaptionEl.classList.add("hidden");
         invoiceTopEl.classList.remove("hidden");
         window.scrollTo({ top: 0, behavior: "smooth" });
+        startInvoicePolling();
         setStatus("Invoice created. Awaiting customer payment.", "ok");
       } catch (err) {
+        stopInvoicePolling();
         setStatus(err.message || "Failed to create invoice.", "error");
       }
     }
@@ -588,7 +640,9 @@
       const detail = String(payload.detail || "");
 
       if (payload.action === "get_balance" && status === "OK") {
-        setStatus(`Balance: ${Number(detail || 0).toLocaleString("en-US")} sats`, "ok");
+        const bal = Number(detail || 0);
+        if (Number.isFinite(bal)) walletBalanceSats = bal;
+        setStatus(`Balance: ${bal.toLocaleString("en-US")} sats`, "ok");
         return;
       }
 
@@ -659,6 +713,8 @@
 
     ws.onclose = () => setStatus("POS channel disconnected.", "error");
     ws.onerror = () => setStatus("POS channel error.", "error");
+    wsStatus.onerror = () => setStatus("Status channel error; using poll fallback.", "info");
+    wsNotify.onerror = () => setStatus("Notify channel error; using poll fallback.", "info");
 
     document.querySelectorAll("[data-key]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -692,7 +748,9 @@
       rawInput = "";
       currentInvoice = "";
       invoicePending = false;
+      invoiceBaselineSats = null;
       nfcPaymentPending = false;
+      stopInvoicePolling();
       updateDisplay();
       updateTotal();
       invoiceTopEl.classList.add("hidden");
@@ -705,11 +763,13 @@
     document.getElementById("btnNfc").addEventListener("click", payWithNfc);
     document.getElementById("btnCopyInvoice").addEventListener("click", copyInvoice);
     document.getElementById("btnBackToAccess").addEventListener("click", () => {
+      stopInvoicePolling();
       window.location.href = "/safebox/access";
     });
 
     updateDisplay();
     updateTotal();
+    hydrateBalanceBaseline();
   </script>
 </body>
 </html>
