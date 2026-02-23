@@ -58,6 +58,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
     setRequestStatus("Tap NFC card to request record...");
     
     var nfc_token;
+    let shouldContinue = false;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
     
     if ("NDEFReader" in window) {
@@ -77,7 +78,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
          
 
-         await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         shouldContinue = await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
          // alert("submitted"); 
          // qr_img_func.src = "/img/hourglass.png";
           
@@ -88,12 +89,15 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
         consoleLog(error);
         setRequestStatus("NFC read failed. Please try again.");
         qr_img_func.src = "/img/safebox.png";
+        return false;
       }
     } else {
       consoleLog("Web NFC is not supported.");
       setRequestStatus("Web NFC is not supported on this device/browser.");
+      return false;
     }
 
+    return shouldContinue;
 
   }
 
@@ -124,27 +128,30 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
           if (!continueWithoutPin) {
             qr_img_func.src = "/img/safebox.png";
             setRequestStatus("Request cancelled.");
+            return false;
           } else {
             qr_img_func.src = "/img/circle-256.gif";
             setRequestStatus("PIN bypass confirmed. Waiting for records...");
+            return true;
           }
         } else {
           alert(detail);
           qr_img_func.src = "/img/safebox.png";
+          return false;
         }
       } else {
         qr_img_func.src = "/img/circle-256.gif";
         setRequestStatus("Request accepted. Waiting for records...");
+        return true;
       }
     } catch (error) {
       consoleLog(`submitProof error: ${error}`);
       setRequestStatus("Unable to submit NFC proof request.");
       alert("Unable to submit NFC proof request.");
       qr_img_func.src = "/img/safebox.png";
+      return false;
     }
-  
-  
-  
+
   }
 
 
@@ -181,13 +188,18 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
     });
 
+  let shouldListen = true;
+  let listenerStarted = false;
   if (nfc_request.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
+      setRequestStatus("Listening for presenter response...");
+      listenForPresentation(global_nauth);
+      listenerStarted = true;
       // alert("Please tap NFC card!");
       const nfc_pin = prompt("Please enter PIN") || "0000";
       // const nfc_pin = "9140"
       
-      await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
+      shouldListen = await requestbyNFC(grant_kind, record_label, global_nauth,nfc_pin);
                      
   } else {
 
@@ -198,8 +210,14 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
     setTimeout(centerQrImageInView, 80);
 
   }
-   
-  listenForPresentation(global_nauth);
+
+  if (!listenerStarted) {
+    if (shouldListen) {
+      listenForPresentation(global_nauth);
+    } else {
+      setRequestStatus("Request not started.");
+    }
+  }
 
 
 
@@ -325,25 +343,62 @@ async function listenForPresentation(nauth) {
     // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
     const wsUrl = buildWsUrl(`/records/ws/request/${nauth}`);
     const ws = new WebSocket(wsUrl);
+    const listenTimeoutMs = 70000;
+    let listenTimeoutHandle = null;
+    let terminalStateReached = false;
     console.log(wsUrl);
     
        
       // alert("listen for request");
       // alert(span_msg_status.textContent)
       span_msg_status.textContent = "Listening for request...";
-      ws.onopen = () => console.log("WebSocket connected");
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+        listenTimeoutHandle = setTimeout(() => {
+          if (!terminalStateReached) {
+            setRequestStatus("Request timed out waiting for presented record. Please retry.");
+            try { ws.close(); } catch (e) {}
+          }
+        }, listenTimeoutMs);
+      };
       ws.onmessage = (event) => {
       console.log("Message received for listen for request:", event.data);
       const response = JSON.parse(event.data);  
     
       if (response.status == "TIMEOUT")
       {
+        terminalStateReached = true;
+        if (listenTimeoutHandle) {
+          clearTimeout(listenTimeoutHandle);
+          listenTimeoutHandle = null;
+        }
         alert("Record presentation has timed out. Please retry.");
         span_msg_status.textContent = "Request presentation has timed out. Please retry.";
+        ws.close();
+        return;
+      }
+
+      if (response.status == "ERROR")
+      {
+        terminalStateReached = true;
+        if (listenTimeoutHandle) {
+          clearTimeout(listenTimeoutHandle);
+          listenTimeoutHandle = null;
+        }
+        const detail = response.detail || "Record request failed.";
+        alert(detail);
+        setRequestStatus(detail);
+        ws.close();
+        return;
       }
     
       if (response.status == "VERIFIED")
       {
+        terminalStateReached = true;
+        if (listenTimeoutHandle) {
+          clearTimeout(listenTimeoutHandle);
+          listenTimeoutHandle = null;
+        }
         
         // alert(`Request has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Request has been received!";
@@ -360,13 +415,31 @@ async function listenForPresentation(nauth) {
         var qr_img_func = document.getElementById("img_qr_display");
       
         qr_img_func.src = "/img/check.png";
+        ws.close();
+        return;
 
       }
       
-      
-      ws.close()
+      // Non-terminal or advisory status update.
+      if (response.detail) {
+        setRequestStatus(response.detail);
+      }
       };
-      ws.onclose = () => console.log("WebSocket closed");
+      ws.onerror = () => {
+        if (!terminalStateReached) {
+          setRequestStatus("Websocket transport error while waiting for presented record.");
+        }
+      };
+      ws.onclose = () => {
+        console.log("WebSocket closed");
+        if (!terminalStateReached) {
+          setRequestStatus("Request listener closed before completion. Please retry.");
+        }
+        if (listenTimeoutHandle) {
+          clearTimeout(listenTimeoutHandle);
+          listenTimeoutHandle = null;
+        }
+      };
       
     
     

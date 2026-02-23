@@ -62,17 +62,27 @@ def _raise_if_missing_acorn(acorn_obj: Acorn):
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
 
 
+def _normalize_nonce(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"", "none", "null", "0"}:
+        return None
+    return str(value).strip()
+
+
 def _nonce_matches(expected_nonce: str | None, candidate_nauth: str | None) -> bool:
-    if not expected_nonce:
+    expected = _normalize_nonce(expected_nonce)
+    if expected is None:
         return True
     if not candidate_nauth:
         return False
     try:
         parsed = parse_nauth(candidate_nauth)
-        candidate_nonce = parsed["values"].get("nonce")
+        candidate_nonce = _normalize_nonce(parsed["values"].get("nonce"))
     except Exception:
         return False
-    return candidate_nonce == expected_nonce
+    return candidate_nonce == expected
 
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
@@ -1504,6 +1514,17 @@ async def post_send_record(      request: Request,
         print(f"send record to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
         # Need to inspect scope to determine what to do
+        verifier_kind = None
+        try:
+            if ":" in scope:
+                verifier_kind = int(scope.split(":", 1)[1])
+        except Exception:
+            verifier_kind = None
+        if verifier_kind is None and record_parms.grant_kind is not None:
+            verifier_kind = int(record_parms.grant_kind)
+        if verifier_kind is None:
+            raise HTTPException(status_code=400, detail=f"Could not resolve grant kind from scope={scope}")
+
         #TODO refactor this code
         if "prover" in scope:
             # this means the presentation has the corresponding record hash
@@ -1517,7 +1538,6 @@ async def post_send_record(      request: Request,
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
-            verifier_kind = int(scope.split(":")[1])
             print(f"grant: {record_parms.grant_name}")
             record_out = await acorn_obj.get_record(record_name=record_parms.grant_name, record_kind=verifier_kind)
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
@@ -1555,8 +1575,21 @@ async def post_send_record(      request: Request,
         print("let's get the original record" )
         issued_record: Event
         original_record: OriginalRecordTransfer
-        issued_grant, original_record = await acorn_obj.create_request_from_grant(grant_name=record_parms.grant_name,grant_kind=verifier_kind, shared_secret_hex=kem_shared_secret_hex)
-        print(f"grant to present is {issued_grant}")
+        try:
+            issued_grant, original_record = await acorn_obj.create_request_from_grant(
+                grant_name=record_parms.grant_name,
+                grant_kind=verifier_kind,
+                shared_secret_hex=kem_shared_secret_hex,
+            )
+            print(f"grant to present is {issued_grant}")
+        except Exception as exc:
+            logger.warning(
+                "sendrecord original_record lookup non-fatal grant=%s kind=%s error=%s",
+                record_parms.grant_name,
+                verifier_kind,
+                exc,
+            )
+            original_record = None
        
         if original_record:           
             original_record_str = original_record.model_dump_json(exclude_none=True)
@@ -1634,15 +1667,48 @@ async def ws_record_present( websocket: WebSocket,
     await websocket.accept()
     
     print("start listening for requester data")
-    requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind,since=None,relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
-    print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
-    if requester_nembed:
+    try:
+        requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(
+            record_kind=auth_kind,
+            since=None,
+            relays=auth_relays,
+            timeout=settings.LISTEN_TIMEOUT,
+        )
+        print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
+    except TimeoutError:
+        try:
+            await websocket.send_json({"status": "TIMEOUT", "detail": "Requester handshake timed out."})
+        except WebSocketDisconnect:
+            logger.info("ws_record_present client disconnected before TIMEOUT send")
+        return
+    except Exception as exc:
+        logger.exception("ws_record_present handshake failure: %s", exc)
+        try:
+            await websocket.send_json({"status": "ERROR", "detail": "Handshake failed."})
+        except WebSocketDisconnect:
+            logger.info("ws_record_present client disconnected before ERROR send")
+        return
+
+    if not requester_nembed:
+        try:
+            await websocket.send_json({"status": "ERROR", "detail": "Missing requester key material."})
+        except WebSocketDisconnect:
+            logger.info("ws_record_present client disconnected before missing-material send")
+        return
+
+    try:
         parsed_nembed = parse_nembed_compressed(requester_nembed)
         kem_public_key = parsed_nembed['kem_public_key']
         kemalg = parsed_nembed['kemalg']
         print(f"From the requester provided to the presenter: kem public key: {kem_public_key} kemalg {kemalg}")
-        kem_material = {'kem_public_key': kem_public_key, 'kemalg': kemalg}
+        kem_material = {'status': 'OK', 'kem_public_key': kem_public_key, 'kemalg': kemalg}
         await websocket.send_json(kem_material)
+    except Exception as exc:
+        logger.exception("ws_record_present invalid requester key material: %s", exc)
+        try:
+            await websocket.send_json({"status": "ERROR", "detail": "Invalid requester key material."})
+        except WebSocketDisconnect:
+            logger.info("ws_record_present client disconnected before invalid-material send")
 
     
 
@@ -1840,13 +1906,42 @@ async def ws_request_record( websocket: WebSocket,
 
     
     print(f"#1 listen for nauth ")
-    presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
-    if not _nonce_matches(expected_nonce, presenter_nauth):
-        logger.warning("ws_request_record nonce mismatch for presenter response")
+    presenter_nauth = None
+    presenter_nembed = None
+    handshake_deadline = datetime.now(timezone.utc) + timedelta(seconds=max(5, settings.LISTEN_TIMEOUT))
+    while datetime.now(timezone.utc) < handshake_deadline:
+        remaining = int((handshake_deadline - datetime.now(timezone.utc)).total_seconds())
+        poll_timeout = max(3, min(10, remaining))
         try:
-            await websocket.send_json({"status": "ERROR", "detail": "Authentication nonce mismatch."})
+            candidate_nauth, candidate_nembed = await acorn_obj.listen_for_record_sub(
+                record_kind=auth_kind,
+                since=since_now,
+                relays=auth_relays,
+                timeout=poll_timeout,
+            )
+        except Exception as exc:
+            logger.exception("ws_request_record presenter handshake failed: %s", exc)
+            candidate_nauth, candidate_nembed = None, None
+
+        if not candidate_nauth:
+            since_now = int((datetime.now(timezone.utc) - timedelta(seconds=1)).timestamp())
+            await asyncio.sleep(0.2)
+            continue
+
+        if not _nonce_matches(expected_nonce, candidate_nauth):
+            logger.warning("ws_request_record ignoring nonce mismatch for candidate response")
+            since_now = int((datetime.now(timezone.utc) - timedelta(seconds=1)).timestamp())
+            await asyncio.sleep(0.2)
+            continue
+
+        presenter_nauth, presenter_nembed = candidate_nauth, candidate_nembed
+        break
+
+    if not presenter_nauth:
+        try:
+            await websocket.send_json({"status": "TIMEOUT", "detail": "Presenter did not acknowledge in time."})
         except WebSocketDisconnect:
-            logger.info("ws_request_record client disconnected before nonce mismatch send")
+            logger.info("ws_request_record client disconnected before presenter TIMEOUT send")
         return
     parsed_nauth = parse_nauth(presenter_nauth)
 
@@ -1891,10 +1986,19 @@ async def ws_request_record( websocket: WebSocket,
 
 
             if incoming_record != incoming_record_old: 
+                if not incoming_record:
+                    await asyncio.sleep(1)
+                    continue
                 # parsed_nauth = parse_nauth(client_nauth)
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
-                record_json = parse_nembed_compressed(incoming_record)
+                try:
+                    record_json = parse_nembed_compressed(incoming_record)
+                except Exception as exc:
+                    logger.warning("ws_request_record could not parse incoming nembed: %s", exc)
+                    incoming_record_old = incoming_record
+                    await asyncio.sleep(1)
+                    continue
                 print(f"parse record json: {record_json}")
                 #### Do the verification here... ####
                 verify_result = "Done"
@@ -1950,7 +2054,8 @@ async def ws_request_record( websocket: WebSocket,
                                 original_record_transfer = OriginalRecordTransfer(**json.loads(decrypted_original))
                                 print(f"original record transfer {original_record_transfer}")
                             except Exception as e:
-                                raise Exception(f"could not create original record transfer {e}")
+                                logger.warning("ws_request_record original record parse failed: %s", e)
+                                original_record_to_present_json = None
 
                         
                     
@@ -2052,8 +2157,14 @@ async def ws_request_record( websocket: WebSocket,
             logger.info("ws_request_record client disconnected")
             break
         except Exception as e:
-            print(f"Websocket message: {e}")
-            break
+            logger.exception("ws_request_record processing error: %s", e)
+            try:
+                await websocket.send_json({"status": "ERROR", "detail": "Record processing error. Please retry."})
+            except WebSocketDisconnect:
+                logger.info("ws_request_record client disconnected while sending ERROR status")
+                break
+            await asyncio.sleep(1)
+            continue
         
         await asyncio.sleep(1)
      

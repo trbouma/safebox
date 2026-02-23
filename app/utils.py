@@ -1381,8 +1381,16 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
     print(f"listening for request on {kind}")
     kem_public_key=None
     #This is for Step 2
-    records_out = await acorn_obj.get_user_records(record_kind=kind, since=since_now, relays=relays)
+    records_out = await acorn_obj.get_user_records(
+        record_kind=kind,
+        since=since_now,
+        relays=relays,
+        reverse=True,
+    )
     print(f"listen for request {records_out}")
+
+    if not records_out:
+        return None, None, None
 
     response_auth = records_out[0]["payload"]
     response_auth_split = response_auth.split(':')

@@ -103,19 +103,65 @@ async function selectRecordKind() {
 // const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
 const ws_present = new WebSocket("{{ws_url}}");
 console.log("{{ws_url}}")
+const handshakeTimeoutMs = 30000;
+let handshakeTimeoutHandle = null;
+
+function setQuantumStatus(message) {
+  const el = document.getElementById('quantum_safe');
+  if (el) el.innerHTML = message;
+}
 
 // alert(`we are here! nauth {{nauth}}`);
 ws_present.onopen = () => console.log("WebSocket connected");
 ws_present.onmessage = (event) => {
   const response = JSON.parse(event.data);
+  if (handshakeTimeoutHandle) {
+    clearTimeout(handshakeTimeoutHandle);
+    handshakeTimeoutHandle = null;
+  }
+  if (response.status === "TIMEOUT") {
+    setQuantumStatus('Handshake timed out. Retry authentication.');
+    return;
+  }
+  if (response.status === "ERROR") {
+    setQuantumStatus(response.detail || 'Handshake failed.');
+    return;
+  }
   global_kem_public_key = response.kem_public_key;
   global_kemalg = response.kemalg;
   console.log("Message received:", response.kem_public_key); 
-  document.getElementById('quantum_safe').innerHTML = 'Channel is now quantum safe';
+  setQuantumStatus('Channel is now quantum safe');
 
 }
 
-ws_present.onclose = () => console.log("WebSocket closed");
+ws_present.onerror = () => {
+  if (handshakeTimeoutHandle) {
+    clearTimeout(handshakeTimeoutHandle);
+    handshakeTimeoutHandle = null;
+  }
+  if (!global_kem_public_key || !global_kemalg) {
+    setQuantumStatus('Handshake transport error. Please retry.');
+  }
+};
+
+ws_present.onclose = () => {
+  console.log("WebSocket closed");
+  if (handshakeTimeoutHandle) {
+    clearTimeout(handshakeTimeoutHandle);
+    handshakeTimeoutHandle = null;
+  }
+  const el = document.getElementById('quantum_safe');
+  if (el && (!global_kem_public_key || !global_kemalg) && el.innerHTML === 'securing...') {
+    setQuantumStatus('Handshake closed before completion. Please retry.');
+  }
+};
+
+handshakeTimeoutHandle = setTimeout(() => {
+  if (!global_kem_public_key || !global_kemalg) {
+    setQuantumStatus('Handshake timed out (relay/network delay). Please retry.');
+    try { ws_present.close(); } catch (e) {}
+  }
+}, handshakeTimeoutMs);
 
   
 </script>
@@ -234,6 +280,10 @@ async function sendRecord(title) {
 console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
+if (!global_kem_public_key || !global_kemalg) {
+  alert("Channel is not quantum safe yet. Please wait for handshake to complete.");
+  return;
+}
 // send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,
                 "grant_name": `${title}`,

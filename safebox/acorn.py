@@ -586,6 +586,11 @@ class Acorn:
         my_gift = GiftWrap(BasicKeySigner(self.k))
         self.logger.info("op=listen_for_record_sub status=start kind=%s", record_kind)
 
+        relays_to_use = relays if relays else [self.home_relay]
+        if not relays_to_use:
+            self.logger.warning("op=listen_for_record_sub status=no_relays kind=%s", record_kind)
+            return None, None
+
         loop = asyncio.get_running_loop()
         record_future = loop.create_future()
 
@@ -594,22 +599,43 @@ class Acorn:
                 self.logger.debug("op=listen_for_record_sub status=received event_id=%s", evt.id)
                 record_future.set_result(evt)
 
-        # url = relays[0]
-        client = ClientPool(relays)
+        client = ClientPool(relays_to_use)
 
         # Run client in background
         client_task = asyncio.create_task(client.run())
         sub_id = secrets.token_hex(4)
-        await client.wait_connect()
+        connect_timeout = max(3, min(timeout, 12))
+        try:
+            await asyncio.wait_for(client.wait_connect(), timeout=connect_timeout)
+        except asyncio.TimeoutError:
+            self.logger.warning(
+                "op=listen_for_record_sub status=connect_timeout kind=%s timeout=%s relays=%s",
+                record_kind,
+                connect_timeout,
+                relays_to_use,
+            )
+            return None, None
+        except Exception as exc:
+            self.logger.warning(
+                "op=listen_for_record_sub status=connect_failed kind=%s error=%s relays=%s",
+                record_kind,
+                exc,
+                relays_to_use,
+            )
+            return None, None
+
+        record_filter = {
+            "limit": 1,
+            "kinds": [record_kind],
+            "#p": [self.pubkey_hex],
+        }
+        if since is not None:
+            record_filter["since"] = since
 
         client.subscribe(
             sub_id=sub_id,
             handlers=incoming_handler,
-            filters={
-                "limit": 1,
-                "kinds": [record_kind],
-                "#p": [self.pubkey_hex],
-            },
+            filters=record_filter,
         )
 
         try:

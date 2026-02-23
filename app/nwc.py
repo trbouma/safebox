@@ -324,6 +324,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
         print(f"present_record scope: {scope} label: {label}")
+        print(f"present_record pin_ok={pin_ok}")
 
         #FIXME Need to determine which record kind should be used - in nauth or what is passed explicity
         # record_kind = int(scope.split(":")[1])
@@ -347,27 +348,58 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
         records_out = await acorn_obj.get_user_records(record_kind=record_kind)
 
+        def _candidate_grant_kinds(requested_kind: int, each_record: dict) -> list[int]:
+            kinds: list[int] = []
+
+            def _add_kind(kind_val):
+                try:
+                    kind_int = int(kind_val)
+                except (TypeError, ValueError):
+                    return
+                if 30000 <= kind_int < 40000 and kind_int % 2 == 0 and kind_int not in kinds:
+                    kinds.append(kind_int)
+
+            _add_kind(requested_kind)
+            _add_kind(each_record.get("type"))
+            return kinds
+
         async def _enrich_with_original_record(each_record: dict, requested_label: str | None) -> dict:
             each_out = dict(each_record)
             tag_values = each_record.get("tag", [])
             raw_tag = tag_values[0] if isinstance(tag_values, list) and tag_values else None
             tag_filter = raw_tag.split(":", 1)[1] if isinstance(raw_tag, str) and ":" in raw_tag else raw_tag
             candidate_labels = []
-            for candidate in [requested_label, tag_filter, raw_tag]:
+            # Prefer the exact returned tag first (may include origin prefix), then normalized tag.
+            # Requested label is often partial and should be fallback only.
+            for candidate in [raw_tag, tag_filter, requested_label]:
                 if isinstance(candidate, str) and candidate and candidate not in candidate_labels:
                     candidate_labels.append(candidate)
+            candidate_kinds = _candidate_grant_kinds(record_kind, each_record)
+            lookup_errors = []
+
             for candidate_label in candidate_labels:
-                try:
-                    _, original_record = await acorn_obj.create_request_from_grant(
-                        grant_name=candidate_label,
-                        grant_kind=record_kind,
-                    )
-                    if original_record:
-                        each_out["original_record"] = original_record.model_dump(exclude_none=True)
-                        print(f"present_record original_record found for label={candidate_label}")
-                        break
-                except Exception as exc:
-                    print(f"present_record original_record lookup failed for {candidate_label}: {exc}")
+                for candidate_kind in candidate_kinds:
+                    try:
+                        _, original_record = await acorn_obj.create_request_from_grant(
+                            grant_name=candidate_label,
+                            grant_kind=candidate_kind,
+                        )
+                        if original_record:
+                            each_out["original_record"] = original_record.model_dump(exclude_none=True)
+                            print(
+                                f"present_record original_record found for label={candidate_label} kind={candidate_kind}"
+                            )
+                            return each_out
+                    except Exception as exc:
+                        lookup_errors.append((candidate_label, candidate_kind, str(exc)))
+
+            if lookup_errors:
+                first_label, first_kind, first_error = lookup_errors[0]
+                print(
+                    "present_record original_record lookup skipped: "
+                    f"label={first_label} kind={first_kind} error={first_error} "
+                    f"(tried {len(lookup_errors)} combinations)"
+                )
             return each_out
 
         filtered_records_out = []
@@ -387,13 +419,26 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 each_out = await _enrich_with_original_record(each, None)
                 filtered_records_out.append(each_out)
 
-
+        if not filtered_records_out:
+            filtered_records_out = [{
+                "tag": [label or "none"],
+                "type": "generic",
+                "payload": "Record is not found for requested label/kind.",
+            }]
 
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
         print(f"filtered records out: {filtered_records_out}")
-        nembed_records = create_nembed_compressed(filtered_records_out)
+        try:
+            nembed_records = create_nembed_compressed(filtered_records_out)
+        except Exception as exc:
+            print(f"present_record nembed encode failed: {exc}")
+            nembed_records = create_nembed_compressed([{
+                "tag": [label or "none"],
+                "type": "generic",
+                "payload": "Record encoding failed during presentation.",
+            }])
         # print(f"nembed records: {nembed_records}")
 
         print(f"nwc record out for {label} {record_kind}: {filtered_records_out}")

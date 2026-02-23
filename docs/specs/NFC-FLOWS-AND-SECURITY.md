@@ -523,6 +523,55 @@ Mitigations:
 - Added hard timeout using `LISTEN_TIMEOUT`-based bound.
 - On timeout, flow fails explicitly instead of hanging indefinitely.
 
+### C1. Request flow nonce mismatch from stale handshake events
+
+Condition:
+
+- Requester websocket (`/records/ws/request/{nauth}`) receives an older auth event from relay history whose nonce does not match the active request.
+
+Observed impact:
+
+- Immediate `Authentication nonce mismatch` error after QR refresh.
+- Valid current presenter may never be considered if the first observed event is stale.
+
+Mitigations:
+
+- Nonce values are normalized so sentinel values (`none`, `null`, `0`, empty) are treated as missing, not strict mismatch.
+- Request handshake loop now ignores nonce-mismatched candidates and continues listening until bounded timeout.
+- Relay query now enforces `since` filtering in `listen_for_record_sub`, reducing stale candidate pickup.
+
+### C2. NFC request race: proof submission before listener ready
+
+Condition:
+
+- In NFC request flow, client submits `acceptprooftoken` first and opens `/records/ws/request/{nauth}` listener afterward.
+
+Observed impact:
+
+- Vault/NWC may complete auth+transmittal before the requester listener is attached.
+- User sees stalled request even though sender-side logs show successful `msg outx` transmittal.
+
+Mitigations:
+
+- Client now starts the websocket listener first, then submits NFC proof token.
+- This guarantees listener readiness before vault-triggered NWC response events are emitted.
+
+### C3. Oldest-first relay read selecting stale transmittal
+
+Condition:
+
+- Request helper read relay events oldest-first while selecting the first row.
+
+Observed impact:
+
+- Receiver repeatedly inspects stale payloads and misses the latest transmittal message.
+- Flow appears hung or inconsistent under busy relay history.
+
+Mitigations:
+
+- Request event helper now queries newest-first (`reverse=True`) and safely handles empty result sets.
+- Combined with short lookback windows, this improves deterministic selection of current transmittal events.
+
 ### D. Slow payment settlement polling
 
 Condition:
@@ -570,6 +619,38 @@ Mitigations:
 
 - Browser-side websocket URL normalization enforces `wss://` on HTTPS pages.
 - Maintains compatibility for localhost (`ws://`) and deployed HTTPS (`wss://`) environments.
+
+### G. Oversized transmittal payload parse fragility
+
+Condition:
+
+- Multi-record NFC/QR presentations can generate very large compressed `nembed` payloads.
+- Any decode/parse failure on the receiver side can silently stall if treated as non-terminal loop noise.
+
+Observed impact:
+
+- Sender logs show transmittal success, while receiver appears stuck waiting for records.
+
+Mitigations:
+
+- Receiver paths now favor explicit parse-error status propagation where practical (avoid silent loops).
+- Multi-record behavior is retained, but operational guidance is to monitor payload size and log parse failures with enough context to triage relay/message size constraints.
+- Future hardening target: chunked/segmented transmittal for very large record sets.
+
+## Recently Validated Stability Improvements
+
+The following fixes were validated in production-like testing and directly improve NFC/QR request reliability:
+
+1. Nonce mismatch resilience:
+   - stale or legacy nonce values no longer hard-fail active flows.
+2. Relay timing correctness:
+   - `since` filter is applied in auth-listener subscription paths.
+3. Listener ordering fix for NFC request:
+   - requester websocket is established before proof-token submission.
+4. Latest-event preference:
+   - request helper reads newest relay entries first.
+5. Multi-record continuity:
+   - NFC request now reliably returns multiple records again after race fix.
 
 ### Operator Diagnostics for Stall Triage
 
