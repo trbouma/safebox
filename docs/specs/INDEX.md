@@ -15,6 +15,7 @@ Section convention used across current Safebox specs:
 
 - [TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md](./TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md) - Transport model, TLS assumptions, and hybrid npub/address routing.
 - [WEB-WALLET-USER-CONSIDERATIONS.md](./WEB-WALLET-USER-CONSIDERATIONS.md) - User-experience principles and interaction decisions for the web wallet, intended as the baseline for future mobile UX once field-stable.
+- [MOBILE-APP-DEVELOPMENT-STRATEGY.md](./MOBILE-APP-DEVELOPMENT-STRATEGY.md) - Flutter-first Android strategy with iOS-ready architecture, mobile UX principles, phased delivery plan, and NFC/payment/record flow parity goals.
 - [HYPERMEDIA-AND-HATEOAS-APPLICATION-STATE.md](./HYPERMEDIA-AND-HATEOAS-APPLICATION-STATE.md) - Hypermedia-first application state strategy (HATEOAS), component mapping, and UI stability/jitter mitigation guidance.
 - [FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md](./FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md) - Operator fiduciary/compliance considerations for payments, records stewardship, private-key responsibility, and lawful process handling.
 - [BRANDING-AND-HOST-RESOLUTION.md](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
@@ -34,6 +35,7 @@ Section convention used across current Safebox specs:
 - [OFFERS-AND-GRANTS-FLOWS.md](./OFFERS-AND-GRANTS-FLOWS.md) - End-to-end offer/grant lifecycle over QR and NFC, including legacy rendering fallback.
 - [PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md](./PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md) - Payment routing between Safebox wallets and Lightning interoperability behavior.
 - [CARD-TOKENIZATION-AND-NFC-PAYMENT-STRATEGY.md](./CARD-TOKENIZATION-AND-NFC-PAYMENT-STRATEGY.md) - Design strategy for NFC card virtualization and tokenized payment authorization model.
+- [NEMBED-COEXISTENCE-WITH-TOKENIZED-CARD-RAILS.md](./NEMBED-COEXISTENCE-WITH-TOKENIZED-CARD-RAILS.md) - Comparative model and phased coexistence strategy for running `nembed` alongside incumbent tokenized card payment rails.
 - [CASHU-STORAGE-AND-MULTI-MINT.md](./CASHU-STORAGE-AND-MULTI-MINT.md) - Proof storage/retrieval model and multi-mint normalization behavior.
 - [WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md](./WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md) - Record persistence formats for plaintext and structured signed records.
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
