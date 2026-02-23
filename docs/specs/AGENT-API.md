@@ -62,12 +62,18 @@ Response (example):
 {
   "status": "OK",
   "handle": "example-handle",
+  "lightning_address": "example-handle@skills.example.com",
   "npub": "npub1...",
   "balance": 12345,
   "home_relay": "wss://relay.example",
   "timestamp": 1770000000
 }
 ```
+
+Notes:
+
+- `lightning_address` is derived from the request host.
+- If a wallet `custom_handle` exists, that handle is used; otherwise the default `handle` is used.
 
 Curl:
 

@@ -154,10 +154,27 @@ def _validate_invite_code(invite_code: str) -> str:
 
 
 @router.get("/info", tags=["agent"])
-async def agent_info(acorn_obj: Acorn = Depends(_agent_get_acorn)):
+async def agent_info(
+    request: Request,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+    x_access_key: str | None = Header(default=None),
+):
+    lightning_local = acorn_obj.handle
+    try:
+        wallet = _resolve_wallet_by_access_key(x_access_key)
+        if wallet.custom_handle:
+            lightning_local = wallet.custom_handle
+    except HTTPException:
+        # If access-key re-resolution fails here, continue with loaded wallet handle.
+        pass
+
+    host = request.url.hostname or ""
+    lightning_address = f"{lightning_local}@{host}" if host else lightning_local
+
     return {
         "status": "OK",
         "handle": acorn_obj.handle,
+        "lightning_address": lightning_address,
         "npub": acorn_obj.pubkey_bech32,
         "balance": acorn_obj.balance,
         "home_relay": acorn_obj.home_relay,
