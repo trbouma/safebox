@@ -2727,6 +2727,9 @@ class Acorn:
 
         self.logger.debug(f"writing proofs ")
         try:
+            expected_proofs = list(self.proofs)
+            expected_balance = sum(each.amount for each in expected_proofs)
+            expected_count = len(expected_proofs)
             old_filter = [{
                 'limit': RECORD_LIMIT,
                 'authors': [self.pubkey_hex],
@@ -2747,7 +2750,49 @@ class Acorn:
             if old_proof_event_ids:
                 await self._async_delete_events_by_ids(old_proof_event_ids, record_kind=7375)
 
-            await self._load_proofs()
+            # Confirm relay state after old-proof deletion. High-latency relays can briefly
+            # surface an empty/partial view; retry before accepting the write as successful.
+            loaded_ok = False
+            loaded_balance = 0
+            loaded_count = 0
+            verify_attempts = 5
+            for attempt in range(1, verify_attempts + 1):
+                await self._load_proofs()
+                loaded_balance = sum(each.amount for each in self.proofs)
+                loaded_count = len(self.proofs)
+                if loaded_balance >= expected_balance and loaded_count >= expected_count:
+                    loaded_ok = True
+                    break
+                await asyncio.sleep(0.4 * attempt)
+
+            if not loaded_ok:
+                self.logger.critical(
+                    "op=write_proofs status=verify_failed expected_balance=%s expected_count=%s loaded_balance=%s loaded_count=%s",
+                    expected_balance,
+                    expected_count,
+                    loaded_balance,
+                    loaded_count,
+                )
+                # Emergency restore path: republish expected proofs and re-load.
+                if expected_proofs:
+                    restore_by_keyset = {}
+                    for each in expected_proofs:
+                        restore_by_keyset.setdefault(each.id, []).append(each)
+                    for _, proof_group in restore_by_keyset.items():
+                        await self.add_proofs_obj(proof_group)
+                    await asyncio.sleep(1)
+                    await self._load_proofs()
+                    loaded_balance = sum(each.amount for each in self.proofs)
+                    loaded_count = len(self.proofs)
+                    if loaded_balance < expected_balance or loaded_count < expected_count:
+                        # Keep local state conservative for caller-side recovery decisions.
+                        self.proofs = expected_proofs
+                        self.balance = expected_balance
+                        raise RuntimeError(
+                            "Proof persistence verification failed after restore attempt"
+                        )
+                elif loaded_balance != 0 or loaded_count != 0:
+                    raise RuntimeError("Unexpected proof state after writing empty proof set")
         except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
             self.logger.error("op=write_proofs status=failed error=%s", e)
             raise RuntimeError(f"error writing proofs: {e}") from e
