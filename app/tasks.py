@@ -365,6 +365,7 @@ async def handle_ecash(
     notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
 ):
     print(f"handle ecash listen for {acorn_obj.handle}")
+    found_event = False
 
     def _ecash_detail(each: tuple) -> str:
         tendered_amount = each[1] if len(each) > 1 else 0
@@ -394,6 +395,7 @@ async def handle_ecash(
 
 
         if ecash_out != []:
+            found_event = True
             print(f"nonce: {nonce} ecash out: {ecash_out}")
             
             if websocket:
@@ -431,6 +433,16 @@ async def handle_ecash(
     
     print(f"done getting ecash. The balance is: {acorn_obj.balance}")
 
+    if not found_event and notify_callback:
+        await notify_callback(
+            {
+                "status": "ERROR",
+                "action": "nfc_token",
+                "detail": "NFC payment not confirmed before timeout.",
+                "balance": acorn_obj.balance,
+            }
+        )
+
 
     # if websocket:
     #     await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": f"Ready!"})
@@ -441,21 +453,50 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
                                 submit_data: object, 
                                 headers: object,
                                 nfc_pay_out_request: nfcPayOutRequest,
-                                final_amount: int
+                                final_amount: int,
+                                notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
                                 ):
     print("pay to nfc tag")
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url=vault_url, json=submit_data, headers=headers)
-        response.raise_for_status()
-        response_json = response.json()
-    print(f"safebox: {response_json}")
-    final_comment = f"\U0001F4B3 {nfc_pay_out_request.comment}"
-    invoice = response_json["invoice"]
-    payee = response_json["payee"]
-    await acorn_obj.pay_multi_invoice(lninvoice=invoice, comment=nfc_pay_out_request.comment)
-    await acorn_obj.add_tx_history(amount = final_amount,comment=final_comment, tendered_amount=nfc_pay_out_request.amount,tx_type='D', tendered_currency=nfc_pay_out_request.currency)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url=vault_url, json=submit_data, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+        print(f"safebox: {response_json}")
+        invoice = response_json["invoice"]
+        await acorn_obj.pay_multi_invoice(
+            lninvoice=invoice,
+            comment=nfc_pay_out_request.comment,
+            tendered_amount=nfc_pay_out_request.amount,
+            tendered_currency=nfc_pay_out_request.currency,
+        )
+        if notify_callback:
+            fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+            fiat_balance = f"{fiat_currency.currency_symbol}{'{:.2f}'.format(fiat_currency.currency_rate * acorn_obj.balance / 1e8)} {fiat_currency.currency_code}"
+            await notify_callback({
+                "status": "OK",
+                "action": "nfc_token",
+                "detail": f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} complete.",
+                "balance": acorn_obj.balance,
+                "fiat_balance": fiat_balance,
+            })
+    except Exception as exc:
+        logger.exception("task_pay_to_nfc_tag failed: %s", exc)
+        if notify_callback:
+            await notify_callback({
+                "status": "ERROR",
+                "action": "nfc_token",
+                "detail": f"NFC payment failed: {exc}",
+                "balance": acorn_obj.balance,
+            })
      
-async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data: object, headers: object):
+async def task_to_send_along_ecash(
+    acorn_obj: Acorn,
+    vault_url: str,
+    submit_data: object,
+    headers: object,
+    notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
+):
     amount = int(submit_data["amount"])
     comment = str(submit_data.get("comment", "ecash transfer"))
     cashu_token = await acorn_obj.issue_token(amount=amount, comment=comment)
@@ -515,6 +556,19 @@ async def task_to_send_along_ecash(acorn_obj: Acorn, vault_url: str, submit_data
         safebox_update.balance = acorn_obj.get_balance()
         session.add(safebox_update)
         session.commit()
+
+    if notify_callback:
+        status = "OK" if delivery_confirmed else "ERROR"
+        detail = "NFC payment complete." if delivery_confirmed else "NFC payment delivery failed."
+        fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+        fiat_balance = f"{fiat_currency.currency_symbol}{'{:.2f}'.format(fiat_currency.currency_rate * acorn_obj.balance / 1e8)} {fiat_currency.currency_code}"
+        await notify_callback({
+            "status": status,
+            "action": "nfc_token",
+            "detail": detail,
+            "balance": acorn_obj.balance,
+            "fiat_balance": fiat_balance,
+        })
 
 async def task_to_accept_ecash(acorn_obj:Acorn, nfc_pay_out: nfcPayOutVault):
     comment_to_log = f"\U0001F4B3 {nfc_pay_out.comment}"

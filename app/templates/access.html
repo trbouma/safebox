@@ -674,6 +674,11 @@ function consoleLog(data) {
    
   };
 
+  function showNfcAlert(message) {
+    if (!message) return;
+    alert(message);
+  }
+
   function markBalanceUpdated() {
     const el = document.getElementById("balance_last_updated");
     if (!el) return;
@@ -748,6 +753,7 @@ try {
   userMessage(detail, status);
   consoleLog(detail);
   if (status === "ERROR") {
+    showNfcAlert(detail);
     document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
   } else {
     userMessage("Payment request accepted. Waiting for network confirmation...", "INFO");
@@ -755,6 +761,7 @@ try {
 } catch (error) {
   consoleLog(`NFC request error: ${error}`);
   userMessage("NFC payment request failed. Please try again.", "ERROR");
+  showNfcAlert("NFC payment request failed. Please try again.");
   document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
 }
 window.scrollTo(0, 0);
@@ -792,10 +799,14 @@ body: JSON.stringify(submit_data)
   consoleLog(detail);
   if (status === "OK") {
     document.getElementById("img_qr_display").src = "/img/green-check.png";
+    showNfcAlert(detail);
     setTimeout(() => {
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
     }, 2500);
+  } else if (status === "PENDING") {
+    document.getElementById("img_qr_display").src = "/img/circle-256.gif";
   } else {
+    showNfcAlert(detail);
     document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
   }
   window.scrollTo(0, 0);
@@ -804,6 +815,7 @@ body: JSON.stringify(submit_data)
 .catch((error) => {
   consoleLog(`NFC payment error: ${error}`);
   userMessage("NFC payment failed. Please try again.", "ERROR");
+  showNfcAlert("NFC payment failed. Please try again.");
   document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
 });
 
@@ -1174,6 +1186,9 @@ function getInvoiceStatus(ln_invoice_status) {
       const status = payload.status || "INFO";
       const detail = payload.detail || "NFC payment update";
       userMessage(detail, status);
+      if (status === "ERROR" || status === "OK") {
+        showNfcAlert(detail);
+      }
       if (typeof payload.balance !== "undefined") {
         checkBalance(Number(payload.balance));
       }

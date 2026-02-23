@@ -2043,6 +2043,8 @@ async def request_nfc_payment( request: Request,
 
     status_url = f"https://{host}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
+    watch_lightning_settlement = None
+    ecash_notify_relays = None
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
@@ -2075,12 +2077,7 @@ async def request_nfc_payment( request: Request,
                 response_json = response.json()
                 print(response_json)
                 ecash_relays = response_json.get("ecash_relays", settings.ECASH_RELAYS)
-                async def _notify(payload: dict):
-                    await notify_user(acorn_obj.pubkey_bech32, payload)
-
-                asyncio.create_task(
-                    handle_ecash(acorn_obj=acorn_obj, relays=ecash_relays, notify_callback=_notify)
-                )
+                ecash_notify_relays = ecash_relays
 
             else:
                 print("do lightning clearing")
@@ -2148,7 +2145,7 @@ async def request_nfc_payment( request: Request,
                             },
                         )
 
-                asyncio.create_task(_watch_lightning_settlement())
+                watch_lightning_settlement = _watch_lightning_settlement
 
             response = await client.post(url=vault_url, json=submit_data, headers=headers)
             response.raise_for_status()
@@ -2172,6 +2169,14 @@ async def request_nfc_payment( request: Request,
     response_status = response_json.get("status", "ERROR")
     response_detail = response_json.get("detail", detail)
     if response_status == "OK":
+        if nfc_ecash_clearing and ecash_notify_relays:
+            async def _notify(payload: dict):
+                await notify_user(acorn_obj.pubkey_bech32, payload)
+            asyncio.create_task(
+                handle_ecash(acorn_obj=acorn_obj, relays=ecash_notify_relays, notify_callback=_notify)
+            )
+        if (not nfc_ecash_clearing) and watch_lightning_settlement:
+            asyncio.create_task(watch_lightning_settlement())
         return {"status": "PENDING", "detail": detail}
     return {
         "status": response_status,
@@ -2226,15 +2231,30 @@ async def pay_to_nfc_tag( request: Request,
 
     status_url = f"https://{host}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
-        if status_resp.status_code != 200:
-            detail_msg = "Card validation failed"
-            try:
-                detail_msg = status_resp.json().get("detail", detail_msg)
-            except Exception:
-                pass
-            return {"status": "ERROR", "detail": detail_msg}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            status_resp = await client.post(url=status_url, json=status_payload, headers=headers)
+            if status_resp.status_code != 200:
+                detail_msg = "Card validation failed"
+                try:
+                    detail_msg = status_resp.json().get("detail", detail_msg)
+                except Exception:
+                    pass
+                return {"status": "ERROR", "detail": detail_msg}
+    except httpx.TimeoutException:
+        return {"status": "ERROR", "detail": "Card status request timed out."}
+    except httpx.HTTPStatusError as exc:
+        detail_msg = f"Card status returned HTTP {exc.response.status_code}."
+        try:
+            detail_msg = exc.response.json().get("detail", detail_msg)
+        except ValueError:
+            if exc.response.text:
+                detail_msg = exc.response.text
+        return {"status": "ERROR", "detail": detail_msg}
+    except httpx.RequestError:
+        return {"status": "ERROR", "detail": "Card status network error."}
+    except ValueError:
+        return {"status": "ERROR", "detail": "Card status returned invalid response."}
 
     if nfc_ecash_clearing:
         print("do nfc ecash clearing")
@@ -2249,7 +2269,15 @@ async def pay_to_nfc_tag( request: Request,
                         "sig":sig, "pubkey":pubkey }
 
         # put this in a task
-        asyncio.create_task(task_to_send_along_ecash(acorn_obj=acorn_obj, vault_url=vault_url,submit_data=submit_data,headers=headers))
+        asyncio.create_task(
+            task_to_send_along_ecash(
+                acorn_obj=acorn_obj,
+                vault_url=vault_url,
+                submit_data=submit_data,
+                headers=headers,
+                notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
+            )
+        )
 
 
 
@@ -2272,15 +2300,16 @@ async def pay_to_nfc_tag( request: Request,
             submit_data=submit_data,
             headers=headers,
             nfc_pay_out_request=nfc_pay_out_request,
-            final_amount=final_amount
+            final_amount=final_amount,
+            notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
         ))
 
     ###
 
 
-    detail = f"Payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency} sent."
+    detail = f"Processing payment of {nfc_pay_out_request.amount} {nfc_pay_out_request.currency}. Please wait..."
 
-    return {"status": status, "detail": detail, "comment": nfc_pay_out_request.comment} 
+    return {"status": "PENDING", "detail": detail, "comment": nfc_pay_out_request.comment} 
 
 
 @router.get("/balance", tags=["public", "hx"])

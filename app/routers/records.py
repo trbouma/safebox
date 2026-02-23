@@ -1806,6 +1806,7 @@ async def ws_request_record( websocket: WebSocket,
 
     print(f"listen with: {nauth}")
     auth_relays = None
+    expected_nonce = None
 
     await websocket.accept()
 
@@ -1816,6 +1817,7 @@ async def ws_request_record( websocket: WebSocket,
         auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)  
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
+        expected_nonce = parsed_nauth['values'].get('nonce')
         print(f"ws transmittal relays: {transmittal_relays}")
 
 
@@ -1839,6 +1841,13 @@ async def ws_request_record( websocket: WebSocket,
     
     print(f"#1 listen for nauth ")
     presenter_nauth, presenter_nembed = await acorn_obj.listen_for_record_sub(record_kind=auth_kind, since=since_now, relays=auth_relays,timeout=settings.LISTEN_TIMEOUT)
+    if not _nonce_matches(expected_nonce, presenter_nauth):
+        logger.warning("ws_request_record nonce mismatch for presenter response")
+        try:
+            await websocket.send_json({"status": "ERROR", "detail": "Authentication nonce mismatch."})
+        except WebSocketDisconnect:
+            logger.info("ws_request_record client disconnected before nonce mismatch send")
+        return
     parsed_nauth = parse_nauth(presenter_nauth)
 
     

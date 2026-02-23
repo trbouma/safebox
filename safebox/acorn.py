@@ -2355,7 +2355,7 @@ class Acorn:
                 mint,
                 e,
             )
-            raise RuntimeError(f"Error in mint_proofs {e}") from e
+            raise RuntimeError(f"Error in mint_proofs ({type(e).__name__}): {e}") from e
         
         finally:
             if lock_acquired:
@@ -2398,7 +2398,18 @@ class Acorn:
 
         if mint_quote.paid == True:
             self.logger.debug("op=check_quote status=paid quote=%s", quote)
-            success_mint = await self._mint_proofs(mint_quote.quote, amount, mint)
+            try:
+                success_mint = await self._mint_proofs(mint_quote.quote, amount, mint)
+            except (RuntimeError, httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
+                # Treat minting failures as transient so polling can continue and/or timeout cleanly.
+                self.logger.warning(
+                    "op=check_quote status=mint_failed quote=%s amount=%s mint=%s error=%s",
+                    quote,
+                    amount,
+                    mint,
+                    exc,
+                )
+                return False, None
             lninvoice = mint_quote.request
         else:
             success_mint = False

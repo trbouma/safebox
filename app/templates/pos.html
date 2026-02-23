@@ -146,6 +146,14 @@
       margin-bottom: 10px;
     }
 
+    .keypad-spacer {
+      min-height: 46px;
+    }
+
+    .keypad-wide-right {
+      grid-column: 3 / 5;
+    }
+
     button {
       border: 0;
       border-radius: 11px;
@@ -169,6 +177,20 @@
       grid-template-columns: 1fr 1fr;
       gap: 8px;
       margin-bottom: 8px;
+    }
+
+    .btn-row-single {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+
+    .btn-small {
+      width: 100%;
+      min-height: 46px;
+      padding: 7px 12px;
+      font-size: 0.86rem;
+      font-weight: 600;
     }
 
     .stack { display: grid; gap: 8px; }
@@ -295,13 +317,15 @@
 
         <button data-key="0">0</button>
         <button class="btn-primary" id="btnDot">.</button>
-        <button class="btn-danger" id="btnReset">Reset</button>
-        <button class="btn-success" id="btnNfc">Pay NFC</button>
+        <button class="btn-danger keypad-wide-right" id="btnReset">Reset</button>
       </div>
 
       <div class="btn-row">
         <button class="btn-primary" id="btnCreateInvoice">Create Invoice</button>
-        <button class="btn-muted" id="btnBalance">Get Balance</button>
+        <button class="btn-success" id="btnNfc">Pay NFC</button>
+      </div>
+      <div class="btn-row-single">
+        <button class="btn-muted btn-small" id="btnBalance">Check Card Balance</button>
       </div>
 
       <p class="meta" id="statusText">Waiting for wallet connection.</p>
@@ -758,7 +782,9 @@
       setStatus("Total reset.", "info");
     });
 
-    document.getElementById("btnBalance").addEventListener("click", () => sendWs({ action: "get_balance" }));
+    document.getElementById("btnBalance").addEventListener("click", () => {
+      window.location.href = "/mybalance?from=pos";
+    });
     document.getElementById("btnCreateInvoice").addEventListener("click", createInvoice);
     document.getElementById("btnNfc").addEventListener("click", payWithNfc);
     document.getElementById("btnCopyInvoice").addEventListener("click", copyInvoice);
