@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 import asyncio, json, requests
-from time import sleep,time
+from time import sleep, time, monotonic
 import secrets
 from datetime import datetime, timedelta
 import urllib.parse
@@ -170,6 +170,8 @@ class Acorn:
             self.access_key = generate_access_key_from_hex(access_key_hash)
 
             self.wallet_reserved_records = {}
+            self._lock_acquired_at: float | None = None
+            self._lock_owner: str | None = None
         else:
             return "Need nsec" 
 
@@ -1575,6 +1577,16 @@ class Acorn:
     async def set_lock(self, lock: bool):
         pass
 
+    def _lock_actor(self) -> str:
+        task = asyncio.current_task()
+        if task is None:
+            return "sync"
+        try:
+            task_name = task.get_name()
+        except Exception:
+            task_name = None
+        return task_name or f"task-{id(task)}"
+
     async def check_lock(self):
         lock_value = "FALSE"
         try:
@@ -1589,7 +1601,15 @@ class Acorn:
         return str(lock_value).upper().strip() == "TRUE"
 
     async def acquire_lock(self, attempts=10):
+        start_wait = monotonic()
+        actor = self._lock_actor()
         loop_count = 0
+        self.logger.debug(
+            "op=acquire_lock status=start handle=%s actor=%s attempts=%s",
+            self.handle,
+            actor,
+            attempts,
+        )
         try:
             lock_value = await self.get_wallet_info(label="lock")
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
@@ -1602,7 +1622,7 @@ class Acorn:
         
         if str(lock_value).upper().strip() == "TRUE":
             
-            self.logger.debug("op=acquire_lock status=already_locked handle=%s", self.handle)
+            self.logger.debug("op=acquire_lock status=already_locked handle=%s actor=%s", self.handle, actor)
             
             
             
@@ -1610,7 +1630,15 @@ class Acorn:
                 await asyncio.sleep(1)
                 loop_count +=1
                 if loop_count > attempts:
-                    self.logger.warning("op=acquire_lock status=seizing_lock handle=%s attempts=%s", self.handle, attempts)
+                    wait_ms = int((monotonic() - start_wait) * 1000)
+                    self.logger.warning(
+                        "op=acquire_lock status=seizing_lock handle=%s actor=%s attempts=%s wait_ms=%s previous_owner=%s",
+                        self.handle,
+                        actor,
+                        attempts,
+                        wait_ms,
+                        self._lock_owner,
+                    )
                     await self.set_wallet_info(label="lock",label_info="FALSE")
                     break
                     # raise RuntimeError(f"Could not acquire lock after {timeout} attempts")
@@ -1631,16 +1659,49 @@ class Acorn:
                 )
                 if str(lock_value).upper().strip() != 'TRUE':
                     await self.set_wallet_info(label="lock",label_info="TRUE")
-                    self.logger.debug("op=acquire_lock status=acquired_after_wait handle=%s", self.handle)
+                    self._lock_acquired_at = monotonic()
+                    self._lock_owner = actor
+                    wait_ms = int((self._lock_acquired_at - start_wait) * 1000)
+                    level = self.logger.warning if wait_ms >= 1500 else self.logger.info
+                    level(
+                        "op=acquire_lock status=acquired_after_wait handle=%s actor=%s wait_ms=%s attempts_used=%s",
+                        self.handle,
+                        actor,
+                        wait_ms,
+                        loop_count,
+                    )
                     break
         else:
-            self.logger.debug("op=acquire_lock status=acquired_immediately handle=%s", self.handle)
+            self.logger.debug("op=acquire_lock status=acquired_immediately handle=%s actor=%s", self.handle, actor)
             await self.set_wallet_info(label="lock",label_info="TRUE")
+            self._lock_acquired_at = monotonic()
+            self._lock_owner = actor
        
 
     async def release_lock(self):
-        self.logger.debug("op=release_lock status=releasing handle=%s", self.handle)
+        actor = self._lock_actor()
+        held_ms = None
+        if self._lock_acquired_at is not None:
+            held_ms = int((monotonic() - self._lock_acquired_at) * 1000)
+        if held_ms is None:
+            self.logger.debug(
+                "op=release_lock status=releasing handle=%s actor=%s owner=%s held_ms=unknown",
+                self.handle,
+                actor,
+                self._lock_owner,
+            )
+        else:
+            level = self.logger.warning if held_ms >= 3000 else self.logger.info
+            level(
+                "op=release_lock status=releasing handle=%s actor=%s owner=%s held_ms=%s",
+                self.handle,
+                actor,
+                self._lock_owner,
+                held_ms,
+            )
         await self.set_wallet_info(label="lock",label_info="FALSE")
+        self._lock_acquired_at = None
+        self._lock_owner = None
         
         pass  
 

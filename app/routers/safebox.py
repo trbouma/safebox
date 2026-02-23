@@ -1424,13 +1424,20 @@ async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)
     # Event channel for completion/status notifications.
     await websocket.accept()
     notify_connections[acorn_obj.pubkey_bech32].add(websocket)
-    await websocket.send_json({"notify":"connected"})
+    try:
+        await websocket.send_json({"notify":"connected"})
+    except WebSocketDisconnect:
+        notify_connections[acorn_obj.pubkey_bech32].discard(websocket)
+        return
     try:
         while True:
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=45)
             except asyncio.TimeoutError:
-                await websocket.send_json({"notify": "heartbeat"})
+                try:
+                    await websocket.send_json({"notify": "heartbeat"})
+                except WebSocketDisconnect:
+                    break
     except WebSocketDisconnect as e:
         print(f"Client disconnected {e.code}")
     finally:

@@ -402,6 +402,12 @@
       return Math.round(n * 100) / 100;
     }
 
+    function buildTenderedComment(amountValue) {
+      const base = (memoInputEl.value || "Paid from POS").trim() || "Paid from POS";
+      const tendered = `${POS_CURRENCY_SYMBOL} ${formatAmount(amountValue)} ${POS_CURRENCY}`;
+      return `${base} (tendered: ${tendered})`;
+    }
+
     function updateDisplay() {
       const shown = rawInput ? parseEntryToTwoDecimals(rawInput) : 0;
       displayEl.textContent = `${POS_CURRENCY_SYMBOL} ${formatAmount(shown)}`;
@@ -577,7 +583,7 @@
           body: JSON.stringify({
             amount: total,
             currency: POS_CURRENCY,
-            comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
+            comment: buildTenderedComment(total)
           })
         });
         if (!response.ok) {
@@ -627,7 +633,7 @@
               amount: total,
               pin: pinInputEl.value || "",
               currency: POS_CURRENCY,
-              comment: (memoInputEl.value || "Paid from POS").trim() || "Paid from POS"
+              comment: buildTenderedComment(total)
             });
             nfcPaymentPending = true;
             setStatus("Awaiting card wallet confirmation...", "info");

@@ -274,6 +274,32 @@
     margin-top: 2px;
   }
 
+  .success-flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: rgba(56, 201, 109, 0.22);
+    opacity: 0;
+    transition: opacity 180ms ease;
+    z-index: 9998;
+  }
+
+  .success-flash.show {
+    opacity: 1;
+    transition: opacity 120ms ease;
+  }
+
+  #confettiCanvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
   .request-qr-output {
     width: 100%;
     max-width: 100%;
@@ -679,6 +705,84 @@ function consoleLog(data) {
     alert(message);
   }
 
+  let nfcSuccessCelebrating = false;
+
+  function celebrateSuccess() {
+    const flashEl = document.getElementById("successFlash");
+    const canvasEl = document.getElementById("confettiCanvas");
+    if (!flashEl || !canvasEl) return;
+    const ctx = canvasEl.getContext("2d");
+    if (!ctx) return;
+
+    flashEl.classList.add("show");
+    setTimeout(() => flashEl.classList.remove("show"), 160);
+    setTimeout(() => flashEl.classList.add("show"), 220);
+    setTimeout(() => flashEl.classList.remove("show"), 420);
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvasEl.width = w;
+    canvasEl.height = h;
+    canvasEl.classList.remove("hidden");
+
+    const colors = ["#4d6fff", "#7de2ff", "#9ae6b0", "#ffe08a", "#ffffff"];
+    const pieces = Array.from({ length: 110 }, () => ({
+      x: w * (0.15 + Math.random() * 0.7),
+      y: h * (0.15 + Math.random() * 0.18),
+      vx: (Math.random() - 0.5) * 5.2,
+      vy: -Math.random() * 5.2 - 1.2,
+      size: 4 + Math.random() * 5,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 0.3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      life: 60 + Math.random() * 30,
+    }));
+
+    let frame = 0;
+    const gravity = 0.15;
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      let alive = 0;
+      for (const p of pieces) {
+        if (p.life <= 0) continue;
+        alive += 1;
+        p.vy += gravity;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        p.life -= 1;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx.restore();
+      }
+      frame += 1;
+      if (alive > 0 && frame < 110) {
+        requestAnimationFrame(draw);
+      } else {
+        ctx.clearRect(0, 0, w, h);
+        canvasEl.classList.add("hidden");
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function celebrateNfcPayment(detailMessage) {
+    if (nfcSuccessCelebrating) return;
+    nfcSuccessCelebrating = true;
+    userMessage(detailMessage || "NFC payment complete.", "OK");
+    document.getElementById("img_qr_display").src = "/img/green-check.png";
+    celebrateSuccess();
+    setTimeout(() => {
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+      nfcSuccessCelebrating = false;
+    }, 2500);
+  }
+
   function markBalanceUpdated() {
     const el = document.getElementById("balance_last_updated");
     if (!el) return;
@@ -798,11 +902,7 @@ body: JSON.stringify(submit_data)
   userMessage(detail, status);
   consoleLog(detail);
   if (status === "OK") {
-    document.getElementById("img_qr_display").src = "/img/green-check.png";
-    showNfcAlert(detail);
-    setTimeout(() => {
-      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-    }, 2500);
+    celebrateNfcPayment(detail);
   } else if (status === "PENDING") {
     document.getElementById("img_qr_display").src = "/img/circle-256.gif";
   } else {
@@ -1054,6 +1154,39 @@ function getlnPayStatus(ln_pay_status) {
 
 }
 
+function clearMakePaymentFields() {
+  const recipientAddress = document.getElementById("ln_recipient_address");
+  const recipientAmount = document.getElementById("ln_recipient_amount");
+  const recipientMemo = document.getElementById("ln_recipient_memo");
+  const recipientCurrency = document.getElementById("ln_select_currency");
+  const payButton = document.getElementById("ln_pay_button");
+  const invoicePanel = document.getElementById("invoice_pay_panel");
+  const invoiceInput = document.getElementById("ln_invoice_input");
+  const invoiceMemo = document.getElementById("ln_invoice_memo");
+  const invoiceSummary = document.getElementById("ln_invoice_summary");
+
+  if (recipientAddress) recipientAddress.value = "";
+  if (recipientAmount) recipientAmount.value = "";
+  if (recipientMemo) recipientMemo.value = "";
+  if (recipientCurrency) {
+    const satOption = Array.from(recipientCurrency.options).find((opt) => opt.value === "SAT");
+    if (satOption) {
+      recipientCurrency.value = "SAT";
+    } else {
+      recipientCurrency.selectedIndex = 0;
+    }
+  }
+  if (payButton) {
+    payButton.textContent = "Send Payment";
+    payButton.disabled = false;
+  }
+
+  if (invoicePanel) invoicePanel.style.display = "none";
+  if (invoiceInput) invoiceInput.value = "";
+  if (invoiceMemo) invoiceMemo.value = "";
+  if (invoiceSummary) invoiceSummary.textContent = "";
+}
+
 async function lnPayAddress() {
   const recipient_address = document.getElementById("ln_recipient_address");
   const recipient_amount = document.getElementById("ln_recipient_amount");
@@ -1067,7 +1200,12 @@ async function lnPayAddress() {
   // alert("Pay! " + ln_address + " " + ln_amount + " with comment "+ ln_comment);
 
   if (recipient_address.value == "NFC Tag") {
-    //alert("Pay to NFC Tag");
+    const proceed = confirm("Get ready to tap your NFC card. Press OK to continue.");
+    if (!proceed) {
+      clearMakePaymentFields();
+      userMessage("Payment canceled.", "INFO");
+      return;
+    }
     paytoNFC();
     return;
   }
@@ -1186,7 +1324,7 @@ function getInvoiceStatus(ln_invoice_status) {
       const status = payload.status || "INFO";
       const detail = payload.detail || "NFC payment update";
       userMessage(detail, status);
-      if (status === "ERROR" || status === "OK") {
+      if (status === "ERROR") {
         showNfcAlert(detail);
       }
       if (typeof payload.balance !== "undefined") {
@@ -1194,10 +1332,7 @@ function getInvoiceStatus(ln_invoice_status) {
       }
       if (status === "OK") {
         clearRequestPaymentFields();
-        document.getElementById("img_qr_display").src = "/img/green-check.png";
-        setTimeout(() => {
-          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-        }, 2500);
+        celebrateNfcPayment(detail);
         scheduleAccessReload(900);
       }
     }
@@ -1308,6 +1443,8 @@ function getInvoiceStatus(ln_invoice_status) {
 
 {% block page_content %}
 <div class="center-text">
+  <canvas id="confettiCanvas" class="hidden"></canvas>
+  <div id="successFlash" class="success-flash"></div>
   <p id="branding_probe" class="branding-badge">
     <span class="branding-message">{{ branding_message }}</span>
     <span class="branding-domain">{{ request.url.hostname }}</span>

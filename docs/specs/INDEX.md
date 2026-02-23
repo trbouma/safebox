@@ -15,10 +15,13 @@ Section convention used across current Safebox specs:
 
 - [TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md](./TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md) - Transport model, TLS assumptions, and hybrid npub/address routing.
 - [WEB-WALLET-USER-CONSIDERATIONS.md](./WEB-WALLET-USER-CONSIDERATIONS.md) - User-experience principles and interaction decisions for the web wallet, intended as the baseline for future mobile UX once field-stable.
+- [HYPERMEDIA-AND-HATEOAS-APPLICATION-STATE.md](./HYPERMEDIA-AND-HATEOAS-APPLICATION-STATE.md) - Hypermedia-first application state strategy (HATEOAS), component mapping, and UI stability/jitter mitigation guidance.
 - [FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md](./FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md) - Operator fiduciary/compliance considerations for payments, records stewardship, private-key responsibility, and lawful process handling.
 - [BRANDING-AND-HOST-RESOLUTION.md](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
 - [AGENT-API.md](./AGENT-API.md) - Header-authenticated machine API for automation clients (OpenClaw-style agents) using wallet access keys instead of browser cookies.
 - [DATABASE-BACKENDS-AND-MIGRATIONS.md](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
+- [ACORN-RESILIENCY-AND-GUARDS.md](./ACORN-RESILIENCY-AND-GUARDS.md) - Runtime guard model for Acorn under unreliable/adversarial conditions, including lock safety, failure handling, and rollback strategy.
+- [ACORN-MODULARIZATION-TRANSITION-PLAN.md](./ACORN-MODULARIZATION-TRANSITION-PLAN.md) - Design note for evolving Acorn from a god-class into compartmentalized services with phased migration and compatibility safeguards.
 - [ACCEPTANCE-MODEL.md](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
 - [THREAT-MODEL.md](./THREAT-MODEL.md) - Safebox threat boundaries, key risks, mitigations, and residual risk considerations.
 - [NAUTH-PROTOCOL.md](./NAUTH-PROTOCOL.md) - Authorization envelope used to coordinate cross-party record flows.
