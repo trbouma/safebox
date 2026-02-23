@@ -2565,8 +2565,41 @@ class Acorn:
             mint_request = mintRequest(amount=amount)
             mint_request_dump = mint_request.model_dump()
             payload_json = mint_request.model_dump_json()
-            response = requests.post(url, data=payload_json, headers=headers)
-            # print(response.json())
+            # Retry transient DNS/connect/read failures common on high-latency links.
+            attempts = 4
+            connect_timeout = 4.0
+            read_timeout = 8.0
+            last_error = None
+            response = None
+            for attempt in range(1, attempts + 1):
+                try:
+                    response = requests.post(
+                        url,
+                        data=payload_json,
+                        headers=headers,
+                        timeout=(connect_timeout, read_timeout),
+                    )
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as exc:
+                    last_error = exc
+                    self.logger.warning(
+                        "op=deposit status=quote_retry_failed attempt=%s/%s url=%s error=%s",
+                        attempt,
+                        attempts,
+                        url,
+                        exc,
+                    )
+                    if attempt < attempts:
+                        sleep(0.4 * attempt)
+                        continue
+                    raise RuntimeError(
+                        f"Mint quote endpoint unreachable or timed out at {url}"
+                    ) from exc
+
+            if response is None:
+                raise RuntimeError(f"Mint quote endpoint unavailable at {url}: {last_error}")
+
             mint_quote = mintQuote(**response.json())
             # print(mint_quote)
             invoice = response.json()['request']
@@ -2578,7 +2611,16 @@ class Acorn:
             wallet_quote_list =[]
             
 
-        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
+        except (
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            IndexError,
+            json.JSONDecodeError,
+            httpx.HTTPError,
+            requests.exceptions.RequestException,
+        ) as e:
             raise RuntimeError(f"The is a error with the deposit {e}")
          
         return cliQuote(invoice=invoice, quote=quote, mint_url=url)

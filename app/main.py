@@ -1,6 +1,6 @@
 from sqlmodel import Field, Session, SQLModel, select
 from fastapi import FastAPI, Request, BackgroundTasks, Cookie, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -229,6 +229,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+
+@app.middleware("http")
+async def agent_cors_middleware(request: Request, call_next):
+    # Allow browser-based agent clients to call /agent/* directly.
+    if request.url.path.startswith("/agent"):
+        cors_headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key",
+        }
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers=cors_headers)
+
+        response = await call_next(request)
+        for key, value in cors_headers.items():
+            response.headers[key] = value
+        return response
+
+    return await call_next(request)
 
 
 app.include_router(lnaddress.router) 

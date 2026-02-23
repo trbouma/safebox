@@ -173,7 +173,10 @@ async def ln_invoice_payment(   request: Request,
         cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=sat_amount, mint=settings.HOME_MINT)
     except Exception as exc:
         logger.exception("POS invoice quote generation failed")
-        return {"status": "ERROR", "detail": f"Unable to create invoice: {exc}"}
+        detail = "Unable to create invoice right now. Mint service may be unreachable. Please retry."
+        if "unsupported currency" in str(exc).lower():
+            detail = "Unable to create invoice due to currency configuration."
+        return {"status": "ERROR", "detail": detail}
 
     asyncio.create_task(
         handle_payment(

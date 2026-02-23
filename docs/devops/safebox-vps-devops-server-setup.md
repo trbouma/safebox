@@ -250,6 +250,52 @@ Confirm firewall allows outbound traffic
 
 ------------------------------------------------------------------------
 
+## Slow DNS Resolution Inside Container
+
+### Symptom
+
+- First DNS lookup is very slow (`getent hosts mint.getsafebox.app`)
+- App intermittently fails on mint quote calls with hostname resolution errors
+
+### Recommended Fix (Compose-Level DNS Override)
+
+Add DNS resolvers to your Safebox service in `docker-compose.yaml`:
+
+```yaml
+services:
+  lnapp:
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+```
+
+Restart after changes:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+### Verify
+
+Inside container:
+
+```bash
+cat /etc/resolv.conf
+getent hosts mint.getsafebox.app
+curl -sS https://mint.getsafebox.app/v1/keysets
+```
+
+### Important Caveat
+
+If your database host is an internal/private hostname (for example `beelink`),
+public resolvers may not resolve it. In that case:
+
+- use the DB server IP address, or
+- use a DNS server that knows your private hostnames.
+
+------------------------------------------------------------------------
+
 # 10. Baseline Deployment Checklist
 
 -   [x] SSH key login configured
