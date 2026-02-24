@@ -311,8 +311,8 @@ async def transmit_records(        request: Request,
         npub_recipient = hex_to_npub(pubhex)
         scope = parsed_nauth['values']['scope']
         nonce = parsed_nauth['values'].get('nonce', generate_nonce(1))
-        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)
-        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
+        auth_kind = parsed_nauth['values'].get('auth_kind') or settings.AUTH_KIND
+        auth_relays = parsed_nauth['values'].get('auth_relays') or settings.AUTH_RELAYS
 
 
         
@@ -320,8 +320,8 @@ async def transmit_records(        request: Request,
         transmittal_npub = hex_to_npub(transmittal_pubhex)
         
         
-        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
 
         # print(f" session nonce {safebox_found.session_nonce} {nonce}")
         #TODO Need to figure out session nonce when authenticating from other side
@@ -1505,11 +1505,11 @@ async def post_send_record(      request: Request,
         pubhex = parsed_nauth['values']['pubhex']
         npub_recipient = hex_to_npub(pubhex)
         nonce = parsed_nauth['values'].get('nonce', '0')
-        auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)
-        auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
-        transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex',acorn_obj.pubkey_hex)
-        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
+        auth_kind = parsed_nauth['values'].get('auth_kind') or settings.AUTH_KIND
+        auth_relays = parsed_nauth['values'].get('auth_relays') or settings.AUTH_RELAYS
+        transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex') or acorn_obj.pubkey_hex
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
 
         print(f"send record to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
@@ -1745,7 +1745,7 @@ async def ws_record_offer( websocket: WebSocket,
     while True:
         if datetime.now() - start_time > timedelta(minutes=1):
             print("1 minute has passed. Exiting loop.")
-            await websocket.send_json({"test":"test"})
+            await websocket.send_json({"status": "TIMEOUT", "detail": "Authentication timed out."})
             break
         try:
             # await acorn_obj.load_data()
@@ -2215,18 +2215,23 @@ async def ws_listen_for_nauth( websocket: WebSocket,
             # await acorn_obj.load_data()
             try:
                 client_nauth,presenter,kem_public_key_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
-                
-                kem_parsed = parse_nembed_compressed(kem_public_key_nauth)
-                kem_public_key = kem_parsed['kem_public_key']
-                kem_public_key_bytes = bytes.fromhex(kem_public_key)
+                kem_public_key = None
+                kemalg = None
+                if kem_public_key_nauth:
+                    try:
+                        kem_parsed = parse_nembed_compressed(kem_public_key_nauth)
+                        kem_public_key = kem_parsed.get('kem_public_key')
+                        kemalg = kem_parsed.get('kemalg')
+                    except Exception as exc:
+                        logger.warning("ws_listen_for_nauth invalid KEM payload; falling back to defaults: %s", exc)
 
-                kemalg = kem_parsed['kemalg']
-
-
+                # NFC-originated auth may not always carry a separate KEM payload.
+                # Keep handshake moving with service defaults instead of dropping auth.
+                kem_public_key = kem_public_key or config.PQC_KEM_PUBLIC_KEY
+                kemalg = kemalg or settings.PQC_KEMALG
 
                 print(f"this is the kem public key: {kem_public_key} kemalg: {kemalg}")
-                # These paramaters get passed along to Step 2a via the browser
-
+                # These parameters get passed along to Step 2a via the browser.
             except Exception as exc:
                 client_nauth=None
             
@@ -2246,14 +2251,14 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                 parsed_nauth = parse_nauth(client_nauth)
                 pubhex = parsed_nauth['values'].get('pubhex')
                 transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind',settings.TRANSMITTAL_KIND)
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
                 
                 # Need to create a new nauth where the transmittal npub points back to the initiator
                 new_nauth = create_nauth (  npub= hex_to_npub(pubhex),
                                             nonce = parsed_nauth['values'].get('nonce'),
-                                            auth_kind = parsed_nauth['values'].get('auth_kind',settings.AUTH_KIND),
-                                            auth_relays = parsed_nauth['values'].get('auth_relays',settings.AUTH_RELAYS),
+                                            auth_kind = parsed_nauth['values'].get('auth_kind') or settings.AUTH_KIND,
+                                            auth_relays = parsed_nauth['values'].get('auth_relays') or settings.AUTH_RELAYS,
                                             transmittal_npub = hex_to_npub(pubhex),
                                             transmittal_kind=  transmittal_kind,
                                             transmittal_relays= transmittal_relays,

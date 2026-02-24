@@ -23,8 +23,14 @@
 
 var global_naddr = "";
 var global_transmit_nauth = "None";
-var global_offer_kind = {{offer_kind}};
-var global_grant_kind = {{grant_kind}};
+var global_kem_public_key = null;
+var global_kemalg = null;
+
+function getSelectedOfferAndGrantKinds() {
+  const selectedOfferKind = parseInt(document.getElementById("offer_kind").value, 10);
+  const selectedGrantKind = selectedOfferKind + 1;
+  return { selectedOfferKind, selectedGrantKind };
+}
 
 async function backToProfile() {
 
@@ -139,9 +145,9 @@ async function createQRCode() {
     var data;
     var qr_img_func = document.getElementById("img_qr_display");
     const nfc_request = document.getElementById("nfc_request_checkbox");
-    var offer_kind = document.getElementById("offer_kind").value;
-    var scope = "offer:{{offer_kind}}";
-    var grant = "record:{{grant_kind}}";
+    const { selectedOfferKind, selectedGrantKind } = getSelectedOfferAndGrantKinds();
+    var scope = `offer:${selectedOfferKind}`;
+    var grant = `record:${selectedGrantKind}`;
    
     // alert(scope);
 
@@ -168,21 +174,7 @@ async function createQRCode() {
                  // getQRStatus(data)
  );
 
-   if (nfc_request.checked == true) {  
-      qr_img_func.src = "/img/nfc.png";
-      consoleLog("Tap NFC card!");
-      
-      await requestbyNFC(offer_kind, global_nauth);
-                     
-  } else {
-
-    // console.log(`grant kind: ${grant_kind}`);
-
-    // qr_img_func.src="/img/circle-256.gif";
-    qr_img_func.src = "/safebox/qr/"+ global_nauth;
-
-  }
-
+ // Start websocket listener first to avoid missing fast NFC responder auth messages.
  const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
  const ws = new WebSocket(wsUrl);
 
@@ -201,6 +193,8 @@ async function createQRCode() {
       client_name = response.name;
       client_transmittal_kind = response.transmittal_kind;
       client_transmittal_relays = response.transmittal_relays;
+      global_kem_public_key = response.kem_public_key;
+      global_kemalg = response.kemalg;
     // client_name = response.name;
     // alert(`Client is authenticated! Ready to transmit files.`); 
     if (global_transmit_nauth) {
@@ -221,6 +215,21 @@ async function createQRCode() {
     qr_img_func.src = "/img/safebox.png";
   };
   ws.onclose = () => console.log("WebSocket closed");
+
+   if (nfc_request.checked == true) {  
+      qr_img_func.src = "/img/nfc.png";
+      consoleLog("Tap NFC card!");
+      
+      await requestbyNFC(selectedOfferKind, global_nauth);
+                     
+  } else {
+
+    // console.log(`grant kind: ${grant_kind}`);
+
+    // qr_img_func.src="/img/circle-256.gif";
+    qr_img_func.src = "/safebox/qr/"+ global_nauth;
+
+  }
   
 
 }
@@ -458,7 +467,7 @@ async function offerRecord() {
       // alert(`Sending...`);
     // } else {return;}
   
-    var data;
+    const { selectedOfferKind, selectedGrantKind } = getSelectedOfferAndGrantKinds();
     if (global_transmit_nauth == "None"){
       
       nauth_to_transmit = client_nauth;
@@ -470,9 +479,21 @@ async function offerRecord() {
 
 
   const submit_data = { "nauth": nauth_to_transmit,
-                        "originating_kind": global_offer_kind,
-                        "final_kind": global_grant_kind
+                        "originating_kind": selectedOfferKind,
+                        "final_kind": selectedGrantKind,
+                        "record_name": document.getElementById('record_label')?.value?.trim() || null,
+                        "kem_public_key": global_kem_public_key,
+                        "kemalg": global_kemalg
    };
+
+  if (!submit_data.record_name) {
+    alert("Please enter/select an offer label before transmitting.");
+    return;
+  }
+  if (!submit_data.kem_public_key || !submit_data.kemalg) {
+    alert("Recipient channel is not quantum-safe yet. Please retry authentication.");
+    return;
+  }
 
   console.log(`data to submit: ${submit_data.nauth}`) ;
 

@@ -21,6 +21,8 @@
 
 var global_transmit_nauth = "";
 var global_listen_nauth;
+let activeRequestWs = null;
+let requestCancelInProgress = false;
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
@@ -217,6 +219,11 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
     } else {
       setRequestStatus("Request not started.");
     }
+  } else if (!shouldListen && activeRequestWs) {
+    requestCancelInProgress = true;
+    try { activeRequestWs.close(); } catch (e) {}
+    activeRequestWs = null;
+    setRequestStatus("Request cancelled.");
   }
 
 
@@ -343,6 +350,7 @@ async function listenForPresentation(nauth) {
     // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`);  
     const wsUrl = buildWsUrl(`/records/ws/request/${nauth}`);
     const ws = new WebSocket(wsUrl);
+    activeRequestWs = ws;
     const listenTimeoutMs = 70000;
     let listenTimeoutHandle = null;
     let terminalStateReached = false;
@@ -432,6 +440,17 @@ async function listenForPresentation(nauth) {
       };
       ws.onclose = () => {
         console.log("WebSocket closed");
+        if (activeRequestWs === ws) {
+          activeRequestWs = null;
+        }
+        if (requestCancelInProgress) {
+          requestCancelInProgress = false;
+          if (listenTimeoutHandle) {
+            clearTimeout(listenTimeoutHandle);
+            listenTimeoutHandle = null;
+          }
+          return;
+        }
         if (!terminalStateReached) {
           setRequestStatus("Request listener closed before completion. Please retry.");
         }

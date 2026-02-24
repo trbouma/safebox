@@ -20,6 +20,7 @@
 
 var global_naddr = "";
 var global_transmit_nauth = "None";
+var client_nauth = "None";
 var global_offer_kind = {{offer_kind}};
 var global_grant_kind = {{grant_kind}};
 var global_offer_card = {{card | tojson}};
@@ -272,25 +273,11 @@ async function createQRCode() {
                  // getQRStatus(data)
  );
 
-   if (nfc_offer.checked == true) {  
-      qr_img_func.src = "/img/nfc.png";
-      consoleLog("Tap NFC card!");
-      
-      await requestbyNFC(offer_kind, global_nauth);
-                     
-  } else {
-
-    // console.log(`grant kind: ${grant_kind}`);
-
-    // qr_img_func.src="/img/circle-256.gif";
-    qr_img_func.src = "/safebox/qr/"+ global_nauth;
-
-  }
-
+ // Start websocket listener first to avoid missing fast NFC responder auth messages.
  // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
  const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
  const ws = new WebSocket(wsUrl);
-  console.log(wsUrl);
+ console.log(wsUrl);
    
   
     ws.onopen = () => console.log("WebSocket connected");
@@ -330,6 +317,21 @@ async function createQRCode() {
     qr_img_func.src = "/img/safebox.png";
   };
   ws.onclose = () => console.log("WebSocket closed");
+
+   if (nfc_offer.checked == true) {  
+      qr_img_func.src = "/img/nfc.png";
+      consoleLog("Tap NFC card!");
+      
+      await requestbyNFC(offer_kind, global_nauth);
+                     
+  } else {
+
+    // console.log(`grant kind: ${grant_kind}`);
+
+    // qr_img_func.src="/img/circle-256.gif";
+    qr_img_func.src = "/safebox/qr/"+ global_nauth;
+
+  }
   
   
 
@@ -347,7 +349,6 @@ async function offerRecord() {
       // alert(`Sending...`);
     // } else {return;}
   
-    var data;
     if (global_transmit_nauth == "None"){
       
       nauth_to_transmit = client_nauth;
@@ -366,18 +367,33 @@ async function offerRecord() {
                         "kemalg": global_kemalg
    };
 
+  if (!submit_data.record_name) {
+    alert("Missing offer label. Please reload and try again.");
+    return;
+  }
+  if (
+    !submit_data.kem_public_key ||
+    submit_data.kem_public_key === "None" ||
+    !submit_data.kemalg ||
+    submit_data.kemalg === "None"
+  ) {
+    alert("Recipient channel is not quantum-safe yet. Please re-authenticate and retry.");
+    return;
+  }
+
   console.log(`data to submit: ${submit_data.nauth} ${submit_data.final_kind}`) ;
 
-  await fetch('/records/transmit', {
-       method: "POST",
-       headers: {"Content-Type": "application/json"},        
-       body: JSON.stringify(submit_data)         
-      })
-   .then((response) => response.json())
-   .then((data) => { console.log(`Done! ${data.status} ${data.detail}`)}
-   
-   // getStatus(data)
-   );
+  const response = await fetch('/records/transmit', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(submit_data)
+  });
+  const responseData = await response.json();
+  console.log(`Done! ${responseData.status} ${responseData.detail}`);
+  if (!response.ok || responseData.status !== "OK") {
+    alert(responseData.detail || "Offer transmit failed.");
+    return;
+  }
 
    // window.location.href=referer;
      }
