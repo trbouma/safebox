@@ -151,6 +151,22 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     await acorn_obj.load_data()
     print(f"nwc watch: {acorn_obj.handle} {instruction_obj['method']}")
 
+    def _coerce(value, default):
+        if value is None:
+            return default
+        if isinstance(value, str) and value.strip().lower() in {"", "none", "null"}:
+            return default
+        return value
+
+    def _coerce_relays(value, default_relays):
+        resolved = _coerce(value, default_relays)
+        if isinstance(resolved, str):
+            return [resolved]
+        if isinstance(resolved, (list, tuple)):
+            out = [str(each) for each in resolved if each]
+            return out if out else list(default_relays)
+        return list(default_relays)
+
     if instruction_obj['method'] == 'pay_invoice':
         invoice = instruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
@@ -317,11 +333,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
-        auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
+        auth_kind = _coerce(parsed_result['values'].get("auth_kind"), settings.AUTH_KIND)
+        auth_relays = _coerce_relays(parsed_result['values'].get("auth_relays"), settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = _coerce(parsed_result['values'].get("transmittal_kind"), settings.TRANSMITTAL_KIND)
+        transmittal_relays = _coerce_relays(parsed_result['values'].get("transmittal_relays"), settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
         print(f"present_record scope: {scope} label: {label}")
         print(f"present_record pin_ok={pin_ok}")
@@ -461,16 +477,16 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']
-        kem_public_key = instruction_obj['params'].get("kem_public_key", config.PQC_KEM_PUBLIC_KEY)
-        kemalg = instruction_obj['params'].get("kemalg", settings.PQC_KEMALG)
+        kem_public_key = _coerce(instruction_obj['params'].get("kem_public_key"), config.PQC_KEM_PUBLIC_KEY)
+        kemalg = _coerce(instruction_obj['params'].get("kemalg"), settings.PQC_KEMALG)
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')
-        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
-        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        auth_kind = _coerce(parsed_result['values'].get("auth_kind"), settings.AUTH_KIND)
+        auth_relays = _coerce_relays(parsed_result['values'].get("auth_relays"), settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = _coerce(parsed_result['values'].get("transmittal_kind"), settings.TRANSMITTAL_KIND)
+        transmittal_relays = _coerce_relays(parsed_result['values'].get("transmittal_relays"), settings.TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope", None)
         grant = parsed_result['values'].get("grant", None)
 
@@ -553,22 +569,41 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
             record_kemalg = each_record.get("kemalg", None)
             my_enc = None
             if record_ciphertext and record_kemalg:
-                pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-                shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-                print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
-                k_pqc = Keys(shared_secret.hex())
-                my_enc = ExtendedNIP44Encrypt(k_pqc)
-                payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
-                if payload_to_decrypt:            
-                    decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
-                    print(f"decrypted payload: {decrypted_payload}")
-                    record_value = decrypted_payload
+                try:
+                    pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                    shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                    print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+                    k_pqc = Keys(shared_secret.hex())
+                    my_enc = ExtendedNIP44Encrypt(k_pqc)
+                    payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
+                    if payload_to_decrypt:
+                        decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                        print(f"decrypted payload: {decrypted_payload}")
+                        record_value = decrypted_payload
+                except Exception as exc:
+                    logger.warning(
+                        "offer_record payload decrypt failed for tag=%s kind=%s: %s",
+                        each_record.get("tag"),
+                        type,
+                        exc,
+                    )
+                    # Non-fatal: continue processing other records without crashing the task.
+                    continue
 
             original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
 
             if original_record_to_decrpyt and my_enc:
-                decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
-                print(f"decrypted original: {decrypted_original}")   
+                try:
+                    decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+                    print(f"decrypted original: {decrypted_original}")
+                except Exception as exc:
+                    logger.warning(
+                        "offer_record original decrypt failed for tag=%s kind=%s: %s",
+                        each_record.get("tag"),
+                        type,
+                        exc,
+                    )
+                    decrypted_original = None
 
             # Persist each incoming record (multi-record support).
             await acorn_obj.put_record(
@@ -578,7 +613,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 record_origin=npub_initiator,
             )
             # Ingest original record if present.
-            if original_record_to_decrpyt and my_enc:
+            if original_record_to_decrpyt and my_enc and decrypted_original:
                 blob_result = await acorn_obj.transfer_blob(
                     record_name=record_name,
                     record_kind=type,
@@ -937,8 +972,8 @@ async def listen_notes_periodic(url):
 
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
-    url = "wss://relay.getsafebox.app"
-    asyncio.create_task(listen_notes(url))
+    relay_url = settings.NWC_RELAYS[0] if settings.NWC_RELAYS else "wss://relay.getsafebox.app"
+    asyncio.create_task(listen_notes(relay_url))
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.DEBUG)
