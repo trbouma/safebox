@@ -106,6 +106,46 @@ curl -sS \
   "${BASE_URL}/agent/balance"
 ```
 
+### `GET /agent/tx_history`
+
+Returns wallet transaction history for the authenticated agent wallet.
+
+Query params:
+
+- `limit` (optional, default `50`, max `500`)
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "count": 2,
+  "transactions": [
+    {
+      "create_time": "2026-02-23 12:45:01",
+      "tx_type": "C",
+      "amount": 1000,
+      "comment": "Please Pay!"
+    },
+    {
+      "create_time": "2026-02-23 12:44:12",
+      "tx_type": "D",
+      "amount": 1000,
+      "comment": "Paid by agent"
+    }
+  ],
+  "timestamp": 1770000000
+}
+```
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/tx_history?limit=50"
+```
+
 ### `POST /agent/onboard`
 
 Creates a new wallet from a valid invite code and returns operational plus recovery material.
@@ -186,8 +226,34 @@ Response (example):
   "invoice": "lnbc...",
   "quote": "abc123...",
   "amount": 1000,
-  "unit": "sat"
+  "unit": "sat",
+  "invoice_status": "PENDING",
+  "status_path": "/agent/invoice_status/abc123..."
 }
+```
+
+### `GET /agent/invoice_status/{quote}`
+
+Returns settlement status for a previously created invoice quote.
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "quote": "abc123...",
+  "quote_status": "PAID",
+  "amount": 1000,
+  "mint": "https://mint.getsafebox.app"
+}
+```
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/invoice_status/abc123..."
 ```
 
 ### `POST /agent/pay_invoice`

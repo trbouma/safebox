@@ -8,6 +8,7 @@ Primary outcomes:
 
 - Onboard a wallet from invite code
 - Read wallet info and balance
+- Read transaction history
 - Create and pay Lightning invoices
 - Issue and accept Cashu ecash tokens
 
@@ -35,7 +36,9 @@ Conditional:
 - `POST /agent/onboard`
 - `GET /agent/info`
 - `GET /agent/balance`
+- `GET /agent/tx_history`
 - `POST /agent/create_invoice`
+- `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
@@ -60,14 +63,18 @@ Expected response includes:
 ### 2) Read Wallet State
 
 1. Call `GET /agent/info` with `X-Access-Key`.
+   - Includes `lightning_address` derived from request host.
 2. Call `GET /agent/balance` for lightweight polling or confirmation.
+3. Call `GET /agent/tx_history` for recent transaction audit context.
 
 ### 3) Create Invoice (Receive Payment)
 
 1. Call `POST /agent/create_invoice` with sat amount and optional comment.
 2. Return invoice immediately to payer.
-3. Monitor settlement by polling `GET /agent/balance` or `GET /agent/info`.
-   - Invoice settlement monitoring runs server-side asynchronously.
+3. Use returned `quote` and `status_path` to monitor settlement:
+   - poll `GET /agent/invoice_status/{quote}`
+   - terminal state is `quote_status: PAID`
+4. Optionally confirm final wallet state with `GET /agent/balance` or `GET /agent/tx_history`.
 
 ### 4) Pay Invoice
 
@@ -99,6 +106,7 @@ Retry guidance:
 
 - Use bounded exponential backoff for `500` and network failures.
 - Do not blindly retry non-idempotent payment operations without reconciliation checks.
+- For invoice receive flows, prefer `GET /agent/invoice_status/{quote}` before concluding failure.
 
 ## Guardrails
 

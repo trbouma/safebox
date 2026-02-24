@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import secrets
 import time
+import urllib.parse
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
@@ -9,11 +11,20 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
-from app.appmodels import RegisteredSafebox
+from app.appmodels import PaymentQuote, RegisteredSafebox, sendRecordParms
 from app.config import Settings
 from app.db import engine
+from app.routers import records as records_router
 from app.tasks import handle_payment
-from app.utils import create_jwt_token, extract_leading_numbers, generate_pnr
+from app.utils import (
+    create_jwt_token,
+    create_nauth,
+    extract_leading_numbers,
+    generate_nonce,
+    generate_pnr,
+    listen_for_request,
+    parse_nauth,
+)
 from monstr.encrypt import Keys
 from safebox.acorn import Acorn
 
@@ -21,6 +32,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 settings = Settings()
 _RATE_LIMIT_WINDOWS: dict[str, deque[float]] = defaultdict(deque)
+_AGENT_OFFERS: dict[str, dict] = {}
 
 
 class AgentInvoiceRequest(BaseModel):
@@ -49,6 +61,21 @@ class AgentAcceptEcashRequest(BaseModel):
 
 class AgentOnboardRequest(BaseModel):
     invite_code: str
+
+
+class AgentOfferCreateRequest(BaseModel):
+    grant_kind: int
+    grant_name: str
+    compact: bool = True
+    transmittal_kind: int | None = None
+
+
+class AgentOfferCaptureRequest(BaseModel):
+    recipient_nauth: str
+
+
+class AgentOfferSendRequest(BaseModel):
+    recipient_nauth: str | None = None
 
 
 def _resolve_wallet_by_access_key(access_key: str | None) -> RegisteredSafebox:
@@ -144,6 +171,64 @@ def _persist_wallet_balance(acorn_obj: Acorn) -> None:
             session.commit()
 
 
+def _upsert_payment_quote(
+    acorn_obj: Acorn,
+    quote: str,
+    amount: int,
+    mint: str,
+    paid: bool,
+) -> None:
+    with Session(engine) as session:
+        existing = session.exec(select(PaymentQuote).where(PaymentQuote.quote == quote)).first()
+        if existing:
+            existing.nsec = acorn_obj.privkey_bech32
+            existing.handle = acorn_obj.handle
+            existing.amount = amount
+            existing.mint = mint
+            existing.paid = paid
+            session.add(existing)
+        else:
+            session.add(
+                PaymentQuote(
+                    nsec=acorn_obj.privkey_bech32,
+                    handle=acorn_obj.handle,
+                    quote=quote,
+                    amount=amount,
+                    mint=mint,
+                    paid=paid,
+                )
+            )
+        session.commit()
+
+
+def _set_payment_quote_paid(quote: str, paid: bool) -> None:
+    with Session(engine) as session:
+        payment_quote = session.exec(select(PaymentQuote).where(PaymentQuote.quote == quote)).first()
+        if not payment_quote:
+            return
+        payment_quote.paid = paid
+        session.add(payment_quote)
+        session.commit()
+
+
+async def _track_agent_invoice_payment(
+    acorn_obj: Acorn,
+    cli_quote,
+    amount: int,
+    comment: str,
+) -> None:
+    success = await handle_payment(
+        acorn_obj=acorn_obj,
+        cli_quote=cli_quote,
+        amount=amount,
+        tendered_amount=float(amount),
+        tendered_currency="SAT",
+        comment=comment,
+        mint=settings.HOME_MINT,
+    )
+    _set_payment_quote_paid(cli_quote.quote, bool(success))
+
+
 def _validate_invite_code(invite_code: str) -> str:
     code = (invite_code or "").strip().lower()
     if not code:
@@ -151,6 +236,51 @@ def _validate_invite_code(invite_code: str) -> str:
     if code not in settings.INVITE_CODES:
         raise HTTPException(status_code=403, detail="Invalid invite code")
     return code
+
+
+def _normalize_nonce(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"", "none", "null", "0"}:
+        return None
+    return str(value).strip()
+
+
+def _nonce_matches(expected_nonce: str | None, candidate_nauth: str | None) -> bool:
+    expected = _normalize_nonce(expected_nonce)
+    if expected is None:
+        return True
+    if not candidate_nauth:
+        return False
+    try:
+        parsed = parse_nauth(candidate_nauth)
+        candidate_nonce = _normalize_nonce(parsed["values"].get("nonce"))
+    except Exception:
+        return False
+    return candidate_nonce == expected
+
+
+def _resolve_offer_for_wallet(offer_id: str, acorn_obj: Acorn) -> dict:
+    offer = _AGENT_OFFERS.get(offer_id)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    if offer.get("owner_npub") != acorn_obj.pubkey_bech32:
+        raise HTTPException(status_code=403, detail="Offer does not belong to this wallet")
+    return offer
+
+
+def _offer_status_payload(offer: dict) -> dict:
+    return {
+        "offer_id": offer["offer_id"],
+        "status": offer["status"],
+        "grant_kind": offer["grant_kind"],
+        "grant_name": offer["grant_name"],
+        "nauth": offer["nauth"],
+        "recipient_nauth": offer.get("recipient_nauth"),
+        "created_at": offer["created_at"],
+        "updated_at": offer["updated_at"],
+    }
 
 
 @router.get("/info", tags=["agent"])
@@ -192,6 +322,29 @@ async def agent_balance(acorn_obj: Acorn = Depends(_agent_get_acorn)):
     }
 
 
+@router.get("/tx_history", tags=["agent"])
+async def agent_tx_history(
+    limit: int = 50,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    max_limit = 500
+    safe_limit = max(1, min(int(limit), max_limit))
+    try:
+        tx_history = await acorn_obj.get_tx_history()
+    except Exception as exc:
+        logger.exception("Agent tx_history failed")
+        raise HTTPException(status_code=500, detail=f"Unable to read tx history: {exc}")
+
+    # Return most recent entries first, bounded by limit.
+    tx_history_sorted = list(reversed(tx_history))
+    return {
+        "status": "OK",
+        "count": min(len(tx_history_sorted), safe_limit),
+        "transactions": tx_history_sorted[:safe_limit],
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/create_invoice", tags=["agent"])
 async def agent_create_invoice(
     payload: AgentInvoiceRequest, acorn_obj: Acorn = Depends(_agent_get_acorn)
@@ -205,15 +358,19 @@ async def agent_create_invoice(
         logger.exception("Agent create_invoice failed")
         raise HTTPException(status_code=500, detail=f"Unable to create invoice: {exc}")
 
+    _upsert_payment_quote(
+        acorn_obj=acorn_obj,
+        quote=cli_quote.quote,
+        amount=payload.amount,
+        mint=settings.HOME_MINT,
+        paid=False,
+    )
     asyncio.create_task(
-        handle_payment(
+        _track_agent_invoice_payment(
             acorn_obj=acorn_obj,
             cli_quote=cli_quote,
             amount=payload.amount,
-            tendered_amount=float(payload.amount),
-            tendered_currency="SAT",
             comment=payload.comment,
-            mint=settings.HOME_MINT,
         )
     )
 
@@ -223,6 +380,31 @@ async def agent_create_invoice(
         "quote": cli_quote.quote,
         "amount": payload.amount,
         "unit": "sat",
+        "invoice_status": "PENDING",
+        "status_path": f"/agent/invoice_status/{cli_quote.quote}",
+    }
+
+
+@router.get("/invoice_status/{quote}", tags=["agent"])
+async def agent_invoice_status(quote: str, acorn_obj: Acorn = Depends(_agent_get_acorn)):
+    with Session(engine) as session:
+        payment_quote = session.exec(
+            select(PaymentQuote).where(
+                PaymentQuote.quote == quote,
+                PaymentQuote.handle == acorn_obj.handle,
+            )
+        ).first()
+
+    if not payment_quote:
+        raise HTTPException(status_code=404, detail="Invoice quote not found")
+
+    quote_status = "PAID" if payment_quote.paid else "PENDING"
+    return {
+        "status": "OK",
+        "quote": payment_quote.quote,
+        "quote_status": quote_status,
+        "amount": payment_quote.amount,
+        "mint": payment_quote.mint,
     }
 
 
@@ -308,6 +490,159 @@ async def agent_accept_ecash(
         "unit": "sat",
         "balance": acorn_obj.balance,
         "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/offers/create", tags=["agent"])
+async def agent_create_offer(
+    request: Request,
+    payload: AgentOfferCreateRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    if payload.grant_kind <= 0:
+        raise HTTPException(status_code=400, detail="Invalid grant_kind")
+    if not payload.grant_name or not payload.grant_name.strip():
+        raise HTTPException(status_code=400, detail="Missing grant_name")
+
+    transmittal_kind = payload.transmittal_kind or settings.RECORD_TRANSMITTAL_KIND
+    if payload.compact:
+        nonce = generate_nonce(length=1)
+        auth_relays = None
+        transmittal_relays = None
+    else:
+        nonce = generate_nonce(length=16)
+        auth_relays = settings.AUTH_RELAYS
+        transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
+
+    nauth = create_nauth(
+        npub=acorn_obj.pubkey_bech32,
+        nonce=nonce,
+        auth_kind=settings.AUTH_KIND,
+        auth_relays=auth_relays,
+        transmittal_npub=acorn_obj.pubkey_bech32,
+        transmittal_kind=transmittal_kind,
+        transmittal_relays=transmittal_relays,
+        name=acorn_obj.handle,
+        scope=f"offer:{payload.grant_kind}",
+        grant=payload.grant_name.strip(),
+    )
+
+    offer_id = secrets.token_urlsafe(12)
+    now_ts = int(datetime.utcnow().timestamp())
+    _AGENT_OFFERS[offer_id] = {
+        "offer_id": offer_id,
+        "owner_npub": acorn_obj.pubkey_bech32,
+        "nauth": nauth,
+        "grant_kind": payload.grant_kind,
+        "grant_name": payload.grant_name.strip(),
+        "status": "WAITING_RECIPIENT",
+        "recipient_nauth": None,
+        "created_at": now_ts,
+        "updated_at": now_ts,
+    }
+
+    host = request.url.hostname or ""
+    qr_text = nauth
+    qr_image_url = (
+        f"https://{host}/safebox/qr/{urllib.parse.quote(qr_text, safe='')}" if host else None
+    )
+
+    return {
+        "status": "OK",
+        "offer": _offer_status_payload(_AGENT_OFFERS[offer_id]),
+        "qr_text": qr_text,
+        "qr_image_url": qr_image_url,
+    }
+
+
+@router.get("/offers/{offer_id}/status", tags=["agent"])
+async def agent_offer_status(
+    offer_id: str,
+    wait_seconds: int = 0,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    offer = _resolve_offer_for_wallet(offer_id, acorn_obj)
+
+    if offer.get("status") == "WAITING_RECIPIENT" and wait_seconds > 0:
+        parsed_offer = parse_nauth(offer["nauth"])
+        expected_nonce = parsed_offer["values"].get("nonce")
+        auth_kind = parsed_offer["values"].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_offer["values"].get("auth_relays", settings.AUTH_RELAYS)
+        since_now = max(0, int(offer["created_at"]) - 5)
+        deadline = time.monotonic() + max(1, min(wait_seconds, settings.LISTEN_TIMEOUT))
+        while time.monotonic() < deadline:
+            candidate_nauth = None
+            try:
+                candidate_nauth, _, _ = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=since_now,
+                    relays=auth_relays,
+                )
+            except Exception:
+                candidate_nauth = None
+
+            if candidate_nauth and _nonce_matches(expected_nonce, candidate_nauth):
+                offer["recipient_nauth"] = candidate_nauth
+                offer["status"] = "RECIPIENT_READY"
+                offer["updated_at"] = int(datetime.utcnow().timestamp())
+                break
+
+            since_now = int(datetime.utcnow().timestamp()) - 1
+            await asyncio.sleep(1)
+
+    return {"status": "OK", "offer": _offer_status_payload(offer)}
+
+
+@router.post("/offers/{offer_id}/capture", tags=["agent"])
+async def agent_offer_capture_recipient(
+    offer_id: str,
+    payload: AgentOfferCaptureRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    offer = _resolve_offer_for_wallet(offer_id, acorn_obj)
+    parsed_offer = parse_nauth(offer["nauth"])
+    expected_nonce = parsed_offer["values"].get("nonce")
+    if not _nonce_matches(expected_nonce, payload.recipient_nauth):
+        raise HTTPException(status_code=400, detail="Recipient nauth nonce mismatch")
+
+    offer["recipient_nauth"] = payload.recipient_nauth
+    offer["status"] = "RECIPIENT_READY"
+    offer["updated_at"] = int(datetime.utcnow().timestamp())
+    return {"status": "OK", "offer": _offer_status_payload(offer)}
+
+
+@router.post("/offers/{offer_id}/send", tags=["agent"])
+async def agent_offer_send(
+    request: Request,
+    offer_id: str,
+    payload: AgentOfferSendRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    offer = _resolve_offer_for_wallet(offer_id, acorn_obj)
+    recipient_nauth = payload.recipient_nauth or offer.get("recipient_nauth")
+    if not recipient_nauth:
+        raise HTTPException(status_code=400, detail="Recipient nauth is required")
+
+    send_parms = sendRecordParms(
+        nauth=recipient_nauth,
+        grant_name=offer["grant_name"],
+        grant_kind=offer["grant_kind"],
+    )
+    send_result = await records_router.post_send_record(
+        request=request,
+        record_parms=send_parms,
+        acorn_obj=acorn_obj,
+    )
+    if send_result.get("status") != "OK":
+        raise HTTPException(status_code=400, detail=send_result.get("detail", "Offer send failed"))
+
+    offer["status"] = "SENT"
+    offer["updated_at"] = int(datetime.utcnow().timestamp())
+    return {
+        "status": "OK",
+        "detail": send_result.get("detail", "Offer sent"),
+        "offer": _offer_status_payload(offer),
     }
 
 
