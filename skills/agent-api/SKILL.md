@@ -11,6 +11,7 @@ Primary outcomes:
 - Read transaction history
 - Create and pay Lightning invoices
 - Issue and accept Cashu ecash tokens
+- Create recipient-first offer QR payloads so humans can send grants by scanning agent QR
 
 ## Inputs
 
@@ -42,6 +43,12 @@ Conditional:
 - `POST /agent/pay_invoice`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
+- `POST /agent/offers/receive/create`
+- `POST /agent/offers/create`
+- `GET /agent/offers/{offer_id}/status`
+- `POST /agent/offers/{offer_id}/capture`
+- `POST /agent/offers/{offer_id}/send`
+- `GET /agent/offers/{offer_id}/delivery`
 
 ## Execution Recipes
 
@@ -94,6 +101,149 @@ Expected response includes:
 2. Verify success and `accepted_amount`.
 3. Confirm final wallet state via `GET /agent/balance`.
 
+### 7) Recipient-First Offer Request (Agent Shows QR)
+
+Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
+
+1. Call `POST /agent/offers/receive/create` with:
+   - optional `ttl_seconds` and `compact_qr` (default `true`)
+   - optional `grant_kind` and `grant_name` metadata (not required for handshake)
+2. Display `qr_text` (or `qr_image_url`) to the human sender.
+3. Sender scans QR from Safebox offer UI.
+4. Sender transmits grant through existing offer flow.
+
+Expected response includes:
+
+- `intent.intent_id`, `intent.expires_at`
+- `recipient.recipient_nauth`
+- `qr_payload`, `qr_text`, `qr_image_url`
+
+Field usage:
+
+- Agent management fields: `status`, `intent`, and `recipient`.
+- Human scan fields: `qr_text` (raw `recipient_nauth`) or `qr_image_url`.
+- Structured optional context: `qr_payload` (for debugging/advanced clients).
+
+Protocol note:
+
+- Recipient-side nauth uses `scope=offer_request`.
+- Scanner routing is expected to detect `offer_request` and redirect into records offer flow instead of generic accept flow.
+
+### Copy/Paste Quickstart For OpenClaw
+
+```bash
+BASE_URL="https://skills.example.com"
+API_KEY="your-wallet-access-key"
+
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ttl_seconds": 120,
+    "compact_qr": true
+  }' \
+  "${BASE_URL}/agent/offers/receive/create"
+```
+
+Use returned `qr_text` (raw `recipient_nauth`) as the QR content the human scans.
+
+Compact behavior:
+
+- `compact_qr=true` (default): `qr_text` stays raw `recipient_nauth`; structured metadata is available in `qr_payload`.
+- `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
+- Backward compatibility: `compact` is accepted as an alias for older clients.
+
+### 8) Sender-Side Offer Dispatch Lifecycle
+
+Use this flow when the agent is the sender and needs explicit dispatch states.
+
+1. Create offer:
+   - `POST /agent/offers/create` with `grant_kind`, `grant_name`
+2. Wait for recipient auth:
+   - `GET /agent/offers/{offer_id}/status?wait_seconds=30`
+3. If needed, capture recipient nauth manually:
+   - `POST /agent/offers/{offer_id}/capture`
+4. Send grant:
+   - `POST /agent/offers/{offer_id}/send`
+5. Check dispatch result:
+   - `GET /agent/offers/{offer_id}/delivery`
+
+Status semantics:
+
+- `offer_status`: `WAITING_RECIPIENT`, `RECIPIENT_READY`, `SENDING`, `SENT`, `FAILED`
+- `delivery_status`: `PENDING`, `DISPATCHED`, `FAILED`
+
+Note:
+
+- `delivery_status=DISPATCHED` means sender-side dispatch completed.
+- It does not prove recipient-side application-level receipt acknowledgment.
+
+### Sender Flow Quick Test (Copy/Paste)
+
+```bash
+BASE_URL="https://skills.example.com"
+API_KEY="your-wallet-access-key"
+GRANT_KIND=34104
+GRANT_NAME="Passport"
+RECIPIENT_NAUTH="nauth1..."   # optional if using manual capture
+```
+
+1. Create offer:
+
+```bash
+OFFER_ID=$(curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"grant_kind\": ${GRANT_KIND},
+    \"grant_name\": \"${GRANT_NAME}\",
+    \"compact\": true
+  }" \
+  "${BASE_URL}/agent/offers/create" | jq -r '.offer.offer_id')
+echo "OFFER_ID=${OFFER_ID}"
+```
+
+2. Check recipient readiness (or wait):
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/status?wait_seconds=30"
+```
+
+3. Optional manual recipient capture:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"recipient_nauth\":\"${RECIPIENT_NAUTH}\"}" \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/capture"
+```
+
+4. Send offer/grant:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/send"
+```
+
+5. Confirm dispatch lifecycle:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/delivery?wait_seconds=10"
+```
+
+Expected terminal state:
+
+- `offer_status` should be `SENT` (or `FAILED`)
+- `delivery_status` should be `DISPATCHED` (or `FAILED`)
+
 ## Error Handling
 
 - `400`: invalid payload or business-rule failure (insufficient funds, malformed token, invoice failure)
@@ -107,6 +257,7 @@ Retry guidance:
 - Use bounded exponential backoff for `500` and network failures.
 - Do not blindly retry non-idempotent payment operations without reconciliation checks.
 - For invoice receive flows, prefer `GET /agent/invoice_status/{quote}` before concluding failure.
+- For recipient-first offer requests, regenerate a fresh QR if `expires_at` has passed.
 
 ## Guardrails
 

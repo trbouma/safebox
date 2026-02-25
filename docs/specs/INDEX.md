@@ -31,6 +31,7 @@ Section convention used across current Safebox specs:
 - [NEMBED-PROTOCOL.md](./NEMBED-PROTOCOL.md) - Compact bech32 extension format for embedded secure payloads.
 - [NWC-NFC-VAULT-EXTENSION.md](./NWC-NFC-VAULT-EXTENSION.md) - NWC extensions used for NFC wallet, payment, and record operations.
 - [AGENT-FLOWS.md](./AGENT-FLOWS.md) - Automation-oriented wallet flow model aligned with NFC and QR pathways.
+- [AGENT-OFFER-RECIPIENT-FIRST-FLOW.md](./AGENT-OFFER-RECIPIENT-FIRST-FLOW.md) - Recipient-first agent offer flow where the recipient presents QR handshake data and the sender scans/transmits using existing record-send pathways.
 - [NFC-FLOWS-AND-SECURITY.md](./NFC-FLOWS-AND-SECURITY.md) - Card issuance, rotation, NFC payment/record flows, and security controls.
 - [OFFERS-AND-GRANTS-FLOWS.md](./OFFERS-AND-GRANTS-FLOWS.md) - End-to-end offer/grant lifecycle over QR and NFC, including legacy rendering fallback.
 - [PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md](./PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md) - Payment routing between Safebox wallets and Lightning interoperability behavior.

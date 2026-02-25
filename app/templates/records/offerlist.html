@@ -40,9 +40,8 @@ window.location.href="/safebox/access" ;
 }
 
 async function scanCode() {
-// alert("scan!");
-
-window.location.href="/scanner/scan?referer=credential-offer";
+  const scanReferer = `${window.location.pathname}${window.location.search}`;
+  window.location.href=`/scanner/scan?referer=${encodeURIComponent(scanReferer)}`;
 
 }
 

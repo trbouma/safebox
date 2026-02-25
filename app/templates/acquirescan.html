@@ -259,8 +259,10 @@
 </section>
 
 <script>
+  const scanReferer = {{ referer | tojson }};
+
   async function gotoScanResult(scandata) {
-    const submit_data = { data: scandata };
+    const submit_data = { data: scandata, referer: scanReferer };
 
     await fetch('/scanner/scanresult', {
       method: 'POST',

@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
 from app.appmodels import PaymentQuote, RegisteredSafebox, sendRecordParms
-from app.config import Settings
+from app.config import ConfigWithFallback, Settings
 from app.db import engine
 from app.routers import records as records_router
 from app.tasks import handle_payment
@@ -31,8 +31,10 @@ from safebox.acorn import Acorn
 router = APIRouter()
 logger = logging.getLogger(__name__)
 settings = Settings()
+config = ConfigWithFallback()
 _RATE_LIMIT_WINDOWS: dict[str, deque[float]] = defaultdict(deque)
 _AGENT_OFFERS: dict[str, dict] = {}
+_AGENT_OFFER_RECEIVE_INTENTS: dict[str, dict] = {}
 
 
 class AgentInvoiceRequest(BaseModel):
@@ -68,6 +70,15 @@ class AgentOfferCreateRequest(BaseModel):
     grant_name: str
     compact: bool = True
     transmittal_kind: int | None = None
+
+
+class AgentOfferReceiveCreateRequest(BaseModel):
+    grant_kind: int | None = None
+    grant_name: str | None = None
+    ttl_seconds: int = 120
+    compact_qr: bool = True
+    # Backward-compatible alias for older clients.
+    compact: bool | None = None
 
 
 class AgentOfferCaptureRequest(BaseModel):
@@ -278,6 +289,10 @@ def _offer_status_payload(offer: dict) -> dict:
         "grant_name": offer["grant_name"],
         "nauth": offer["nauth"],
         "recipient_nauth": offer.get("recipient_nauth"),
+        "delivery_status": offer.get("delivery_status", "PENDING"),
+        "dispatch_detail": offer.get("dispatch_detail"),
+        "last_error": offer.get("last_error"),
+        "dispatched_at": offer.get("dispatched_at"),
         "created_at": offer["created_at"],
         "updated_at": offer["updated_at"],
     }
@@ -537,6 +552,10 @@ async def agent_create_offer(
         "grant_name": payload.grant_name.strip(),
         "status": "WAITING_RECIPIENT",
         "recipient_nauth": None,
+        "delivery_status": "PENDING",
+        "dispatch_detail": None,
+        "last_error": None,
+        "dispatched_at": None,
         "created_at": now_ts,
         "updated_at": now_ts,
     }
@@ -550,6 +569,106 @@ async def agent_create_offer(
     return {
         "status": "OK",
         "offer": _offer_status_payload(_AGENT_OFFERS[offer_id]),
+        "qr_text": qr_text,
+        "qr_image_url": qr_image_url,
+    }
+
+
+@router.post("/offers/receive/create", tags=["agent"])
+async def agent_create_offer_receive(
+    request: Request,
+    payload: AgentOfferReceiveCreateRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    ttl_seconds = int(payload.ttl_seconds or 0)
+    if ttl_seconds < 30 or ttl_seconds > 600:
+        raise HTTPException(status_code=400, detail="ttl_seconds must be between 30 and 600")
+    grant_kind = payload.grant_kind
+    if grant_kind is not None and grant_kind <= 0:
+        raise HTTPException(status_code=400, detail="Invalid grant_kind")
+    grant_name = payload.grant_name.strip() if payload.grant_name else None
+
+    compact_qr = payload.compact_qr if payload.compact is None else payload.compact
+
+    transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
+    if compact_qr:
+        nonce = generate_nonce(length=1)
+        auth_relays = None
+        transmittal_relays = None
+    else:
+        nonce = generate_nonce(length=16)
+        auth_relays = settings.AUTH_RELAYS
+        transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
+
+    recipient_nauth = create_nauth(
+        npub=acorn_obj.pubkey_bech32,
+        nonce=nonce,
+        auth_kind=settings.AUTH_KIND,
+        auth_relays=auth_relays,
+        transmittal_npub=acorn_obj.pubkey_bech32,
+        transmittal_kind=transmittal_kind,
+        transmittal_relays=transmittal_relays,
+        name=acorn_obj.handle,
+        scope="offer_request",
+        grant="offer_request",
+    )
+
+    intent_id = f"rx_{secrets.token_urlsafe(9)}"
+    now_ts = int(datetime.utcnow().timestamp())
+    expires_at = now_ts + ttl_seconds
+
+    _AGENT_OFFER_RECEIVE_INTENTS[intent_id] = {
+        "intent_id": intent_id,
+        "owner_npub": acorn_obj.pubkey_bech32,
+        "status": "WAITING_SEND",
+        "grant_kind": grant_kind,
+        "grant_name": grant_name,
+        "recipient_nauth": recipient_nauth,
+        "created_at": now_ts,
+        "updated_at": now_ts,
+        "expires_at": expires_at,
+    }
+
+    qr_payload = {
+        "v": 1,
+        "mode": "recipient_first_offer",
+        "intent_id": intent_id,
+        "recipient_nauth": recipient_nauth,
+        "expires_at": expires_at,
+        "compact_qr": compact_qr,
+    }
+    if not compact_qr:
+        qr_payload["auth_kind"] = settings.AUTH_KIND
+        qr_payload["auth_relays"] = auth_relays or settings.AUTH_RELAYS
+        qr_payload["transmittal_kind"] = transmittal_kind
+        qr_payload["transmittal_relays"] = transmittal_relays or settings.RECORD_TRANSMITTAL_RELAYS
+        qr_payload["kem_public_key"] = config.PQC_KEM_PUBLIC_KEY
+        qr_payload["kemalg"] = settings.PQC_KEMALG
+    if grant_kind is not None:
+        qr_payload["grant_kind"] = grant_kind
+    if grant_name:
+        qr_payload["grant_name"] = grant_name
+    qr_text = recipient_nauth
+    host = request.url.hostname or ""
+    scheme = request.url.scheme or "https"
+    qr_image_url = (
+        f"{scheme}://{host}/safebox/qr/{urllib.parse.quote(qr_text, safe='')}" if host else None
+    )
+
+    return {
+        "status": "OK",
+        "intent": {
+            "intent_id": intent_id,
+            "status": "WAITING_SEND",
+            "grant_kind": grant_kind,
+            "grant_name": grant_name,
+            "created_at": now_ts,
+            "expires_at": expires_at,
+        },
+        "recipient": {
+            "recipient_nauth": recipient_nauth,
+        },
+        "qr_payload": qr_payload,
         "qr_text": qr_text,
         "qr_image_url": qr_image_url,
     }
@@ -624,25 +743,73 @@ async def agent_offer_send(
     if not recipient_nauth:
         raise HTTPException(status_code=400, detail="Recipient nauth is required")
 
+    offer["status"] = "SENDING"
+    offer["delivery_status"] = "PENDING"
+    offer["last_error"] = None
+    offer["updated_at"] = int(datetime.utcnow().timestamp())
+
     send_parms = sendRecordParms(
         nauth=recipient_nauth,
         grant_name=offer["grant_name"],
         grant_kind=offer["grant_kind"],
     )
-    send_result = await records_router.post_send_record(
-        request=request,
-        record_parms=send_parms,
-        acorn_obj=acorn_obj,
-    )
+    try:
+        send_result = await records_router.post_send_record(
+            request=request,
+            record_parms=send_parms,
+            acorn_obj=acorn_obj,
+        )
+    except Exception as exc:
+        offer["status"] = "FAILED"
+        offer["delivery_status"] = "FAILED"
+        offer["last_error"] = str(exc)
+        offer["updated_at"] = int(datetime.utcnow().timestamp())
+        logger.exception("Agent offer send failed for offer_id=%s", offer_id)
+        raise HTTPException(status_code=400, detail=f"Offer send failed: {exc}")
+
     if send_result.get("status") != "OK":
+        offer["status"] = "FAILED"
+        offer["delivery_status"] = "FAILED"
+        offer["last_error"] = send_result.get("detail", "Offer send failed")
+        offer["updated_at"] = int(datetime.utcnow().timestamp())
         raise HTTPException(status_code=400, detail=send_result.get("detail", "Offer send failed"))
 
     offer["status"] = "SENT"
+    offer["delivery_status"] = "DISPATCHED"
+    offer["dispatch_detail"] = send_result.get("detail", "Offer sent")
+    offer["dispatched_at"] = int(datetime.utcnow().timestamp())
     offer["updated_at"] = int(datetime.utcnow().timestamp())
     return {
         "status": "OK",
         "detail": send_result.get("detail", "Offer sent"),
         "offer": _offer_status_payload(offer),
+    }
+
+
+@router.get("/offers/{offer_id}/delivery", tags=["agent"])
+async def agent_offer_delivery_status(
+    offer_id: str,
+    wait_seconds: int = 0,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    offer = _resolve_offer_for_wallet(offer_id, acorn_obj)
+
+    if offer.get("status") == "SENDING" and wait_seconds > 0:
+        deadline = time.monotonic() + max(1, min(wait_seconds, settings.LISTEN_TIMEOUT))
+        while time.monotonic() < deadline:
+            if offer.get("status") in {"SENT", "FAILED"}:
+                break
+            await asyncio.sleep(1)
+
+    return {
+        "status": "OK",
+        "offer_id": offer["offer_id"],
+        "offer_status": offer.get("status"),
+        "delivery_status": offer.get("delivery_status", "PENDING"),
+        "dispatch_detail": offer.get("dispatch_detail"),
+        "last_error": offer.get("last_error"),
+        "dispatched_at": offer.get("dispatched_at"),
+        "updated_at": offer.get("updated_at"),
     }
 
 

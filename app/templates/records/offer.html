@@ -102,9 +102,8 @@ alert(`${parsedResult.status} ${parsedResult.detail}`);
 }
 
 async function scanCode() {
-// alert("scan!");
-
-window.location.href="/scanner/scan";
+  const scanReferer = `${window.location.pathname}${window.location.search}`;
+  window.location.href=`/scanner/scan?referer=${encodeURIComponent(scanReferer)}`;
 
 }
 
@@ -707,6 +706,8 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
     <h2>Offer {{offer_label}} Record to Recipient?</h2>
     Click below to authenticate with {{offer_kind_label}} recipient. 
     <br>Please ask them to scan the generated QR code.
+    <br><br>
+    <button onclick="scanCode()">Scan Recipient QR</button>
     <br><br>
     <label>
     <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">

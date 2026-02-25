@@ -1,5 +1,5 @@
 import logging
-from urllib.parse import quote, unquote, urlparse, urlencode
+from urllib.parse import quote, unquote, urlparse, urlencode, parse_qsl, urlunparse
 
 import bolt11
 from fastapi import APIRouter, Request
@@ -49,6 +49,8 @@ async def get_scan_result(  request: Request,
     if request.method == "POST":
         data = await request.json()
         qr_code = data.get("data", None)
+        referer = data.get("referer", referer)
+    referer = (referer or "none").strip()
     qr_code = _normalize_scan_payload(qr_code)
     if not qr_code:
         return RedirectResponse("/safebox/access")
@@ -107,6 +109,8 @@ async def get_scan_result(  request: Request,
         logger.debug("scanner parsed nauth: %s", parsed_nauth)
 
         scope = parsed_nauth.get("values", {}).get("scope", "")
+        if scope == "offer_request":
+            return _redirect_offer_request_scan(qr_code, referer)
         if "prover" in scope:
             return RedirectResponse(f"/credentials/presentationrequest?nauth={quote(qr_code)}")
         if "vcred" in scope:
@@ -171,5 +175,26 @@ def _redirect_access(**params: object) -> RedirectResponse:
     if not clean_params:
         return RedirectResponse("/safebox/access")
     return RedirectResponse(f"/safebox/access?{urlencode(clean_params)}")
+
+
+def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectResponse:
+    if referer:
+        parsed_ref = urlparse(referer)
+        if parsed_ref.path in {"/records/offerlist", "/records/displayoffer"}:
+            query_params = dict(parse_qsl(parsed_ref.query, keep_blank_values=True))
+            query_params["nauth"] = nauth
+            rebuilt = urlunparse(
+                (
+                    parsed_ref.scheme,
+                    parsed_ref.netloc,
+                    parsed_ref.path,
+                    parsed_ref.params,
+                    urlencode(query_params),
+                    parsed_ref.fragment,
+                )
+            )
+            return RedirectResponse(rebuilt)
+
+    return RedirectResponse(f"/records/offerlist?nauth={quote(nauth)}")
     
       

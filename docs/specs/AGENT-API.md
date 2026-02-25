@@ -18,6 +18,7 @@ Current scope (initial release):
 - Invoice payment
 - Ecash token issuance
 - Ecash token acceptance
+- Offer/grant dispatch lifecycle for agent-driven record sends
 
 Out of scope (current release):
 
@@ -339,6 +340,108 @@ Request:
   "tendered_currency": "SAT"
 }
 ```
+
+### Offer/Grant Agent Flow
+
+These endpoints let an agent coordinate offer/grant transmission using the same sender-side record flow used by web UI routes.
+
+#### `POST /agent/offers/create`
+
+Create a sender-side offer intent and QR (`nauth`) for recipient authentication.
+
+Request:
+
+```json
+{
+  "grant_kind": 34104,
+  "grant_name": "Passport",
+  "compact": true
+}
+```
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_kind": 34104,
+    "grant_name": "Passport",
+    "compact": true
+  }' \
+  "${BASE_URL}/agent/offers/create"
+```
+
+#### `GET /agent/offers/{offer_id}/status`
+
+Get current offer state. Optional `wait_seconds` waits for recipient auth capture when status is `WAITING_RECIPIENT`.
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/status?wait_seconds=30"
+```
+
+#### `POST /agent/offers/{offer_id}/capture`
+
+Capture a scanned recipient nauth directly.
+
+Request:
+
+```json
+{
+  "recipient_nauth": "nauth1..."
+}
+```
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_nauth": "nauth1..."
+  }' \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/capture"
+```
+
+#### `POST /agent/offers/{offer_id}/send`
+
+Dispatch the configured grant to the captured recipient.
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/send"
+```
+
+#### `GET /agent/offers/{offer_id}/delivery`
+
+Returns dispatch lifecycle state after send attempts.  
+This endpoint confirms sender-side dispatch result (`DISPATCHED`/`FAILED`), not recipient-side attestation.
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/offers/${OFFER_ID}/delivery?wait_seconds=10"
+```
+
+Response fields (important):
+
+- `offer_status`: `WAITING_RECIPIENT`, `RECIPIENT_READY`, `SENDING`, `SENT`, or `FAILED`
+- `delivery_status`: `PENDING`, `DISPATCHED`, or `FAILED`
+- `dispatch_detail`: sender-side completion detail
+- `last_error`: populated when dispatch fails
 
 Curl:
 

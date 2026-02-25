@@ -4454,7 +4454,30 @@ class Acorn:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url=checkstate_url, json=data_to_send, headers=headers)
             response.raise_for_status()
+            checkstate_response = response.json()
             self.logger.debug("op=swap_for_payment_multi status=checkstate_response")
+
+        states = checkstate_response.get("states", []) if isinstance(checkstate_response, dict) else []
+        invalid_states = []
+        for idx, state_obj in enumerate(states):
+            state_value = None
+            if isinstance(state_obj, dict):
+                state_value = state_obj.get("state")
+            # Only UNSPENT proofs are safe to pass into /swap.
+            if state_value not in ("UNSPENT",):
+                invalid_states.append((idx, state_value))
+
+        if invalid_states:
+            invalid_summary = ", ".join([f"{idx}:{state}" for idx, state in invalid_states])
+            self.logger.warning(
+                "op=swap_for_payment_multi status=invalid_checkstate keyset=%s details=%s",
+                keyset_to_use,
+                invalid_summary,
+            )
+            raise RuntimeError(
+                f"mint rejected one or more proofs before swap (states: {invalid_summary}). "
+                "Retry payment after wallet state refresh."
+            )
 
         # Figure out proofs_to_use_amount
         proofs_to_use_amount = 0
@@ -4508,7 +4531,17 @@ class Acorn:
             self.logger.debug("are we here?")
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url=swap_url, json=data_to_send, headers=headers)
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    response_text = response.text
+                    self.logger.warning(
+                        "op=swap_for_payment_multi status=swap_http_error keyset=%s code=%s body=%s",
+                        keyset_to_use,
+                        response.status_code,
+                        response_text,
+                    )
+                    raise RuntimeError(
+                        f"swap failed with HTTP {response.status_code}: {response_text}"
+                    )
                 promises = response.json()['signatures']
 
                 mint_key_url = f"{self.known_mints[keyset_to_use]}/v1/keys/{keyset}"
