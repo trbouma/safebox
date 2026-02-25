@@ -241,16 +241,20 @@ async def agent_cors_middleware(request: Request, call_next):
         or request.url.path == "/openapi.json"
     ):
         requested_headers = request.headers.get("access-control-request-headers")
+        request_origin = request.headers.get("origin")
+        allow_origin = request_origin if request_origin else "*"
         allow_headers = (
             requested_headers
             if requested_headers
             else "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
         )
         cors_headers = {
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": allow_origin,
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": allow_headers,
+            "Access-Control-Allow-Credentials": "true",
             "Access-Control-Max-Age": "600",
+            "Vary": "Origin",
         }
         if request.method == "OPTIONS":
             return Response(status_code=200, headers=cors_headers)
