@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     CORS_ALLOW_ORIGINS: List[str] = [
         "https://getsafebox.app",
         "https://www.getsafebox.app",
+        "https://openbrowserclaw.com",
+        "https://www.openbrowserclaw.com",
         "http://localhost:7375",
         "http://127.0.0.1:7375",
     ]
