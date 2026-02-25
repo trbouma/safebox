@@ -60,7 +60,6 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
     setRequestStatus("Tap NFC card to request record...");
     
     var nfc_token;
-    let shouldContinue = false;
     // var nfc_comment = document.getElementById("ln_recipient_memo").value;
     
     if ("NDEFReader" in window) {
@@ -80,7 +79,12 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
          
 
-         shouldContinue = await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         const shouldContinue = await submitProof(nfc_token, record_label, grant_kind, nauth, nfc_pin);
+         if (!shouldContinue && activeRequestWs) {
+           requestCancelInProgress = true;
+           try { activeRequestWs.close(); } catch (e) {}
+           activeRequestWs = null;
+         }
          // alert("submitted"); 
          // qr_img_func.src = "/img/hourglass.png";
           
@@ -99,7 +103,8 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       return false;
     }
 
-    return shouldContinue;
+    // NFC scan handler is now armed; do not treat as cancelled before first tap.
+    return true;
 
   }
 
