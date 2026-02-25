@@ -644,10 +644,30 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                     )
                     decrypted_original = None
 
+            # Preserve signed-event payloads for downstream verification flows.
+            def _is_signed_event_payload(value) -> bool:
+                candidate = None
+                if isinstance(value, str):
+                    stripped = value.strip()
+                    if not stripped.startswith("{"):
+                        return False
+                    candidate = value
+                elif isinstance(value, dict):
+                    candidate = json.dumps(value)
+                else:
+                    return False
+                try:
+                    evt = Event().load(candidate)
+                except Exception:
+                    return False
+                return bool(evt.kind is not None and evt.pub_key and evt.sig)
+
             # Normalize structured payloads so records store user-facing content
             # instead of full event envelopes when possible.
             def _extract_human_payload(value):
                 if isinstance(value, str):
+                    if _is_signed_event_payload(value):
+                        return value
                     try:
                         parsed = json.loads(value)
                     except Exception:
@@ -655,6 +675,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                     return _extract_human_payload(parsed)
 
                 if isinstance(value, dict):
+                    if _is_signed_event_payload(value):
+                        return json.dumps(value)
                     content_value = value.get("content")
                     if isinstance(content_value, str) and content_value.strip():
                         return content_value
