@@ -234,11 +234,23 @@ app.add_middleware(
 @app.middleware("http")
 async def agent_cors_middleware(request: Request, call_next):
     # Allow browser-based agent clients to call /agent/* directly.
-    if request.url.path.startswith("/agent"):
+    if (
+        request.url.path.startswith("/agent")
+        or request.url.path.startswith("/.well-known/")
+        or request.url.path.startswith("/public/")
+        or request.url.path == "/openapi.json"
+    ):
+        requested_headers = request.headers.get("access-control-request-headers")
+        allow_headers = (
+            requested_headers
+            if requested_headers
+            else "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
+        )
         cors_headers = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent",
+            "Access-Control-Allow-Headers": allow_headers,
+            "Access-Control-Max-Age": "600",
         }
         if request.method == "OPTIONS":
             return Response(status_code=200, headers=cors_headers)
