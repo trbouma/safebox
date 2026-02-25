@@ -238,7 +238,7 @@ async def agent_cors_middleware(request: Request, call_next):
         cors_headers = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key",
+            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent",
         }
         if request.method == "OPTIONS":
             return Response(status_code=200, headers=cors_headers)
