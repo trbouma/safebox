@@ -164,8 +164,8 @@ async def offer_list(      request: Request,
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_pubhex = parsed_result['values'].get("transmittal_pubhex")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
 
         transmittal_npub = hex_to_npub(transmittal_pubhex)
@@ -320,8 +320,8 @@ async def transmit_records(        request: Request,
         transmittal_npub = hex_to_npub(transmittal_pubhex)
         
         
-        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
-        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.RECORD_TRANSMITTAL_KIND
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.RECORD_TRANSMITTAL_RELAYS
 
         # print(f" session nonce {safebox_found.session_nonce} {nonce}")
         #TODO Need to figure out session nonce when authenticating from other side
@@ -423,8 +423,8 @@ async def my_present_records(       request: Request,
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -567,8 +567,8 @@ async def my_retrieve_records(       request: Request,
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -689,8 +689,8 @@ async def retrieve_grant_list(       request: Request,
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
         transmittal_npub = parsed_result['values'].get("transmittal_npub")
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
         if "verifier" in scope:
@@ -843,8 +843,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     nonce = parsed_result['values'].get('nonce', '0')
     auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
     auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
-    transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.TRANSMITTAL_KIND)
-    transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+    transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.RECORD_TRANSMITTAL_KIND)
+    transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
     scope = parsed_result['values'].get("scope",None)
     grant = parsed_result['values'].get("grant",None)
     
@@ -1002,8 +1002,8 @@ async def accept_incoming_record(       request: Request,
         nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
-        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.TRANSMITTAL_KIND)
-        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
 
         # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         # await acorn_obj.load_data()
@@ -1508,8 +1508,8 @@ async def post_send_record(      request: Request,
         auth_kind = parsed_nauth['values'].get('auth_kind') or settings.AUTH_KIND
         auth_relays = parsed_nauth['values'].get('auth_relays') or settings.AUTH_RELAYS
         transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex') or acorn_obj.pubkey_hex
-        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
-        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.RECORD_TRANSMITTAL_KIND
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.RECORD_TRANSMITTAL_RELAYS
 
         print(f"send record to transmittal_pubhex: {transmittal_pubhex} scope: {scope} grant:{grant}")
 
@@ -1881,8 +1881,8 @@ async def ws_request_record( websocket: WebSocket,
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
         auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
-        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.TRANSMITTAL_KIND)  
-        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.TRANSMITTAL_RELAYS)
+        transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.RECORD_TRANSMITTAL_KIND)  
+        transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.RECORD_TRANSMITTAL_RELAYS)
         expected_nonce = parsed_nauth['values'].get('nonce')
         print(f"ws transmittal relays: {transmittal_relays}")
 
@@ -2251,8 +2251,8 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                 parsed_nauth = parse_nauth(client_nauth)
                 pubhex = parsed_nauth['values'].get('pubhex')
                 transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
-                transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.TRANSMITTAL_KIND
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.TRANSMITTAL_RELAYS
+                transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.RECORD_TRANSMITTAL_KIND
+                transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.RECORD_TRANSMITTAL_RELAYS
                 
                 # Need to create a new nauth where the transmittal npub points back to the initiator
                 new_nauth = create_nauth (  npub= hex_to_npub(pubhex),
