@@ -236,6 +236,7 @@ async def agent_cors_middleware(request: Request, call_next):
     # Allow browser-based agent clients to call /agent/* directly.
     if (
         request.url.path.startswith("/agent")
+        or request.url.path.startswith("/api/v1/")
         or request.url.path.startswith("/.well-known/")
         or request.url.path.startswith("/public/")
         or request.url.path == "/openapi.json"
@@ -283,6 +284,7 @@ app.include_router(emergency.router)
 app.include_router(pos.router, prefix="/pos")
 app.include_router(public.router, prefix="/public")
 app.include_router(agent.router, prefix="/agent")
+app.include_router(agent.router, prefix="/api/v1")
 
 app.include_router(records.router, prefix="/records")
 
