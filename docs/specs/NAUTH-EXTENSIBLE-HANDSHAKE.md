@@ -183,6 +183,13 @@ Rules:
 - Timeouts emit explicit step-level failure, not generic transport error.
 - If `pqc_kem_init`/`pqc_kem_ack` does not yield valid peer KEM material,
   required quantum-safe flows must fail closed (no local-default KEM fallback).
+- In cross-instance operation, log resolved relay and kind parameters at both
+  sender and responder handshake points to detect relay-topology mismatch
+  (`NWC_RELAYS` vs `auth_relays`) before declaring handshake timeout.
+- If browser-side KEM capture is unavailable in NFC-triggered flows, resolver
+  logic may obtain recipient public KEM metadata from the recipient service, but
+  policy still requires fail-closed behavior when valid peer KEM cannot be
+  established.
 
 ## Security Considerations
 

@@ -479,7 +479,10 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         nauth = instruction_obj['params']['nauth']
         kem_public_key = instruction_obj['params'].get("kem_public_key")
         kemalg = instruction_obj['params'].get("kemalg")
-        if not kem_public_key or not kemalg:
+        if (
+            not kem_public_key or kem_public_key == "None" or
+            not kemalg or kemalg == "None"
+        ):
             logger.warning("offer_record missing KEM material; rejecting instruction")
             return
         parsed_result = parse_nauth(nauth)
@@ -495,6 +498,14 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
 
         print(f"nwc offer_record scope: {scope} grant: {grant}")
+        print(
+            "nwc offer_record resolved auth params "
+            f"kind={auth_kind} relays={auth_relays} nonce={nonce}"
+        )
+        print(
+            "nwc offer_record resolved transmittal params "
+            f"kind={transmittal_kind} relays={transmittal_relays}"
+        )
         # record_kind = int(scope.split(":")[1])
 
         response_nauth = create_nauth(    npub=acorn_obj.pubkey_bech32,
@@ -528,18 +539,42 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         user_records = []
         wait_start = datetime.now(timezone.utc)
         wait_timeout = timedelta(seconds=max(10, settings.LISTEN_TIMEOUT))
+        attempts = 0
         while user_records == []:
-            user_records = await acorn_obj.get_user_records(
+            candidate_records = await acorn_obj.get_user_records(
                 record_kind=transmittal_kind,
                 relays=transmittal_relays,
                 since=since_now,
+                reverse=True,
             )
-            if user_records:
+            # Fallback path for relay/index timing skew that may miss same-second events.
+            if not candidate_records and attempts % 8 == 0:
+                candidate_records = await acorn_obj.get_user_records(
+                    record_kind=transmittal_kind,
+                    relays=transmittal_relays,
+                    since=None,
+                    reverse=True,
+                )
+
+            # Guard against stale/unrelated transmittal records by requiring
+            # records from this initiator and roughly this request window.
+            filtered_records = []
+            for rec in candidate_records or []:
+                rec_endorsement = rec.get("endorsement")
+                rec_ts = int(rec.get("timestamp") or 0)
+                same_sender = rec_endorsement == npub_initiator
+                in_window = rec_ts >= (since_now - 2)
+                if same_sender and in_window:
+                    filtered_records.append(rec)
+
+            if filtered_records:
+                user_records = filtered_records
                 break
             if datetime.now(timezone.utc) - wait_start > wait_timeout:
                 raise TimeoutError(
                     f"offer_record timed out waiting for transmittal kind={transmittal_kind}"
                 )
+            attempts += 1
             await asyncio.sleep(0.25)
 
 
@@ -662,9 +697,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                     )
     
         print(f"records finished added")
-        # Not sure if I need the following line
-        
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth,dm_relays=auth_relays,kind=auth_kind)
+        # No trailing auth re-send here; it can create ambiguous extra auth traffic.
 
     elif instruction_obj['method'] == 'pay_ecash':
         print("we gotta pay ecash!")
@@ -1004,8 +1037,10 @@ async def listen_notes_periodic(url):
 
 async def listen_nwc():
     print(f"listening for nwc {os.getpid()}")
-    relay_url = settings.NWC_RELAYS[0] if settings.NWC_RELAYS else "wss://relay.getsafebox.app"
-    asyncio.create_task(listen_notes(relay_url))
+    relay_urls = list(dict.fromkeys(settings.NWC_RELAYS or ["wss://relay.getsafebox.app"]))
+    for relay_url in relay_urls:
+        print(f"nwc listener subscribing relay: {relay_url}")
+        asyncio.create_task(listen_notes(relay_url))
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.DEBUG)

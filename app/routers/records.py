@@ -2233,7 +2233,10 @@ async def ws_listen_for_nauth( websocket: WebSocket,
         auth_kind = parsed_nauth['values'].get('auth_kind',   settings.AUTH_KIND)
         auth_relays = parsed_nauth['values'].get("auth_relays", settings.AUTH_RELAYS)
         expected_nonce = parsed_nauth['values'].get("nonce")
-        print(f"ws auth relays: {auth_relays}")
+        print(
+            "ws_listen_for_nauth resolved auth params "
+            f"kind={auth_kind} relays={auth_relays} nonce={expected_nonce}"
+        )
 
 
 
@@ -2474,10 +2477,34 @@ async def accept_offer_token( request: Request,
         # On transport-level uncertainty, continue and rely on authoritative vault validation.
         logger.warning("Offer preflight advisory host=%s detail=%s", host, card_detail)
 
-    # need to send off to the vault for processing
-    # also need to send along kem_public_key and kemalg
-    kem_public_key = config.PQC_KEM_PUBLIC_KEY
-    kemalg = settings.PQC_KEMALG
+    # need to send off to the vault for processing with negotiated recipient KEM
+    kem_public_key = offer_token.kem_public_key
+    kemalg = offer_token.kemalg
+    if (
+        not kem_public_key or kem_public_key == "None" or
+        not kemalg or kemalg == "None"
+    ):
+        # NFC flows may not always have browser-captured KEM state yet.
+        # Resolve recipient KEM directly from the target host as fallback.
+        kem_url = f"https://{host}/.well-known/kem"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                kem_response = await client.get(kem_url)
+                kem_response.raise_for_status()
+                kem_payload = kem_response.json()
+            kem_public_key = kem_payload.get("kem_public_key")
+            kemalg = kem_payload.get("kemalg")
+            logger.info("acceptoffertoken resolved KEM from host=%s", host)
+        except Exception as exc:
+            logger.warning("acceptoffertoken unable to resolve KEM from host=%s: %s", host, exc)
+            return {"status": "ERROR", "detail": "Recipient channel is not quantum-safe yet. Please re-authenticate and retry."}
+
+    if (
+        not kem_public_key or kem_public_key == "None" or
+        not kemalg or kemalg == "None"
+    ):
+        logger.warning("acceptoffertoken missing KEM material after host lookup; rejecting request")
+        return {"status": "ERROR", "detail": "Recipient channel is not quantum-safe yet. Please re-authenticate and retry."}
 
     submit_data = { "nauth": offer_token.nauth, 
                     "token": offer_token_to_use,                    

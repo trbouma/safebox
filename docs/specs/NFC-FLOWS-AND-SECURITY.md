@@ -161,6 +161,41 @@ KEM material in-session.
 - Implementations must not substitute local service default KEM for peer KEM in
   cross-party encryption paths.
 
+### Stale-Record Mitigation in NFC Offer Processing
+
+NFC offer processing may poll relay history where multiple transmittal records
+exist on the same kind. To prevent stale replay-like selection, candidate
+records are constrained to the active exchange context.
+
+Current constraints:
+
+- candidate endorsement must match the current initiator
+- candidate timestamp must fall within the active request window
+
+Why this matters:
+
+- prevents unrelated historical records from being ingested as current offer data
+- reduces false negatives such as `source_blob_missing` caused by stale blob refs
+
+### Cross-Instance KEM and Relay Alignment
+
+Cross-instance NFC flows are sensitive to configuration drift. Two classes of
+mismatch are now explicitly handled:
+
+1. KEM timing/missing at browser submit:
+   - backend can resolve recipient KEM from recipient host metadata endpoint
+     (`/.well-known/kem`) when browser-captured KEM is unavailable.
+2. Relay topology mismatch:
+   - NWC relay path and auth relay path can diverge if configs differ.
+   - operationally, web and NWC services must share aligned relay settings.
+
+Recommended operational checks:
+
+- confirm effective `AUTH_RELAYS` and `NWC_RELAYS` in both web and worker
+  processes
+- confirm auth kind and relay set logged in sender websocket and NWC offer path
+- restart both web and NWC workers after relay config changes
+
 ## Core Security Model
 
 Safebox uses an application-layer card token model:

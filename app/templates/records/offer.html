@@ -27,6 +27,7 @@ var global_offer_card = {{card | tojson}};
 var global_offer_content = {{content | tojson}}
 var global_kem_public_key = "None";
 var global_kemalg = "None";
+var global_offer_auth_ws = null;
 
 
 var record_kind = parseInt("{{record_kind}}");
@@ -37,6 +38,30 @@ function consoleLog(data) {
     var logElement = document.getElementById('log');
     logElement.innerHTML += data + '\n';
   };
+
+function resetOfferChannelState() {
+  global_transmit_nauth = "None";
+  global_kem_public_key = "None";
+  global_kemalg = "None";
+}
+
+function hasQuantumReadyChannel() {
+  return !!global_kem_public_key &&
+         global_kem_public_key !== "None" &&
+         !!global_kemalg &&
+         global_kemalg !== "None";
+}
+
+async function waitForQuantumReadyChannel(timeoutMs = 12000, intervalMs = 200) {
+  const start = Date.now();
+  while ((Date.now() - start) < timeoutMs) {
+    if (hasQuantumReadyChannel()) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return hasQuantumReadyChannel();
+}
 
 function buildWsUrl(path) {
   const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -171,7 +196,18 @@ async function deleteOffer() {
   async function submitOffer(nfc_token, nauth) {
 
     consoleLog(`submit nfc_token ${nfc_token} ${nauth}`);
-    const submit_data = {"offer_token": nfc_token, "nauth": nauth };
+    const submit_data = {
+      "offer_token": nfc_token,
+      "nauth": nauth,
+      "kem_public_key": global_kem_public_key,
+      "kemalg": global_kemalg
+    };
+    // NFC can proceed without browser-captured KEM; backend resolves from recipient host.
+    if (!hasQuantumReadyChannel()) {
+      consoleLog("Quantum channel not yet observed in browser; continuing with server-side KEM lookup.");
+      submit_data.kem_public_key = null;
+      submit_data.kemalg = null;
+    }
     try {
       const response = await fetch('/records/acceptoffertoken', {
         method: "POST",
@@ -249,6 +285,7 @@ async function createQRCode() {
     // alert(scope);
     consoleLog(`Create QR code with scope: ${scope}`);
 
+    resetOfferChannelState();
     qr_img_func.src="/img/circle-256.gif";   
     
     const submit_data = {"scope": scope, "grant": grant, "compact": compact_qr.checked };
@@ -275,7 +312,11 @@ async function createQRCode() {
  // Start websocket listener first to avoid missing fast NFC responder auth messages.
  // const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`);
  const wsUrl = buildWsUrl(`/records/ws/listenfornauth/${global_nauth}`);
+ if (global_offer_auth_ws && global_offer_auth_ws.readyState < 2) {
+   try { global_offer_auth_ws.close(); } catch (e) {}
+ }
  const ws = new WebSocket(wsUrl);
+ global_offer_auth_ws = ws;
  console.log(wsUrl);
    
   
@@ -307,6 +348,10 @@ async function createQRCode() {
     // alert('Ready to transmit offer');
     
     offerRecord();
+    // Close listener once auth has completed to stop extra polling.
+    if (global_offer_auth_ws && global_offer_auth_ws.readyState < 2) {
+      try { global_offer_auth_ws.close(); } catch (e) {}
+    }
     
     
   };
@@ -315,7 +360,12 @@ async function createQRCode() {
     alert("Unable to establish authentication channel. Please retry.");
     qr_img_func.src = "/img/safebox.png";
   };
-  ws.onclose = () => console.log("WebSocket closed");
+  ws.onclose = () => {
+    if (global_offer_auth_ws === ws) {
+      global_offer_auth_ws = null;
+    }
+    console.log("WebSocket closed");
+  };
 
    if (nfc_offer.checked == true) {  
       qr_img_func.src = "/img/nfc.png";
@@ -370,12 +420,13 @@ async function offerRecord() {
     alert("Missing offer label. Please reload and try again.");
     return;
   }
-  if (
-    !submit_data.kem_public_key ||
-    submit_data.kem_public_key === "None" ||
-    !submit_data.kemalg ||
-    submit_data.kemalg === "None"
-  ) {
+  if (!hasQuantumReadyChannel()) {
+    consoleLog("Waiting for recipient quantum-safe channel...");
+    await waitForQuantumReadyChannel();
+    submit_data.kem_public_key = global_kem_public_key;
+    submit_data.kemalg = global_kemalg;
+  }
+  if (!hasQuantumReadyChannel()) {
     alert("Recipient channel is not quantum-safe yet. Please re-authenticate and retry.");
     return;
   }

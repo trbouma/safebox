@@ -165,6 +165,8 @@ class proofByToken(BaseModel):
 class OfferToken(BaseModel):
     offer_token: str|None = None
     nauth: str
+    kem_public_key: str|None = None
+    kemalg: str|None = None
     
 
 class nfcCard(BaseModel):

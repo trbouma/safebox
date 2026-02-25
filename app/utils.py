@@ -1379,30 +1379,41 @@ def generate_pnr(length=6):
 async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
     """This should be records transfer"""
     print(f"listening for request on {kind}")
-    kem_public_key=None
-    #This is for Step 2
+    # This is for Step 2
     records_out = await acorn_obj.get_user_records(
         record_kind=kind,
         since=since_now,
         relays=relays,
         reverse=True,
     )
+    # Fallback in case relay/index clock skew or eventual consistency causes
+    # same-second events to be excluded by strict `since` filtering.
+    if not records_out and since_now is not None:
+        records_out = await acorn_obj.get_user_records(
+            record_kind=kind,
+            since=None,
+            relays=relays,
+            reverse=True,
+        )
     print(f"listen for request {records_out}")
 
     if not records_out:
         return None, None, None
 
-    response_auth = records_out[0]["payload"]
-    response_auth_split = response_auth.split(':')
-    response_nauth = response_auth_split[0]
-    if len(response_auth_split) == 2:
-        response_kem = response_auth_split[1]
-    else:
-        response_kem = None
+    response_auth = records_out[0].get("payload")
+    response_nauth = None
+    response_kem = None
+
+    if isinstance(response_auth, str):
+        # Parse only the first delimiter so embedded payload data is preserved.
+        if ":" in response_auth:
+            response_nauth, response_kem = response_auth.split(":", 1)
+        else:
+            response_nauth = response_auth
 
     # return nauth, present, and we will add shared secret
-    
-    return response_nauth, records_out[0]["presenter"],response_kem
+
+    return response_nauth, records_out[0].get("presenter"), response_kem
 
 def lnaddress_to_safebox_npub(lnaddress: str):
     relays = []

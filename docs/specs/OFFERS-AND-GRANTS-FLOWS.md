@@ -178,6 +178,57 @@ cross-instance operation:
   - missing/invalid responder KEM must fail/re-authenticate.
   - local default KEM fallback is not used for cross-party encryption.
 
+## Additional Hardening: Stale Records and Cross-Instance Compatibility
+
+### Stale Record Selection Guard (NWC NFC Offer Path)
+
+NFC offer ingestion can observe multiple records of the same transmittal kind in
+relay history. Without narrowing, this may select unrelated older records.
+
+Current `offer_record` handling hardens this by filtering candidate records to:
+
+- sender endorsement matching the current initiator
+- timestamp within the current request window
+
+Result:
+
+- prevents processing unrelated historical records
+- prevents false blob transfer errors from stale `original_record` references
+- aligns NFC ingestion behavior with the intended single exchange context
+
+### Cross-Instance KEM Resolution
+
+In cross-instance operation, browser-captured KEM material is not always
+available at NFC submit time.
+
+Current behavior:
+
+- NFC submit may proceed without local browser KEM
+- server resolves recipient KEM from `GET /.well-known/kem` on target host
+- vault dispatch then uses resolved KEM for `offer_record`
+
+Result:
+
+- NFC offer flow is less sensitive to browser/websocket KEM timing races
+- quantum-safe exchange remains required (no silent downgrade)
+
+### Relay Mismatch Failure Mode
+
+A common stall mode is relay mismatch between:
+
+- NWC instruction transport (`NWC_RELAYS`)
+- auth response transport (`auth_relays` from `nauth` or `AUTH_RELAYS` fallback)
+
+Observed symptom:
+
+- sender waits on auth kind (for example `21061`) with repeated empty polls
+
+Mitigations:
+
+- NWC listener subscribes across configured `NWC_RELAYS`
+- explicit logging of resolved auth/transmittal relay sets in sender and NWC paths
+- deployment requirement: web and NWC processes must share the same relay config
+
 ## Implementation References
 
 - Routes:

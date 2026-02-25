@@ -389,6 +389,16 @@ async def get_settings(request: Request):
     return {"relays": settings.RELAYS,
             "ecash_relays": settings.ECASH_RELAYS}
 
+
+@router.get("/.well-known/kem", tags=["public"])
+async def get_kem_material(request: Request):
+    """Public KEM metadata for cross-service offer/request coordination."""
+    return {
+        "status": "OK",
+        "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+        "kemalg": settings.PQC_KEMALG,
+    }
+
 @router.post("/.well-known/card-status", tags=["public"])
 async def card_status(request: Request, card_status_request: cardStatusRequest):
     _, _, npub, mode = _parse_and_validate_card_token(
