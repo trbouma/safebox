@@ -122,7 +122,11 @@ def get_info_post(request: Request):
     return HTMLResponse(request.url.hostname)
 
 @router.get("/.well-known/lnurlp/{name}")
-async def ln_resolve(request: Request, name: str = None, amount: int = None):
+async def ln_resolve(request: Request, response: Response, name: str = None, amount: int = None):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
+
     match = False
     ln_payment_request = False
     amount = None
@@ -207,6 +211,19 @@ async def ln_resolve(request: Request, name: str = None, amount: int = None):
     print(f"{request.base_url} nonce: {nonce}") 
 
     return ln_response
+
+
+@router.options("/.well-known/lnurlp/{name}")
+async def ln_resolve_options(name: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent",
+            "Access-Control-Max-Age": "600",
+        },
+    )
 
 @router.get("/lnpay/{name}")
 async def ln_pay( amount: float,
