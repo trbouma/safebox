@@ -587,8 +587,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                         type,
                         exc,
                     )
-                    # Non-fatal: continue processing other records without crashing the task.
-                    continue
+                    # Non-fatal: keep processing this record using existing payload content.
+                    my_enc = None
 
             original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
 
