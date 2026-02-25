@@ -130,6 +130,25 @@ With the above strategy, Safebox NFC payment flows aim to provide:
 - recovery paths for uncertain transfer states
 - consistent user semantics despite asynchronous backend coordination
 
+## Recent NFC Hardening Additions
+
+Additional hardening implemented in current NFC record/payment work:
+
+- NFC request-record listener race fix:
+  - request listeners remain active through first card tap/submit path.
+  - prevents successful backend completion with missing frontend render.
+- Cross-instance PQC fallback behavior:
+  - expected decrypt mismatches (for example legacy/mixed payload envelopes)
+    no longer abort record ingestion.
+  - records continue through safe fallback processing.
+- Payload rendering resilience:
+  - plain text records and structured JSON records are normalized before
+    display.
+  - event signature validation is gated to true signed-event payloads only.
+- Compact QR parity:
+  - when compact `nauth` omits transmittal metadata, record flows consistently
+    fall back to `RECORD_TRANSMITTAL_*` defaults.
+
 ## Core Security Model
 
 Safebox uses an application-layer card token model:

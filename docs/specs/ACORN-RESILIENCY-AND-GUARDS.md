@@ -112,6 +112,9 @@ Current behavior:
 - Completion path deduping in UI signaling (avoid duplicate success sequence on dual signal arrival).
 - Explicit card-validity/secret checks in NFC paths.
 - nAuth/nonce-based sequence constraints to limit unintended multi-responder completion.
+- Non-fatal offer ingest fallback on decrypt mismatch to avoid dropping valid records.
+- Payload normalization before persistence/render to prevent raw envelope leakage in UI.
+- Signed-event validation guards so plain-text/JSON payloads are not misclassified as invalid events.
 
 ## Adversarial Environment Considerations
 

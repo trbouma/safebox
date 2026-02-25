@@ -149,6 +149,29 @@ This preserves functional access on older browsers/devices (for example older Ch
 - Signature verification and token decryption are required before vault actions.
 - QR flows are independent from NFC card rotation state.
 
+## Recent Hardening Notes
+
+The current implementation includes additional hardening for mixed QR/NFC and
+cross-instance operation:
+
+- NFC request listener lifecycle:
+  - request websocket is no longer closed prematurely before first NFC tap.
+  - prevents backend-success/client-no-render race conditions.
+- Offer ingestion PQC fallback:
+  - `offer_record` payload decrypt failures (for example `invalid MAC`) are
+    non-fatal and do not drop the offered record.
+- Payload normalization:
+  - nested payload envelopes are normalized to user-facing content where
+    possible, instead of rendering raw JSON envelopes.
+- Event validation guards:
+  - signature verification runs only when payload is a valid signed event.
+  - plain text / non-event JSON payloads are rendered as content, not treated
+    as malformed events.
+- Record transmittal defaults:
+  - record flows consistently use `RECORD_TRANSMITTAL_KIND` and
+    `RECORD_TRANSMITTAL_RELAYS` when `nauth` omits explicit transmittal fields
+    (common in compact QR mode).
+
 ## Implementation References
 
 - Routes:
