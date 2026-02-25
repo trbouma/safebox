@@ -1,6 +1,6 @@
 from sqlmodel import Field, Session, SQLModel, select
 from fastapi import FastAPI, Request, BackgroundTasks, Cookie, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -229,52 +229,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
-
-@app.middleware("http")
-async def agent_cors_middleware(request: Request, call_next):
-    # Allow browser-based agent clients to call /agent/* directly.
-    if (
-        request.url.path.startswith("/agent")
-        or request.url.path.startswith("/api/v1/")
-        or request.url.path.startswith("/.well-known/")
-        or request.url.path.startswith("/public/")
-        or request.url.path == "/openapi.json"
-    ):
-        requested_headers = request.headers.get("access-control-request-headers")
-        request_origin = request.headers.get("origin")
-        requested_method = request.headers.get("access-control-request-method")
-        logger.info(
-            "cors_request path=%s method=%s origin=%s acr_method=%s acr_headers=%s",
-            request.url.path,
-            request.method,
-            request_origin,
-            requested_method,
-            requested_headers,
-        )
-        allow_origin = request_origin if request_origin else "*"
-        allow_headers = (
-            requested_headers
-            if requested_headers
-            else "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
-        )
-        cors_headers = {
-            "Access-Control-Allow-Origin": allow_origin,
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": allow_headers,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Max-Age": "600",
-            "Vary": "Origin",
-        }
-        if request.method == "OPTIONS":
-            return Response(status_code=200, headers=cors_headers)
-
-        response = await call_next(request)
-        for key, value in cors_headers.items():
-            response.headers[key] = value
-        return response
-
-    return await call_next(request)
 
 
 app.include_router(lnaddress.router) 
