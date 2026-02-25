@@ -229,6 +229,20 @@ Mitigations:
 - explicit logging of resolved auth/transmittal relay sets in sender and NWC paths
 - deployment requirement: web and NWC processes must share the same relay config
 
+### Strict Live-Window Listener Rule
+
+For active QR request/present websocket flows, record listeners should consume
+only fresh records in the current request window.
+
+- strict `since` filtering is required for live presentation listeners
+- broad history fallback (`since=None`) is intentionally disabled in that path
+
+Reason:
+
+- prevents stale historical transmittal records from being treated as current
+  presentation completion
+- preserves expected wait semantics until a new presentation is actually sent
+
 ## Implementation References
 
 - Routes:

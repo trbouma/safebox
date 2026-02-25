@@ -2028,7 +2028,13 @@ async def ws_request_record( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                incoming_record,presenter,kem_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=transmittal_kind, since_now=since_now, relays=transmittal_relays)
+                incoming_record,presenter,kem_public_key = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=transmittal_kind,
+                    since_now=since_now,
+                    relays=transmittal_relays,
+                    allow_since_fallback=False,
+                )
             except Exception as e:
                 incoming_record=None
             

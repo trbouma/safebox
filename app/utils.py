@@ -1376,7 +1376,13 @@ def generate_pnr(length=6):
     characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # Excludes I, O, 0, 1
     return ''.join(secrets.choice(characters) for _ in range(length))
 
-async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=None, relays: List=None):
+async def listen_for_request(
+    acorn_obj: Acorn,
+    kind: int = 1060,
+    since_now: int = None,
+    relays: List = None,
+    allow_since_fallback: bool = True,
+):
     """This should be records transfer"""
     print(f"listening for request on {kind}")
     # This is for Step 2
@@ -1388,7 +1394,7 @@ async def listen_for_request(acorn_obj: Acorn, kind: int = 1060,since_now:int=No
     )
     # Fallback in case relay/index clock skew or eventual consistency causes
     # same-second events to be excluded by strict `since` filtering.
-    if not records_out and since_now is not None:
+    if allow_since_fallback and not records_out and since_now is not None:
         records_out = await acorn_obj.get_user_records(
             record_kind=kind,
             since=None,

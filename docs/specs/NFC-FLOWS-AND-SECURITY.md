@@ -196,6 +196,17 @@ Recommended operational checks:
 - confirm auth kind and relay set logged in sender websocket and NWC offer path
 - restart both web and NWC workers after relay config changes
 
+### Live Listener Semantics (QR/NFC Parity)
+
+Request/presentation listeners that drive user-visible completion must preserve
+live-session semantics:
+
+- listen for fresh events in the current request window
+- do not complete from broad historical fallback scans
+
+This avoids false immediate completion from stale records while keeping NWC-side
+stale-record filtering active for NFC ingest safety.
+
 ## Core Security Model
 
 Safebox uses an application-layer card token model:
