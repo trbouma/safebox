@@ -45,6 +45,7 @@ Section convention used across current Safebox specs:
 ## Operations
 
 - [../devops/incremental-change-hardening-strategy.md](../devops/incremental-change-hardening-strategy.md) - Incremental in-flight hardening strategy for isolating failures, applying narrow patches, validating in dev/test, and promoting safely.
+- [../devops/recipient-offer-incremental-execution-checklist.md](../devops/recipient-offer-incremental-execution-checklist.md) - One-page execution checklist for recipient-first offer development with mandatory regression gates, slice-by-slice rollout, and rollback criteria.
 - [INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md](./INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md) - Incident classification, containment, recovery, and key-compromise response procedures.
 - [BACKUP-AND-RECOVERY-PLAN.md](./BACKUP-AND-RECOVERY-PLAN.md) - Backup tiers, restore validation, and disaster recovery operating model.
 - [DATA-RETENTION-AND-DELETION-POLICY.md](./DATA-RETENTION-AND-DELETION-POLICY.md) - Data minimization, retention classes, deletion lifecycle, and legal-hold alignment.

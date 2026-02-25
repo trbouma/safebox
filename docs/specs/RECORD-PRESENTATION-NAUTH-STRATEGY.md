@@ -95,6 +95,33 @@ Because transfer occurs on negotiated secure channels rather than inside QR/NFC 
   - grants/offers
   - generic records and associated blob data
 
+## Relay And Kind Fallback Rules
+
+Safebox supports two transmittal configuration layers:
+
+- global transmittal defaults: `TRANSMITTAL_KIND`, `TRANSMITTAL_RELAYS`
+- record-flow defaults: `RECORD_TRANSMITTAL_KIND`, `RECORD_TRANSMITTAL_RELAYS`
+
+For record presentation flows (offer/grant/request/present), Safebox uses the
+record-flow defaults when `nauth` does not explicitly carry transmittal kind
+or transmittal relays.
+
+Practical implications:
+
+- If compact QR is enabled, `nauth` is intentionally minimal and may omit
+  relay/kind tags.
+- In that case, runtime behavior is determined by the record-flow defaults.
+- If record-flow defaults are set the same as global defaults, behavior is the
+  same.
+- If they differ, record presentation can be routed independently from other
+  transmittal traffic.
+
+Recommended operator posture:
+
+- Keep `RECORD_TRANSMITTAL_*` explicitly configured in production.
+- Use differing values only when you intentionally want flow isolation.
+- Validate compact and non-compact QR behavior in post-deploy sanity checks.
+
 ## Security Considerations
 
 - Treat QR/NFC data as bootstrap-only and potentially observable.

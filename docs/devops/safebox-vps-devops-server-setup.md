@@ -259,6 +259,25 @@ Confirm firewall allows outbound traffic
 
 ### Recommended Fix (Compose-Level DNS Override)
 
+## Record Flow Relay Defaults (nAuth Compact QR)
+
+Safebox has two transmittal default layers:
+
+- global defaults: `TRANSMITTAL_KIND`, `TRANSMITTAL_RELAYS`
+- record-flow defaults: `RECORD_TRANSMITTAL_KIND`, `RECORD_TRANSMITTAL_RELAYS`
+
+Record presentation paths use the record-flow defaults when incoming `nauth`
+does not explicitly include transmittal kind/relays (common in compact QR
+mode).
+
+Operational guidance:
+
+- Set `RECORD_TRANSMITTAL_KIND` and `RECORD_TRANSMITTAL_RELAYS` explicitly.
+- If you want record and non-record traffic to follow the same route, set
+  `RECORD_TRANSMITTAL_*` equal to `TRANSMITTAL_*`.
+- If you want isolation, set different values intentionally and verify both
+  compact and non-compact QR flows after deploy.
+
 Add DNS resolvers to your Safebox service in `docker-compose.yaml`:
 
 ```yaml
