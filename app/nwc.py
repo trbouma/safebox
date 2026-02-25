@@ -572,7 +572,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                 try:
                     pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
                     shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-                    print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
+                    print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_kemalg}")
                     k_pqc = Keys(shared_secret.hex())
                     my_enc = ExtendedNIP44Encrypt(k_pqc)
                     payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
@@ -581,12 +581,13 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                         print(f"decrypted payload: {decrypted_payload}")
                         record_value = decrypted_payload
                 except Exception as exc:
-                    logger.warning(
-                        "offer_record payload decrypt failed for tag=%s kind=%s: %s",
-                        each_record.get("tag"),
-                        type,
-                        exc,
-                    )
+                    log_msg = "offer_record payload decrypt failed for tag=%s kind=%s: %s"
+                    # Cross-instance or legacy offers may carry envelopes we cannot decrypt.
+                    # Keep flow non-fatal and avoid noisy warnings for expected MAC mismatches.
+                    if "invalid MAC" in str(exc):
+                        logger.info(log_msg, each_record.get("tag"), type, exc)
+                    else:
+                        logger.warning(log_msg, each_record.get("tag"), type, exc)
                     # Non-fatal: keep processing this record using existing payload content.
                     my_enc = None
 
@@ -604,6 +605,34 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                         exc,
                     )
                     decrypted_original = None
+
+            # Normalize structured payloads so records store user-facing content
+            # instead of full event envelopes when possible.
+            def _extract_human_payload(value):
+                if isinstance(value, str):
+                    try:
+                        parsed = json.loads(value)
+                    except Exception:
+                        return value
+                    return _extract_human_payload(parsed)
+
+                if isinstance(value, dict):
+                    content_value = value.get("content")
+                    if isinstance(content_value, str) and content_value.strip():
+                        return content_value
+                    payload_value = value.get("payload")
+                    if payload_value is not None:
+                        return _extract_human_payload(payload_value)
+                    return json.dumps(value)
+
+                if isinstance(value, list):
+                    if len(value) == 1:
+                        return _extract_human_payload(value[0])
+                    return json.dumps(value)
+
+                return str(value)
+
+            record_value = _extract_human_payload(record_value)
 
             # Persist each incoming record (multi-record support).
             await acorn_obj.put_record(

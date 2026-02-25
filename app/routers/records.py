@@ -84,6 +84,52 @@ def _nonce_matches(expected_nonce: str | None, candidate_nauth: str | None) -> b
         return False
     return candidate_nonce == expected
 
+
+def _parse_event_payload(payload) -> Optional[Event]:
+    candidate = None
+    if isinstance(payload, dict):
+        candidate = json.dumps(payload)
+    elif isinstance(payload, str):
+        stripped = payload.strip()
+        if not stripped.startswith("{"):
+            return None
+        candidate = payload
+    else:
+        return None
+
+    try:
+        event_to_validate: Event = Event().load(candidate)
+    except Exception:
+        return None
+
+    if (
+        event_to_validate.kind is None
+        or event_to_validate.pub_key is None
+        or event_to_validate.sig is None
+    ):
+        return None
+    return event_to_validate
+
+
+def _extract_payload_content(payload):
+    if isinstance(payload, str):
+        try:
+            parsed = json.loads(payload)
+        except Exception:
+            return payload
+        return _extract_payload_content(parsed)
+
+    if isinstance(payload, dict):
+        content = payload.get("content")
+        if isinstance(content, str):
+            return content
+        return json.dumps(payload)
+
+    if isinstance(payload, list):
+        return json.dumps(payload)
+
+    return str(payload)
+
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
     status_url = f"https://{host}/.well-known/card-status"
@@ -478,11 +524,11 @@ async def my_present_records(       request: Request,
     is_valid = "Cannot Validate"
     for each in user_records:        
 
-        if isinstance(each["payload"], dict):
+        event_to_validate = _parse_event_payload(each.get("payload"))
+        if event_to_validate:
 
             
                         
-            event_to_validate: Event = Event().load(each["payload"])
             print(f"event to validate tags: {event_to_validate.tags}")
             tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
             tag_safebox = get_tag_value(event_to_validate.tags, "safebox_issuer")
@@ -504,7 +550,7 @@ async def my_present_records(       request: Request,
             each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
             each["picture"]=picture
         else:
-            each["content"] = each["payload"] 
+            each["content"] = _extract_payload_content(each.get("payload"))
             each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
             each["picture"]=None
         
@@ -615,9 +661,10 @@ async def my_retrieve_records(       request: Request,
         try:
             
             content = record["payload"]
-            
             private_record = record["payload"]
-            event_to_validate: Event = Event().load(private_record)
+            event_to_validate = _parse_event_payload(private_record)
+            if not event_to_validate:
+                raise ValueError("payload is not a signed event")
             
             
             # tag_owner = get_tag_value(private_record["tags"], "safebox_owner")
@@ -637,7 +684,7 @@ async def my_retrieve_records(       request: Request,
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
             record["content"] = content
         except Exception as exc:
-            record["content"] = record
+            record["content"] = _extract_payload_content(record.get("payload"))
         present_records = record
     
     #FIXME don't need the grant kinds
@@ -1145,7 +1192,9 @@ async def display_grant(     request: Request,
             # content = record["payload"]
             # content=grant_record.payload
             private_record = record["payload"]
-            event_to_validate: Event = Event().load(private_record)
+            event_to_validate = _parse_event_payload(private_record)
+            if not event_to_validate:
+                raise ValueError("payload is not a signed event")
             
             
             # tag_owner = get_tag_value(private_record["tags"], "safebox_owner")
@@ -1164,7 +1213,7 @@ async def display_grant(     request: Request,
 
             content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
         except Exception as exc:
-            content = record
+            content = _extract_payload_content(record.get("payload"))
         
     elif action_mode == 'offer':
 
@@ -2061,16 +2110,12 @@ async def ws_request_record( websocket: WebSocket,
                     
 
                     print(f"each to present: {each} {presenter}")
-                    try:
-                        payload_to_use = json.loads(each['payload'])
-                    except Exception as exc:
-                        payload_to_use = each['payload']
+                    payload_to_use = each.get('payload')
 
                     print(f"each ciphertext {each.get('ciphertext','None')}")
                     is_valid = "Cannot Validate"
-                    if isinstance(payload_to_use, dict):
-                        
-                        event_to_validate: Event = Event().load(each["payload"])
+                    event_to_validate = _parse_event_payload(payload_to_use)
+                    if event_to_validate:
                         print(f"event to validate tags: {event_to_validate.tags}")
                         tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
                         tag_issuer = get_tag_value(event_to_validate.tags, "safebox_issuer")
@@ -2126,7 +2171,7 @@ async def ws_request_record( websocket: WebSocket,
 
 
                     else:
-                        each["content"] = each["payload"]   
+                        each["content"] = _extract_payload_content(payload_to_use)
                         each["verification"] = f"\n\n{'_'*40}\n\nPlain Text {is_valid}"
                         each["picture"] = None
                         each["is_attested"] = False
