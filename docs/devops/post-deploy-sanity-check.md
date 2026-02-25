@@ -73,6 +73,26 @@ Quick user-facing verification after deployment to confirm critical NFC/QR/payme
 - Confirm no worker boot/restart crashes.
 - Confirm DB migration/startup is clean.
 
+## 9) Cross-Instance Verification (Required)
+
+Use two independent Safebox instances (for example instance A and instance B).
+
+- Offer by QR (A -> B and B -> A):
+  - Verify received payload is actual record content (not placeholder text).
+- Offer by NFC (A -> B and B -> A):
+  - Verify received payload is actual record content (not placeholder text).
+  - Verify no silent KEM fallback behavior.
+- Request by QR (A -> B and B -> A):
+  - Verify presenter response completes and records render.
+- Request by NFC (A -> B and B -> A):
+  - Verify no hang at post-tap stage.
+  - Verify records render correctly (plain text + signed event payloads).
+
+Expected KEM behavior:
+
+- If peer KEM is present/valid, flow completes quantum-safe.
+- If peer KEM is missing/invalid, flow must fail/re-authenticate (not silently continue with local-default KEM).
+
 ## Exit Criteria
 
 - QR and NFC offer flows pass.

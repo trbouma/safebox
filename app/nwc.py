@@ -477,8 +477,11 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
     elif instruction_obj['method'] == 'offer_record':
         print("we have an offer record!")
         nauth = instruction_obj['params']['nauth']
-        kem_public_key = _coerce(instruction_obj['params'].get("kem_public_key"), config.PQC_KEM_PUBLIC_KEY)
-        kemalg = _coerce(instruction_obj['params'].get("kemalg"), settings.PQC_KEMALG)
+        kem_public_key = instruction_obj['params'].get("kem_public_key")
+        kemalg = instruction_obj['params'].get("kemalg")
+        if not kem_public_key or not kemalg:
+            logger.warning("offer_record missing KEM material; rejecting instruction")
+            return
         parsed_result = parse_nauth(nauth)
         npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
         nonce = parsed_result['values'].get('nonce', '0')

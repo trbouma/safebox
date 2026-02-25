@@ -2268,12 +2268,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                         kem_public_key = kem_parsed.get('kem_public_key')
                         kemalg = kem_parsed.get('kemalg')
                     except Exception as exc:
-                        logger.warning("ws_listen_for_nauth invalid KEM payload; falling back to defaults: %s", exc)
-
-                # NFC-originated auth may not always carry a separate KEM payload.
-                # Keep handshake moving with service defaults instead of dropping auth.
-                kem_public_key = kem_public_key or config.PQC_KEM_PUBLIC_KEY
-                kemalg = kemalg or settings.PQC_KEMALG
+                        logger.warning("ws_listen_for_nauth invalid KEM payload; requiring re-authentication: %s", exc)
 
                 print(f"this is the kem public key: {kem_public_key} kemalg: {kemalg}")
                 # These parameters get passed along to Step 2a via the browser.

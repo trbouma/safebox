@@ -181,6 +181,8 @@ Rules:
 - Required-step failure aborts flow.
 - Optional-step failure marks `skipped` and continues if policy allows.
 - Timeouts emit explicit step-level failure, not generic transport error.
+- If `pqc_kem_init`/`pqc_kem_ack` does not yield valid peer KEM material,
+  required quantum-safe flows must fail closed (no local-default KEM fallback).
 
 ## Security Considerations
 

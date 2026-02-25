@@ -141,6 +141,8 @@ Additional hardening implemented in current NFC record/payment work:
   - expected decrypt mismatches (for example legacy/mixed payload envelopes)
     no longer abort record ingestion.
   - records continue through safe fallback processing.
+  - missing/invalid responder KEM does not silently fall back to local default
+    KEM for encryption; flow should re-authenticate to obtain valid peer KEM.
 - Payload rendering resilience:
   - plain text records and structured JSON records are normalized before
     display.
@@ -148,6 +150,16 @@ Additional hardening implemented in current NFC record/payment work:
 - Compact QR parity:
   - when compact `nauth` omits transmittal metadata, record flows consistently
     fall back to `RECORD_TRANSMITTAL_*` defaults.
+
+### KEM Integrity Rule
+
+Safebox NFC/QR record transfer remains quantum-safe by using responder-provided
+KEM material in-session.
+
+- If responder KEM is present and valid, flow uses it for encapsulation.
+- If responder KEM is missing/invalid, flow must stop or re-authenticate.
+- Implementations must not substitute local service default KEM for peer KEM in
+  cross-party encryption paths.
 
 ## Core Security Model
 

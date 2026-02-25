@@ -160,6 +160,8 @@ cross-instance operation:
 - Offer ingestion PQC fallback:
   - `offer_record` payload decrypt failures (for example `invalid MAC`) are
     non-fatal and do not drop the offered record.
+  - this condition is treated as a KEM/payload compatibility mismatch signal
+    for that item; flow continues with safe payload fallback.
 - Payload normalization:
   - nested payload envelopes are normalized to user-facing content where
     possible, instead of rendering raw JSON envelopes.
@@ -171,6 +173,10 @@ cross-instance operation:
   - record flows consistently use `RECORD_TRANSMITTAL_KIND` and
     `RECORD_TRANSMITTAL_RELAYS` when `nauth` omits explicit transmittal fields
     (common in compact QR mode).
+- KEM negotiation requirement:
+  - quantum-safe transmittal requires responder-provided KEM material.
+  - missing/invalid responder KEM must fail/re-authenticate.
+  - local default KEM fallback is not used for cross-party encryption.
 
 ## Implementation References
 
