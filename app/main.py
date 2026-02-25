@@ -242,6 +242,15 @@ async def agent_cors_middleware(request: Request, call_next):
     ):
         requested_headers = request.headers.get("access-control-request-headers")
         request_origin = request.headers.get("origin")
+        requested_method = request.headers.get("access-control-request-method")
+        logger.info(
+            "cors_request path=%s method=%s origin=%s acr_method=%s acr_headers=%s",
+            request.url.path,
+            request.method,
+            request_origin,
+            requested_method,
+            requested_headers,
+        )
         allow_origin = request_origin if request_origin else "*"
         allow_headers = (
             requested_headers
