@@ -153,6 +153,14 @@ async def lifespan(app: FastAPI):
     if is_production and not SETTINGS.COOKIE_SECURE:
         raise RuntimeError("COOKIE_SECURE must be enabled in production")
 
+    if SETTINGS.BLOSSOM_XFER_SERVER == SETTINGS.BLOSSOM_HOME_SERVER:
+        logger.warning(
+            "BLOSSOM_XFER_SERVER and BLOSSOM_HOME_SERVER are the same (%s). "
+            "This is acceptable for testing, but production should use a dedicated "
+            "xfer server to allow safe TTL cleanup without affecting durable blobs.",
+            SETTINGS.BLOSSOM_XFER_SERVER,
+        )
+
     relay_task = asyncio.create_task(run_relay())
     if SETTINGS.NWC_SERVICE:
         pass

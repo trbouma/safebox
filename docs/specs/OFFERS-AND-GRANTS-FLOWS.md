@@ -37,19 +37,20 @@ Out of scope:
 
 ### Initiation
 
-1. User opens offer page (`/records/offerlist` or `/records/displayoffer`).
-2. Client generates `nauth` via `POST /records/nauth`.
-3. QR code is rendered from returned `nauth`.
+1. **Recipient-first bootstrap (required for agent flows):** recipient generates a `nauth` and presents it as a QR code.
+2. Offerer opens offer page (`/records/offerlist` or `/records/displayoffer`).
+3. Offerer scans recipient QR and imports recipient `nauth` context.
+4. If recipient-first is not used, offerer may generate `nauth` via `POST /records/nauth` and render QR (legacy initiator-first mode).
 
 ### Authentication + Transfer
 
-4. Counterparty scans QR and authenticates.
-5. Offer page listens on websocket (`/records/ws/listenfornauth/{nauth}`) for authenticated response.
-6. On success, offerer submits transmittal via `POST /records/transmit`.
+5. Counterparty authenticates against the active `nauth` context.
+6. Offer page listens on websocket (`/records/ws/listenfornauth/{nauth}`) for authenticated response.
+7. On success, offerer submits transmittal via `POST /records/transmit`.
 
 ### Result
 
-7. Recipient receives offer context and downstream grant creation/transmission proceeds over configured transmittal channels.
+8. Recipient receives offer context and downstream grant creation/transmission proceeds over configured transmittal channels.
 
 ## Flow B: Offer by NFC
 
@@ -79,15 +80,16 @@ Out of scope:
 
 ### Initiation
 
-1. Requester opens `/records/request`.
-2. Client generates request `nauth` via `POST /records/nauth`.
-3. Request QR is shown to presenter.
+1. **Recipient-first bootstrap (required for agent flows):** recipient generates a request `nauth` and presents it as a QR code.
+2. Presenter scans recipient QR and uses that `nauth` as the request context.
+3. Requester opens `/records/request`.
+4. If recipient-first is not used, requester generates request `nauth` via `POST /records/nauth` and shows QR (legacy initiator-first mode).
 
 ### Presentation
 
-4. Presenter authenticates and provides response metadata.
-5. Requester listens on websocket (`/records/ws/request/{nauth}`) for incoming verified records.
-6. Records are rendered in requester UI, including original-record blob when available.
+5. Presenter authenticates and provides response metadata.
+6. Requester listens on websocket (`/records/ws/request/{nauth}`) for incoming verified records.
+7. Records are rendered in requester UI, including original-record blob when available.
 
 ## Flow D: Request/Present Grant by NFC
 
@@ -120,6 +122,63 @@ Out of scope:
   - UI prompts user confirmation ("Invalid PIN. Continue anyway?").
   - cancel: flow stops.
   - continue: request remains active and waits for records according to vault policy.
+
+## Side-by-Side Flow Matrix
+
+### Offer Flow (QR vs NFC)
+
+| Step | QR Flow | NFC Flow |
+|---|---|---|
+| 1. Start | Recipient-first for agents: recipient shows `nauth` QR; offerer scans it. Legacy: offerer starts and generates QR. | Same offer page start; recipient card tap used as introduction token. |
+| 2. Create auth context | Active `nauth` context comes from scanned recipient QR (agent) or local `POST /records/nauth` (legacy). | `nauth` from current session + NFC token from card tap. |
+| 3. Introduction channel | QR carries `nauth` between parties. | NFC `nembed` token + `nauth` in submit request. |
+| 4. Auth handshake | Websocket `/records/ws/listenfornauth/{nauth}` waits for recipient auth response. | `POST /records/acceptoffertoken` sends token + `nauth` to server. |
+| 5. KEM acquisition | KEM is delivered through auth handshake payload and held in browser state. | KEM may come from browser state; fallback is host lookup via `GET /.well-known/kem`. |
+| 6. Validation gate | Offer transmit waits for quantum-ready channel before `/records/transmit`. | Preflight card-status is advisory; authoritative validation is at `POST /.well-known/offer`. |
+| 7. Grant transmittal | `/records/transmit` creates encrypted grant payload and sends to recipient transmittal channel. | Vault emits NWC `offer_record`; recipient wallet ingests and stores/transfers records. |
+| 8. Completion behavior | Offer completes when recipient-side ingest/transmittal succeeds. | Same target outcome, with additional card-token validation boundary. |
+| 9. Hardening notes | Nonce/auth checks on websocket channel; stale/live-window guards in request paths. | Cross-instance KEM fallback, stale-record filtering, non-fatal decrypt mismatch handling. |
+
+### Request/Present Flow (QR vs NFC)
+
+| Step | QR Flow | NFC Flow |
+|---|---|---|
+| 1. Start | Recipient-first for agents: recipient shows request `nauth` QR; presenter scans it. Legacy: requester opens `/records/request` and generates QR. | Same UI, with NFC option enabled. |
+| 2. Create request context | Active request `nauth` comes from scanned recipient QR (agent) or local `POST /records/nauth` (legacy). | Same `nauth` plus NFC proof token from card tap. |
+| 3. Introduction channel | QR carries request `nauth` to presenter. | Requester taps presenter card and reads proof token (`nembed`). |
+| 4. Listener startup | Request websocket `/records/ws/request/{nauth}` starts and waits for presenter. | Listener is started first, then proof submit proceeds (race hardening). |
+| 5. Presenter auth response | Presenter sends auth response and requester KEM is exchanged via auth path. | `POST /records/acceptprooftoken` calls vault (`/.well-known/proof`) using signed token + `nauth`. |
+| 6. Policy checks | Nonce and auth/transmittal routing checks enforced in websocket flow. | Same plus card secret validation and PIN policy at vault boundary. |
+| 7. PIN handling | Not typically involved in QR-only request path. | PIN may be valid/invalid; invalid path supports user continue/cancel decision. |
+| 8. Record delivery | Presenter sends encrypted transmittal payload; requester verifies/decrypts/renders records. | Same final delivery path; NFC only changes authorization/introduction stage. |
+| 9. Completion behavior | Websocket reports `VERIFIED`, `ERROR`, or `TIMEOUT`. | Same terminal states, with extra vault-side error details for token/PIN outcomes. |
+| 10. Hardening notes | Strict live-window listener (`allow_since_fallback=False`) to avoid stale completion. | Same listener protections plus advisory preflight and authoritative vault enforcement. |
+
+## Recipient-First Agent QR Sequence
+
+```mermaid
+sequenceDiagram
+    participant A as "Agent (Recipient)"
+    participant U as "User Wallet (Offerer/Presenter)"
+    participant W as "Safebox Web App"
+    participant R as "Relays"
+    participant V as "Vault/.well-known"
+
+    A->>A: Generate nauth (scope + nonce + auth/transmittal metadata)
+    A->>U: Present nauth as QR
+    U->>W: Scan QR and load recipient nauth context
+    W->>R: Listen for auth response (auth_kind/auth_relays)
+    U->>R: Send auth response (nauth + KEM material)
+    R-->>W: Auth response received and validated (nonce match)
+    W->>W: Confirm quantum-ready channel (KEM present)
+    W->>W: Build transmittal payload (offer/grant or request/present data)
+    W->>R: Secure transmittal (transmittal_kind/transmittal_relays)
+    R-->>A: Recipient-side listener receives payload
+    A->>A: Decrypt, verify, and render/store result
+
+    Note over W,V: NFC-assisted variants call vault endpoints first
+    Note over W,V: Vault remains authoritative
+```
 
 ## Original Record Rendering
 
@@ -211,6 +270,22 @@ Result:
 
 - NFC offer flow is less sensitive to browser/websocket KEM timing races
 - quantum-safe exchange remains required (no silent downgrade)
+
+### Original-Record Blob Retrieval Fallback (Transfer Ingest)
+
+For accepted grants/presentations that include `original_record`, ingest now uses
+an explicit blossom retrieval order:
+
+- first: `BLOSSOM_XFER_SERVER`
+- second: `BLOSSOM_HOME_SERVER`
+- if not found on either: continue non-fatally with the record payload and emit
+  warning/status that original blob is unavailable
+
+Result:
+
+- avoids hard flow failure when transfer blobs are missing or delayed
+- preserves successful offer/request interactions for text/payload content
+- makes original-blob unavailability observable instead of silent
 
 ### Relay Mismatch Failure Mode
 

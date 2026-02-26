@@ -392,8 +392,33 @@ async def transmit_records(        request: Request,
 
         issued_record: Event
         original_record: OriginalRecordTransfer
-        issued_record, original_record = await acorn_obj.create_grant_from_offer(   offer_kind=transmit_consultation.originating_kind, 
-        offer_name=transmit_consultation.record_name, grant_kind=transmit_consultation.final_kind, holder=transmittal_npub,shared_secret_hex=kem_shared_secret_hex, blossom_xfer_server=settings.BLOSSOM_XFER_SERVER)
+        try:
+            issued_record, original_record = await acorn_obj.create_grant_from_offer(
+                offer_kind=transmit_consultation.originating_kind,
+                offer_name=transmit_consultation.record_name,
+                grant_kind=transmit_consultation.final_kind,
+                holder=transmittal_npub,
+                shared_secret_hex=kem_shared_secret_hex,
+                blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+            )
+        except requests.exceptions.ConnectionError as exc:
+            fallback_server = settings.BLOSSOM_HOME_SERVER
+            if not fallback_server or fallback_server == settings.BLOSSOM_XFER_SERVER:
+                raise
+            logger.warning(
+                "Primary blossom transfer server unreachable (%s); retrying on fallback (%s): %s",
+                settings.BLOSSOM_XFER_SERVER,
+                fallback_server,
+                exc,
+            )
+            issued_record, original_record = await acorn_obj.create_grant_from_offer(
+                offer_kind=transmit_consultation.originating_kind,
+                offer_name=transmit_consultation.record_name,
+                grant_kind=transmit_consultation.final_kind,
+                holder=transmittal_npub,
+                shared_secret_hex=kem_shared_secret_hex,
+                blossom_xfer_server=fallback_server,
+            )
 
         issued_record_str = json.dumps(issued_record.data())
         pqc_encrypted_payload = my_enc.encrypt(to_pub_k=k_nip44.public_key_hex(),plain_text=issued_record_str)
@@ -591,6 +616,8 @@ async def my_retrieve_records(       request: Request,
                                 record_kind: int = 34002,
                                 acorn_obj = Depends(get_acorn)
                     ):
+    # Legacy retrieval route retained for compatibility with older record views.
+    # New request/presentation flow is centered on /records/request and /ws/request.
     """Protected access to private data stored in home relay"""
     redirect = _redirect_if_missing_acorn(acorn_obj)
     if redirect:
@@ -955,6 +982,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         first_type = int(user_records[0].get('type',34002))
         
 
+    records_missing_original_blob: List[str] = []
+
     for each_record in user_records:
         type = int(each_record['type'])
         print(f"incoming record: {each_record} type: {type}")
@@ -1005,6 +1034,8 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
                 record_kind=type,
                 record_origin=npub_initiator,
                 blobxfer=decrypted_original,
+                blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+                blossom_home_server=settings.BLOSSOM_HOME_SERVER,
             )
             if blob_result.get("status") != "OK":
                 logger.warning(
@@ -1014,18 +1045,24 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
                     blob_result.get("status"),
                     blob_result.get("reason"),
                 )
+                if blob_result.get("reason") == "original_record_not_available":
+                    records_missing_original_blob.append(record_name)
 
 
 
 
     try:
-        await websocket.send_json(
-            {
-                "status": "OK",
-                "detail": f"all good {acorn_obj.handle} {scope} {grant} {user_records}",
-                "grant_kind": first_type,
-            }
-        )
+        response_payload = {
+            "status": "OK",
+            "detail": f"all good {acorn_obj.handle} {scope} {grant} {user_records}",
+            "grant_kind": first_type,
+        }
+        if records_missing_original_blob:
+            response_payload["warning"] = (
+                "Original record blob unavailable for: "
+                + ", ".join(records_missing_original_blob)
+            )
+        await websocket.send_json(response_payload)
     except WebSocketDisconnect:
         logger.info("websocket_accept client disconnected before final send")
    
@@ -1766,6 +1803,8 @@ async def ws_record_offer( websocket: WebSocket,
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
+    # Legacy path retained for backward compatibility with retrieve/grantlist views.
+    # Prefer /ws/listenfornauth for newer offer flows.
 
     print(f"ws nauth: {nauth}")
     auth_relays = None
@@ -1775,7 +1814,11 @@ async def ws_record_offer( websocket: WebSocket,
 
     if nauth:
         parsed_nauth = parse_nauth(nauth) 
-        npub_initiator =   parsed_nauth['values'] ['npub'] 
+        pubhex_initiator = parsed_nauth['values'].get('pubhex')
+        if not pubhex_initiator:
+            await websocket.send_json({"status": "ERROR", "detail": "Invalid authentication payload."})
+            return
+        npub_initiator = hex_to_npub(pubhex_initiator)
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
         expected_nonce = parsed_nauth['values'].get("nonce")
@@ -1842,6 +1885,8 @@ async def ws_listen_for_requestor( websocket: WebSocket,
                                         nauth:str=None, 
                                         acorn_obj = Depends(get_acorn)
                                         ):
+    # Legacy path retained for backward compatibility with older requestor flows.
+    # Prefer /ws/request for current request-record UX.
     """After presenting a QR code, listen for verifier reponse using nauth parameters"""
     print(f"ws nauth: {nauth}")
     auth_relays = None
@@ -2086,31 +2131,45 @@ async def ws_request_record( websocket: WebSocket,
                     # Add in PQC stuff here
                     record_ciphertext = each.get("ciphertext", None)
                     record_kemalg = each.get("kemalg", None) 
-                    if record_ciphertext:
-                        pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-                        kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-                        kem_shared_secret_hex = kem_shared_secret.hex()
-                        print(f"This is the shared secret: {kem_shared_secret_hex}")
-                        k_pqc = Keys(priv_k=kem_shared_secret_hex)
-                        my_enc = ExtendedNIP44Encrypt(k_pqc)
-                        payload_to_decrypt = each.get("pqc_encrypted_payload", None)
-                        original_record_to_decrpyt = each.get("pqc_encrypted_original", None)
-                        if payload_to_decrypt:            
-                            decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
-                            print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
-                            each['payload'] = decrypted_payload
-                        if original_record_to_decrpyt:
-                            print("there is an original record in the presentation!")
-                            decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
-                            print(f"decrypted original for presentation: {decrypted_original}") 
-                            orignal_record_transfer: OriginalRecordTransfer
-                            try:
-                                original_record_to_present_json = json.loads(decrypted_original)
-                                original_record_transfer = OriginalRecordTransfer(**json.loads(decrypted_original))
-                                print(f"original record transfer {original_record_transfer}")
-                            except Exception as e:
-                                logger.warning("ws_request_record original record parse failed: %s", e)
-                                original_record_to_present_json = None
+                    if record_ciphertext and record_kemalg:
+                        try:
+                            pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                            kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                            kem_shared_secret_hex = kem_shared_secret.hex()
+                            print(f"This is the shared secret: {kem_shared_secret_hex}")
+                            k_pqc = Keys(priv_k=kem_shared_secret_hex)
+                            my_enc = ExtendedNIP44Encrypt(k_pqc)
+                            payload_to_decrypt = each.get("pqc_encrypted_payload", None)
+                            original_record_to_decrpyt = each.get("pqc_encrypted_original", None)
+                            if payload_to_decrypt:
+                                decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
+                                print(f"decrypted payload to put in content: {decrypted_payload} compare to content: {each['payload']}")
+                                each['payload'] = decrypted_payload
+                            if original_record_to_decrpyt:
+                                print("there is an original record in the presentation!")
+                                decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
+                                print(f"decrypted original for presentation: {decrypted_original}") 
+                                orignal_record_transfer: OriginalRecordTransfer
+                                try:
+                                    original_record_to_present_json = json.loads(decrypted_original)
+                                    original_record_transfer = OriginalRecordTransfer(**json.loads(decrypted_original))
+                                    print(f"original record transfer {original_record_transfer}")
+                                except Exception as e:
+                                    logger.warning("ws_request_record original record parse failed: %s", e)
+                                    original_record_to_present_json = None
+                        except Exception as exc:
+                            logger.warning(
+                                "ws_request_record payload decrypt skipped tag=%s kind=%s: %s",
+                                each.get("tag"),
+                                each.get("type"),
+                                exc,
+                            )
+                    elif record_ciphertext and not record_kemalg:
+                        logger.warning(
+                            "ws_request_record payload decrypt skipped tag=%s kind=%s: missing kemalg",
+                            each.get("tag"),
+                            each.get("type"),
+                        )
 
                         
                     
@@ -2637,7 +2696,14 @@ async def retrieve_blob(
     blob_bytes: bytes = None
     mime_type = "image/jpeq"
 
-    blob_bytes, mime_type = await acorn_obj.get_original_blob(original_record)
+    blob_bytes, mime_type = await acorn_obj.get_original_blob(
+        original_record,
+        blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+        blossom_home_server=settings.BLOSSOM_HOME_SERVER,
+    )
+
+    if not blob_bytes:
+        raise HTTPException(status_code=404, detail="Original record is not available")
 
     # raise HTTPException(status_code=404, detail="Blob not available")
 

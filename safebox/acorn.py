@@ -62,6 +62,8 @@ import mimetypes
 
 RECORD_LIMIT: int = 1024
 PROOF_LIMIT: int = 32
+DEFAULT_BLOSSOM_HOME_SERVER: str = "https://blossom.getsafebox.app"
+DEFAULT_BLOSSOM_XFER_SERVER: str = "https://blossomx.getsafebox.app"
 
 def powers_of_2_sum(amount):
     powers = []
@@ -118,6 +120,12 @@ class Acorn:
     logger: logging.Logger
     TZ: str = "America/New_York"
 
+    def _default_blossom_home_server(self) -> str:
+        return self.blossom_home_server
+
+    def _default_blossom_xfer_server(self) -> str:
+        return self.blossom_xfer_server
+
     
 
 
@@ -129,7 +137,10 @@ class Acorn:
                     home_relay:str|None=None, 
                     max_proof_event_size: int = 16384,
                     replicate = False, 
-                    logging_level=logging.INFO) -> None:
+                    logging_level=logging.INFO,
+                    blossom_home_server: str | None = None,
+                    blossom_xfer_server: str | None = None,
+                    blossom_servers: List[str] | None = None) -> None:
         
         self.max_proof_event_size = max_proof_event_size
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -145,6 +156,26 @@ class Acorn:
         access_key_digest = hashlib.sha256()    
         
         self.logger.info(f"Wallet initialized: {self.__class__.__name__}")
+        self.blossom_home_server = (
+            blossom_home_server
+            or os.getenv("BLOSSOM_HOME_SERVER")
+            or DEFAULT_BLOSSOM_HOME_SERVER
+        )
+        self.blossom_xfer_server = (
+            blossom_xfer_server
+            or os.getenv("BLOSSOM_XFER_SERVER")
+            or DEFAULT_BLOSSOM_XFER_SERVER
+        )
+        if blossom_servers:
+            self.blossom_servers = blossom_servers
+        else:
+            env_servers = os.getenv("BLOSSOM_SERVERS", "").strip()
+            if env_servers:
+                self.blossom_servers = [s.strip() for s in env_servers.split(",") if s.strip()]
+            else:
+                self.blossom_servers = [self.blossom_home_server]
+        if self.blossom_home_server not in self.blossom_servers:
+            self.blossom_servers.insert(0, self.blossom_home_server)
 
         if nsec.startswith('nsec'):
             self.k = Keys(priv_k=nsec)
@@ -1808,14 +1839,61 @@ class Acorn:
 
         return safebox_record
     
-    async def get_original_blob(self, orginal_record: OriginalRecordTransfer, delete:bool = True):
+    async def get_original_blob(
+        self,
+        orginal_record: OriginalRecordTransfer,
+        delete: bool = True,
+        blossom_xfer_server: str | None = None,
+        blossom_home_server: str | None = None,
+    ):
 
         blob_data: bytes = None
         blob_type:  str = None
         self.logger.debug("op=get_original_blob status=start")
-        blossom_servers = ['https://blossom.getsafebox.app']
-        client = BlossomClient(nsec=orginal_record.blobnsec, default_servers=blossom_servers)
-        blob_retrieve: BlossomBlob = client.get_blob(server=orginal_record.blobserver,sha256=orginal_record.blobsha256,)
+        fallback_xfer = blossom_xfer_server or self._default_blossom_xfer_server()
+        fallback_home = blossom_home_server or self._default_blossom_home_server()
+        source_servers: List[str] = []
+        for server in [fallback_xfer, fallback_home]:
+            if server and server not in source_servers:
+                source_servers.append(server)
+
+        client = BlossomClient(nsec=orginal_record.blobnsec, default_servers=source_servers)
+        blob_retrieve: BlossomBlob | None = None
+        source_server_used: str | None = None
+        last_fetch_error: str | None = None
+        for source_server in source_servers:
+            try:
+                blob_retrieve = client.get_blob(
+                    server=source_server,
+                    sha256=orginal_record.blobsha256,
+                )
+                source_server_used = source_server
+                break
+            except Exception as exc:
+                last_fetch_error = str(exc)
+                if exc.__class__.__name__ == "BlobNotFound":
+                    self.logger.info(
+                        "op=get_original_blob status=source_missing server=%s sha256=%s",
+                        source_server,
+                        orginal_record.blobsha256,
+                    )
+                else:
+                    self.logger.warning(
+                        "op=get_original_blob status=fetch_failed server=%s sha256=%s error=%s",
+                        source_server,
+                        orginal_record.blobsha256,
+                        exc,
+                    )
+
+        if not blob_retrieve:
+            self.logger.warning(
+                "op=get_original_blob status=not_available sha256=%s tried=%s error=%s",
+                orginal_record.blobsha256,
+                source_servers,
+                last_fetch_error,
+            )
+            return None, None
+
         self.logger.debug("op=get_original_blob status=mime mime=%s", blob_retrieve.mime_type)
         if blob_retrieve.mime_type == "application/octet-stream":
             self.logger.debug("op=get_original_blob status=decrypting")
@@ -1826,11 +1904,19 @@ class Acorn:
                                                         iv = bytes.fromhex(orginal_record.encryptparms.iv)
                                                     )
                 blob_type = filetype.guess_mime(blob_data)
-                if delete:
-                    delete_result = client.delete_blob(server=orginal_record.blobserver,sha256=orginal_record.blobsha256)
-                    self.logger.debug("op=get_original_blob status=deleted delete=%s", delete)
             except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
                 self.logger.warning("op=get_original_blob status=decrypt_failed error=%s", e)
+            if delete and blob_data:
+                try:
+                    delete_result = client.delete_blob(server=source_server_used,sha256=orginal_record.blobsha256)
+                    self.logger.debug("op=get_original_blob status=deleted delete=%s result=%s", delete, delete_result)
+                except Exception as exc:
+                    self.logger.warning(
+                        "op=get_original_blob status=delete_failed server=%s sha256=%s error=%s",
+                        source_server_used,
+                        orginal_record.blobsha256,
+                        exc,
+                    )
         else:
             self.logger.debug("op=get_original_blob status=no_decrypt_needed")
             blob_data = blob_retrieve.get_bytes()
@@ -1844,7 +1930,7 @@ class Acorn:
         guessed_blob_type: str = None
         my_enc = NIP44Encrypt(self.k)
 
-        blossom_servers = ['https://blossom.getsafebox.app']
+        blossom_servers = self.blossom_servers
         client = BlossomClient(nsec=None, default_servers=blossom_servers)
 
         
@@ -2104,11 +2190,19 @@ class Acorn:
         record_kind: int = 37375,
         record_origin: str = None,
         blobxfer: str = None,
+        blossom_xfer_server: str | None = None,
+        blossom_home_server: str | None = None,
     ) -> Dict[str, Any]:
         """Transfer source blob to wallet blob store and attach metadata to record."""
         self.logger.debug("op=transfer_blob status=start record=%s kind=%s", record_name, record_kind)
-        blossom_servers = ['https://blossom.getsafebox.app']
-        blossom_server = 'https://blossom.getsafebox.app'
+        blossom_server = self._default_blossom_home_server()
+        default_xfer_server = self._default_blossom_xfer_server()
+        source_xfer = blossom_xfer_server or default_xfer_server
+        source_home = blossom_home_server or blossom_server
+        source_servers: List[str] = []
+        for server in [source_xfer, source_home]:
+            if server and server not in source_servers:
+                source_servers.append(server)
 
         if record_origin:
             record_name = ':'.join([record_origin, record_name])
@@ -2129,32 +2223,51 @@ class Acorn:
 
         self.logger.debug("op=transfer_blob status=validated record=%s kind=%s", record_name, record_kind)
         try:
-            client_xfer = BlossomClient(nsec=blobxfer_obj.blobnsec, default_servers=blossom_servers)
-            try:
-                blob_retrieve: BlossomBlob = client_xfer.get_blob(
-                    server=blobxfer_obj.blobserver,
-                    sha256=blobxfer_obj.blobsha256,
-                )
-            except Exception as exc:
-                if exc.__class__.__name__ == "BlobNotFound":
-                    self.logger.info(
-                        "op=transfer_blob status=source_missing record=%s kind=%s sha256=%s",
-                        record_name,
-                        record_kind,
-                        blobxfer_obj.blobsha256,
+            client_xfer = BlossomClient(nsec=blobxfer_obj.blobnsec, default_servers=source_servers)
+            blob_retrieve: BlossomBlob | None = None
+            source_server_used: str | None = None
+            last_fetch_error: str | None = None
+            for source_server in source_servers:
+                try:
+                    blob_retrieve = client_xfer.get_blob(
+                        server=source_server,
+                        sha256=blobxfer_obj.blobsha256,
                     )
-                    return {"status": "NOT_FOUND", "reason": "source_blob_missing"}
+                    source_server_used = source_server
+                    break
+                except Exception as exc:
+                    last_fetch_error = str(exc)
+                    if exc.__class__.__name__ == "BlobNotFound":
+                        self.logger.info(
+                            "op=transfer_blob status=source_missing record=%s kind=%s sha256=%s server=%s",
+                            record_name,
+                            record_kind,
+                            blobxfer_obj.blobsha256,
+                            source_server,
+                        )
+                    else:
+                        self.logger.warning(
+                            "op=transfer_blob status=fetch_failed record=%s kind=%s server=%s error=%s",
+                            record_name,
+                            record_kind,
+                            source_server,
+                            exc,
+                        )
+
+            if not blob_retrieve:
                 self.logger.warning(
-                    "op=transfer_blob status=fetch_failed record=%s kind=%s error=%s",
+                    "op=transfer_blob status=not_available record=%s kind=%s sha256=%s tried=%s error=%s",
                     record_name,
                     record_kind,
-                    exc,
+                    blobxfer_obj.blobsha256,
+                    source_servers,
+                    last_fetch_error,
                 )
-                return {"status": "FETCH_FAILED", "reason": str(exc)}
+                return {"status": "NOT_FOUND", "reason": "original_record_not_available"}
 
             try:
                 delete_result = client_xfer.delete_blob(
-                    server=blobxfer_obj.blobserver,
+                    server=source_server_used,
                     sha256=blobxfer_obj.blobsha256,
                 )
                 self.logger.debug("op=transfer_blob status=source_deleted record=%s result=%s", record_name, delete_result)
@@ -2242,7 +2355,7 @@ class Acorn:
 
     async def put_record(self,record_name, record_value, record_type="generic", record_kind: int = 37375, record_origin: str = None, blob_data: bytes = None):
 
-        blossom_server = "https://blossom.getsafebox.app"
+        blossom_server = self._default_blossom_home_server()
         mime_type_guess = None
         origsha256 = None
         encrypt_parms = None
@@ -5508,12 +5621,11 @@ class Acorn:
         original_record: OriginalRecordTransfer = None
         h_pubhex = Keys(pub_k=holder).public_key_hex()
 
-        blossom_server = "https://blossom.getsafebox.app"
+        blossom_server = self._default_blossom_home_server()
+        default_xfer_server = self._default_blossom_xfer_server()
         if not blossom_xfer_server:
-            blossom_xfer_server = "https://nostr.download"
+            blossom_xfer_server = default_xfer_server
         
-        # blossom_xfer_server = "https://blossom.getsafebox.app"
-
         mime_type_guess = None
         origsha256 = None
         encrypt_parms = None
@@ -5604,12 +5716,11 @@ class Acorn:
         original_record: OriginalRecordTransfer = None
         
 
-        blossom_server = "https://blossom.getsafebox.app"
+        blossom_server = self._default_blossom_home_server()
+        default_xfer_server = self._default_blossom_xfer_server()
         if not blossom_xfer_server:
-            blossom_xfer_server = "https://nostr.download"
+            blossom_xfer_server = default_xfer_server
         
-        # blossom_xfer_server = "https://blossom.getsafebox.app"
-
         mime_type_guess = None
         origsha256 = None
         encrypt_parms = None

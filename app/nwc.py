@@ -708,6 +708,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                     record_kind=type,
                     record_origin=npub_initiator,
                     blobxfer=decrypted_original,
+                    blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+                    blossom_home_server=settings.BLOSSOM_HOME_SERVER,
                 )
                 if blob_result.get("status") != "OK":
                     logger.warning(

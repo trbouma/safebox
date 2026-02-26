@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     ECASH_LISTEN_TIMEOUT: int = 120
     BLOSSOM_SERVERS: List[str] = ['https://blossom.getsafebox.app']
     BLOSSOM_HOME_SERVER: str = 'https://blossom.getsafebox.app'
-    BLOSSOM_XFER_SERVER: str = 'https://nostr.download'
+    BLOSSOM_XFER_SERVER: str = 'https://blossomx.getsafebox.app'
     CORS_ALLOW_ORIGINS: List[str] = [
         "https://getsafebox.app",
         "https://www.getsafebox.app",

@@ -105,7 +105,7 @@ In `create_grant_from_offer(...)` and `create_request_from_grant(...)`:
    - PQC shared secret when available (`shared_secret_hex`), or
    - random 32-byte key fallback.
 3. Encrypt plaintext blob for transfer.
-4. Upload encrypted blob to transfer Blossom server (`BLOSSOM_XFER_SERVER`, default `https://nostr.download`).
+4. Upload encrypted blob to transfer Blossom server (`BLOSSOM_XFER_SERVER`, default `https://blossomx.getsafebox.app`).
 5. Create `OriginalRecordTransfer` with:
    - origin hash/mimetype
    - transfer blob location/hash
@@ -123,13 +123,16 @@ In record accept/presentation flows (`app/routers/records.py`), Safebox decrypts
 `transfer_blob(...)` does:
 
 1. Parse `OriginalRecordTransfer`.
-2. Fetch encrypted blob from transfer server using transfer `blobnsec`.
-3. Delete transfer blob from source server after fetch.
-4. Decrypt blob using transfer `encryptparms`.
-5. Verify decrypted hash equals `origsha256`.
-6. Re-encrypt blob with a new local random key.
-7. Upload to local/home Blossom server.
-8. Update local `SafeboxRecord` blob metadata to point to new blob location.
+2. Fetch encrypted blob using fallback order:
+   - `BLOSSOM_XFER_SERVER` (primary)
+   - `BLOSSOM_HOME_SERVER` (secondary)
+3. If still not found, continue non-fatally and mark original record as unavailable.
+4. Delete transfer blob from source server after fetch (best effort; non-fatal if unsupported).
+5. Decrypt blob using transfer `encryptparms`.
+6. Verify decrypted hash equals `origsha256`.
+7. Re-encrypt blob with a new local random key.
+8. Upload to local/home Blossom server.
+9. Update local `SafeboxRecord` blob metadata to point to new blob location.
 
 This makes transfer blobs short-lived while anchoring the accepted document in the recipient’s own storage context.
 
@@ -139,7 +142,12 @@ This makes transfer blobs short-lived while anchoring the accepted document in t
 
 - `get_original_blob(...)`
 
-`get_original_blob(...)` can also delete transfer blob after successful fetch/decrypt.
+`get_original_blob(...)` now retrieves using the same fallback order:
+
+- `BLOSSOM_XFER_SERVER`
+- `BLOSSOM_HOME_SERVER`
+
+If not available on either, it returns not found cleanly (`404`) without crashing the interaction.
 
 ## Server Configuration Notes
 
@@ -147,9 +155,41 @@ Configured defaults:
 
 - `BLOSSOM_SERVERS`: `https://blossom.getsafebox.app`
 - `BLOSSOM_HOME_SERVER`: `https://blossom.getsafebox.app`
-- `BLOSSOM_XFER_SERVER`: `https://nostr.download`
+- `BLOSSOM_XFER_SERVER`: `https://blossomx.getsafebox.app`
 
-Note: parts of `safebox/acorn.py` still use explicit Blossom URLs in-code. Functional behavior follows those values unless refactored to fully use config constants.
+Acorn endpoint resolution model:
+
+- Blossom endpoints are resolved at `Acorn` initialization time.
+- Resolution order:
+  1. explicit constructor values
+  2. environment variables (`BLOSSOM_HOME_SERVER`, `BLOSSOM_XFER_SERVER`, `BLOSSOM_SERVERS`)
+  3. hardcoded defaults
+- Runtime blob transfer/retrieval paths use those resolved instance values.
+
+## Operational Decision Record
+
+### What was encountered
+
+- Third-party transfer dependency (`nostr.download`) caused operational failures in some environments (network reachability and reliability concerns).
+- Some deployments do not support blob `DELETE`, so transfer cleanup may not execute even after successful ingest.
+- In live testing with a dedicated xfer server, `DELETE` returned unauthorized (`HTTP 400 {"message":"unauthorized"}`) during direct original-blob retrieval.
+
+### What was decided
+
+- Default transfer target should be operator-controlled (`BLOSSOM_XFER_SERVER`) and separate from durable home storage.
+- Retrieval must be resilient:
+  - try xfer server first
+  - then home server
+  - then continue flow with non-fatal `original_record_not_available`.
+- Application startup should emit a strong warning if xfer and home servers are identical.
+- `get_original_blob(...)` delete attempts are best-effort and non-fatal; retrieval/decrypt success must not fail due to delete authorization policy.
+
+### Going forward
+
+- Production should use a dedicated transfer server (`BLOSSOM_XFER_SERVER`) separate from durable home storage.
+- TTL/manual purge policy should be applied on dedicated xfer storage.
+- Immediate delete remains best-effort and non-fatal.
+- Shared xfer/home is acceptable for development and temporary testing only.
 
 ## Security Considerations
 
@@ -157,3 +197,4 @@ Note: parts of `safebox/acorn.py` still use explicit Blossom URLs in-code. Funct
 - Integrity/authenticity of blob ciphertext is enforced by AES-GCM tag verification.
 - Transfer flow verifies plaintext hash (`origsha256`) before accepting.
 - Transfer blobs are designed for temporary exchange and are deleted after pull in transfer paths.
+- If delete is unsupported, confidentiality still depends on transfer encryption + key handling, but retention risk increases and must be mitigated operationally (dedicated xfer + purge policy).
