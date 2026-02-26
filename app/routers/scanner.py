@@ -109,7 +109,7 @@ async def get_scan_result(  request: Request,
         logger.debug("scanner parsed nauth: %s", parsed_nauth)
 
         scope = parsed_nauth.get("values", {}).get("scope", "")
-        if scope == "offer_request":
+        if scope.startswith("offer_request"):
             return _redirect_offer_request_scan(qr_code, referer)
         if "prover" in scope:
             return RedirectResponse(f"/credentials/presentationrequest?nauth={quote(qr_code)}")
@@ -178,11 +178,33 @@ def _redirect_access(**params: object) -> RedirectResponse:
 
 
 def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectResponse:
+    offer_kind = None
+    recipient_mode = "review"
+    try:
+        parsed = parse_nauth(nauth)
+        scope = (parsed.get("values", {}).get("scope") or "").strip()
+        # Extended receive-offer scope format:
+        #   offer_request:<grant_kind>:<offer_kind>
+        # Fall back gracefully if format is absent or malformed.
+        if scope.startswith("offer_request:"):
+            parts = scope.split(":")
+            if len(parts) >= 3 and parts[2].isdigit():
+                offer_kind = int(parts[2])
+    except Exception:
+        offer_kind = None
+
     if referer:
         parsed_ref = urlparse(referer)
         if parsed_ref.path in {"/records/offerlist", "/records/displayoffer"}:
             query_params = dict(parse_qsl(parsed_ref.query, keep_blank_values=True))
+            existing_mode = (query_params.get("recipient_mode") or "").strip().lower()
+            if existing_mode in {"auto_send", "review"}:
+                recipient_mode = existing_mode
             query_params["nauth"] = nauth
+            query_params["recipient_initiated"] = "1"
+            query_params["recipient_mode"] = recipient_mode
+            if offer_kind is not None:
+                query_params["kind"] = str(offer_kind)
             rebuilt = urlunparse(
                 (
                     parsed_ref.scheme,
@@ -195,6 +217,10 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectRes
             )
             return RedirectResponse(rebuilt)
 
-    return RedirectResponse(f"/records/offerlist?nauth={quote(nauth)}")
+    if offer_kind is not None:
+        return RedirectResponse(
+            f"/records/offerlist?nauth={quote(nauth)}&kind={offer_kind}&recipient_initiated=1&recipient_mode={recipient_mode}"
+        )
+    return RedirectResponse(f"/records/offerlist?nauth={quote(nauth)}&recipient_initiated=1&recipient_mode={recipient_mode}")
     
       

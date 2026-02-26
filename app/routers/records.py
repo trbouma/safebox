@@ -26,7 +26,7 @@ from monstr.encrypt import NIP44Encrypt
 import oqs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub
 
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
@@ -154,6 +154,51 @@ async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -
     return False, f"Card validation failed with HTTP {response.status_code}.", True
 
 
+def _relay_to_http_origin(relay_url: str) -> str | None:
+    try:
+        parsed = urllib.parse.urlparse((relay_url or "").strip())
+    except Exception:
+        return None
+    if not parsed.hostname:
+        return None
+    scheme = "https" if parsed.scheme in {"https", "wss"} else "http"
+    default_port = 443 if scheme == "https" else 80
+    if parsed.port and parsed.port != default_port:
+        return f"{scheme}://{parsed.hostname}:{parsed.port}"
+    return f"{scheme}://{parsed.hostname}"
+
+
+async def _resolve_kem_from_service_hosts(host_origins: list[str]) -> tuple[str | None, str | None]:
+    for origin in host_origins:
+        kem_url = f"{origin.rstrip('/')}/.well-known/kem"
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(kem_url)
+                response.raise_for_status()
+                payload = response.json()
+            kem_public_key = payload.get("kem_public_key")
+            kemalg = payload.get("kemalg")
+            if kem_public_key and kemalg:
+                logger.info("Resolved recipient KEM from %s", kem_url)
+                return kem_public_key, kemalg
+        except Exception as exc:
+            logger.warning("KEM lookup failed at %s: %s", kem_url, exc)
+            continue
+    return None, None
+
+
+def _origin_from_host(host: str) -> str | None:
+    host = (host or "").strip()
+    if not host:
+        return None
+    if host.startswith("http://") or host.startswith("https://"):
+        return host.rstrip("/")
+    # Local/dev safety; production defaults to HTTPS.
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return f"http://{host}"
+    return f"https://{host}"
+
+
 
 @router.get("/issue", tags=["records"]) 
 async def issue_credentials (   request: Request, 
@@ -179,7 +224,9 @@ async def offer_list(      request: Request,
                                     private_mode:str = "offer", 
                                     kind:int = None,   
                                     nprofile:str = None, 
-                                    nauth: str = None,                            
+                                    nauth: str = None,
+                                    recipient_initiated: int = 0,
+                                    recipient_mode: str = None,
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to consulting recods in home relay"""
@@ -190,10 +237,6 @@ async def offer_list(      request: Request,
     auth_msg = None
 
     offer_kinds = settings.OFFER_KINDS
-    if not kind:
-        kind = offer_kinds[0][0]
-
-    user_records = await acorn_obj.get_user_records(record_kind=kind)
     
     if nprofile:
         nprofile_parse = parse_nostr_bech32(nprofile)
@@ -213,6 +256,18 @@ async def offer_list(      request: Request,
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
+        if isinstance(scope, str) and scope.startswith("offer_request"):
+            recipient_initiated = 1
+
+        if not kind and isinstance(scope, str) and scope.startswith("offer_request:"):
+            scope_parts = scope.split(":")
+            if len(scope_parts) >= 3:
+                try:
+                    scope_offer_kind = int(scope_parts[2])
+                    if any(entry[0] == scope_offer_kind for entry in offer_kinds):
+                        kind = scope_offer_kind
+                except ValueError:
+                    pass
 
         transmittal_npub = hex_to_npub(transmittal_pubhex)
     
@@ -239,9 +294,16 @@ async def offer_list(      request: Request,
     else:
        pass
     
+    if not kind:
+        kind = offer_kinds[0][0]
+
+    normalized_mode = (recipient_mode or "").strip().lower()
+    if normalized_mode not in {"auto_send", "review"}:
+        normalized_mode = "review" if recipient_initiated else "auto_send"
+
+    user_records = await acorn_obj.get_user_records(record_kind=kind)
 
 
-    offer_kinds = settings.OFFER_KINDS
     grant_kinds = settings.GRANT_KINDS
     offer_kind_label = get_label_by_id(offer_kinds, kind)
     host = request.url.hostname
@@ -265,13 +327,17 @@ async def offer_list(      request: Request,
                                             "client_nprofile_parse": nprofile_parse,
                                             "client_nauth": auth_msg,
                                             "offer_kinds": offer_kinds,
-                                            "ws_url": ws_url
+                                            "ws_url": ws_url,
+                                            "recipient_initiated": bool(recipient_initiated),
+                                            "recipient_mode": normalized_mode
 
                                         })
 
 @router.get("/request", tags=["records", "protected"])
 async def record_request(      request: Request,                                    
                                 kind:int = 34003,                          
+                                grant_kind:int = None,
+                                mode:str = None,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
@@ -294,15 +360,37 @@ async def record_request(      request: Request,
     ws_url = f"{scheme}://{host}{port}/records/ws/request/"
     
 
+    request_mode = (mode or "request").strip().lower()
+    request_scope_prefix = "offer_request" if request_mode == "receive_offer" else "verifier"
+
+    resolved_kind = grant_kind if grant_kind is not None else kind
+
     return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
-                                            
-                                            "record_kind": kind,   
+                                            "record_kind": resolved_kind,
                                             "grant_kinds": settings.GRANT_KINDS,
-                                            "ws_url": ws_url
+                                            "ws_url": ws_url,
+                                            "request_mode": request_mode,
+                                            "request_scope_prefix": request_scope_prefix
 
 
                                         })
+
+
+@router.get("/request-offer", tags=["records", "protected"])
+async def record_request_offer(
+                                request: Request,
+                                grant_kind:int = 34003,
+                                acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Explicit route for recipient-initiated offer intake flow."""
+    return await record_request(
+        request=request,
+        kind=grant_kind,
+        grant_kind=grant_kind,
+        mode="receive_offer",
+        acorn_obj=acorn_obj,
+    )
 @router.get("/verificationrequest", tags=["records", "protected"])
 async def records_verfication_request(      request: Request,
                           
@@ -375,13 +463,61 @@ async def transmit_records(        request: Request,
         # if safebox_found.session_nonce != nonce:
         #     raise Exception("Invalid session!")
 
-        # PQC Step 2a
-        logger.info("PQC encapsulation start (kemalg=%s)", transmit_consultation.kemalg)
-        if not transmit_consultation.kem_public_key:
-            raise HTTPException(status_code=400, detail="Missing kem_public_key")
+        kem_public_key = transmit_consultation.kem_public_key
+        kemalg = transmit_consultation.kemalg
+        if (
+            not kem_public_key or kem_public_key == "None" or
+            not kemalg or kemalg == "None"
+        ):
+            # Browser-side KEM state may be unavailable (e.g. review mode/navigation).
+            # Resolve recipient KEM from service hosts inferred from nauth context.
+            candidate_origins: list[str] = []
+            seen_origins: set[str] = set()
 
-        pqc = oqs.KeyEncapsulation(transmit_consultation.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(transmit_consultation.kem_public_key))
+            def add_origin_from_relay(relay: str | None):
+                origin = _relay_to_http_origin(relay or "")
+                if origin and origin not in seen_origins:
+                    seen_origins.add(origin)
+                    candidate_origins.append(origin)
+
+            # Preferred: recipient service host embedded by request-offer scope.
+            # Format: offer_request:<grant_kind>:<offer_kind>:<recipient_host>
+            if isinstance(scope, str) and scope.startswith("offer_request:"):
+                scope_parts = scope.split(":")
+                if len(scope_parts) >= 4:
+                    scope_host = scope_parts[3].strip()
+                    scope_origin = _origin_from_host(scope_host)
+                    if scope_origin and scope_origin not in seen_origins:
+                        seen_origins.add(scope_origin)
+                        candidate_origins.append(scope_origin)
+
+            for relay in (transmittal_relays or []):
+                add_origin_from_relay(relay)
+            for relay in (auth_relays or []):
+                add_origin_from_relay(relay)
+
+            # Same-instance fallback: if recipient npub exists locally, use its home relay too.
+            try:
+                recipient_local = await fetch_safebox_by_npub(transmittal_npub)
+                if recipient_local and recipient_local.home_relay:
+                    add_origin_from_relay(recipient_local.home_relay)
+            except Exception as exc:
+                logger.debug("Local recipient lookup for KEM host failed: %s", exc)
+
+            resolved_kem_public_key, resolved_kemalg = await _resolve_kem_from_service_hosts(candidate_origins)
+            if resolved_kem_public_key and resolved_kemalg:
+                kem_public_key = resolved_kem_public_key
+                kemalg = resolved_kemalg
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Recipient channel is not quantum-safe yet. Please re-authenticate and retry.",
+                )
+
+        # PQC Step 2a
+        logger.info("PQC encapsulation start (kemalg=%s)", kemalg)
+        pqc = oqs.KeyEncapsulation(kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(kem_public_key))
         kem_shared_secret_hex = kem_shared_secret.hex()
         kem_ciphertext_hex = kem_ciphertext.hex()
 
@@ -439,7 +575,7 @@ async def transmit_records(        request: Request,
                         "timestamp": int(datetime.now(timezone.utc).timestamp()),
                         "endorsement": acorn_obj.pubkey_bech32,
                         "ciphertext": kem_ciphertext_hex,
-                        "kemalg": transmit_consultation.kemalg,
+                        "kemalg": kemalg,
                         "pqc_encrypted_payload": pqc_encrypted_payload,
                         "pqc_encrypted_original": pqc_encrypted_original
                             }
@@ -1330,6 +1466,9 @@ async def display_grant(     request: Request,
 async def display_offer(     request: Request, 
                             card: str = None,
                             kind: int = 34002,
+                            nauth: str = None,
+                            recipient_initiated: int = 0,
+                            recipient_mode: str = None,
                             action_mode: str = None,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
@@ -1371,6 +1510,9 @@ async def display_offer(     request: Request,
     port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
     ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
     # need to add in global_nauth in the page
+    normalized_mode = (recipient_mode or "").strip().lower()
+    if normalized_mode not in {"auto_send", "review"}:
+        normalized_mode = "review" if recipient_initiated else "auto_send"
 
     return templates.TemplateResponse(  template_to_use, 
                                         {   "request": request,
@@ -1386,7 +1528,10 @@ async def display_offer(     request: Request,
                                             "action_mode":action_mode,
                                             "content": content,
                                             "credential_record": credential_record,
-                                            "ws_url": ws_url
+                                            "ws_url": ws_url,
+                                            "nauth": nauth,
+                                            "recipient_initiated": bool(recipient_initiated),
+                                            "recipient_mode": normalized_mode
                                             
                                         })
 
@@ -1737,28 +1882,6 @@ async def post_send_record(      request: Request,
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
 
     return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
-
-@router.get("/recordrequest", tags=["records", "protected"])
-async def record_request(      request: Request,
-                          
-                                    acorn_obj: Acorn = Depends(get_acorn)
-                    ):
-    """This function display the verification page"""
-    """The page sets up a websocket to listen for the incoming credential"""
-    redirect = _redirect_if_missing_acorn(acorn_obj)
-    if redirect:
-        return redirect
-
-    
-    
-    grant_kinds = settings.GRANT_KINDS
-
-    return templates.TemplateResponse(  "records/recordrequest.html", 
-                                        {   "request": request,  
-                                            "grant_kinds": grant_kinds
-
-                                        })
-
 
 @router.websocket("/ws/recorddata")
 async def ws_record_data( websocket: WebSocket,                                          
@@ -2126,13 +2249,17 @@ async def ws_request_record( websocket: WebSocket,
                 # parsed_nauth = parse_nauth(client_nauth)
                 # transmittal_kind = parsed_nauth['values'].get('transmittal_kind')
                 # transmittal_relays = parsed_nauth['values'].get('transmittal_relays')
-                try:
-                    record_json = parse_nembed_compressed(incoming_record)
-                except Exception as exc:
-                    logger.warning("ws_request_record could not parse incoming nembed: %s", exc)
-                    incoming_record_old = incoming_record
-                    await asyncio.sleep(1)
-                    continue
+                if isinstance(incoming_record, (dict, list)):
+                    # Some flows deliver already-decoded record payloads via get_user_records.
+                    record_json = incoming_record
+                else:
+                    try:
+                        record_json = parse_nembed_compressed(incoming_record)
+                    except Exception as exc:
+                        logger.warning("ws_request_record could not parse incoming nembed: %s", exc)
+                        incoming_record_old = incoming_record
+                        await asyncio.sleep(1)
+                        continue
                 print(f"parse record json: {record_json}")
                 #### Do the verification here... ####
                 verify_result = "Done"

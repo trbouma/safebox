@@ -37,6 +37,11 @@ window.location.href="/safebox/access" ;
 
 }
 
+async function receiveOffer() {
+const selectedGrantKind = document.getElementById("select_record_kind")?.value || "{{record_kind}}";
+window.location.href=`/records/request-offer?grant_kind=${encodeURIComponent(selectedGrantKind)}`;
+}
+
 async function goBack() {
     window.history.back();
 }
@@ -168,6 +173,8 @@ async function selectRecordKind() {
       {% endfor %}
     </select>
       
+    <br><br>
+    <button onclick="receiveOffer()">Receive Offer</button>
     <br><br>
     
      

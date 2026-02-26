@@ -65,6 +65,47 @@ Design principle:
 - QR/NFC carry minimal bootstrap material
 - sensitive content is transferred over negotiated secure channels
 
+## Why Safebox Uses `nAuth` Instead of OAuth/OID Core Flows
+
+Safebox intentionally does not use OAuth 2.0, OID4VCI, or OID4VP as the core
+security primitive for wallet-to-wallet sensitive payload exchange.
+
+Reasoning:
+
+- OAuth-style bearer semantics are possession-based:
+  - whoever holds the token can often use it
+  - server-side systems cannot always prove cryptographic holder binding
+- OAuth/OID ecosystems are operationally complex:
+  - multiple redirect/token/introspection/state paths
+  - uneven implementation quality across providers
+  - difficult end-to-end security auditing in heterogeneous deployments
+- Transport-layer trust (TLS) is necessary but insufficient:
+  - real deployments terminate TLS at proxies, load balancers, and gateways
+  - sensitive artifacts can leak into logs/headers/intermediate systems
+  - this is hop-by-hop protection, not payload-carried end-to-end guarantees
+
+Safebox design choice:
+
+- move security emphasis from pipe security to payload security
+- bind request/response context with `nauth` (nonce/scope/relay/kind constraints)
+- use explicit cryptographic proof paths and encrypted payload envelopes
+- support optional PQC KEM for stronger forward-looking protection
+
+In short, Safebox treats OAuth/OID patterns as useful compatibility tooling in
+broader ecosystems, but not as sufficient long-term primitives for sovereign,
+adversarially aware, decentralized wallet exchange.
+
+### Transitional Position
+
+This is not a claim that OAuth/OID must be abandoned everywhere immediately.
+They remain practical in many existing infrastructures. Safebox’s position is:
+
+- acceptable for integration bridges where required
+- not preferred as the foundational trust mechanism for core private payload
+  exchange
+- long-term direction should favor cryptographic holder/request binding with
+  payload-level confidentiality and verifiability
+
 ## Issuance and Presentation Model
 
 Safebox has two dominant interaction families:
@@ -111,6 +152,25 @@ Hardening posture:
 
 - missing/invalid cryptographic materials must fail closed where required
 - malformed legacy/partial payload cases degrade safely without crashing flow
+
+### Holder Binding in Wallet-to-Wallet Grant Flows
+
+In Safebox grant exchange, holder binding is explicit at issuance time:
+
+- the sending wallet (acting as issuer for the grant event) knows the recipient
+  wallet identity as `npub`
+- the issued grant/transmittal is constructed for that recipient identity
+- secure transmittal is routed and encrypted for that recipient context
+
+At presentation/acceptance time, the receiving wallet returns proof-bearing
+messages over secure protocols that are also tied to `npub` identities and
+request context (`nauth`, nonce, relay/kind scope).
+
+Result:
+
+- grants are not treated as anonymous bearer artifacts
+- issuer intent and recipient identity are cryptographically and protocol-bound
+  through wallet keys and scoped transmittal state
 
 ## Revocation and Status Perspective
 

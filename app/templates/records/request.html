@@ -23,6 +23,8 @@ var global_transmit_nauth = "";
 var global_listen_nauth;
 let activeRequestWs = null;
 let requestCancelInProgress = false;
+const requestMode = "{{ request_mode | default('request') }}";
+const requestScopePrefix = "{{ request_scope_prefix | default('verifier') }}";
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
@@ -173,7 +175,19 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
 
 
-    var scope = `verifier:${grant_kind}`;
+    var scope = `${requestScopePrefix}:${grant_kind}`;
+    if (requestScopePrefix === "offer_request") {
+      const grantKindInt = parseInt(grant_kind, 10);
+      const offerKind = Number.isNaN(grantKindInt) ? null : (grantKindInt - 1);
+      if (offerKind !== null) {
+        // Include recipient service host so sender can resolve /.well-known/kem
+        // against the correct wallet service (not relay hosts).
+        const recipientHost = window.location.hostname || "";
+        scope = recipientHost
+          ? `${scope}:${offerKind}:${recipientHost}`
+          : `${scope}:${offerKind}`;
+      }
+    }
     const submit_data = {"scope": scope, "compact": compact_qr.checked  };
     
     console.log(JSON.stringify(submit_data));
@@ -243,14 +257,14 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 </script>
 
 <div class="center-text">
-  <h1>Request Record</h1>
+  <h1 id="request_title">Request Record</h1>
   <span id="span_msg_status">Select Record Type:</span>   
 
   <br><br>
 
   <select id="grant_kind" name="grant_kind" style="font-size: 16px;">    
     {% for entry in grant_kinds %}
-      <option value="{{ entry[0] }}">{{ entry[1] }}</option>
+      <option value="{{ entry[0] }}" {{ 'selected' if entry[0] == record_kind else '' }}>{{ entry[1] }}</option>
     {% endfor %}
   </select>
 
@@ -334,7 +348,26 @@ function updateSubtypes() {
 
   // Update on change + once on load
   selectEl.addEventListener('change', updateSubtypes);
-  window.addEventListener('DOMContentLoaded', updateSubtypes);
+  window.addEventListener('DOMContentLoaded', () => {
+    const initialGrantKind = "{{ record_kind }}";
+    if (initialGrantKind && selectEl) {
+      selectEl.value = initialGrantKind;
+    }
+    updateSubtypes();
+
+    const titleEl = document.getElementById("request_title");
+    const statusEl = document.getElementById("span_msg_status");
+    const nfcCheckbox = document.getElementById("nfc_request_checkbox");
+    const qrImg = document.getElementById("img_qr_display");
+
+    if (requestMode === "receive_offer") {
+      if (titleEl) titleEl.textContent = "Receive Offer";
+      if (statusEl) statusEl.textContent = "Generating recipient QR...";
+      if (nfcCheckbox) nfcCheckbox.checked = false;
+      if (qrImg) qrImg.title = "Tap to refresh QR if timed out";
+      createQRCode();
+    }
+  });
 </script>
 
 <script>
@@ -369,7 +402,7 @@ async function listenForPresentation(nauth) {
         console.log("WebSocket connected");
         listenTimeoutHandle = setTimeout(() => {
           if (!terminalStateReached) {
-            setRequestStatus("Request timed out waiting for presented record. Please retry.");
+            setRequestStatus("Timed out waiting for presented record. Tap the QR image to refresh.");
             try { ws.close(); } catch (e) {}
           }
         }, listenTimeoutMs);
@@ -385,8 +418,8 @@ async function listenForPresentation(nauth) {
           clearTimeout(listenTimeoutHandle);
           listenTimeoutHandle = null;
         }
-        alert("Record presentation has timed out. Please retry.");
-        span_msg_status.textContent = "Request presentation has timed out. Please retry.";
+        alert("Record presentation timed out. Tap the QR image to refresh.");
+        span_msg_status.textContent = "Timed out. Tap the QR image to refresh.";
         ws.close();
         return;
       }
@@ -414,7 +447,7 @@ async function listenForPresentation(nauth) {
         }
         
         // alert(`Request has been received! ${JSON.stringify(response.detail)}`);
-        span_msg_status.textContent = "Request has been received!";
+        span_msg_status.textContent = "Records received.";
         
         for (const rec of response.records) {
           //console.log(rec);

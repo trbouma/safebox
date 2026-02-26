@@ -1411,11 +1411,25 @@ async def listen_for_request(
     response_kem = None
 
     if isinstance(response_auth, str):
-        # Parse only the first delimiter so embedded payload data is preserved.
-        if ":" in response_auth:
-            response_nauth, response_kem = response_auth.split(":", 1)
+        payload_text = response_auth.strip()
+        lower_payload = payload_text.lower()
+        # Handshake/auth payloads are encoded as "nauth...:nembed..."
+        if lower_payload.startswith("nauth") and ":" in payload_text:
+            response_nauth, response_kem = payload_text.split(":", 1)
+        # Legacy/simple auth payload (nauth only)
+        elif lower_payload.startswith("nauth"):
+            response_nauth = payload_text
+        # Structured transfer payload encoded as nembed
+        elif lower_payload.startswith("nembed"):
+            response_nauth = payload_text
         else:
-            response_nauth = response_auth
+            # For record transfer events where payload is plain text and metadata
+            # lives at the top level (ciphertext/kemalg/etc), return full record.
+            response_nauth = records_out[0]
+    else:
+        # For non-auth transfer events, payload may already be decoded as dict/list.
+        # Pass through the full record object so callers can handle structured records.
+        response_nauth = records_out[0]
 
     # return nauth, present, and we will add shared secret
 

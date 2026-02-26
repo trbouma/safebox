@@ -13,6 +13,8 @@
   const record_kind = parseInt("{{ record_kind }}");
   //There are two ways to receive client nauth 1) from scan, 2) from websockets
   var client_nauth = "{{client_nauth}}";
+  const recipientInitiated = {{ recipient_initiated | tojson }};
+  const recipientMode = {{ recipient_mode | tojson }};
   
 
   
@@ -68,9 +70,46 @@ function consoleLog(data) {
     logElement.innerHTML += data + '\n';
   };
 
+function formatApiDetail(detail) {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(item => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+        const msg = item.msg || JSON.stringify(item);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return String(item);
+    }).join("\n");
+  }
+  if (typeof detail === "object") return JSON.stringify(detail, null, 2);
+  return String(detail);
+}
+
 function buildWsUrl(path) {
   const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
   return `${wsScheme}://${window.location.host}${path}`;
+}
+
+function getActiveRecipientNauth() {
+  if (global_transmit_nauth && global_transmit_nauth !== "None") return global_transmit_nauth;
+  if (client_nauth && client_nauth !== "None") return client_nauth;
+  return null;
+}
+
+function cacheRecipientKemForNauth(nauthValue) {
+  if (!nauthValue || nauthValue === "None") return;
+  if (!global_kem_public_key || !global_kemalg) return;
+  try {
+    sessionStorage.setItem(
+      `offer-kem:${nauthValue}`,
+      JSON.stringify({ kem_public_key: global_kem_public_key, kemalg: global_kemalg })
+    );
+  } catch (e) {
+    consoleLog(`KEM cache write failed: ${e}`);
+  }
 }
 
 async function requestbyNFC(offer_kind, nauth) {
@@ -194,6 +233,9 @@ async function createQRCode() {
       client_transmittal_relays = response.transmittal_relays;
       global_kem_public_key = response.kem_public_key;
       global_kemalg = response.kemalg;
+      if (global_transmit_nauth && global_transmit_nauth !== "None") {
+        cacheRecipientKemForNauth(global_transmit_nauth);
+      }
     // client_name = response.name;
     // alert(`Client is authenticated! Ready to transmit files.`); 
     if (global_transmit_nauth) {
@@ -204,7 +246,12 @@ async function createQRCode() {
       qr_img_func.src="/img/safebox.png";
     }
     ws.close()
-    offerRecord();
+    if (!recipientInitiated || recipientMode === "auto_send") {
+      offerRecord();
+    } else {
+      consoleLog("Recipient authenticated. Select an offer from the list to review and send.");
+      alert("Recipient authenticated. Select an offer from the list to review.");
+    }
     
     
   };
@@ -236,8 +283,13 @@ async function createQRCode() {
 async function offerKind() {
 
   var offer_kind_value = document.getElementById("offer_kind").value
-  // alert(`select kind ${offer_kind_value}`);
-  window.location.href=`/records/offerlist?kind=${offer_kind_value}`;
+  const params = new URLSearchParams();
+  params.set("kind", offer_kind_value);
+  const activeNauth = getActiveRecipientNauth();
+  if (activeNauth) params.set("nauth", activeNauth);
+  if (recipientInitiated) params.set("recipient_initiated", "1");
+  if (recipientMode) params.set("recipient_mode", recipientMode);
+  window.location.href=`/records/offerlist?${params.toString()}`;
 }
 </script>
 
@@ -405,8 +457,26 @@ function updateSubtypes() {
     
 
     card.addEventListener('click', () => {
-        // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/records/displayoffer?card=${title}&kind={{record_kind}}`;
+        const activeNauth = getActiveRecipientNauth();
+        if (recipientInitiated && recipientMode === "auto_send") {
+          if (!activeNauth) {
+            alert("Recipient is not authenticated yet.");
+            return;
+          }
+          document.getElementById('record_label').value = title;
+          offerRecord();
+          return;
+        }
+
+        const selectedOfferKind = parseInt(document.getElementById("offer_kind").value, 10);
+        const params = new URLSearchParams();
+        params.set("card", title);
+        params.set("kind", String(selectedOfferKind));
+        if (activeNauth) params.set("nauth", activeNauth);
+        cacheRecipientKemForNauth(activeNauth);
+        if (recipientInitiated) params.set("recipient_initiated", "1");
+        if (recipientMode) params.set("recipient_mode", recipientMode);
+        window.location.href=`/records/displayoffer?${params.toString()}`;
       });
 
     // Append the card to the container
@@ -490,22 +560,25 @@ async function offerRecord() {
     return;
   }
   if (!submit_data.kem_public_key || !submit_data.kemalg) {
-    alert("Recipient channel is not quantum-safe yet. Please retry authentication.");
-    return;
+    consoleLog("Recipient KEM not available in browser state; relying on server-side KEM resolution.");
+    submit_data.kem_public_key = null;
+    submit_data.kemalg = null;
   }
 
   console.log(`data to submit: ${submit_data.nauth}`) ;
 
-  await fetch('/records/transmit', {
+  const response = await fetch('/records/transmit', {
        method: "POST",
        headers: {"Content-Type": "application/json"},        
        body: JSON.stringify(submit_data)         
-      })
-   .then((response) => response.json())
-   .then((data) => { alert(`Done! ${data.status}`)}
-   
-   // getStatus(data)
-   );
+      });
+  const data = await response.json();
+  const detailText = formatApiDetail(data.detail);
+  if (!response.ok || data.status !== "OK") {
+    alert(detailText || "Offer transmit failed.");
+    return;
+  }
+  alert(`Done! ${data.status}`);
 
    // window.location.href=referer;
      }
