@@ -351,7 +351,16 @@ async def agent_tx_history(
         raise HTTPException(status_code=500, detail=f"Unable to read tx history: {exc}")
 
     # Return most recent entries first, bounded by limit.
-    tx_history_sorted = list(reversed(tx_history))
+    def _tx_sort_key(entry: dict) -> datetime:
+        created = entry.get("create_time")
+        if not created:
+            return datetime.min
+        try:
+            return datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return datetime.min
+
+    tx_history_sorted = sorted(tx_history, key=_tx_sort_key, reverse=True)
     return {
         "status": "OK",
         "count": min(len(tx_history_sorted), safe_limit),

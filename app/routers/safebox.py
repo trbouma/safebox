@@ -902,6 +902,17 @@ async def my_tx_history(    request: Request,
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
     await acorn_obj.load_data()
     tx_history = await acorn_obj.get_tx_history()
+
+    def _tx_sort_key(entry: dict) -> datetime:
+        created = entry.get("create_time")
+        if not created:
+            return datetime.min
+        try:
+            return datetime.strptime(created, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return datetime.min
+
+    tx_history = sorted(tx_history, key=_tx_sort_key, reverse=True)
     
     # print(f"tx history {tx_history}")
 
