@@ -41,6 +41,7 @@ Section convention used across current Safebox specs:
 - [WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md](./WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md) - Record persistence formats for plaintext and structured signed records.
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
+- [SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md) - Safebox alternative to centralized wallet ecosystems: role model, trust boundaries, issuance/presentation approach, and resiliency/security tradeoffs.
 
 ## Operations
 

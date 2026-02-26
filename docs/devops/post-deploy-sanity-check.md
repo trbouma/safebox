@@ -4,6 +4,10 @@
 
 Quick user-facing verification after deployment to confirm critical NFC/QR/payment/record flows are operational.
 
+Related:
+
+- `docs/devops/blossom-xfer-rollout-checklist.md` for dedicated transfer-blob server rollout.
+
 ## 1) Basic Health
 
 - Load `/` and log in.

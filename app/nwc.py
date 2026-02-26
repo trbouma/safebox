@@ -3,7 +3,7 @@ import logging
 import inspect
 from monstr.relay.relay import Relay
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
-from monstr.client.client import Client
+from monstr.client.client import Client, ClientPool
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys
 from monstr.event.event import Event
@@ -805,7 +805,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
 
     if nwc_reply:
         # print(f"we should be reply here for nwc {instruction_obj['method']} with {response_json}")
-        async with Client(settings.NWC_RELAYS[0]) as c:
+        async with ClientPool(settings.NWC_RELAYS) as c:
             n_msg = Event(kind=23195,
                         content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
                         pub_key=k.public_key_hex(),
@@ -850,7 +850,7 @@ async def paid_response(nsec: str, payment_hash:str, evt: Event):
     }
     print(f"payment notification {response_json}")
     await asyncio.sleep(5)
-    async with Client(settings.NWC_RELAYS[0]) as c:
+    async with ClientPool(settings.NWC_RELAYS) as c:
         n_msg = Event(kind=23196,
                     content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
                     pub_key=k.public_key_hex(),

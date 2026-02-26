@@ -1006,29 +1006,63 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
         
         record_ciphertext = each_record.get("ciphertext", None)
         record_kemalg = each_record.get("kemalg", None)
-        pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-        shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
-        print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_ciphertext}")
-        k_pqc = Keys(shared_secret.hex())
-        my_enc = ExtendedNIP44Encrypt(k_pqc)
+        my_enc = None
+        pqc_pub_hex = None
+        if record_ciphertext and record_kemalg:
+            try:
+                pqc = oqs.KeyEncapsulation(record_kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                print(f"PQC Step 3: shared secret {shared_secret.hex()} cipertext: {record_ciphertext} kemalg: {record_kemalg}")
+                k_pqc = Keys(shared_secret.hex())
+                my_enc = ExtendedNIP44Encrypt(k_pqc)
+                pqc_pub_hex = k_pqc.public_key_hex()
+            except Exception as exc:
+                logger.warning(
+                    "acceptincomingrecord PQC decrypt skipped tag=%s kind=%s: %s",
+                    each_record.get("tag"),
+                    type,
+                    exc,
+                )
+        elif record_ciphertext and not record_kemalg:
+            logger.warning(
+                "acceptincomingrecord PQC decrypt skipped tag=%s kind=%s: missing kemalg",
+                each_record.get("tag"),
+                type,
+            )
         payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
-        if payload_to_decrypt:            
-            decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=k_pqc.public_key_hex())
-            print(f"decrypted payload: {decrypted_payload}")
-            record_value = decrypted_payload
+        if payload_to_decrypt and my_enc:
+            try:
+                decrypted_payload = my_enc.decrypt(payload=payload_to_decrypt, for_pub_k=pqc_pub_hex)
+                print(f"decrypted payload: {decrypted_payload}")
+                record_value = decrypted_payload
+            except Exception as exc:
+                logger.warning(
+                    "acceptincomingrecord payload decrypt skipped tag=%s kind=%s: %s",
+                    each_record.get("tag"),
+                    type,
+                    exc,
+                )
 
         original_record_to_decrpyt = each_record.get("pqc_encrypted_original", None)
-
-        if original_record_to_decrpyt:
-            decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=k_pqc.public_key_hex())
-            print(f"decrypted original: {decrypted_original}")   
+        decrypted_original = None
+        if original_record_to_decrpyt and my_enc:
+            try:
+                decrypted_original = my_enc.decrypt(payload=original_record_to_decrpyt, for_pub_k=pqc_pub_hex)
+                print(f"decrypted original: {decrypted_original}")
+            except Exception as exc:
+                logger.warning(
+                    "acceptincomingrecord original decrypt skipped tag=%s kind=%s: %s",
+                    each_record.get("tag"),
+                    type,
+                    exc,
+                )  
 
         # Just add in record_value instead of final value
         
         await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=type, record_origin=npub_initiator)
         # Ingest original recored if there is one
 
-        if original_record_to_decrpyt:
+        if original_record_to_decrpyt and decrypted_original:
             blob_result = await acorn_obj.transfer_blob(
                 record_name=record_name,
                 record_kind=type,

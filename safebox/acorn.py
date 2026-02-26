@@ -171,7 +171,16 @@ class Acorn:
         else:
             env_servers = os.getenv("BLOSSOM_SERVERS", "").strip()
             if env_servers:
-                self.blossom_servers = [s.strip() for s in env_servers.split(",") if s.strip()]
+                parsed_servers: List[str] = []
+                try:
+                    loaded = json.loads(env_servers)
+                    if isinstance(loaded, list):
+                        parsed_servers = [str(s).strip() for s in loaded if str(s).strip()]
+                except Exception:
+                    parsed_servers = []
+                if not parsed_servers:
+                    parsed_servers = [s.strip() for s in env_servers.split(",") if s.strip()]
+                self.blossom_servers = parsed_servers
             else:
                 self.blossom_servers = [self.blossom_home_server]
         if self.blossom_home_server not in self.blossom_servers:

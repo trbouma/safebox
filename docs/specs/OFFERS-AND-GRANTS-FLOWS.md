@@ -236,6 +236,11 @@ cross-instance operation:
   - quantum-safe transmittal requires responder-provided KEM material.
   - missing/invalid responder KEM must fail/re-authenticate.
   - local default KEM fallback is not used for cross-party encryption.
+- Accept-path PQC guard parity:
+  - `acceptincomingrecord` now treats missing/invalid `kemalg`/ciphertext as
+    non-fatal for payload ingestion.
+  - PQC decrypt errors are logged and flow continues with safe fallback behavior
+    instead of crashing the interaction.
 
 ## Additional Hardening: Stale Records and Cross-Instance Compatibility
 
@@ -301,6 +306,7 @@ Observed symptom:
 Mitigations:
 
 - NWC listener subscribes across configured `NWC_RELAYS`
+- NWC publish/reply paths now publish across configured `NWC_RELAYS` (not relay index 0 only)
 - explicit logging of resolved auth/transmittal relay sets in sender and NWC paths
 - deployment requirement: web and NWC processes must share the same relay config
 

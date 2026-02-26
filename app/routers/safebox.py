@@ -28,7 +28,6 @@ from monstr.client.client import ClientPool
 
 from monstr.relay.relay import Relay
 
-from monstr.client.client import Client
 from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt, DecryptionException
 from monstr.event.event import Event
@@ -434,7 +433,7 @@ async def create_nwc_qr(request: Request,
     # 
    
     # 
-    async with Client(settings.NWC_RELAYS[0]) as c:
+    async with ClientPool(settings.NWC_RELAYS) as c:
         capabilities = "pay_invoice pay_keysend get_balance get_info make_invoice lookup_invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications"
         n_msg = Event(kind=13194,
                 content= capabilities,
@@ -1229,7 +1228,7 @@ async def my_danger_zone(       request: Request,
     nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # Publish profile
-    async with Client(settings.NWC_RELAYS[0]) as c:
+    async with ClientPool(settings.NWC_RELAYS) as c:
         n_msg = Event(kind=13194,
                     content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
                     pub_key=acorn_obj.pubkey_hex,
@@ -1288,7 +1287,7 @@ async def issue_card(       request: Request,
     nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
 
     # Publish profile
-    async with Client(settings.NWC_RELAYS[0]) as c:
+    async with ClientPool(settings.NWC_RELAYS) as c:
         n_msg = Event(kind=13194,
                     content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
                     pub_key=acorn_obj.pubkey_hex,

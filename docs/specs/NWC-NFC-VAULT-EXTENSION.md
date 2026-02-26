@@ -41,6 +41,17 @@ Supported extended methods include:
 
 This turns NWC into a generalized wallet + record control plane.
 
+### Relay publish behavior hardening
+
+For cross-instance resilience, NWC publish/reply paths now publish via relay
+pools across configured `NWC_RELAYS` rather than a single indexed relay.
+
+Result:
+
+- reduces single-relay dependency for instruction replies and notifications
+- improves delivery probability when one relay is degraded/unreachable
+- aligns publish behavior with multi-relay listener strategy
+
 ## NFC Card Tokenization Pattern
 
 Safebox NFC cards carry `nembed` payloads that contain encrypted token material (`k`) plus routing metadata (`h`, amount/default fields, etc.).

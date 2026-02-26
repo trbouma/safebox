@@ -165,6 +165,9 @@ Acorn endpoint resolution model:
   2. environment variables (`BLOSSOM_HOME_SERVER`, `BLOSSOM_XFER_SERVER`, `BLOSSOM_SERVERS`)
   3. hardcoded defaults
 - Runtime blob transfer/retrieval paths use those resolved instance values.
+- `BLOSSOM_SERVERS` parsing accepts either:
+  - JSON list string (preferred in env files), or
+  - comma-separated string fallback.
 
 ## Operational Decision Record
 
