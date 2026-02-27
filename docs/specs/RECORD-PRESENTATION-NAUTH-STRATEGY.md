@@ -53,6 +53,26 @@ It is intentionally compact enough to be transmitted through constrained edge ch
 
 In both cases, QR/NFC are treated as edge bootstrap channels, not final data channels.
 
+## Presenter-Initiated Handshake Rules
+
+For presenter-initiated QR record presentation (`present_request:*`), the flow must satisfy:
+
+1. Nonce continuity:
+   - verifier `nauth` must reuse presenter session nonce.
+   - practical mechanism: pass `source_nauth` when verifier creates local `nauth`.
+2. Stage-1 acknowledge:
+   - presenter must emit explicit auth announce before/with data transmittal so
+     requester `/ws/request/{nauth}` can transition from auth wait to record wait.
+3. KEM carriage:
+   - auth callback payload should include KEM as `nauth:nembed(kem_public_key, kemalg)`.
+   - prevents downstream missing-KEM errors in immediate-send path.
+
+Failure modes if rules are violated:
+
+- nonce mismatch loop on requester auth listener
+- auth-stage deadlock (records sent but requester not yet in transmittal stage)
+- missing KEM validation errors at send endpoint
+
 ## Multi-Channel Presentation Model
 
 Safebox separates interaction into two channel classes:
@@ -128,6 +148,8 @@ Recommended operator posture:
 - Perform authorization and trust checks on secure-channel processing path.
 - Keep record acceptance and trust policy independent from initiation channel.
 - Prefer signed/encrypted transmittal for all non-trivial payloads.
+- Require nonce-correlated auth continuation in presenter-initiated mode; reject
+  cross-nonce candidate messages.
 
 ## Implementation References
 

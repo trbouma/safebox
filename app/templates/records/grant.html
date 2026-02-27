@@ -15,9 +15,11 @@
 </script>
 
 <script>
-var global_card = "{{card}}";
-var global_record_kind = parseInt("{{record_kind}}");
+var global_card = {{ (card or "") | tojson }};
+var global_record_kind = Number.parseInt("{{record_kind}}", 10);
 var referer = "{{referer}}";
+let presentRequestWs = null;
+let presentSendInFlight = false;
 console.log(referer)
 async function backToProfile() {
 
@@ -49,6 +51,148 @@ async function scanCode() {
 
 window.location.href="/scanner/scan";
 
+}
+
+async function presentAsQRCode(forceRefresh = false) {
+  const qrWrap = document.getElementById("present_qr_wrap");
+  const qrImg = document.getElementById("present_qr_img");
+  const qrStatus = document.getElementById("present_qr_status");
+
+  if (!qrWrap || !qrImg || !qrStatus) return;
+
+  // If already generated and not forcing refresh, just toggle visible.
+  if (!forceRefresh && qrImg.dataset.nauth) {
+    qrWrap.style.display = "block";
+    qrStatus.textContent = "Verifier can scan this QR code.";
+    startPresentRequestListener(qrImg.dataset.nauth);
+    return;
+  }
+
+  qrWrap.style.display = "block";
+  qrStatus.textContent = "Generating presenter QR...";
+  qrImg.src = "/img/circle-256.gif";
+
+  const scope = `present_request:${global_record_kind}:target=${global_card}`;
+  const submit_data = { scope: scope, compact: true };
+
+  try {
+    const response = await fetch("/records/nauth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(submit_data)
+    });
+    const data = await response.json();
+    if (!response.ok || data.status !== "OK" || !data.detail) {
+      throw new Error(data.detail || "Unable to generate presenter QR.");
+    }
+    qrImg.dataset.nauth = data.detail;
+    qrImg.src = `/safebox/qr/${encodeURIComponent(data.detail)}`;
+    qrImg.title = "Tap to refresh";
+    qrStatus.textContent = "Verifier can scan this QR code. Listening for verifier response...";
+    startPresentRequestListener(data.detail);
+  } catch (err) {
+    console.error("presentAsQRCode error", err);
+    qrImg.src = "/img/safebox.png";
+    qrStatus.textContent = "Failed to generate QR. Tap button to retry.";
+  }
+}
+
+function startPresentRequestListener(nauth) {
+  if (!nauth) return;
+  const qrStatus = document.getElementById("present_qr_status");
+  const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${wsScheme}://${window.location.host}/records/ws/listenfornauth/${encodeURIComponent(nauth)}`;
+
+  if (presentRequestWs) {
+    try { presentRequestWs.close(); } catch (e) {}
+    presentRequestWs = null;
+  }
+
+  presentRequestWs = new WebSocket(wsUrl);
+  presentRequestWs.onopen = () => {
+    if (qrStatus) qrStatus.textContent = "Listening for verifier response...";
+  };
+  presentRequestWs.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.status === "TIMEOUT") {
+        if (qrStatus) qrStatus.textContent = "Timed out waiting for verifier. Tap QR to refresh.";
+        return;
+      }
+      if (data.status === "ERROR") {
+        if (qrStatus) qrStatus.textContent = data.detail || "Verifier handshake failed.";
+        return;
+      }
+      if (data.nauth && data.kem_public_key && data.kemalg) {
+        if (presentSendInFlight) return;
+        presentSendInFlight = true;
+        if (qrStatus) qrStatus.textContent = "Verifier authenticated. Sending selected record...";
+        sendPresentedRecordNow(data.nauth, data.kem_public_key, data.kemalg)
+          .finally(() => {
+            presentSendInFlight = false;
+          });
+      }
+    } catch (e) {
+      if (qrStatus) qrStatus.textContent = "Invalid verifier response.";
+    }
+  };
+  presentRequestWs.onerror = () => {
+    if (qrStatus) qrStatus.textContent = "Listener transport error. Tap QR to refresh.";
+  };
+  presentRequestWs.onclose = () => {};
+}
+
+function renderGreenCheck() {
+  const qrImg = document.getElementById("present_qr_img");
+  if (!qrImg) return;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'>
+    <circle cx='64' cy='64' r='58' fill='#12a150'/>
+    <path d='M35 66l18 18 40-40' fill='none' stroke='#fff' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/>
+  </svg>`;
+  qrImg.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+async function sendPresentedRecordNow(nauth, kemPublicKey, kemalg) {
+  const qrStatus = document.getElementById("present_qr_status");
+  const submitData = {
+    nauth: nauth,
+    grant_name: global_card,
+    grant_kind: global_record_kind,
+    kem_public_key: kemPublicKey,
+    kemalg: kemalg
+  };
+  try {
+    const announceResp = await fetch("/records/presenter-announce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verifier_nauth: nauth })
+    });
+    const announcePayload = await announceResp.json();
+    if (!announceResp.ok || announcePayload.status !== "OK") {
+      throw new Error(announcePayload.detail || "Unable to announce presenter readiness.");
+    }
+
+    if (qrStatus) qrStatus.textContent = "Presenter announced. Transmitting selected record...";
+
+    const response = await fetch("/records/sendrecord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(submitData)
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "OK") {
+      throw new Error(payload.detail || "Unable to send record.");
+    }
+    renderGreenCheck();
+    if (qrStatus) qrStatus.textContent = "Record transmitted successfully.";
+    if (presentRequestWs) {
+      try { presentRequestWs.close(); } catch (e) {}
+      presentRequestWs = null;
+    }
+  } catch (err) {
+    console.error("sendPresentedRecordNow failed", err);
+    if (qrStatus) qrStatus.textContent = `Send failed: ${err.message || err}. Tap QR to retry.`;
+  }
 }
 
 
@@ -392,6 +536,11 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
     </div>
     <br><br>
     <button onclick="goBack()">Back</button>
+    <button onclick="presentAsQRCode()">Present as QR Code</button>
+    <div id="present_qr_wrap" style="display:none; margin-top:12px;">
+      <div id="present_qr_status" style="margin-bottom:8px;">Generating presenter QR...</div>
+      <img id="present_qr_img" src="/img/safebox.png" alt="Presenter QR" onclick="presentAsQRCode(true)" style="max-width:420px; width:92%; height:auto; cursor:pointer;" />
+    </div>
    <div class="original-record-panel">
       <br><span id="original_record_status">Original Record</span><hr>
       <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />

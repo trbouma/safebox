@@ -118,6 +118,19 @@ Introduce one shared ingress classifier/normalizer for request/listener paths:
 
 No endpoint should perform ad hoc chained parsing logic after normalization.
 
+## Transitional Contract Implemented
+
+Current implementation (pre-full envelope normalization) now enforces:
+
+- verifier/requester `nauth` generation can inherit nonce from initiating
+  `source_nauth` for presenter-initiated flows.
+- callback auth payload format uses `nauth:nembed(kem_public_key, kemalg)`.
+- requester stage-gate remains nonce-bound; presenter announce must occur before
+  or with transmittal to avoid auth-loop deadlock.
+
+This preserves current QR compactness while aligning runtime behavior with the
+relay-first binding model.
+
 ## Backward Compatibility
 
 Transitional support remains for legacy paths:

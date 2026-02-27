@@ -25,6 +25,7 @@ let activeRequestWs = null;
 let requestCancelInProgress = false;
 const requestMode = "{{ request_mode | default('request') }}";
 const requestScopePrefix = "{{ request_scope_prefix | default('verifier') }}";
+const presenterNauth = "{{ presenter_nauth | default('') }}";
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
@@ -165,7 +166,7 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
 
 
 
-  async function createQRCode() {
+async function createQRCode() {
   var data;
   var qr_img_func = document.getElementById("img_qr_display");
   var grant_kind = document.getElementById("grant_kind").value;
@@ -189,6 +190,9 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
       }
     }
     const submit_data = {"scope": scope, "compact": compact_qr.checked  };
+    if (presenterNauth) {
+      submit_data.source_nauth = presenterNauth;
+    }
     
     console.log(JSON.stringify(submit_data));
 
@@ -208,6 +212,29 @@ async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
   
 
     });
+
+  if (presenterNauth) {
+    try {
+      const callbackResp = await fetch("/records/presenter-callback", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          presenter_nauth: presenterNauth,
+          verifier_nauth: global_nauth
+        })
+      });
+      const callbackData = await callbackResp.json();
+      if (!callbackResp.ok || callbackData.status !== "OK") {
+        throw new Error(callbackData.detail || "Unable to notify presenter.");
+      }
+      setRequestStatus("Presenter notified. Waiting for presented record...");
+    } catch (err) {
+      consoleLog(`presenter callback failed: ${err}`);
+      setRequestStatus("Could not notify presenter. Tap QR to retry.");
+      qr_img_func.src = "/safebox/qr/"+ global_nauth;
+      return;
+    }
+  }
 
   let shouldListen = true;
   let listenerStarted = false;
@@ -364,12 +391,22 @@ function updateSubtypes() {
     const statusEl = document.getElementById("span_msg_status");
     const nfcCheckbox = document.getElementById("nfc_request_checkbox");
     const qrImg = document.getElementById("img_qr_display");
+    const compactQrCheckbox = document.getElementById("compact_qr_checkbox");
 
     if (requestMode === "receive_offer") {
       if (titleEl) titleEl.textContent = "Receive Offer";
       if (statusEl) statusEl.textContent = "Generating recipient QR...";
       if (nfcCheckbox) nfcCheckbox.checked = false;
       if (qrImg) qrImg.title = "Tap to refresh QR if timed out";
+      createQRCode();
+    } else if (presenterNauth) {
+      if (titleEl) titleEl.textContent = "Requesting Selected Record";
+      if (statusEl) statusEl.textContent = "Preparing verifier handshake...";
+      if (nfcCheckbox) nfcCheckbox.checked = false;
+      const nfcLabel = nfcCheckbox ? nfcCheckbox.closest("label") : null;
+      if (nfcLabel) nfcLabel.style.display = "none";
+      if (compactQrCheckbox) compactQrCheckbox.checked = true;
+      if (qrImg) qrImg.style.display = "none";
       createQRCode();
     }
   });

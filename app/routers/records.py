@@ -50,6 +50,15 @@ templates = build_templates()
 
 router = APIRouter()
 
+
+class PresenterCallbackRequest(BaseModel):
+    presenter_nauth: str
+    verifier_nauth: str
+
+
+class PresenterAnnounceRequest(BaseModel):
+    verifier_nauth: str
+
 def _redirect_if_missing_acorn(acorn_obj: Acorn):
     if acorn_obj is None:
         logger.warning("records route called without an active acorn session")
@@ -135,7 +144,7 @@ def _extract_kind_from_scope(scope: str | None, expected_prefix: str = "verifier
     """Return kind from '<prefix>:<kind>' scope or None if missing/invalid."""
     if not isinstance(scope, str):
         return None
-    parts = scope.split(":")
+    parts = scope.split(":", 2)
     if len(parts) < 2 or parts[0] != expected_prefix:
         return None
     kind_raw = str(parts[1]).strip()
@@ -145,6 +154,42 @@ def _extract_kind_from_scope(scope: str | None, expected_prefix: str = "verifier
         return int(kind_raw)
     except (TypeError, ValueError):
         return None
+
+
+def _extract_target_from_scope(scope: str | None, expected_prefix: str = "verifier") -> Optional[str]:
+    """Return optional scope target from '<prefix>:<kind>:target=<value>' preserving ':' in value."""
+    if not isinstance(scope, str):
+        return None
+    parts = scope.split(":", 2)
+    if len(parts) < 3 or parts[0] != expected_prefix:
+        return None
+    suffix = str(parts[2]).strip()
+    if not suffix.startswith("target="):
+        return None
+    target_value = suffix[len("target="):].strip()
+    return target_value or None
+
+
+def _parse_offer_request_scope(scope: str | None) -> tuple[Optional[int], Optional[int], Optional[str]]:
+    """
+    Parse 'offer_request:<grant_kind>:<offer_kind>[:<recipient_host...>]'
+    using bounded split so recipient_host may include ':' (e.g. host:port).
+    """
+    if not isinstance(scope, str) or not scope.startswith("offer_request:"):
+        return None, None, None
+    parts = scope.split(":", 3)
+    if len(parts) < 3:
+        return None, None, None
+    try:
+        grant_kind = int(str(parts[1]).strip())
+    except Exception:
+        grant_kind = None
+    try:
+        offer_kind = int(str(parts[2]).strip())
+    except Exception:
+        offer_kind = None
+    recipient_host = str(parts[3]).strip() if len(parts) >= 4 else None
+    return grant_kind, offer_kind, recipient_host
 
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
@@ -276,14 +321,9 @@ async def offer_list(      request: Request,
             recipient_initiated = 1
 
         if not kind and isinstance(scope, str) and scope.startswith("offer_request:"):
-            scope_parts = scope.split(":")
-            if len(scope_parts) >= 3:
-                try:
-                    scope_offer_kind = int(scope_parts[2])
-                    if any(entry[0] == scope_offer_kind for entry in offer_kinds):
-                        kind = scope_offer_kind
-                except ValueError:
-                    pass
+            _, scope_offer_kind, _ = _parse_offer_request_scope(scope)
+            if scope_offer_kind is not None and any(entry[0] == scope_offer_kind for entry in offer_kinds):
+                kind = scope_offer_kind
 
         transmittal_npub = hex_to_npub(transmittal_pubhex)
     
@@ -354,6 +394,7 @@ async def record_request(      request: Request,
                                 kind:int = 34003,                          
                                 grant_kind:int = None,
                                 mode:str = None,
+                                presenter_nauth: str = None,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
@@ -393,7 +434,8 @@ async def record_request(      request: Request,
                                             "grant_kinds": grant_kinds,
                                             "ws_url": ws_url,
                                             "request_mode": request_mode,
-                                            "request_scope_prefix": request_scope_prefix
+                                            "request_scope_prefix": request_scope_prefix,
+                                            "presenter_nauth": presenter_nauth or ""
 
 
                                         })
@@ -413,6 +455,147 @@ async def record_request_offer(
         mode="receive_offer",
         acorn_obj=acorn_obj,
     )
+
+
+@router.post("/presenter-callback", tags=["records", "protected"])
+async def presenter_callback(
+    request: Request,
+    payload: PresenterCallbackRequest,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Send verifier nauth back to presenter-auth channel in presenter-initiated QR flow."""
+    _raise_if_missing_acorn(acorn_obj)
+
+    presenter_nauth = (payload.presenter_nauth or "").strip()
+    verifier_nauth = (payload.verifier_nauth or "").strip()
+    if not presenter_nauth or not verifier_nauth:
+        raise HTTPException(status_code=400, detail="Missing presenter_nauth or verifier_nauth")
+
+    try:
+        parsed = parse_nauth(presenter_nauth)
+        presenter_pubhex = parsed["values"].get("pubhex")
+        presenter_nonce = parsed["values"].get("nonce")
+        if not presenter_pubhex:
+            raise ValueError("presenter_nauth missing pubhex")
+        presenter_npub = hex_to_npub(presenter_pubhex)
+        presenter_auth_kind = parsed["values"].get("auth_kind", settings.AUTH_KIND)
+        presenter_auth_relays = parsed["values"].get("auth_relays", settings.AUTH_RELAYS)
+    except Exception as exc:
+        logger.warning("presenter-callback invalid presenter_nauth: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid presenter_nauth") from exc
+
+    try:
+        verifier_to_send = verifier_nauth
+        try:
+            parsed_verifier = parse_nauth(verifier_nauth)
+            verifier_values = parsed_verifier.get("values", {})
+            verifier_nonce = verifier_values.get("nonce")
+            if _normalize_nonce(verifier_nonce) != _normalize_nonce(presenter_nonce):
+                verifier_pubhex = verifier_values.get("pubhex")
+                verifier_npub = hex_to_npub(verifier_pubhex) if verifier_pubhex else acorn_obj.pubkey_bech32
+                verifier_auth_kind = verifier_values.get("auth_kind", settings.AUTH_KIND)
+                verifier_auth_relays = verifier_values.get("auth_relays", settings.AUTH_RELAYS)
+                transmittal_pubhex = verifier_values.get("transmittal_pubhex")
+                verifier_transmittal_npub = (
+                    hex_to_npub(transmittal_pubhex)
+                    if transmittal_pubhex
+                    else acorn_obj.pubkey_bech32
+                )
+                verifier_transmittal_kind = verifier_values.get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+                verifier_transmittal_relays = verifier_values.get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
+                verifier_scope = verifier_values.get("scope")
+                verifier_grant = verifier_values.get("grant")
+
+                verifier_to_send = create_nauth(
+                    npub=verifier_npub,
+                    nonce=presenter_nonce,
+                    auth_kind=verifier_auth_kind,
+                    auth_relays=verifier_auth_relays,
+                    transmittal_npub=verifier_transmittal_npub,
+                    transmittal_kind=verifier_transmittal_kind,
+                    transmittal_relays=verifier_transmittal_relays,
+                    name=acorn_obj.handle,
+                    scope=verifier_scope,
+                    grant=verifier_grant,
+                )
+        except Exception as exc:
+            logger.warning("presenter-callback could not normalize verifier nonce: %s", exc)
+            verifier_to_send = verifier_nauth
+
+        kem_material = {
+            "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+            "kemalg": settings.PQC_KEMALG,
+        }
+        kem_nembed = create_nembed_compressed(kem_material)
+        callback_message = f"{verifier_to_send}:{kem_nembed}"
+
+        msg_out = await acorn_obj.secure_transmittal(
+            nrecipient=presenter_npub,
+            message=callback_message,
+            kind=presenter_auth_kind,
+            dm_relays=presenter_auth_relays,
+        )
+    except Exception as exc:
+        logger.exception("presenter-callback secure transmittal failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not notify presenter") from exc
+
+    return {"status": "OK", "detail": "Presenter notified.", "result": msg_out}
+
+
+@router.post("/presenter-announce", tags=["records", "protected"])
+async def presenter_announce(
+    request: Request,
+    payload: PresenterAnnounceRequest,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """
+    Emit presenter nauth back to verifier auth channel so /ws/request can
+    complete its stage-1 handshake before waiting for transmittal records.
+    """
+    _raise_if_missing_acorn(acorn_obj)
+    verifier_nauth = (payload.verifier_nauth or "").strip()
+    if not verifier_nauth:
+        raise HTTPException(status_code=400, detail="Missing verifier_nauth")
+
+    try:
+        parsed_result = parse_nauth(verifier_nauth)
+        npub_initiator = hex_to_npub(parsed_result["values"]["pubhex"])
+        nonce = parsed_result["values"].get("nonce", "0")
+        auth_kind = parsed_result["values"].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result["values"].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_npub = hex_to_npub(parsed_result["values"].get("transmittal_pubhex"))
+        transmittal_kind = parsed_result["values"].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result["values"].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
+        scope = parsed_result["values"].get("scope")
+    except Exception as exc:
+        logger.warning("presenter-announce invalid verifier_nauth: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid verifier_nauth") from exc
+
+    presenter_nauth = create_nauth(
+        npub=acorn_obj.pubkey_bech32,
+        nonce=nonce,
+        auth_kind=auth_kind,
+        auth_relays=auth_relays,
+        transmittal_npub=transmittal_npub,
+        transmittal_kind=transmittal_kind,
+        transmittal_relays=transmittal_relays,
+        name=acorn_obj.handle,
+        scope=scope,
+        grant=scope,
+    )
+
+    try:
+        msg_out = await acorn_obj.secure_transmittal(
+            nrecipient=npub_initiator,
+            message=presenter_nauth,
+            dm_relays=auth_relays,
+            kind=auth_kind,
+        )
+    except Exception as exc:
+        logger.exception("presenter-announce secure transmittal failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not announce presenter readiness") from exc
+
+    return {"status": "OK", "detail": "Presenter announced.", "nauth": presenter_nauth, "result": msg_out}
 @router.get("/verificationrequest", tags=["records", "protected"])
 async def records_verfication_request(      request: Request,
                           
@@ -505,9 +688,8 @@ async def transmit_records(        request: Request,
             # Preferred: recipient service host embedded by request-offer scope.
             # Format: offer_request:<grant_kind>:<offer_kind>:<recipient_host>
             if isinstance(scope, str) and scope.startswith("offer_request:"):
-                scope_parts = scope.split(":")
-                if len(scope_parts) >= 4:
-                    scope_host = scope_parts[3].strip()
+                _, _, scope_host = _parse_offer_request_scope(scope)
+                if scope_host:
                     scope_origin = _origin_from_host(scope_host)
                     if scope_origin and scope_origin not in seen_origins:
                         seen_origins.add(scope_origin)
@@ -1761,16 +1943,26 @@ async def generate_nauth(    request: Request,
             transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
        
         if nauth_request.compact:
-            nonce = generate_nonce(length=1)
             auth_relays = None
-            transmittal_relays=None
-            
-            
+            transmittal_relays = None
+            default_nonce = generate_nonce(length=1)
         else:
-           
-            auth_relays=settings.AUTH_RELAYS  
-            transmittal_relays=settings.RECORD_TRANSMITTAL_RELAYS
-            nonce = generate_nonce(length=16)
+            auth_relays = settings.AUTH_RELAYS
+            transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
+            default_nonce = generate_nonce(length=16)
+
+        nonce = default_nonce
+        if nauth_request.nonce:
+            nonce = str(nauth_request.nonce).strip() or default_nonce
+        elif nauth_request.source_nauth:
+            try:
+                parsed_source_nauth = parse_nauth(nauth_request.source_nauth)
+                source_nonce = parsed_source_nauth.get("values", {}).get("nonce")
+                source_nonce = str(source_nonce).strip() if source_nonce is not None else ""
+                if source_nonce:
+                    nonce = source_nonce
+            except Exception as exc:
+                logger.warning("generate_nauth could not parse source_nauth nonce: %s", exc)
 
         detail = create_nauth(  npub=npub_to_use,
                                 nonce=nonce,
@@ -1827,8 +2019,10 @@ async def post_send_record(      request: Request,
         # Need to inspect scope to determine what to do
         verifier_kind = None
         try:
-            if ":" in scope:
-                verifier_kind = int(scope.split(":", 1)[1])
+            if "verifier" in scope:
+                verifier_kind = _extract_kind_from_scope(scope, "verifier")
+            elif "prover" in scope:
+                verifier_kind = _extract_kind_from_scope(scope, "prover")
         except Exception:
             verifier_kind = None
         if verifier_kind is None and record_parms.grant_kind is not None:

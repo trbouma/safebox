@@ -91,6 +91,27 @@ Out of scope:
 6. Requester listens on websocket (`/records/ws/request/{nauth}`) for incoming verified records.
 7. Records are rendered in requester UI, including original-record blob when available.
 
+### Presenter-Initiated Variant (Grant Page QR)
+
+This variant is now supported and is the base pattern for agent-facing present flows.
+
+1. Presenter opens grant display page and taps `Present as QR Code`.
+2. Presenter creates `nauth` scope `present_request:<grant_kind>:target=<npub:label>`.
+3. Verifier scans QR and lands on `/records/request` with `presenter_nauth`.
+4. Verifier generates local request `nauth` and MUST bind nonce to presenter session:
+   - pass `source_nauth` (or explicit `nonce`) to `POST /records/nauth`.
+5. Verifier callback sends `verifier_nauth` back to presenter auth channel:
+   - payload format: `nauth:nembed(kem_public_key, kemalg)`.
+6. Presenter receives verifier response and performs two actions in order:
+   - `POST /records/presenter-announce` to satisfy requester stage-1 auth wait.
+   - `POST /records/sendrecord` to transmit selected grant immediately.
+7. Presenter UI shows success locally (green check), verifier request page receives and renders record.
+
+Ordering constraint:
+
+- `presenter-announce` must execute before or with `sendrecord`.
+- If omitted, requester `/records/ws/request/{nauth}` can remain in auth wait loop and never switch to record intake.
+
 ## Flow D: Request/Present Grant by NFC
 
 ### Initiation
@@ -241,6 +262,29 @@ cross-instance operation:
     non-fatal for payload ingestion.
   - PQC decrypt errors are logged and flow continues with safe fallback behavior
     instead of crashing the interaction.
+- Presenter-initiated QR request handshake:
+  - verifier-generated `nauth` now supports nonce alignment from `source_nauth`.
+  - this prevents stage-1 auth nonce drift between presenter and verifier.
+  - callback payload standardized as `nauth:nembed(kem)` for KEM continuity.
+  - added explicit presenter announce step to avoid auth-stage deadlock before
+    record transmittal.
+
+### Troubleshooting Signatures and Root Causes
+
+Common signatures observed during troubleshooting and their dominant causes:
+
+- `ws_request_record ignoring nonce mismatch for candidate response`
+  - verifier `nauth` nonce differs from presenter session nonce.
+  - fix: generate verifier `nauth` using `source_nauth`/shared nonce.
+- Repeating `listen for request [...]` on auth kind with no record pickup
+  - requester still in stage-1 auth wait.
+  - fix: ensure presenter sends announce (`/records/presenter-announce`).
+- `body.kem_public_key: Input should be a valid string` or `kemalg` missing
+  - callback message carried plain `nauth` without KEM envelope.
+  - fix: send `nauth:nembed(kem_public_key, kemalg)`.
+- `Invalid Bech32 string or unsupported prefix` while parsing request input
+  - stale/non-normalized mixed payload consumed during auth polling.
+  - fix: enforce nonce gating and typed auth payload parsing.
 
 ## Additional Hardening: Stale Records and Cross-Instance Compatibility
 

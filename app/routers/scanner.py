@@ -111,6 +111,8 @@ async def get_scan_result(  request: Request,
         scope = parsed_nauth.get("values", {}).get("scope", "")
         if scope.startswith("offer_request"):
             return _redirect_offer_request_scan(qr_code, referer)
+        if scope.startswith("present_request"):
+            return _redirect_present_request_scan(qr_code)
         if "prover" in scope:
             return RedirectResponse(f"/credentials/presentationrequest?nauth={quote(qr_code)}")
         if "vcred" in scope:
@@ -187,7 +189,7 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectRes
         #   offer_request:<grant_kind>:<offer_kind>
         # Fall back gracefully if format is absent or malformed.
         if scope.startswith("offer_request:"):
-            parts = scope.split(":")
+            parts = scope.split(":", 3)
             if len(parts) >= 3 and parts[2].isdigit():
                 offer_kind = int(parts[2])
     except Exception:
@@ -222,5 +224,26 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectRes
             f"/records/offerlist?nauth={quote(nauth)}&kind={offer_kind}&recipient_initiated=1&recipient_mode={recipient_mode}"
         )
     return RedirectResponse(f"/records/offerlist?nauth={quote(nauth)}&recipient_initiated=1&recipient_mode={recipient_mode}")
+
+
+def _redirect_present_request_scan(nauth: str) -> RedirectResponse:
+    grant_kind = None
+    try:
+        parsed = parse_nauth(nauth)
+        scope = (parsed.get("values", {}).get("scope") or "").strip()
+        # Format:
+        #   present_request:<grant_kind>[:target=<npub:label>]
+        if scope.startswith("present_request:"):
+            parts = scope.split(":", 2)
+            if len(parts) >= 2 and parts[1].isdigit():
+                grant_kind = int(parts[1])
+    except Exception:
+        grant_kind = None
+
+    if grant_kind is not None:
+        return RedirectResponse(
+            f"/records/request?grant_kind={grant_kind}&mode=request&presenter_nauth={quote(nauth)}"
+        )
+    return RedirectResponse(f"/records/request?mode=request&presenter_nauth={quote(nauth)}")
     
       
