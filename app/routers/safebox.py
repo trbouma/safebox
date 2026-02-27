@@ -35,7 +35,7 @@ from safebox.models import cliQuote
 from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret
 from app.config import Settings, ConfigWithFallback
@@ -1555,6 +1555,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
 
     print(f"ws nauth: {nauth}")
     auth_relays = None
+    expected_nonce = None
 
     await websocket.accept()
 
@@ -1562,6 +1563,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'] ['auth_kind']   
         auth_relays = parsed_nauth['values']['auth_relays']
+        expected_nonce = parsed_nauth['values'].get("nonce")
         print(f"ws auth relays: {auth_relays}")
 
 
@@ -1578,9 +1580,17 @@ async def websocket_requesttransmittal( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth, presenter, kem_public_key_nauth = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=since_now,
+                    relays=auth_relays,
+                    expected_nonce=expected_nonce,
+                    expected_transmittal_pubhex=acorn_obj.pubkey_hex,
+                )
             except Exception as exc:
                 client_nauth=None
+                kem_public_key_nauth = None
             
 
             
@@ -1590,6 +1600,9 @@ async def websocket_requesttransmittal( websocket: WebSocket,
             
 
             if client_nauth != nauth_old: 
+                if not client_nauth:
+                    await asyncio.sleep(1)
+                    continue
                 parsed_nauth = parse_nauth(client_nauth)
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind',settings.TRANSMITTAL_KIND)
                 transmittal_relays = parsed_nauth['values'].get('transmittal_relays',settings.TRANSMITTAL_RELAYS)
@@ -1604,7 +1617,7 @@ async def websocket_requesttransmittal( websocket: WebSocket,
             print(f"Websocket message: {e}")
             break
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
         
      
     # await websocket.close()
