@@ -4,6 +4,14 @@ Safebox is a sovereign wallet-and-records platform built on Nostr, Cashu, and re
 
 The core problem Safebox is addressing is the gap between convenience and sovereignty: most mainstream systems are easy to use but depend on centralized custodians and weak user control, while many self-sovereign tools are hard to operate at scale. Safebox uses a hybrid approach to reduce this tradeoff by combining familiar interfaces with end-user key ownership and application-layer payload security.
 
+Safebox is designed for both human-operated and agent-operated wallets. Current sequencing is deliberate: human interaction flows are hardened first, then agent flows are aligned to the same contracts and semantics so interactions between human-controlled and agent-controlled Safeboxes remain consistent and predictable.
+
+Headline context document:
+
+- [SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md)
+
+This is the primary framing document for the spec set. It explains Safebox’s architectural rationale, trust model, compliance posture, and protocol-level design choices. Read this first; the remaining specs define specific protocol, flow, operational, and governance details that implement this context.
+
 This index lists the specification documents in this folder.
 
 Section convention used across current Safebox specs:
@@ -42,7 +50,6 @@ Section convention used across current Safebox specs:
 - [WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md](./WALLET-RECORD-STORAGE-PLAINTEXT-AND-SAFEBOXRECORD.md) - Record persistence formats for plaintext and structured signed records.
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
-- [SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md) - Safebox alternative to centralized wallet ecosystems: role model, trust boundaries, issuance/presentation approach, and resiliency/security tradeoffs.
 - [HISTORICAL-CONTEXT-LAW-MERCHANT-AND-DIGITAL-EXCHANGE.md](./HISTORICAL-CONTEXT-LAW-MERCHANT-AND-DIGITAL-EXCHANGE.md) - Non-normative historical context linking law merchant instrument/register mechanics to Safebox's digital exchange model.
 - [PORTABLE-RECORD-FORMAT-PRF.md](./PORTABLE-RECORD-FORMAT-PRF.md) - Unified PRF specification (context + normative profile): artifact anchoring, NIP-01-aligned envelope, human-readable canonical form, compact encoding rules, and long-term archivability intent.
 

@@ -70,6 +70,21 @@ In practical terms:
 - NFC and QR are interaction channels for humans and devices in-session.
 - Agent flows are orchestration channels for bots, services, and back-office automation.
 
+## Human-First Hardening Policy
+
+Safebox is intended to support both:
+
+- human-controlled wallets (browser/mobile/NFC/QR interaction), and
+- agent-controlled wallets (API-driven automation).
+
+Hardening sequence is intentional:
+
+1. Human flows are hardened first and treated as the operational baseline.
+2. Agent flows are then aligned to the same semantics and control-plane contracts.
+3. Cross-mode interoperability is a required outcome: human-operated and agent-operated Safebox instances should be able to interact predictably with minimal special handling.
+
+This sequencing reduces regression risk, keeps UX-critical trust paths stable, and ensures agent behavior is derived from proven human flow semantics rather than a divergent protocol branch.
+
 ## Security Considerations
 
 - `X-Access-Key` is a bearer credential; protect as a secret.

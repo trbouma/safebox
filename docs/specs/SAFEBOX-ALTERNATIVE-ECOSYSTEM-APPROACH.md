@@ -244,6 +244,18 @@ Required operator controls include:
 - retention/deletion governance
 - evidence and incident response procedures
 
+### Protocol Neutrality vs Institutional Controls
+
+Safebox is designed as a neutral protocol substrate for any `npub` holder.  
+Risk controls for illicit use are expected to be implemented at the institutional/operator layer (policy, governance, lawful process, and enforcement controls), not by embedding blanket discrimination rules into the protocol itself.
+
+Regulator-facing analogy:
+
+- regulating premises operations (for example safety/compliance controls) is appropriate;
+- cutting off the air supply to a premise based only on suspicion is not an appropriate equivalent control.
+
+The Safebox implication is the same: govern operation and accountability at the service/institution boundary while preserving protocol neutrality and due-process-oriented control paths.
+
 ## Practical Positioning
 
 Safebox is best characterized as:

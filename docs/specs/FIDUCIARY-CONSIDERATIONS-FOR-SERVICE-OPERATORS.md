@@ -68,6 +68,23 @@ Operators and users should treat this as a strict principle:
 - Terms of service and acceptable use policies should explicitly prohibit illegal activity.
 - Enforcement should focus on account/session controls and lawful process compliance, not mass surveillance.
 
+## Infrastructure Neutrality and Non-Discrimination
+
+Safebox protocol/platform design should not discriminate between `npub` holders at the base protocol layer.  
+Policy decisions about misuse, sanctions, or legal restrictions are institutional controls applied by operators and competent authorities, not identity discrimination hardcoded into the protocol itself.
+
+Regulatory framing:
+
+- It is reasonable to regulate the operation of a premise (controls, oversight, safety conditions).
+- It is not equivalent to requiring blanket restriction of the air supply to the premise based only on suspicion of possible illicit activity within it.
+
+Applied to Safebox:
+
+- regulate operator behavior, governance, reporting, and lawful process handling;
+- do not treat neutral communication/record/payment substrate behavior as a substitute for due process and institutional controls.
+
+This distinction is important for demonstrating both lawful stewardship and non-complicity without converting the protocol into a discriminatory or indiscriminate denial system.
+
 ## Private Key Responsibility Model
 
 Safebox vests security authority in private keys.
