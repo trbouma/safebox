@@ -21,7 +21,6 @@ class RegisteredSafebox(SQLModel, table=True):
     access_key: Optional[str] = Field(default=None, index=True, unique=True, nullable=True)  # Made nullable 
     balance: int = 0
     owner: Optional[str] = None
-    session_nonce: Optional[str] = None
     emergency_code: Optional[str] = Field(default=None,unique=True, nullable=True)
     currency_code: Optional[str] = Field(default="USD",unique=False, nullable=True)
     

@@ -5,6 +5,11 @@
 This document describes Safebox as an alternative approach to state-centric
 digital identity wallet ecosystems.
 
+For foundational context on artifact-plus-anchor records and decentralized
+registry semantics, see:
+
+- [Portable Record Format (PRF)](./PORTABLE-RECORD-FORMAT-PRF.md)
+
 Safebox targets the same high-level outcomes:
 
 - user-controlled credential and payment interactions
@@ -258,6 +263,7 @@ that prioritize user control and protocol-level openness.
 - `app/nwc.py`
 - `safebox/acorn.py`
 - `docs/specs/NAUTH-PROTOCOL.md`
+- [Portable Record Format (PRF)](./PORTABLE-RECORD-FORMAT-PRF.md)
 - `docs/specs/NEMBED-PROTOCOL.md`
 - `docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
 - `docs/specs/NFC-FLOWS-AND-SECURITY.md`

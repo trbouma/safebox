@@ -1857,13 +1857,6 @@ async def get_nauth(    request: Request,
     npub_to_use = acorn_obj.pubkey_bech32
     nonce = generate_nonce()
     print(f"nonce: {nonce}")
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-        safeboxes = session.exec(statement)
-        safebox_for_nonce = safeboxes.first()
-        safebox_for_nonce.session_nonce = nonce
-        session.add(safebox_for_nonce)
-        session.commit()
 
     try:
         #TODO add in nonce to safebox table and change from naddr to nauth
@@ -1925,12 +1918,6 @@ async def transmit_records(        request: Request,
         transmittal_npub = hex_to_npub(transmittal_pubhex)
         transmittal_kind = parsed_nauth['values']['transmittal_kind']
         transmittal_relays = parsed_nauth['values']['transmittal_relays']
-
-        # print(f" session nonce {safebox_found.session_nonce} {nonce}")
-        #TODO Need to figure out session nonce when authenticating from other side
-        # Need to update somewhere in the process leave out for now
-        # if safebox_found.session_nonce != nonce:
-        #     raise Exception("Invalid session!")
 
         # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay, mints=MINTS)
         # await acorn_obj.load_data()

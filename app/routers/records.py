@@ -395,6 +395,7 @@ async def record_request(      request: Request,
                                 grant_kind:int = None,
                                 mode:str = None,
                                 presenter_nauth: str = None,
+                                target: str = None,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """This function display the verification page"""
@@ -435,7 +436,8 @@ async def record_request(      request: Request,
                                             "ws_url": ws_url,
                                             "request_mode": request_mode,
                                             "request_scope_prefix": request_scope_prefix,
-                                            "presenter_nauth": presenter_nauth or ""
+                                            "presenter_nauth": presenter_nauth or "",
+                                            "presenter_target": target or ""
 
 
                                         })
@@ -661,12 +663,6 @@ async def transmit_records(        request: Request,
         
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.RECORD_TRANSMITTAL_KIND
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.RECORD_TRANSMITTAL_RELAYS
-
-        # print(f" session nonce {safebox_found.session_nonce} {nonce}")
-        #TODO Need to figure out session nonce when authenticating from other side
-        # Need to update somewhere in the process leave out for now
-        # if safebox_found.session_nonce != nonce:
-        #     raise Exception("Invalid session!")
 
         kem_public_key = transmit_consultation.kem_public_key
         kemalg = transmit_consultation.kemalg
@@ -1924,13 +1920,6 @@ async def generate_nauth(    request: Request,
     npub_to_use = acorn_obj.pubkey_bech32
     
     print(f"scope: {nauth_request.scope} nonce: {nonce}")
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub==acorn_obj.pubkey_bech32)
-        safeboxes = session.exec(statement)
-        safebox_for_nonce = safeboxes.first()
-        safebox_for_nonce.session_nonce = nonce
-        session.add(safebox_for_nonce)
-        session.commit()
 
     try:
 

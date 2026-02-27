@@ -26,6 +26,7 @@ let requestCancelInProgress = false;
 const requestMode = "{{ request_mode | default('request') }}";
 const requestScopePrefix = "{{ request_scope_prefix | default('verifier') }}";
 const presenterNauth = "{{ presenter_nauth | default('') }}";
+const presenterTarget = "{{ presenter_target | default('') }}";
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
@@ -342,6 +343,13 @@ async function createQRCode() {
   const datalistEl = document.getElementById('subtypes');
   const labelInput = document.getElementById('record_label');
 
+function getTargetLabel(rawTarget) {
+  if (!rawTarget) return "";
+  const trimmed = String(rawTarget).trim();
+  const idx = trimmed.indexOf(":");
+  return idx >= 0 ? trimmed.substring(idx + 1) : trimmed;
+}
+
 function updateSubtypes() {
   const code = selectEl.value;
   const info = grantKindMap[code] || { subtypes: [] };
@@ -401,12 +409,21 @@ function updateSubtypes() {
       createQRCode();
     } else if (presenterNauth) {
       if (titleEl) titleEl.textContent = "Requesting Selected Record";
-      if (statusEl) statusEl.textContent = "Preparing verifier handshake...";
+      if (statusEl) {
+        const scopedLabel = getTargetLabel(presenterTarget);
+        statusEl.textContent = scopedLabel
+          ? `Preparing verifier handshake for "${scopedLabel}"...`
+          : "Preparing verifier handshake...";
+      }
       if (nfcCheckbox) nfcCheckbox.checked = false;
       const nfcLabel = nfcCheckbox ? nfcCheckbox.closest("label") : null;
       if (nfcLabel) nfcLabel.style.display = "none";
       if (compactQrCheckbox) compactQrCheckbox.checked = true;
       if (qrImg) qrImg.style.display = "none";
+      const targetLabel = getTargetLabel(presenterTarget);
+      if (targetLabel && labelInput && !labelInput.value) {
+        labelInput.value = targetLabel;
+      }
       createQRCode();
     }
   });

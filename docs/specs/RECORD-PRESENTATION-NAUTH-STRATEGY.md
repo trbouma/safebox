@@ -103,6 +103,13 @@ Safebox’s record-presentation model is broader:
 - supports dynamic secure channel negotiation independent of QR/NFC edge channel
 - keeps edge channel data minimal even when final payload is large/complex
 
+### Commercial Policy Context (Non-Normative)
+
+For historical/policy framing of Safebox's instrument-and-register model, see:
+
+- [Historical Context: Law Merchant and Digital Exchange](./HISTORICAL-CONTEXT-LAW-MERCHANT-AND-DIGITAL-EXCHANGE.md)
+- [Portable Record Format (PRF)](./PORTABLE-RECORD-FORMAT-PRF.md)
+
 ## Payload Size and Data-Class Neutrality
 
 Because transfer occurs on negotiated secure channels rather than inside QR/NFC payloads:

@@ -228,6 +228,7 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectRes
 
 def _redirect_present_request_scan(nauth: str) -> RedirectResponse:
     grant_kind = None
+    target = None
     try:
         parsed = parse_nauth(nauth)
         scope = (parsed.get("values", {}).get("scope") or "").strip()
@@ -237,13 +238,21 @@ def _redirect_present_request_scan(nauth: str) -> RedirectResponse:
             parts = scope.split(":", 2)
             if len(parts) >= 2 and parts[1].isdigit():
                 grant_kind = int(parts[1])
+            if len(parts) >= 3:
+                suffix = (parts[2] or "").strip()
+                if suffix.startswith("target="):
+                    target_candidate = suffix[len("target="):].strip()
+                    if target_candidate:
+                        target = target_candidate
     except Exception:
         grant_kind = None
+        target = None
 
+    target_qs = f"&target={quote(target)}" if target else ""
     if grant_kind is not None:
         return RedirectResponse(
-            f"/records/request?grant_kind={grant_kind}&mode=request&presenter_nauth={quote(nauth)}"
+            f"/records/request?grant_kind={grant_kind}&mode=request&presenter_nauth={quote(nauth)}{target_qs}"
         )
-    return RedirectResponse(f"/records/request?mode=request&presenter_nauth={quote(nauth)}")
+    return RedirectResponse(f"/records/request?mode=request&presenter_nauth={quote(nauth)}{target_qs}")
     
       

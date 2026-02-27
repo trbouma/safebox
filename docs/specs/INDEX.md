@@ -43,6 +43,8 @@ Section convention used across current Safebox specs:
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
 - [SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md) - Safebox alternative to centralized wallet ecosystems: role model, trust boundaries, issuance/presentation approach, and resiliency/security tradeoffs.
+- [HISTORICAL-CONTEXT-LAW-MERCHANT-AND-DIGITAL-EXCHANGE.md](./HISTORICAL-CONTEXT-LAW-MERCHANT-AND-DIGITAL-EXCHANGE.md) - Non-normative historical context linking law merchant instrument/register mechanics to Safebox's digital exchange model.
+- [PORTABLE-RECORD-FORMAT-PRF.md](./PORTABLE-RECORD-FORMAT-PRF.md) - Unified PRF specification (context + normative profile): artifact anchoring, NIP-01-aligned envelope, human-readable canonical form, compact encoding rules, and long-term archivability intent.
 
 KEM fallback quick reference:
 
