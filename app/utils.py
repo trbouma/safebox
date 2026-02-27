@@ -1382,6 +1382,8 @@ async def listen_for_request(
     since_now: int = None,
     relays: List = None,
     allow_since_fallback: bool = True,
+    expected_nonce: str | None = None,
+    expected_transmittal_pubhex: str | None = None,
 ):
     """This should be records transfer"""
     print(f"listening for request on {kind}")
@@ -1406,7 +1408,65 @@ async def listen_for_request(
     if not records_out:
         return None, None, None
 
-    response_auth = records_out[0].get("payload")
+    selected_record = records_out[0]
+    if expected_nonce is not None or expected_transmittal_pubhex is not None:
+        selected_record = None
+        expected_nonce_norm = str(expected_nonce).strip() if expected_nonce is not None else None
+        expected_transmittal_norm = (
+            str(expected_transmittal_pubhex).strip().lower()
+            if expected_transmittal_pubhex is not None
+            else None
+        )
+
+        fallback_match = None
+        for candidate in records_out:
+            payload_text = candidate.get("payload")
+            if not isinstance(payload_text, str):
+                continue
+            payload_text = payload_text.strip()
+            payload_lower = payload_text.lower()
+            if not payload_lower.startswith("nauth"):
+                continue
+
+            # Auth handshakes may include an optional nembed suffix.
+            candidate_nauth = payload_text.split(":", 1)[0] if ":" in payload_text else payload_text
+            try:
+                parsed = parse_nauth(candidate_nauth)
+                values = parsed.get("values", {})
+            except Exception:
+                continue
+
+            if expected_nonce_norm is not None:
+                candidate_nonce = values.get("nonce")
+                candidate_nonce_norm = str(candidate_nonce).strip() if candidate_nonce is not None else None
+                if candidate_nonce_norm != expected_nonce_norm:
+                    continue
+
+            if expected_transmittal_norm is not None:
+                candidate_transmittal = values.get("transmittal_pubhex")
+                candidate_transmittal_norm = (
+                    str(candidate_transmittal).strip().lower()
+                    if candidate_transmittal is not None
+                    else None
+                )
+                if candidate_transmittal_norm != expected_transmittal_norm:
+                    continue
+
+            # Prefer handshake material that already includes KEM (`nauth:nembed`).
+            if ":" in payload_text:
+                selected_record = candidate
+                break
+
+            if fallback_match is None:
+                fallback_match = candidate
+
+        if selected_record is None and fallback_match is not None:
+            selected_record = fallback_match
+
+        if selected_record is None:
+            return None, None, None
+
+    response_auth = selected_record.get("payload")
     response_nauth = None
     response_kem = None
 
@@ -1425,15 +1485,15 @@ async def listen_for_request(
         else:
             # For record transfer events where payload is plain text and metadata
             # lives at the top level (ciphertext/kemalg/etc), return full record.
-            response_nauth = records_out[0]
+            response_nauth = selected_record
     else:
         # For non-auth transfer events, payload may already be decoded as dict/list.
         # Pass through the full record object so callers can handle structured records.
-        response_nauth = records_out[0]
+        response_nauth = selected_record
 
     # return nauth, present, and we will add shared secret
 
-    return response_nauth, records_out[0].get("presenter"), response_kem
+    return response_nauth, selected_record.get("presenter"), response_kem
 
 def lnaddress_to_safebox_npub(lnaddress: str):
     relays = []

@@ -2228,7 +2228,14 @@ async def ws_record_offer( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth, presenter,kem_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth, presenter,kem_public_key = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=since_now,
+                    relays=auth_relays,
+                    expected_nonce=expected_nonce,
+                    expected_transmittal_pubhex=acorn_obj.pubkey_hex,
+                )
             except Exception as exc:
                 client_nauth=None
             
@@ -2242,7 +2249,6 @@ async def ws_record_offer( websocket: WebSocket,
             if client_nauth != nauth_old: 
                 if not _nonce_matches(expected_nonce, client_nauth):
                     logger.warning("ws_record_offer ignoring nonce mismatch for candidate response")
-                    nauth_old = client_nauth
                     await asyncio.sleep(1)
                     continue
                 parsed_nauth = parse_nauth(client_nauth)
@@ -2308,7 +2314,14 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             # Error handling
             
             try:
-                client_nauth, presenter, ken_public_key = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth, presenter, ken_public_key = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=since_now,
+                    relays=auth_relays,
+                    expected_nonce=expected_nonce,
+                    expected_transmittal_pubhex=acorn_obj.pubkey_hex,
+                )
             except Exception as exc:
                 client_nauth=None
             
@@ -2317,7 +2330,6 @@ async def ws_listen_for_requestor( websocket: WebSocket,
             if client_nauth != nauth_old: 
                 if not _nonce_matches(expected_nonce, client_nauth):
                     logger.warning("ws_listen_for_requestor ignoring nonce mismatch for candidate response")
-                    nauth_old = client_nauth
                     await asyncio.sleep(1)
                     continue
                 parsed_nauth = parse_nauth(client_nauth)
@@ -2717,7 +2729,13 @@ async def ws_listen_for_nauth( websocket: WebSocket,
         try:
             # await acorn_obj.load_data()
             try:
-                client_nauth,presenter,kem_public_key_nauth = await listen_for_request(acorn_obj=acorn_obj,kind=auth_kind, since_now=since_now, relays=auth_relays)
+                client_nauth,presenter,kem_public_key_nauth = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=since_now,
+                    relays=auth_relays,
+                    expected_nonce=expected_nonce,
+                )
                 kem_public_key = None
                 kemalg = None
                 if kem_public_key_nauth:
@@ -2743,7 +2761,10 @@ async def ws_listen_for_nauth( websocket: WebSocket,
             if client_nauth != nauth_old: 
                 if not _nonce_matches(expected_nonce, client_nauth):
                     logger.warning("ws_listen_for_nauth ignoring nonce mismatch for candidate response")
-                    nauth_old = client_nauth
+                    await asyncio.sleep(1)
+                    continue
+                if not kem_public_key or not kemalg:
+                    logger.info("ws_listen_for_nauth waiting for KEM-bearing auth response")
                     await asyncio.sleep(1)
                     continue
                 parsed_nauth = parse_nauth(client_nauth)

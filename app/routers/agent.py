@@ -4,6 +4,7 @@ import secrets
 import time
 import urllib.parse
 from collections import defaultdict, deque
+from decimal import Decimal
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -14,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.appmodels import PaymentQuote, RegisteredSafebox, sendRecordParms
 from app.config import ConfigWithFallback, Settings
 from app.db import engine
+from app.rates import get_currency_rate, get_currency_rates
 from app.routers import records as records_router
 from app.tasks import handle_payment
 from app.utils import (
@@ -51,10 +53,12 @@ class AgentPayInvoiceRequest(BaseModel):
 
 class AgentPayLightningAddressRequest(BaseModel):
     lightning_address: str
-    amount_sats: int
+    amount_sats: int | None = None
+    amount: float | None = None
+    currency: str = "SAT"
     comment: str = "Paid by agent"
     tendered_amount: float | None = None
-    tendered_currency: str = "SAT"
+    tendered_currency: str | None = None
 
 
 class AgentIssueEcashRequest(BaseModel):
@@ -377,6 +381,42 @@ async def agent_tx_history(
     }
 
 
+@router.get("/supported_currencies", tags=["agent"])
+async def agent_supported_currencies(acorn_obj: Acorn = Depends(_agent_get_acorn)):
+    try:
+        rates = await get_currency_rates()
+    except Exception as exc:
+        logger.exception("Agent supported_currencies failed")
+        raise HTTPException(status_code=500, detail=f"Unable to read currency rates: {exc}")
+
+    by_code = {str(each.currency_code).upper(): each for each in rates}
+    currencies = []
+    for code in settings.SUPPORTED_CURRENCIES:
+        normalized = str(code).upper()
+        rate_obj = by_code.get(normalized)
+        currencies.append(
+            {
+                "currency_code": normalized,
+                "currency_symbol": getattr(rate_obj, "currency_symbol", None),
+                "currency_rate": getattr(rate_obj, "currency_rate", None),
+                "fractional_unit": getattr(rate_obj, "fractional_unit", None),
+                "number_to_base": getattr(rate_obj, "number_to_base", None),
+                "refresh_time": (
+                    int(rate_obj.refresh_time.timestamp())
+                    if getattr(rate_obj, "refresh_time", None)
+                    else None
+                ),
+                "available": rate_obj is not None and getattr(rate_obj, "currency_rate", None) is not None,
+            }
+        )
+
+    return {
+        "status": "OK",
+        "currencies": currencies,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/create_invoice", tags=["agent"])
 async def agent_create_invoice(
     payload: AgentInvoiceRequest, acorn_obj: Acorn = Depends(_agent_get_acorn)
@@ -486,16 +526,55 @@ async def agent_pay_lightning_address(
     local_part, domain = lightning_address.split("@", 1)
     if not local_part or not domain:
         raise HTTPException(status_code=400, detail="Invalid lightning_address format")
-    if payload.amount_sats <= 0:
-        raise HTTPException(status_code=400, detail="amount_sats must be greater than zero")
+    sat_amount: int
+    converted_from_currency = False
+    currency_code = (payload.currency or "SAT").strip().upper()
+    if payload.amount_sats is not None:
+        sat_amount = int(payload.amount_sats)
+    else:
+        if payload.amount is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide amount_sats or amount+currency",
+            )
+        amount_value = Decimal(str(payload.amount))
+        if amount_value <= 0:
+            raise HTTPException(status_code=400, detail="amount must be greater than zero")
+        if currency_code == "SAT":
+            sat_amount = int(amount_value)
+        else:
+            try:
+                local_currency = await get_currency_rate(currency_code)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported or unavailable currency code: {currency_code}",
+                ) from exc
+            rate = Decimal(str(local_currency.currency_rate or 0))
+            if rate <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported or unavailable currency code: {currency_code}",
+                )
+            sat_amount = int((amount_value * Decimal("100000000")) / rate)
+            converted_from_currency = True
+
+    if sat_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
+
+    tendered_amount = payload.tendered_amount
+    if tendered_amount is None:
+        tendered_amount = float(payload.amount) if payload.amount is not None else float(sat_amount)
+
+    tendered_currency = (payload.tendered_currency or currency_code or "SAT").upper()
 
     try:
         msg_out, final_fees = await acorn_obj.pay_multi(
-            amount=payload.amount_sats,
+            amount=sat_amount,
             lnaddress=lightning_address,
             comment=payload.comment,
-            tendered_amount=payload.tendered_amount,
-            tendered_currency=payload.tendered_currency,
+            tendered_amount=tendered_amount,
+            tendered_currency=tendered_currency,
         )
         await acorn_obj.load_data()
         _persist_wallet_balance(acorn_obj)
@@ -507,7 +586,8 @@ async def agent_pay_lightning_address(
         "status": "OK",
         "message": msg_out,
         "lightning_address": lightning_address,
-        "amount_sats": payload.amount_sats,
+        "amount_sats": sat_amount,
+        "converted_from_currency": converted_from_currency,
         "fees_paid": final_fees,
         "balance": acorn_obj.balance,
         "timestamp": int(datetime.utcnow().timestamp()),

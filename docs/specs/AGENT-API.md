@@ -13,6 +13,7 @@ Current scope (initial release):
 
 - Wallet identity/status lookup
 - Balance lookup
+- Supported-currency lookup
 - Invite-based wallet onboarding
 - Invoice creation
 - Invoice payment
@@ -146,6 +147,47 @@ Curl:
 curl -sS \
   -H "X-Access-Key: ${API_KEY}" \
   "${BASE_URL}/agent/tx_history?limit=50"
+```
+
+### `GET /agent/supported_currencies`
+
+Returns supported currency codes and currently available rate metadata for preflight payment validation.
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "currencies": [
+    {
+      "currency_code": "SAT",
+      "currency_symbol": "s",
+      "currency_rate": 100000000.0,
+      "fractional_unit": "sats",
+      "number_to_base": 100000000,
+      "refresh_time": 1770000000,
+      "available": true
+    },
+    {
+      "currency_code": "USD",
+      "currency_symbol": "$",
+      "currency_rate": 106500.0,
+      "fractional_unit": "cents",
+      "number_to_base": 100,
+      "refresh_time": 1770000000,
+      "available": true
+    }
+  ],
+  "timestamp": 1770000000
+}
+```
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/supported_currencies"
 ```
 
 ### `POST /agent/onboard`
@@ -292,6 +334,11 @@ curl -sS -X POST \
 
 Pays a Lightning address directly (server-side LNURL resolution and invoice/payment handling).
 
+Accepted amount modes:
+
+- `amount_sats` (integer sats), or
+- `amount` (floating-point) with `currency` (for example `USD`, `EUR`, `SAT`)
+
 Request:
 
 ```json
@@ -301,6 +348,17 @@ Request:
   "comment": "Paid by agent",
   "tendered_amount": 1000.0,
   "tendered_currency": "SAT"
+}
+```
+
+Alternative request (fiat input):
+
+```json
+{
+  "lightning_address": "alice@example.com",
+  "amount": 1.50,
+  "currency": "USD",
+  "comment": "Paid by agent"
 }
 ```
 
@@ -328,6 +386,7 @@ Response (example):
   "message": "Payment of 1000 sats with fee 2 sats to alice@example.com successful!",
   "lightning_address": "alice@example.com",
   "amount_sats": 1000,
+  "converted_from_currency": false,
   "fees_paid": 2,
   "balance": 9341,
   "timestamp": 1770000000

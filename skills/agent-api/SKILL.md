@@ -40,6 +40,7 @@ Conditional:
 - `GET /agent/info`
 - `GET /agent/balance`
 - `GET /agent/tx_history`
+- `GET /agent/supported_currencies`
 - `POST /agent/create_invoice`
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
@@ -86,6 +87,13 @@ Expected response includes:
    - terminal state is `quote_status: PAID`
 4. Optionally confirm final wallet state with `GET /agent/balance` or `GET /agent/tx_history`.
 
+### Currency Preflight (Before Address Payments)
+
+1. Call `GET /agent/supported_currencies`.
+2. Confirm requested currency appears with `available=true`.
+3. Prefer `SAT` if rate metadata is unavailable for a fiat code.
+4. Then call `POST /agent/pay_lightning_address`.
+
 ### 4) Pay Invoice
 
 1. Call `POST /agent/pay_invoice` with BOLT11 invoice.
@@ -102,7 +110,7 @@ Expected response includes:
 
 1. Call `POST /agent/pay_lightning_address` with:
    - `lightning_address` (for example `alice@example.com`)
-   - `amount_sats` (integer sats)
+   - either `amount_sats` (integer sats) OR `amount` + `currency` (floating-point amount in selected currency)
    - optional `comment`, `tendered_amount`, `tendered_currency`
 2. Server performs LNURL resolution and payment using wallet core logic.
 3. Verify `status == OK` and review `fees_paid`.
