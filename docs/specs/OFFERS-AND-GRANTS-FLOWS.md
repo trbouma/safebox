@@ -133,11 +133,11 @@ Out of scope:
 | 2. Create auth context | Active `nauth` context comes from scanned recipient QR (agent) or local `POST /records/nauth` (legacy). | `nauth` from current session + NFC token from card tap. |
 | 3. Introduction channel | QR carries `nauth` between parties. | NFC `nembed` token + `nauth` in submit request. |
 | 4. Auth handshake | Websocket `/records/ws/listenfornauth/{nauth}` waits for recipient auth response. | `POST /records/acceptoffertoken` sends token + `nauth` to server. |
-| 5. KEM acquisition | KEM is delivered through auth handshake payload and held in browser state. | KEM may come from browser state; fallback is host lookup via `GET /.well-known/kem`. |
-| 6. Validation gate | Offer transmit waits for quantum-ready channel before `/records/transmit`. | Preflight card-status is advisory; authoritative validation is at `POST /.well-known/offer`. |
+| 5. KEM acquisition | KEM may be delivered through auth handshake payload; if browser KEM state is missing, `/records/transmit` resolves KEM server-side using `nauth` context. | KEM may come from browser state; fallback is server host resolution via `GET /.well-known/kem`. |
+| 6. Validation gate | Review mode and auto-send mode are both supported. In review mode, auth is established first, offer is selected/reviewed, then `Send Offer Now` transmits. | Preflight card-status is advisory; authoritative validation is at `POST /.well-known/offer`. |
 | 7. Grant transmittal | `/records/transmit` creates encrypted grant payload and sends to recipient transmittal channel. | Vault emits NWC `offer_record`; recipient wallet ingests and stores/transfers records. |
 | 8. Completion behavior | Offer completes when recipient-side ingest/transmittal succeeds. | Same target outcome, with additional card-token validation boundary. |
-| 9. Hardening notes | Nonce/auth checks on websocket channel; stale/live-window guards in request paths. | Cross-instance KEM fallback, stale-record filtering, non-fatal decrypt mismatch handling. |
+| 9. Hardening notes | Nonce/auth checks on websocket channel; stale/live-window guards in request paths; recipient-initiated scope includes host hint for KEM resolution. | Cross-instance KEM fallback, stale-record filtering, non-fatal decrypt mismatch handling. |
 
 ### Request/Present Flow (QR vs NFC)
 
@@ -276,6 +276,60 @@ Result:
 - NFC offer flow is less sensitive to browser/websocket KEM timing races
 - quantum-safe exchange remains required (no silent downgrade)
 
+### `/records/transmit` KEM Fallback (QR + Review Mode)
+
+`POST /records/transmit` now supports missing browser KEM material and resolves
+KEM server-side before encryption.
+
+Resolution order:
+
+1. Use client-provided `kem_public_key`/`kemalg` if present.
+2. If missing, parse `nauth` scope for recipient host hint:
+   - `offer_request:<grant_kind>:<offer_kind>:<recipient_host>`
+3. Attempt `GET https://<recipient_host>/.well-known/kem` first.
+4. If still unresolved, try candidate origins derived from auth/transmittal
+   relay metadata and local recipient lookup.
+5. If unresolved, fail closed with:
+   - `Recipient channel is not quantum-safe yet. Please re-authenticate and retry.`
+
+Important constraint:
+
+- Relay hosts are not authoritative wallet-service hosts for KEM.
+- KEM lookup should prefer recipient wallet service host from `nauth` context.
+- Local service default KEM is never substituted for peer KEM in cross-party
+  encryption.
+
+### KEM Fallback Contract (Operational)
+
+When sender-side browser state is incomplete, KEM resolution follows this strict
+contract:
+
+1. Use peer KEM values submitted by client (`kem_public_key`, `kemalg`) when
+   present and valid.
+2. Else resolve recipient service host from recipient-initiated `nauth` scope
+   hint.
+3. Else attempt host candidates derived from authenticated recipient context.
+4. Else fail closed and require re-authentication.
+
+Failure behavior is intentional:
+
+- no downgrade to plaintext
+- no substitution with local/default KEM material
+- explicit operator/user error for missing quantum-ready recipient channel
+
+### Recipient-Initiated Offer Modes
+
+Offer-side behavior now supports explicit recipient-initiated modes:
+
+- `recipient_mode=review`:
+  - authenticate recipient channel
+  - open selected offer for review
+  - explicit `Send Offer Now` required
+- `recipient_mode=auto_send`:
+  - selecting offer transmits immediately after auth context is ready
+
+Both modes keep quantum-safe requirements; mode controls send timing only.
+
 ### Original-Record Blob Retrieval Fallback (Transfer Ingest)
 
 For accepted grants/presentations that include `original_record`, ingest now uses
@@ -323,6 +377,31 @@ Reason:
 - prevents stale historical transmittal records from being treated as current
   presentation completion
 - preserves expected wait semantics until a new presentation is actually sent
+
+### Listener Payload Normalization (Kind 21062)
+
+Observed failure mode:
+
+- request listener received records where `payload` was plain text
+  (`"This record is quantum-safe"`) while cryptographic fields
+  (`ciphertext`, `kemalg`, encrypted payload/original) lived at top level.
+- legacy decode path incorrectly attempted to parse plain payload as `nembed`,
+  causing repeated polling loops.
+
+Current hardening:
+
+- `listen_for_request(...)` classifies payload shapes:
+  - auth handshake strings (`nauth...[:nembed...]`)
+  - encoded transfer payload (`nembed...`)
+  - non-encoded/plain-text payload -> return full record object
+- `/records/ws/request` accepts both:
+  - already-decoded dict/list record objects
+  - encoded `nembed` strings
+
+Result:
+
+- eliminates `could not parse incoming nembed` loops on valid 21062 records
+- allows decryption/verification pipeline to proceed using top-level fields
 
 ## Implementation References
 

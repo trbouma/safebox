@@ -29,10 +29,6 @@ async function goBack() {
     window.history.back();
 }
 
-async function receiveOffer() {
-  window.location.href = `/records/request-offer?grant_kind={{record_kind}}`;
-}
-
 async function privateData() {
 
 window.location.href="/safebox/privatedata";
@@ -396,7 +392,6 @@ document.addEventListener("DOMContentLoaded", () => getBlob());
     </div>
     <br><br>
     <button onclick="goBack()">Back</button>
-    <button onclick="receiveOffer()">Receive Offer</button>
    <div class="original-record-panel">
       <br><span id="original_record_status">Original Record</span><hr>
       <img id="dynamic_image" alt="" style="display: block; margin: 0 auto;" />

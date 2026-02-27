@@ -130,6 +130,22 @@ def _extract_payload_content(payload):
 
     return str(payload)
 
+
+def _extract_kind_from_scope(scope: str | None, expected_prefix: str = "verifier") -> Optional[int]:
+    """Return kind from '<prefix>:<kind>' scope or None if missing/invalid."""
+    if not isinstance(scope, str):
+        return None
+    parts = scope.split(":")
+    if len(parts) < 2 or parts[0] != expected_prefix:
+        return None
+    kind_raw = str(parts[1]).strip()
+    if not kind_raw:
+        return None
+    try:
+        return int(kind_raw)
+    except (TypeError, ValueError):
+        return None
+
 async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
     status_url = f"https://{host}/.well-known/card-status"
@@ -363,12 +379,18 @@ async def record_request(      request: Request,
     request_mode = (mode or "request").strip().lower()
     request_scope_prefix = "offer_request" if request_mode == "receive_offer" else "verifier"
 
+    grant_kinds = settings.GRANT_KINDS or []
+    valid_grant_kinds = {entry[0] for entry in grant_kinds if isinstance(entry, list) and len(entry) >= 2}
+    default_grant_kind = grant_kinds[0][0] if grant_kinds else kind
+
     resolved_kind = grant_kind if grant_kind is not None else kind
+    if resolved_kind not in valid_grant_kinds:
+        resolved_kind = default_grant_kind
 
     return templates.TemplateResponse(  "records/request.html", 
                                         {   "request": request,
                                             "record_kind": resolved_kind,
-                                            "grant_kinds": settings.GRANT_KINDS,
+                                            "grant_kinds": grant_kinds,
                                             "ws_url": ws_url,
                                             "request_mode": request_mode,
                                             "request_scope_prefix": request_scope_prefix
@@ -380,7 +402,7 @@ async def record_request(      request: Request,
 @router.get("/request-offer", tags=["records", "protected"])
 async def record_request_offer(
                                 request: Request,
-                                grant_kind:int = 34003,
+                                grant_kind:int = 34004,
                                 acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Explicit route for recipient-initiated offer intake flow."""
@@ -634,9 +656,17 @@ async def my_present_records(       request: Request,
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
-        if "verifier" in scope:
+        if isinstance(scope, str) and "verifier" in scope:
             record_select = True
-            record_kind = int(scope.split(":")[1])
+            scope_kind = _extract_kind_from_scope(scope, "verifier")
+            if scope_kind is not None:
+                record_kind = scope_kind
+            else:
+                logger.warning(
+                    "present route received malformed verifier scope='%s'; using record_kind=%s",
+                    scope,
+                    record_kind,
+                )
             nauth_response = nauth
         
         else:
@@ -780,9 +810,17 @@ async def my_retrieve_records(       request: Request,
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
-        if "verifier" in scope:
+        if isinstance(scope, str) and "verifier" in scope:
             record_select = True
-            record_kind = int(scope.split(":")[1])
+            scope_kind = _extract_kind_from_scope(scope, "verifier")
+            if scope_kind is not None:
+                record_kind = scope_kind
+            else:
+                logger.warning(
+                    "retrieve route received malformed verifier scope='%s'; using record_kind=%s",
+                    scope,
+                    record_kind,
+                )
             nauth_response = nauth
         
         else:
@@ -903,9 +941,17 @@ async def retrieve_grant_list(       request: Request,
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
     
-        if "verifier" in scope:
+        if isinstance(scope, str) and "verifier" in scope:
             record_select = True
-            record_kind = int(scope.split(":")[1])
+            scope_kind = _extract_kind_from_scope(scope, "verifier")
+            if scope_kind is not None:
+                record_kind = scope_kind
+            else:
+                logger.warning(
+                    "grantlist route received malformed verifier scope='%s'; using record_kind=%s",
+                    scope,
+                    record_kind,
+                )
             nauth_response = nauth
         
         else:

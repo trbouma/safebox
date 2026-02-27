@@ -196,6 +196,17 @@ Recommended operational checks:
 - confirm auth kind and relay set logged in sender websocket and NWC offer path
 - restart both web and NWC workers after relay config changes
 
+KEM fallback guardrails:
+
+- Prefer recipient wallet service host (from authenticated context or scope
+  hint), not relay host, for `/.well-known/kem`.
+- Treat relay-host `/.well-known/kem` misses (for example `404`) as expected
+  non-authoritative outcomes, not success signals.
+- Fail closed when valid recipient KEM cannot be resolved; require
+  re-authentication/retry.
+- Never substitute local default KEM material for peer KEM in encrypted
+  cross-party record transfer.
+
 ### Live Listener Semantics (QR/NFC Parity)
 
 Request/presentation listeners that drive user-visible completion must preserve

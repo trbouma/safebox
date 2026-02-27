@@ -350,8 +350,13 @@ function updateSubtypes() {
   selectEl.addEventListener('change', updateSubtypes);
   window.addEventListener('DOMContentLoaded', () => {
     const initialGrantKind = "{{ record_kind }}";
-    if (initialGrantKind && selectEl) {
-      selectEl.value = initialGrantKind;
+    if (selectEl) {
+      const optionValues = Array.from(selectEl.options).map(o => o.value);
+      if (initialGrantKind && optionValues.includes(String(initialGrantKind))) {
+        selectEl.value = initialGrantKind;
+      } else if (selectEl.options.length > 0) {
+        selectEl.selectedIndex = 0;
+      }
     }
     updateSubtypes();
 

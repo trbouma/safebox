@@ -27,6 +27,7 @@ Section convention used across current Safebox specs:
 - [THREAT-MODEL.md](./THREAT-MODEL.md) - Safebox threat boundaries, key risks, mitigations, and residual risk considerations.
 - [NAUTH-PROTOCOL.md](./NAUTH-PROTOCOL.md) - Authorization envelope used to coordinate cross-party record flows.
 - [NAUTH-EXTENSIBLE-HANDSHAKE.md](./NAUTH-EXTENSIBLE-HANDSHAKE.md) - Step/state handshake model for adding PQC and policy-driven sequence extensions without breaking flow compatibility.
+- [PROTOCOL-NORMALIZATION-RELAY-FIRST-KEM.md](./PROTOCOL-NORMALIZATION-RELAY-FIRST-KEM.md) - Patch spec for control-plane normalization, relay-first KEM acquisition, compact QR policy, and fail-closed compatibility migration.
 - [RECORD-PRESENTATION-NAUTH-STRATEGY.md](./RECORD-PRESENTATION-NAUTH-STRATEGY.md) - Generalized record presentation over QR/NFC with separate secure transfer channels.
 - [NEMBED-PROTOCOL.md](./NEMBED-PROTOCOL.md) - Compact bech32 extension format for embedded secure payloads.
 - [NWC-NFC-VAULT-EXTENSION.md](./NWC-NFC-VAULT-EXTENSION.md) - NWC extensions used for NFC wallet, payment, and record operations.
@@ -42,6 +43,11 @@ Section convention used across current Safebox specs:
 - [BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md](./BLOSSOM-BLOB-STORAGE-AND-TRANSFER.md) - Blob encryption, transfer semantics, and original-record exchange behavior.
 - [QUANTUM-SAFE-CRYPTOGRAPHY.md](./QUANTUM-SAFE-CRYPTOGRAPHY.md) - ML-KEM integration and quantum-safe payload encryption model.
 - [SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md) - Safebox alternative to centralized wallet ecosystems: role model, trust boundaries, issuance/presentation approach, and resiliency/security tradeoffs.
+
+KEM fallback quick reference:
+
+- `/records/transmit` KEM fallback contract, recipient-host hint resolution, and fail-closed rules: [OFFERS-AND-GRANTS-FLOWS.md](./OFFERS-AND-GRANTS-FLOWS.md)
+- Cross-instance/NFC KEM guardrails (authoritative host selection, relay mismatch handling): [NFC-FLOWS-AND-SECURITY.md](./NFC-FLOWS-AND-SECURITY.md)
 
 ## Operations
 
