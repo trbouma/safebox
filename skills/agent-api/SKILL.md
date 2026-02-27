@@ -10,6 +10,7 @@ Primary outcomes:
 - Read wallet info and balance
 - Read transaction history
 - Create and pay Lightning invoices
+- Pay Lightning addresses directly
 - Issue and accept Cashu ecash tokens
 - Create recipient-first offer QR payloads so humans can send grants by scanning agent QR
 
@@ -24,6 +25,7 @@ Conditional:
 - `invite_code` for onboarding
 - `access_key` for authenticated wallet actions
 - `invoice` string for pay flow
+- `lightning_address` and `amount_sats` for direct LN-address pay flow
 - `amount` (sat integer) for create/issue flows
 - `ecash_token` for accept flow
 
@@ -41,6 +43,7 @@ Conditional:
 - `POST /agent/create_invoice`
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
+- `POST /agent/pay_lightning_address`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
 - `POST /agent/offers/receive/create`
@@ -95,13 +98,30 @@ Expected response includes:
 2. Capture returned `ecash_token`.
 3. Treat token as bearer value until redeemed.
 
-### 6) Accept Ecash
+### 6) Pay Lightning Address
+
+1. Call `POST /agent/pay_lightning_address` with:
+   - `lightning_address` (for example `alice@example.com`)
+   - `amount_sats` (integer sats)
+   - optional `comment`, `tendered_amount`, `tendered_currency`
+2. Server performs LNURL resolution and payment using wallet core logic.
+3. Verify `status == OK` and review `fees_paid`.
+4. Use returned `balance` as post-payment state; optionally confirm with `GET /agent/balance`.
+
+Why prefer this over manual LNURL flow:
+
+- avoids client-side LNURL fetch/parse bugs
+- avoids millisat conversion errors
+- gives consistent behavior across LN-address providers
+- centralizes error handling for unresolved/invalid addresses
+
+### 7) Accept Ecash
 
 1. Call `POST /agent/accept_ecash` with `ecash_token`.
 2. Verify success and `accepted_amount`.
 3. Confirm final wallet state via `GET /agent/balance`.
 
-### 7) Recipient-First Offer Request (Agent Shows QR)
+### 8) Recipient-First Offer Request (Agent Shows QR)
 
 Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
 
@@ -153,7 +173,7 @@ Compact behavior:
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
 
-### 8) Sender-Side Offer Dispatch Lifecycle
+### 9) Sender-Side Offer Dispatch Lifecycle
 
 Use this flow when the agent is the sender and needs explicit dispatch states.
 

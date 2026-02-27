@@ -49,6 +49,14 @@ class AgentPayInvoiceRequest(BaseModel):
     tendered_currency: str = "SAT"
 
 
+class AgentPayLightningAddressRequest(BaseModel):
+    lightning_address: str
+    amount_sats: int
+    comment: str = "Paid by agent"
+    tendered_amount: float | None = None
+    tendered_currency: str = "SAT"
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -459,6 +467,48 @@ async def agent_pay_invoice(
         "payment_hash": payment_hash,
         "payment_preimage": payment_preimage,
         "description_hash": description_hash,
+        "balance": acorn_obj.balance,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/pay_lightning_address", tags=["agent"])
+async def agent_pay_lightning_address(
+    payload: AgentPayLightningAddressRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    lightning_address = (payload.lightning_address or "").strip().lower()
+    if not lightning_address:
+        raise HTTPException(status_code=400, detail="Missing lightning_address")
+    if "@" not in lightning_address:
+        raise HTTPException(status_code=400, detail="Invalid lightning_address format")
+
+    local_part, domain = lightning_address.split("@", 1)
+    if not local_part or not domain:
+        raise HTTPException(status_code=400, detail="Invalid lightning_address format")
+    if payload.amount_sats <= 0:
+        raise HTTPException(status_code=400, detail="amount_sats must be greater than zero")
+
+    try:
+        msg_out, final_fees = await acorn_obj.pay_multi(
+            amount=payload.amount_sats,
+            lnaddress=lightning_address,
+            comment=payload.comment,
+            tendered_amount=payload.tendered_amount,
+            tendered_currency=payload.tendered_currency,
+        )
+        await acorn_obj.load_data()
+        _persist_wallet_balance(acorn_obj)
+    except Exception as exc:
+        logger.exception("Agent pay_lightning_address failed")
+        raise HTTPException(status_code=400, detail=f"Lightning address payment failed: {exc}")
+
+    return {
+        "status": "OK",
+        "message": msg_out,
+        "lightning_address": lightning_address,
+        "amount_sats": payload.amount_sats,
+        "fees_paid": final_fees,
         "balance": acorn_obj.balance,
         "timestamp": int(datetime.utcnow().timestamp()),
     }

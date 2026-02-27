@@ -16,6 +16,7 @@ Current scope (initial release):
 - Invite-based wallet onboarding
 - Invoice creation
 - Invoice payment
+- Lightning-address payment
 - Ecash token issuance
 - Ecash token acceptance
 - Offer/grant dispatch lifecycle for agent-driven record sends
@@ -285,6 +286,52 @@ curl -sS -X POST \
     "tendered_currency": "SAT"
   }' \
   "${BASE_URL}/agent/pay_invoice"
+```
+
+### `POST /agent/pay_lightning_address`
+
+Pays a Lightning address directly (server-side LNURL resolution and invoice/payment handling).
+
+Request:
+
+```json
+{
+  "lightning_address": "alice@example.com",
+  "amount_sats": 1000,
+  "comment": "Paid by agent",
+  "tendered_amount": 1000.0,
+  "tendered_currency": "SAT"
+}
+```
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "lightning_address": "alice@example.com",
+    "amount_sats": 1000,
+    "comment": "Paid by agent",
+    "tendered_amount": 1000.0,
+    "tendered_currency": "SAT"
+  }' \
+  "${BASE_URL}/agent/pay_lightning_address"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "message": "Payment of 1000 sats with fee 2 sats to alice@example.com successful!",
+  "lightning_address": "alice@example.com",
+  "amount_sats": 1000,
+  "fees_paid": 2,
+  "balance": 9341,
+  "timestamp": 1770000000
+}
 ```
 
 ### `POST /agent/issue_ecash`

@@ -16,6 +16,7 @@ Current agent flows:
 - Invite onboarding (`/agent/onboard`)
 - Wallet info/balance (`/agent/info`, `/agent/balance`)
 - Lightning invoice create/pay (`/agent/create_invoice`, `/agent/pay_invoice`)
+- Lightning-address payment (`/agent/pay_lightning_address`)
 - Cashu token issue/accept (`/agent/issue_ecash`, `/agent/accept_ecash`)
 
 ## Flow Families
@@ -45,6 +46,13 @@ Current agent flows:
 2. Service executes multi-mint payment path.
 3. Service reloads wallet state and persists updated balance snapshot.
 4. API returns payment result and final balance.
+
+### Payment Flow (Pay Lightning Address)
+
+1. Agent calls `/agent/pay_lightning_address` with `lightning_address` and `amount_sats`.
+2. Service resolves LNURL and payment request server-side through existing wallet payment logic.
+3. Service executes payment, reloads wallet state, and persists updated balance snapshot.
+4. API returns payment status, paid fees, and final balance.
 
 ### Ecash Flow
 
