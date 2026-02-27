@@ -37,6 +37,7 @@ Section convention used across current Safebox specs:
 - [Agent API](./AGENT-API.md) - Header-authenticated machine API for automation clients (OpenClaw-style agents) using wallet access keys instead of browser cookies.
 - [Database Backends and Migrations](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
 - [Acorn Resiliency and Guards](./ACORN-RESILIENCY-AND-GUARDS.md) - Runtime guard model for Acorn under unreliable/adversarial conditions, including lock safety, failure handling, and rollback strategy.
+- [Hardening in Unpredictable and Adversarial Environments](./HARDENING-IN-UNPREDICTABLE-AND-ADVERSARIAL-ENVIRONMENTS.md) - Cross-cutting hardening model covering shared failure modes, fallback classes, fail-closed boundaries, and graceful rollback/recovery patterns across all flow families.
 - [Acorn Modularization Transition Plan](./ACORN-MODULARIZATION-TRANSITION-PLAN.md) - Design note for evolving Acorn from a god-class into compartmentalized services with phased migration and compatibility safeguards.
 - [Acceptance Model](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
 - [Threat Model](./THREAT-MODEL.md) - Safebox threat boundaries, key risks, mitigations, and residual risk considerations.

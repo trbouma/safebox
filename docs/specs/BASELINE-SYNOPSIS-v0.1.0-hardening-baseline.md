@@ -84,6 +84,10 @@ Impact:
 ## B. Backend Listener and Polling Controls
 
 - `listen_for_request` hardened with robust payload parsing (`split(":", 1)`)
+- auth candidate selection hardened with session binding:
+  - nonce matching required for auth response pickup
+  - optional transmittal target binding (`transmittal_pubhex`) where applicable
+  - candidate preference for `nauth:nembed` over plain `nauth`
 - strict live-window behavior enforced for active QR request/presentation listeners
 - fallback broad-history polling made explicit/controlled rather than implicit everywhere
 - NWC `offer_record` polling hardened with:
@@ -159,6 +163,9 @@ For production parity with this baseline:
    - resolved relay/kind diagnostics
    - no indefinite auth polling loops
    - no stale immediate completion on request listeners
+4. Stale-history replay guard:
+   - keep prior auth DMs in relay history and run fresh NFC offer session
+   - confirm listener selects current nonce-bound candidate instead of stale auth payload
 
 ## Architectural Outcome
 

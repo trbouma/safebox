@@ -218,6 +218,26 @@ live-session semantics:
 This avoids false immediate completion from stale records while keeping NWC-side
 stale-record filtering active for NFC ingest safety.
 
+### Listener Selection Hardening (Auth Stage)
+
+Offer/request auth listeners now follow these selection rules:
+
+- Bind auth response selection to active nonce.
+- Apply transmittal target binding (`transmittal_pubhex`) where route semantics permit.
+- Prefer `nauth:nembed` candidates over plain `nauth` when both exist in history.
+- Primary offer auth listener (`/records/ws/listenfornauth/{nauth}`) requires KEM-ready
+  handshake material before stage completion.
+
+Operational note:
+
+- Compatibility websocket routes may remain less strict to avoid blocking valid
+  same-instance legacy paths; strictness should be enforced on primary paths first.
+
+Regression requirement:
+
+- Validate cross-instance NFC offer both directions with stale auth DMs present in relay
+  history and confirm current nonce-bound candidate is selected.
+
 ## Core Security Model
 
 Safebox uses an application-layer card token model:

@@ -234,6 +234,19 @@ This preserves functional access on older browsers/devices (for example older Ch
 The current implementation includes additional hardening for mixed QR/NFC and
 cross-instance operation:
 
+- Auth listener candidate binding and selection:
+  - auth response pickup is nonce-bound to active session.
+  - where supported, transmittal target binding is applied (`transmittal_pubhex`).
+  - candidate selection prefers `nauth:nembed(kem)` over plain `nauth`.
+- Primary offer listener KEM gate:
+  - `/records/ws/listenfornauth/{nauth}` does not complete auth stage without valid
+    KEM material in the active response path.
+  - legacy websocket routes remain compatibility paths and should not become stricter
+    than the primary flow in ways that block already-valid transfer paths.
+- Troubleshooting footnote:
+  - in multi-card environments, selecting the wrong card/offer-kind can mimic protocol
+    failure; verify card label and expected kind before transport-level debugging.
+
 - NFC request listener lifecycle:
   - request websocket is no longer closed prematurely before first NFC tap.
   - prevents backend-success/client-no-render race conditions.
