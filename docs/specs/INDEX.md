@@ -70,6 +70,8 @@ KEM fallback quick reference:
 
 - [Incremental Change Hardening Strategy](../devops/incremental-change-hardening-strategy.md) - Incremental in-flight hardening strategy for isolating failures, applying narrow patches, validating in dev/test, and promoting safely.
 - [Recipient Offer Incremental Execution Checklist](../devops/recipient-offer-incremental-execution-checklist.md) - One-page execution checklist for recipient-first offer development with mandatory regression gates, slice-by-slice rollout, and rollback criteria.
+- [Configuration and Key Material Inventory](../devops/config-parameters-and-key-material-inventory.md) - Enumerated runtime config defaults, precedence rules, and key generation/storage lifecycle (`data/default.conf`, DB mappings, and rotation points).
+- [Zero-Config Docker Bootstrap and Production Path](../devops/zero-config-docker-bootstrap-and-production-path.md) - Defines instant up-and-running Docker goals for testing and the recommended production transition to operator-controlled Postgres, relays, mints, blossom services, and secrets.
 - [Incident Response and Key Compromise Runbook](./INCIDENT-RESPONSE-AND-KEY-COMPROMISE-RUNBOOK.md) - Incident classification, containment, recovery, and key-compromise response procedures.
 - [Backup and Recovery Plan](./BACKUP-AND-RECOVERY-PLAN.md) - Backup tiers, restore validation, and disaster recovery operating model.
 - [Data Retention and Deletion Policy](./DATA-RETENTION-AND-DELETION-POLICY.md) - Data minimization, retention classes, deletion lifecycle, and legal-hold alignment.
