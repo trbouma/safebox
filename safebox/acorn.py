@@ -6486,6 +6486,21 @@ class Acorn:
         result["pubkey"] = pubhex
         return result
 
+    async def follow(
+        self,
+        identifier: str,
+        relay_hint: str | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Follow a user by nip05, npub, or pubhex by updating kind-3 contact list.
+        """
+        return await self.add_follower(
+            identifier=identifier,
+            relay_hint=relay_hint,
+            relays=relays,
+        )
+
     async def delete_follower(
         self,
         identifier: str,
@@ -6507,6 +6522,19 @@ class Acorn:
         result["pubkey"] = pubhex
         result["removed"] = removed
         return result
+
+    async def unfollow(
+        self,
+        identifier: str,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Unfollow a user by nip05, npub, or pubhex by updating kind-3 contact list.
+        """
+        return await self.delete_follower(
+            identifier=identifier,
+            relays=relays,
+        )
 
     async def get_latest_kind1_posts_from_follow_list(
         self,

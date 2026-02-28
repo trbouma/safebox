@@ -109,6 +109,17 @@ class AgentReplyRequest(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentFollowRequest(BaseModel):
+    identifier: str
+    relay_hint: str | None = None
+    relays: list[str] | None = None
+
+
+class AgentUnfollowRequest(BaseModel):
+    identifier: str
+    relays: list[str] | None = None
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -982,6 +993,81 @@ async def agent_reply(
         "content": result.get("content"),
         "tags": result.get("tags"),
         "relays": result.get("relays"),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/follow", tags=["agent"])
+async def agent_follow(
+    payload: AgentFollowRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    identifier = (payload.identifier or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Missing identifier")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.follow(
+            identifier=identifier,
+            relay_hint=payload.relay_hint,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent follow failed")
+        raise HTTPException(status_code=400, detail=f"Follow failed: {exc}")
+
+    return {
+        "status": "OK",
+        "identifier": identifier,
+        "result": result,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/unfollow", tags=["agent"])
+async def agent_unfollow(
+    payload: AgentUnfollowRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    identifier = (payload.identifier or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Missing identifier")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.unfollow(
+            identifier=identifier,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent unfollow failed")
+        raise HTTPException(status_code=400, detail=f"Unfollow failed: {exc}")
+
+    return {
+        "status": "OK",
+        "identifier": identifier,
+        "result": result,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 

@@ -55,6 +55,8 @@ Conditional:
 - `POST /agent/publish_kind1`
 - `POST /agent/react`
 - `POST /agent/reply`
+- `POST /agent/follow`
+- `POST /agent/unfollow`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
 - `POST /agent/offers/receive/create`
@@ -127,6 +129,25 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 2. Optional relay override: `&relays=<relay1,relay2,...>`.
 3. Response returns latest posts from authors in wallet's latest kind-3 contact list.
 4. Use returned `events[].event_id` for reaction/reply/zap workflows.
+
+### Follow / Unfollow Management
+
+Safebox core supports following and unfollowing by identifier via:
+
+- `Acorn.follow(identifier, relay_hint=None, relays=None)`
+- `Acorn.unfollow(identifier, relays=None)`
+
+Accepted identifiers:
+
+- NIP-05 (`name@domain`)
+- `npub1...`
+- 64-char pubhex
+
+Suggested workflow:
+
+1. Follow identity (core or API route, if exposed).
+2. Query `GET /agent/nostr/following/latest_kind1` to verify feed changes.
+3. Unfollow identity when needed and re-check feed.
 
 ### Kind-0 Profile Lookup by Identifier
 
