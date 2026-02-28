@@ -310,6 +310,35 @@ def publish_kind0(
     )
     click.echo(json.dumps(result, indent=2))
 
+@click.command("publish_kind1", help="Publish NIP-01 kind 1 text note")
+@click.argument("content", type=str)
+@click.option("--relays", "-r", default=None, help="comma-separated relay list override")
+def publish_kind1(content: str, relays: str | None):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        mints=MINTS,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    try:
+        result = asyncio.run(acorn_obj.publish_kind1_post(content=content, relays=relay_list))
+    except Exception as exc:
+        click.echo(f"Failed to publish kind1: {exc}")
+        return
+    click.echo(json.dumps(result, indent=2))
+
 @click.command("setowner", help="get profile")
 @click.option('--owner', '-o', default=None, help="set owner npub")
 @click.option('--currency', '-c', default=None, help="set local currency")
@@ -980,6 +1009,7 @@ cli.add_command(release_lock)
 
 cli.add_command(get_profile)
 cli.add_command(publish_kind0)
+cli.add_command(publish_kind1)
 cli.add_command(tx_history)
 cli.add_command(deposit)
 cli.add_command(proofs)

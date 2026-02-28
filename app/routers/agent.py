@@ -83,6 +83,11 @@ class AgentPublishKind0Request(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentPublishKind1Request(BaseModel):
+    content: str
+    relays: list[str] | None = None
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -522,6 +527,44 @@ async def agent_latest_kind1_events(
     }
 
 
+@router.get("/nostr/kind0", tags=["agent"])
+async def agent_kind0_profile(
+    identifier: str,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    identifier_value = (identifier or "").strip()
+    if not identifier_value:
+        raise HTTPException(status_code=400, detail="Missing identifier")
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        profile_event = await acorn_obj.get_kind0_profile_by_identifier(
+            identifier=identifier_value,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent kind0 lookup failed")
+        raise HTTPException(status_code=400, detail=f"Kind0 lookup failed: {exc}")
+
+    return {
+        "status": "OK",
+        "identifier": identifier_value,
+        "profile_event": profile_event,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/create_invoice", tags=["agent"])
 async def agent_create_invoice(
     payload: AgentInvoiceRequest, acorn_obj: Acorn = Depends(_agent_get_acorn)
@@ -753,6 +796,41 @@ async def agent_publish_kind0(
         "status": "OK",
         "event_id": result.get("event_id"),
         "profile": result.get("profile"),
+        "relays": result.get("relays"),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/publish_kind1", tags=["agent"])
+async def agent_publish_kind1(
+    payload: AgentPublishKind1Request,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    content = (payload.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Missing content")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_kind1_post(content=content, relays=relay_list)
+    except Exception as exc:
+        logger.exception("Agent publish_kind1 failed")
+        raise HTTPException(status_code=400, detail=f"Publish kind1 failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": result.get("event_id"),
+        "content": result.get("content"),
         "relays": result.get("relays"),
         "timestamp": int(datetime.utcnow().timestamp()),
     }

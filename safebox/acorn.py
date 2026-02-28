@@ -1377,21 +1377,41 @@ class Acorn:
     def send_post(self,text):
         asyncio.run(self._async_send_post(text))  
     
-    async def _async_send_post(self, text:str):
-        """
-            Example showing how to post a text note (Kind 1) to relay
-        """
+    def _build_kind1_publish_relays(self, relays: List[str] | None = None) -> List[str]:
+        relay_pool: List[str] = []
+        candidates = relays if relays else [self.home_relay] + list(self.public_relays or []) + list(self.relays or [])
+        for each in candidates:
+            if each and each not in relay_pool:
+                relay_pool.append(each)
+        return relay_pool
 
-        # rnd generate some keys
-        
-        async with ClientPool([self.home_relay]+self.relays) as c:
-        # async with Client(relay) as c:
-            n_msg = Event(kind=Event.KIND_TEXT_NOTE,
-                        content=text,
-                        pub_key=self.pubkey_hex)
+    async def _async_send_post(self, text:str, relays: List[str] | None = None):
+        """Publish a kind-1 text note."""
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for kind1 publish")
+
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=Event.KIND_TEXT_NOTE,
+                content=text,
+                pub_key=self.pubkey_hex
+            )
             n_msg.sign(self.privkey_hex)
             c.publish(n_msg)
-            # await asyncio.sleep(1)
+            self.logger.debug("op=publish_kind1 status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+            return str(n_msg.id)
+
+    async def publish_kind1_post(self, content: str, relays: List[str] | None = None) -> Dict[str, Any]:
+        if not content or not str(content).strip():
+            raise ValueError("Content is required")
+        event_id = await self._async_send_post(str(content), relays=relays)
+        return {
+            "status": "OK",
+            "event_id": event_id,
+            "content": str(content),
+            "relays": self._build_kind1_publish_relays(relays=relays),
+        }
 
     async def add_tx_history(   self, 
                                 tx_type:str, 
@@ -6165,6 +6185,62 @@ class Acorn:
                         social_profile = json.loads(event.content)
 
         return social_profile       
+
+    async def get_kind0_profile_by_identifier(
+        self,
+        identifier: str,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        value = (identifier or "").strip()
+        if not value:
+            raise ValueError("Identifier is required")
+
+        pubhex: str | None = None
+        try:
+            if "@" in value:
+                pubhex, _ = nip05_to_npub(value)
+            elif value.startswith("npub"):
+                pubhex = Keys(pub_k=value).public_key_hex()
+            elif len(value) == 64 and all(ch in string.hexdigits for ch in value):
+                pubhex = value.lower()
+            else:
+                raise ValueError("Identifier must be nip05, npub, or pubhex")
+        except Exception as exc:
+            raise ValueError(f"Could not resolve identifier: {value}") from exc
+
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": 1,
+            "authors": [pubhex],
+            "kinds": [0],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            raise RuntimeError("No kind 0 profile found")
+
+        event = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[0]
+
+        try:
+            content_json = json.loads(event.content)
+        except Exception as exc:
+            raise RuntimeError("Kind 0 profile content is not valid JSON") from exc
+
+        return {
+            "id": str(event.id),
+            "pubkey": str(event.pub_key),
+            "created_at": int(event.created_at.timestamp()),
+            "content": content_json,
+        }
     
     async def get_latest_kind1_posts_by_nip05(
         self,

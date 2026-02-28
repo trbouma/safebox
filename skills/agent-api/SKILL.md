@@ -44,12 +44,14 @@ Conditional:
 - `GET /agent/tx_history`
 - `GET /agent/supported_currencies`
 - `GET /agent/nostr/latest_kind1`
+- `GET /agent/nostr/kind0`
 - `POST /agent/create_invoice`
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
 - `POST /agent/pay_lightning_address`
 - `POST /agent/zap`
 - `POST /agent/publish_kind0`
+- `POST /agent/publish_kind1`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
 - `POST /agent/offers/receive/create`
@@ -107,6 +109,28 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 2. Read returned `events[]` and choose the target `event_id` (or `event_id_hex` / `id`).
 3. Pass that value as `event_id` (or `event`) in `POST /agent/zap`.
 4. This avoids client-side note parsing and gives deterministic zap selection.
+
+### Kind-0 Profile Lookup by Identifier
+
+Use agent endpoint:
+
+- `GET /agent/nostr/kind0?identifier=<value>`
+- optional: `&relays=<relay1,relay2,...>`
+
+Accepted identifier inputs:
+
+- NIP-05 (`name@domain`)
+- `npub1...`
+- 64-char pubhex
+
+Returns latest kind-0 event data with parsed JSON profile content:
+
+- `profile_event.id`
+- `profile_event.pubkey`
+- `profile_event.created_at`
+- `profile_event.content` (object)
+
+Use this when an agent needs authoritative profile metadata before social actions (for example pre-zap context, identity checks, or local profile caching).
 
 ### 4) Pay Invoice
 
@@ -181,7 +205,15 @@ Identity-separation warning:
 - Do not copy the agent's own stable identity metadata into Safebox profiles if anonymity is desired.
 - An agent may operate many Safeboxes with distinct kind-0 identities that should not be trivially correlated back to the controlling agent.
 
-### 10) Recipient-First Offer Request (Agent Shows QR)
+### 10) Publish Kind-1 Text Note (NIP-01)
+
+1. Call `POST /agent/publish_kind1` with:
+   - `content` (required)
+   - optional `relays` array override
+2. Server signs and publishes a kind-1 event on configured relays.
+3. Confirm returned `event_id`.
+
+### 11) Recipient-First Offer Request (Agent Shows QR)
 
 Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
 
@@ -233,7 +265,7 @@ Compact behavior:
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
 
-### 11) Sender-Side Offer Dispatch Lifecycle
+### 12) Sender-Side Offer Dispatch Lifecycle
 
 Use this flow when the agent is the sender and needs explicit dispatch states.
 
