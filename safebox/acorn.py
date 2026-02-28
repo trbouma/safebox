@@ -233,6 +233,15 @@ class Acorn:
             if each and each not in relay_pool:
                 relay_pool.append(each)
         return relay_pool
+
+    def _build_zap_request_relays(self) -> List[str]:
+        relay_pool: List[str] = []
+        for each in list(self.public_relays or []):
+            if each and each not in relay_pool:
+                relay_pool.append(each)
+        if not relay_pool and self.home_relay:
+            relay_pool.append(self.home_relay)
+        return relay_pool
    
     async def load_data(self, force_profile_creation: bool=False):
         self.logger.debug(f"load data. Force profile creation {force_profile_creation}")
@@ -5263,9 +5272,10 @@ class Acorn:
             
             # Now we can create zap request
             self.logger.debug("create zap request")
+            zap_request_relays = self._build_zap_request_relays()
             tags = [
                 ["lnurl", lnaddress_to_lnurl(lnaddress)],
-                ["relays"] + query_relays,
+                ["relays"] + zap_request_relays,
                 ["amount", str(zap_amount * 1000)],
                 ["p", each_zap[0]],
             ]
@@ -5318,8 +5328,9 @@ class Acorn:
 
                 # Now we can create zap request
                 self.logger.debug("create zap request for profile")
+                zap_request_relays = self._build_zap_request_relays()
                 tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
-                            ["relays"] + query_relays,
+                            ["relays"] + zap_request_relays,
                             ["amount",str(amount*1000)],
                             ["p",event_profile.pub_key]
                             
