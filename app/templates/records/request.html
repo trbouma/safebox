@@ -45,6 +45,20 @@ function setRequestStatus(message) {
   }
 }
 
+function extractIncomingLabel(record) {
+  if (!record) return "";
+  const rawTag = record.tag;
+  let rawLabel = "";
+  if (Array.isArray(rawTag) && rawTag.length > 0) {
+    rawLabel = String(rawTag[0] || "");
+  } else if (typeof rawTag === "string") {
+    rawLabel = rawTag;
+  }
+  if (!rawLabel) return "";
+  const idx = rawLabel.indexOf(":");
+  return idx >= 0 ? rawLabel.substring(idx + 1) : rawLabel;
+}
+
 function centerQrImageInView() {
   const qrImg = document.getElementById("img_qr_display");
   if (!qrImg) return;
@@ -507,6 +521,11 @@ async function listenForPresentation(nauth) {
         
         // alert(`Request has been received! ${JSON.stringify(response.detail)}`);
         span_msg_status.textContent = "Records received.";
+        const labelInput = document.getElementById("record_label");
+        const firstLabel = extractIncomingLabel((response.records || [])[0]);
+        if (labelInput && firstLabel) {
+          labelInput.value = firstLabel;
+        }
         
         for (const rec of response.records) {
           //console.log(rec);

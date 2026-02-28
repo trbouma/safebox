@@ -286,11 +286,12 @@ async def offer_list(      request: Request,
                                     kind:int = None,   
                                     nprofile:str = None, 
                                     nauth: str = None,
+                                    card: str = None,
                                     recipient_initiated: int = 0,
                                     recipient_mode: str = None,
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
-    """Protected access to consulting recods in home relay"""
+    """Protected access to offer records in home relay."""
     redirect = _redirect_if_missing_acorn(acorn_obj)
     if redirect:
         return redirect
@@ -304,8 +305,7 @@ async def offer_list(      request: Request,
         pass
 
     if nauth:
-        
-        print(f"nauth from do consult {nauth}")
+        logger.info("offer_list received nauth for recipient-initiated offer flow")
 
 
         parsed_result = parse_nauth(nauth)
@@ -355,7 +355,10 @@ async def offer_list(      request: Request,
 
     normalized_mode = (recipient_mode or "").strip().lower()
     if normalized_mode not in {"auto_send", "review"}:
-        normalized_mode = "review" if recipient_initiated else "auto_send"
+        normalized_mode = "auto_send"
+    if recipient_initiated:
+        # Offer-request handshake depends on immediate send semantics.
+        normalized_mode = "auto_send"
 
     user_records = await acorn_obj.get_user_records(record_kind=kind)
 
@@ -385,9 +388,32 @@ async def offer_list(      request: Request,
                                             "offer_kinds": offer_kinds,
                                             "ws_url": ws_url,
                                             "recipient_initiated": bool(recipient_initiated),
-                                            "recipient_mode": normalized_mode
+                                            "recipient_mode": normalized_mode,
+                                            "preselected_card": card or ""
 
                                         })
+
+
+@router.post("/offerlist-scan", tags=["records", "protected"])
+async def offer_list_scan_post(
+    request: Request,
+    nauth: str = Form(None),
+    kind: int = Form(None),
+    card: str = Form(None),
+    recipient_initiated: int = Form(1),
+    recipient_mode: str = Form("auto_send"),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Scanner-only POST handoff to avoid exposing offer flow params in URL."""
+    return await offer_list(
+        request=request,
+        kind=kind,
+        nauth=nauth,
+        card=card,
+        recipient_initiated=recipient_initiated,
+        recipient_mode=recipient_mode,
+        acorn_obj=acorn_obj,
+    )
 
 @router.get("/request", tags=["records", "protected"])
 async def record_request(      request: Request,                                    
@@ -1736,7 +1762,9 @@ async def display_offer(     request: Request,
     # need to add in global_nauth in the page
     normalized_mode = (recipient_mode or "").strip().lower()
     if normalized_mode not in {"auto_send", "review"}:
-        normalized_mode = "review" if recipient_initiated else "auto_send"
+        normalized_mode = "auto_send"
+    if recipient_initiated:
+        normalized_mode = "auto_send"
 
     return templates.TemplateResponse(  template_to_use, 
                                         {   "request": request,
@@ -2369,6 +2397,8 @@ async def ws_request_record( websocket: WebSocket,
     await websocket.accept()
 
 
+    request_scope = None
+    receive_offer_mode = False
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
@@ -2376,6 +2406,8 @@ async def ws_request_record( websocket: WebSocket,
         transmittal_kind = parsed_nauth['values'].get('transmittal_kind', settings.RECORD_TRANSMITTAL_KIND)  
         transmittal_relays = parsed_nauth['values'].get('transmittal_relays', settings.RECORD_TRANSMITTAL_RELAYS)
         expected_nonce = parsed_nauth['values'].get('nonce')
+        request_scope = parsed_nauth['values'].get('scope')
+        receive_offer_mode = isinstance(request_scope, str) and request_scope.startswith("offer_request")
         print(f"ws transmittal relays: {transmittal_relays}")
 
 
@@ -2517,10 +2549,13 @@ async def ws_request_record( websocket: WebSocket,
                 # determine content to display and verification result
 
                 out_records =[]
+                persisted_records: List[str] = []
+                records_missing_original_blob: List[str] = []
                 is_valid = "Cannot Validate"
                 is_presenter = False
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
+                    decrypted_original = None
                     original_record_to_present_json = None
                     incoming_original_record = each.get("original_record")
                     if isinstance(incoming_original_record, dict):
@@ -2643,6 +2678,56 @@ async def ws_request_record( websocket: WebSocket,
                         each["picture"] = None
                         each["is_attested"] = False
 
+                    if receive_offer_mode:
+                        try:
+                            raw_tag = each.get("tag")
+                            if isinstance(raw_tag, list) and raw_tag:
+                                record_name = str(raw_tag[0])
+                            else:
+                                record_name = str(each.get("content") or "received-offer")
+
+                            record_kind = int(each.get("type") or each.get("kind") or transmittal_kind)
+                            record_value = each.get("payload")
+                            if not isinstance(record_value, str):
+                                record_value = json.dumps(record_value)
+
+                            record_origin = presenter
+                            try:
+                                if isinstance(presenter, str) and len(presenter) == 64:
+                                    record_origin = hex_to_npub(presenter)
+                            except Exception:
+                                pass
+
+                            await acorn_obj.put_record(
+                                record_name=record_name,
+                                record_value=record_value,
+                                record_kind=record_kind,
+                                record_origin=record_origin,
+                            )
+                            persisted_records.append(f"{record_name}:{record_kind}")
+
+                            if decrypted_original:
+                                blob_result = await acorn_obj.transfer_blob(
+                                    record_name=record_name,
+                                    record_kind=record_kind,
+                                    record_origin=record_origin,
+                                    blobxfer=decrypted_original,
+                                    blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+                                    blossom_home_server=settings.BLOSSOM_HOME_SERVER,
+                                )
+                                if blob_result.get("status") != "OK":
+                                    logger.warning(
+                                        "ws_request_record transfer_blob non-fatal status record=%s kind=%s status=%s reason=%s",
+                                        record_name,
+                                        record_kind,
+                                        blob_result.get("status"),
+                                        blob_result.get("reason"),
+                                    )
+                                    if blob_result.get("reason") == "original_record_not_available":
+                                        records_missing_original_blob.append(record_name)
+                        except Exception as exc:
+                            logger.warning("ws_request_record failed to persist received offer record: %s", exc)
+
                     out_records.append(each)
                     print(f"out records: {out_records}")
 
@@ -2653,6 +2738,13 @@ async def ws_request_record( websocket: WebSocket,
                                 "result": is_valid
                                
                                }
+                if receive_offer_mode and persisted_records:
+                    msg_out["detail"] = f"Stored {len(persisted_records)} incoming grant record(s)."
+                if receive_offer_mode and records_missing_original_blob:
+                    msg_out["warning"] = (
+                        "Original record blob unavailable for: "
+                        + ", ".join(records_missing_original_blob)
+                    )
                 # print(f"send {incoming_record} {record_json}") 
                 # print(f"msg out: {msg_out}") 
                 try:

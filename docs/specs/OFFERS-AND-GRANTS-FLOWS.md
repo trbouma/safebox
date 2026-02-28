@@ -40,6 +40,7 @@ Out of scope:
 1. **Recipient-first bootstrap (required for agent flows):** recipient generates a `nauth` and presents it as a QR code.
 2. Offerer opens offer page (`/records/offerlist` or `/records/displayoffer`).
 3. Offerer scans recipient QR and imports recipient `nauth` context.
+   - Scanner intake now uses a scanner-only POST bridge (`/records/offerlist-scan`) so `nauth` and recipient flow parameters are not exposed in URL query strings.
 4. If recipient-first is not used, offerer may generate `nauth` via `POST /records/nauth` and render QR (legacy initiator-first mode).
 
 ### Authentication + Transfer
@@ -51,6 +52,7 @@ Out of scope:
 ### Result
 
 8. Recipient receives offer context and downstream grant creation/transmission proceeds over configured transmittal channels.
+9. In `receive_offer` mode, incoming grants are persisted during `/records/ws/request/{nauth}` processing (not only rendered), with original-blob transfer attempted when `pqc_encrypted_original` metadata is present.
 
 ## Flow B: Offer by NFC
 
@@ -387,6 +389,16 @@ Offer-side behavior now supports explicit recipient-initiated modes:
 
 Both modes keep quantum-safe requirements; mode controls send timing only.
 
+Current defaults in scanner-driven offer-request flow:
+
+- scanner normalization forces `recipient_mode=auto_send` for `offer_request`.
+- route normalization targets handshake-capable offer pages for stage-1 and stage-2.
+- stale referer mode values are ignored for scanner offer-request intake.
+
+Result:
+
+- avoids dead-end states where handshake succeeds but no transmittal is triggered.
+
 ### Original-Record Blob Retrieval Fallback (Transfer Ingest)
 
 For accepted grants/presentations that include `original_record`, ingest now uses
@@ -459,6 +471,26 @@ Result:
 
 - eliminates `could not parse incoming nembed` loops on valid 21062 records
 - allows decryption/verification pipeline to proceed using top-level fields
+
+### Scanner Handoff and UI Trigger Robustness
+
+Observed failure class:
+
+- scanner flow reached the correct route but remained stuck on scanner or stalled after handshake.
+
+Root causes:
+
+- `fetch('/scanner/scanresult')` does not perform full-page navigation for HTML handoff responses.
+- client logging helper assumed `#log` existed and could throw in auto-send paths.
+
+Current hardening:
+
+- scanner submission now uses real form POST navigation from scanner page.
+- scanner backend accepts both JSON and form payloads for `/scanner/scanresult`.
+- scanner offer-request handoff uses POST bridge (`/records/offerlist-scan`) to avoid query-string leakage.
+- offer-list auto-send bootstrap runs for both normal DOM load and already-ready document state.
+- offer-list logging helper degrades to `console.log` if page log element is absent.
+- successful auto-send now reloads to a clean offer-list URL (drops handshake params).
 
 ## Implementation References
 

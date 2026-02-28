@@ -262,17 +262,24 @@
   const scanReferer = {{ referer | tojson }};
 
   async function gotoScanResult(scandata) {
-    const submit_data = { data: scandata, referer: scanReferer };
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/scanner/scanresult';
 
-    await fetch('/scanner/scanresult', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submit_data)
-    }).then((response) => {
-      if (response.redirected) {
-        window.location.href = response.url;
-      }
-    });
+    const dataInput = document.createElement('input');
+    dataInput.type = 'hidden';
+    dataInput.name = 'data';
+    dataInput.value = scandata || '';
+    form.appendChild(dataInput);
+
+    const refererInput = document.createElement('input');
+    refererInput.type = 'hidden';
+    refererInput.name = 'referer';
+    refererInput.value = scanReferer || '';
+    form.appendChild(refererInput);
+
+    document.body.appendChild(form);
+    form.submit();
   }
 </script>
 

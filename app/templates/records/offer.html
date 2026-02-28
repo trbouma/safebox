@@ -82,6 +82,35 @@ function restoreRecipientKemFromCache() {
   }
 }
 
+function getAutoSendKey() {
+  const nauthPart = (global_transmit_nauth && global_transmit_nauth !== "None")
+    ? global_transmit_nauth
+    : "none";
+  const cardPart = global_offer_card || "unknown";
+  return `offer-auto-sent:${nauthPart}:${cardPart}`;
+}
+
+function shouldAutoSendRecipientFlow() {
+  if (!recipientInitiated) return false;
+  if (recipientMode !== "auto_send") return false;
+  if (!global_transmit_nauth || global_transmit_nauth === "None") return false;
+  return true;
+}
+
+async function maybeAutoSendRecipientFlow() {
+  if (!shouldAutoSendRecipientFlow()) return;
+  const autoSendKey = getAutoSendKey();
+  if (sessionStorage.getItem(autoSendKey) === "1") return;
+  sessionStorage.setItem(autoSendKey, "1");
+  consoleLog("Recipient-initiated flow detected: sending offer automatically.");
+  try {
+    await offerRecord();
+  } catch (error) {
+    consoleLog(`Auto-send failed: ${error}`);
+    sessionStorage.removeItem(autoSendKey);
+  }
+}
+
 function hasQuantumReadyChannel() {
   return !!global_kem_public_key &&
          global_kem_public_key !== "None" &&
@@ -754,6 +783,7 @@ async function getBlob() {
 document.addEventListener("DOMContentLoaded", () => {
   restoreRecipientKemFromCache();
   getBlob();
+  maybeAutoSendRecipientFlow();
 });
 </script>
 
@@ -799,8 +829,6 @@ document.addEventListener("DOMContentLoaded", () => {
     <h2>Offer {{offer_label}} Record to Recipient?</h2>
     Click below to authenticate with {{offer_kind_label}} recipient. 
     <br>Please ask them to scan the generated QR code.
-    <br><br>
-    <button onclick="offerRecord()">Send Offer Now</button>
     <br><br>
     <button onclick="scanCode()">Scan Recipient QR</button>
     <br><br>

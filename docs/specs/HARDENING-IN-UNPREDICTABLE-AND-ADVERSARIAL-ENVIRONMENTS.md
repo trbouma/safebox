@@ -127,6 +127,47 @@ Purpose:
 
 - Prevent regressions during hardening rollout.
 
+### G. Frontend Trigger Integrity and Safe Diagnostics
+
+- Auto-send/auto-transmit flows MUST not depend on optional UI elements.
+- Logging helpers used in critical paths MUST degrade safely when UI log targets are absent.
+- Recipient-initiated mode semantics SHOULD be normalized server-side to avoid stale query-state drift.
+- Route normalization MUST land on handshake-capable pages for stage-1 auth and stage-2 transmit.
+
+Purpose:
+
+- Prevent silent client-side exceptions from aborting protocol steps.
+- Avoid dead-end states where handshake succeeds but transmit never executes.
+- Keep flow behavior deterministic across refresh/referer/browser restore conditions.
+
+Observed failure class:
+
+- Handshake completed (`presenter_nauth` + KEM exchange) but no records appeared on transmittal kind.
+- Root cause was a frontend exception in a logging helper on a page without a log container, plus stale mode/routing interactions.
+- Corrective hardening included: safe logging fallback, forced recipient auto-send mode for offer-request scans, and routing normalization to handshake-capable offer pages.
+
+### H. Scanner Navigation and URL-Exposure Controls
+
+- Scanner-driven sensitive handoffs SHOULD use browser-navigation POST (not fetch-only API calls) when downstream flow requires full-page transition.
+- Scanner intake handlers SHOULD accept both JSON and form payloads to tolerate client transport differences.
+- For recipient-initiated offer intake, bootstrap values (`nauth`, recipient mode flags) SHOULD be passed through scanner-only POST endpoints instead of query-string redirects.
+
+Purpose:
+
+- Prevent scanner pages from appearing stuck due to non-navigating fetch responses.
+- Reduce accidental exposure of bootstrap/session parameters in browser URL surfaces.
+- Keep scanner and non-scanner paths interoperable without duplicating flow logic.
+
+### I. Receive-Offer Persistence Semantics
+
+- In `offer_request`/`receive_offer` mode, verified incoming records MUST be persisted, not just rendered.
+- When original-record transfer metadata is present, blob transfer SHOULD be attempted and non-fatal failures surfaced as warnings.
+
+Purpose:
+
+- Align user-visible success with durable grant storage outcomes.
+- Prevent false-positive completion where records appear in-session but are not stored.
+
 ## HTTPS/REST/API Surface in Current Flows
 
 Safebox flows currently touch HTTPS/REST/API endpoints for specific control-plane needs, including:

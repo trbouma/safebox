@@ -1,4 +1,5 @@
 import logging
+from html import escape
 from urllib.parse import quote, unquote, urlparse, urlencode, parse_qsl, urlunparse
 
 import bolt11
@@ -47,7 +48,15 @@ async def get_scan_result(  request: Request,
     """return wallet mode information"""
 
     if request.method == "POST":
-        data = await request.json()
+        data = {}
+        try:
+            data = await request.json()
+        except Exception:
+            try:
+                form_data = await request.form()
+                data = dict(form_data)
+            except Exception:
+                data = {}
         qr_code = data.get("data", None)
         referer = data.get("referer", referer)
     referer = (referer or "none").strip()
@@ -179,9 +188,10 @@ def _redirect_access(**params: object) -> RedirectResponse:
     return RedirectResponse(f"/safebox/access?{urlencode(clean_params)}")
 
 
-def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectResponse:
+def _redirect_offer_request_scan(nauth: str, referer: str | None) -> HTMLResponse | RedirectResponse:
     offer_kind = None
-    recipient_mode = "review"
+    # Recipient-initiated offer scans should default to immediate transmit.
+    recipient_mode = "auto_send"
     try:
         parsed = parse_nauth(nauth)
         scope = (parsed.get("values", {}).get("scope") or "").strip()
@@ -197,33 +207,149 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> RedirectRes
 
     if referer:
         parsed_ref = urlparse(referer)
+        # Critical: offer_request handshake is initiated in /records/offerlist.
+        # /records/displayoffer renders a specific offer, but does not emit the
+        # recipient-auth response needed by /records/ws/request stage-1.
+        # Therefore always normalize offer_request scans to /records/offerlist.
         if parsed_ref.path in {"/records/offerlist", "/records/displayoffer"}:
             query_params = dict(parse_qsl(parsed_ref.query, keep_blank_values=True))
-            existing_mode = (query_params.get("recipient_mode") or "").strip().lower()
-            if existing_mode in {"auto_send", "review"}:
-                recipient_mode = existing_mode
             query_params["nauth"] = nauth
             query_params["recipient_initiated"] = "1"
+            # For offer_request scans, always force auto-send. Keeping a stale
+            # referer-provided "review" mode causes a dead-end because the
+            # manual send button is intentionally hidden in this flow.
             query_params["recipient_mode"] = recipient_mode
             if offer_kind is not None:
                 query_params["kind"] = str(offer_kind)
-            rebuilt = urlunparse(
-                (
-                    parsed_ref.scheme,
-                    parsed_ref.netloc,
-                    parsed_ref.path,
-                    parsed_ref.params,
-                    urlencode(query_params),
-                    parsed_ref.fragment,
-                )
-            )
-            return RedirectResponse(rebuilt)
+            # Scanner-only POST handoff keeps nauth and flow params out of URL.
+            return _post_offerlist_scan(query_params)
 
     if offer_kind is not None:
-        return RedirectResponse(
-            f"/records/offerlist?nauth={quote(nauth)}&kind={offer_kind}&recipient_initiated=1&recipient_mode={recipient_mode}"
+        return _post_offerlist_scan(
+            {
+                "nauth": nauth,
+                "kind": str(offer_kind),
+                "recipient_initiated": "1",
+                "recipient_mode": recipient_mode,
+            }
         )
-    return RedirectResponse(f"/records/offerlist?nauth={quote(nauth)}&recipient_initiated=1&recipient_mode={recipient_mode}")
+    return _post_offerlist_scan(
+        {
+            "nauth": nauth,
+            "recipient_initiated": "1",
+            "recipient_mode": recipient_mode,
+        }
+    )
+
+
+def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
+    inputs = []
+    for key, value in fields.items():
+        if value is None:
+            continue
+        inputs.append(
+            f'<input type="hidden" name="{escape(str(key), quote=True)}" value="{escape(str(value), quote=True)}" />'
+        )
+    html = f"""
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Safebox Redirect</title>
+    <style>
+      :root {{
+        --sb-navy: #000060;
+        --sb-light: #f6f6f6;
+        --sb-blue-1: #5267ec;
+        --sb-blue-2: #5369ec;
+      }}
+      html, body {{
+        margin: 0;
+        height: 100%;
+        background: radial-gradient(circle at 20% 20%, rgba(82, 103, 236, 0.25), rgba(0, 0, 96, 0.95));
+        color: var(--sb-light);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Helvetica, Arial, sans-serif;
+      }}
+      .wrap {{
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }}
+      .card {{
+        width: min(360px, 84vw);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        background: rgba(8, 13, 38, 0.75);
+        backdrop-filter: blur(4px);
+        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.35);
+        padding: 16px 14px;
+        text-align: center;
+      }}
+      .brand {{
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        margin-bottom: 8px;
+      }}
+      .msg {{
+        margin: 0;
+        opacity: 0.94;
+        font-size: 0.95rem;
+      }}
+      .spinner {{
+        width: 34px;
+        height: 34px;
+        margin: 14px auto 4px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.25);
+        border-top-color: var(--sb-blue-1);
+        animation: spin 0.8s linear infinite;
+      }}
+      @keyframes spin {{
+        to {{ transform: rotate(360deg); }}
+      }}
+      @media (max-width: 520px) {{
+        .wrap {{
+          padding: 14px;
+        }}
+        .card {{
+          width: min(320px, 80vw);
+          border-radius: 14px;
+          padding: 14px 12px;
+        }}
+        .brand {{
+          font-size: 0.95rem;
+          margin-bottom: 6px;
+        }}
+        .msg {{
+          font-size: 0.9rem;
+        }}
+        .spinner {{
+          width: 30px;
+          height: 30px;
+          margin-top: 12px;
+        }}
+      }}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="brand">SAFEBOX</div>
+        <p class="msg">Preparing recipient offer channel...</p>
+        <div class="spinner" aria-hidden="true"></div>
+      </div>
+    </div>
+    <form id="scanOfferPost" method="post" action="/records/offerlist-scan">
+      {''.join(inputs)}
+    </form>
+    <script>document.getElementById('scanOfferPost').submit();</script>
+  </body>
+</html>
+"""
+    return HTMLResponse(content=html)
 
 
 def _redirect_present_request_scan(nauth: str) -> RedirectResponse:

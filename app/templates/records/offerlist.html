@@ -27,6 +27,7 @@ var global_naddr = "";
 var global_transmit_nauth = "None";
 var global_kem_public_key = null;
 var global_kemalg = null;
+const preselectedCard = {{ preselected_card | default("") | tojson }};
 
 function getSelectedOfferAndGrantKinds() {
   const selectedOfferKind = parseInt(document.getElementById("offer_kind").value, 10);
@@ -67,7 +68,11 @@ qr_img_func.src = "/safebox/qr/"+ global_nauth;
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
+    if (logElement) {
+      logElement.innerHTML += data + '\n';
+      return;
+    }
+    console.log(data);
   };
 
 function formatApiDetail(detail) {
@@ -559,6 +564,9 @@ async function offerRecord() {
     alert("Please enter/select an offer label before transmitting.");
     return;
   }
+  consoleLog(
+    `Auto-transmit trigger: record='${submit_data.record_name}' offer_kind=${selectedOfferKind} grant_kind=${selectedGrantKind}`
+  );
   if (!submit_data.kem_public_key || !submit_data.kemalg) {
     consoleLog("Recipient KEM not available in browser state; relying on server-side KEM resolution.");
     submit_data.kem_public_key = null;
@@ -579,14 +587,39 @@ async function offerRecord() {
     return;
   }
   alert(`Done! ${data.status}`);
-
-   // window.location.href=referer;
-     }
+  // Reset to a clean offer list URL after successful transmit.
+  // This removes handshake/bootstrap query params and avoids accidental
+  // auto-send retriggers on refresh/back navigation.
+  window.location.href = `/records/offerlist?kind=${selectedOfferKind}`;
+}
 
 
 
 
 setDarkMode();
+
+function bootstrapRecipientAutoSend() {
+  const requestedCard = (preselectedCard || "").trim();
+  if (!requestedCard) return;
+  const labelInput = document.getElementById("record_label");
+  if (labelInput && !labelInput.value) {
+    labelInput.value = requestedCard;
+  }
+  // Recipient-initiated auto mode should send immediately when a card context
+  // is already known from the scanner referer (e.g. displayoffer -> scan).
+  if (recipientInitiated && recipientMode === "auto_send") {
+    consoleLog(`Auto-send bootstrap: card='${requestedCard}' nauth_present=${!!getActiveRecipientNauth()}`);
+    setTimeout(() => {
+      offerRecord();
+    }, 250);
+  }
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", bootstrapRecipientAutoSend);
+} else {
+  bootstrapRecipientAutoSend();
+}
 
 
 </script>
