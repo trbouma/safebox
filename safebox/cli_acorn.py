@@ -235,6 +235,81 @@ def get_profile(name, force):
 
     asyncio.run(acorn_obj.get_ecash_latest())
 
+@click.command("publish_kind0", help="Publish NIP-01 kind 0 metadata event")
+@click.option("--name", default=None, help="profile name")
+@click.option("--about", default=None, help="short bio")
+@click.option("--picture", default=None, help="profile picture URL")
+@click.option("--display-name", "display_name", default=None, help="display name")
+@click.option("--nip05", default=None, help="nip05 identifier")
+@click.option("--banner", default=None, help="banner URL")
+@click.option("--website", default=None, help="website URL")
+@click.option("--lud16", default=None, help="lightning address")
+@click.option("--extra-json", default=None, help="extra metadata fields as JSON object")
+@click.option("--relays", "-r", default=None, help="comma-separated relay list override")
+def publish_kind0(
+    name,
+    about,
+    picture,
+    display_name,
+    nip05,
+    banner,
+    website,
+    lud16,
+    extra_json,
+    relays,
+):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+
+    extra_fields = {}
+    if display_name is not None:
+        extra_fields["display_name"] = display_name
+    if nip05 is not None:
+        extra_fields["nip05"] = nip05
+    if banner is not None:
+        extra_fields["banner"] = banner
+    if website is not None:
+        extra_fields["website"] = website
+    if lud16 is not None:
+        extra_fields["lud16"] = lud16
+
+    if extra_json:
+        try:
+            parsed_extra = json.loads(extra_json)
+            if not isinstance(parsed_extra, dict):
+                click.echo("extra-json must be a JSON object")
+                return
+            extra_fields.update(parsed_extra)
+        except Exception as exc:
+            click.echo(f"Invalid extra-json: {exc}")
+            return
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        mints=MINTS,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    result = asyncio.run(
+        acorn_obj.publish_kind0_metadata(
+            name=name,
+            about=about,
+            picture=picture,
+            extra_fields=extra_fields if extra_fields else None,
+            relays=relay_list,
+        )
+    )
+    click.echo(json.dumps(result, indent=2))
+
 @click.command("setowner", help="get profile")
 @click.option('--owner', '-o', default=None, help="set owner npub")
 @click.option('--currency', '-c', default=None, help="set local currency")
@@ -904,6 +979,7 @@ cli.add_command(acquire_lock)
 cli.add_command(release_lock)
 
 cli.add_command(get_profile)
+cli.add_command(publish_kind0)
 cli.add_command(tx_history)
 cli.add_command(deposit)
 cli.add_command(proofs)

@@ -70,6 +70,19 @@ class AgentZapRequest(BaseModel):
     comment: str = "⚡️"
 
 
+class AgentPublishKind0Request(BaseModel):
+    name: str | None = None
+    about: str | None = None
+    picture: str | None = None
+    display_name: str | None = None
+    nip05: str | None = None
+    banner: str | None = None
+    website: str | None = None
+    lud16: str | None = None
+    extra_fields: dict | None = None
+    relays: list[str] | None = None
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -686,6 +699,61 @@ async def agent_zap(
         "currency": currency_code,
         "converted_from_currency": converted_from_currency,
         "balance": acorn_obj.balance,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/publish_kind0", tags=["agent"])
+async def agent_publish_kind0(
+    payload: AgentPublishKind0Request,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    extra_fields: dict = {}
+    if payload.extra_fields:
+        if not isinstance(payload.extra_fields, dict):
+            raise HTTPException(status_code=400, detail="extra_fields must be an object")
+        extra_fields.update(payload.extra_fields)
+
+    if payload.display_name is not None:
+        extra_fields["display_name"] = payload.display_name
+    if payload.nip05 is not None:
+        extra_fields["nip05"] = payload.nip05
+    if payload.banner is not None:
+        extra_fields["banner"] = payload.banner
+    if payload.website is not None:
+        extra_fields["website"] = payload.website
+    if payload.lud16 is not None:
+        extra_fields["lud16"] = payload.lud16
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_kind0_metadata(
+            name=payload.name,
+            about=payload.about,
+            picture=payload.picture,
+            extra_fields=extra_fields if extra_fields else None,
+            relays=relay_list,
+            persist_profile_record=True,
+        )
+    except Exception as exc:
+        logger.exception("Agent publish_kind0 failed")
+        raise HTTPException(status_code=400, detail=f"Publish kind0 failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": result.get("event_id"),
+        "profile": result.get("profile"),
+        "relays": result.get("relays"),
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 

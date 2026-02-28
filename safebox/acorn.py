@@ -418,28 +418,88 @@ class Acorn:
         return self.k.private_key_bech32()
 
     async def _async_create_profile(self, nostr_profile: nostrProfile, replicate_relays: List[str]=None):
-        if replicate_relays:
-            write_relays = replicate_relays
-        else:
-            write_relays = [self.home_relay]
-        async with ClientPool(write_relays) as c:
-            out_msg = "ok"
-            try:
-                profile = nostr_profile.model_dump_json()
-            
-                profile_str = json.dumps(profile)
-                self.logger.debug("op=create_profile status=profile_json_ready")
-                # this seems to work
-                profile_2 = json.dumps(nostr_profile.model_dump(mode='json'))
-                n_msg = Event(kind=0,
-                        content=profile_2,
-                        pub_key=self.pubkey_hex)
-                n_msg.sign(self.privkey_hex)
-                c.publish(n_msg)
-            except (ValueError, TypeError, json.JSONDecodeError) as exc:
-                self.logger.warning("op=create_profile status=publish_failed error=%s", exc)
-                out_msg = "error"
+        out_msg = "ok"
+        try:
+            profile_payload = nostr_profile.model_dump(mode="json")
+            await self._publish_kind0_event(profile_payload=profile_payload, relays=replicate_relays)
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self.logger.warning("op=create_profile status=publish_failed error=%s", exc)
+            out_msg = "error"
         return out_msg
+
+    async def _publish_kind0_event(self, profile_payload: Dict[str, Any], relays: List[str] | None = None) -> str:
+        if relays:
+            write_relays = relays
+        else:
+            write_relays = []
+            for each in [self.home_relay] + list(self.public_relays or []):
+                if each and each not in write_relays:
+                    write_relays.append(each)
+        if not write_relays:
+            raise RuntimeError("No relays configured for kind0 publish")
+
+        profile_content = json.dumps(profile_payload)
+        async with ClientPool(write_relays) as c:
+            n_msg = Event(
+                kind=0,
+                content=profile_content,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=publish_kind0 status=published event_id=%s relays=%s", n_msg.id, write_relays)
+            return str(n_msg.id)
+
+    async def publish_kind0_metadata(
+        self,
+        name: str | None = None,
+        about: str | None = None,
+        picture: str | None = None,
+        extra_fields: Dict[str, Any] | None = None,
+        relays: List[str] | None = None,
+        persist_profile_record: bool = True,
+    ) -> Dict[str, Any]:
+        profile_payload: Dict[str, Any] = {}
+        try:
+            profile_raw = await self.get_wallet_info(label="profile")
+            if profile_raw:
+                profile_payload = json.loads(profile_raw)
+        except Exception:
+            profile_payload = {}
+
+        if not profile_payload:
+            profile_payload = nostrProfile().model_dump(mode="json")
+
+        if name is not None:
+            profile_payload["name"] = name
+            if not profile_payload.get("display_name"):
+                profile_payload["display_name"] = name
+        if about is not None:
+            profile_payload["about"] = about
+        if picture is not None:
+            profile_payload["picture"] = picture
+
+        if extra_fields:
+            for key, value in extra_fields.items():
+                if key:
+                    profile_payload[str(key)] = value
+
+        event_id = await self._publish_kind0_event(profile_payload=profile_payload, relays=relays)
+
+        if persist_profile_record:
+            await self.set_wallet_info(label="profile", label_info=json.dumps(profile_payload))
+
+        result_relays: List[str] = []
+        for each in (relays if relays else [self.home_relay] + list(self.public_relays or [])):
+            if each and each not in result_relays:
+                result_relays.append(each)
+
+        return {
+            "status": "OK",
+            "event_id": event_id,
+            "profile": profile_payload,
+            "relays": result_relays,
+        }
 
     async def create_instance(self, keepkey:bool=False, longseed:bool=False, name="wallet"):
         out_msg = "This is another instance"
