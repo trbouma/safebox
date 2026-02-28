@@ -339,6 +339,139 @@ def publish_kind1(content: str, relays: str | None):
         return
     click.echo(json.dumps(result, indent=2))
 
+
+@click.command("react", help="Publish NIP-25 reaction (kind 7) to an event")
+@click.argument("event_id", type=str)
+@click.option("--content", "-c", default="❤️", help="reaction content, default heart emoji")
+@click.option("--pubkey", default=None, help="reacted event author pubkey (npub or hex)")
+@click.option("--kind", "reacted_kind", default=None, type=int, help="reacted event kind")
+@click.option("--relay-hint", default=None, help="relay hint for the e/p tags")
+@click.option("--a-tag", default=None, help="optional addressable event coordinate")
+@click.option("--extra-tags-json", default=None, help="optional extra tags as JSON array of arrays")
+@click.option("--relays", "-r", default=None, help="comma-separated relay list override")
+def react(
+    event_id: str,
+    content: str,
+    pubkey: str | None,
+    reacted_kind: int | None,
+    relay_hint: str | None,
+    a_tag: str | None,
+    extra_tags_json: str | None,
+    relays: str | None,
+):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+
+    extra_tags = None
+    if extra_tags_json:
+        try:
+            parsed = json.loads(extra_tags_json)
+            if not isinstance(parsed, list):
+                click.echo("extra-tags-json must be a JSON array")
+                return
+            extra_tags = parsed
+        except Exception as exc:
+            click.echo(f"Invalid extra-tags-json: {exc}")
+            return
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        mints=MINTS,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    try:
+        result = asyncio.run(
+            acorn_obj.publish_reaction(
+                target_event_id=event_id,
+                content=content,
+                reacted_pubkey=pubkey,
+                reacted_kind=reacted_kind,
+                relay_hint=relay_hint,
+                a_tag=a_tag,
+                extra_tags=extra_tags,
+                relays=relay_list,
+            )
+        )
+    except Exception as exc:
+        click.echo(f"Failed to publish reaction: {exc}")
+        return
+    click.echo(json.dumps(result, indent=2))
+
+
+@click.command("reply", help="Publish a kind 1 reply to an event")
+@click.argument("event_id", type=str)
+@click.argument("content", type=str)
+@click.option("--pubkey", default=None, help="target event author pubkey (npub or hex)")
+@click.option("--kind", "target_kind", default=None, type=int, help="target event kind")
+@click.option("--relay-hint", default=None, help="relay hint for reply tags")
+@click.option("--extra-tags-json", default=None, help="optional extra tags as JSON array of arrays")
+@click.option("--relays", "-r", default=None, help="comma-separated relay list override")
+def reply(
+    event_id: str,
+    content: str,
+    pubkey: str | None,
+    target_kind: int | None,
+    relay_hint: str | None,
+    extra_tags_json: str | None,
+    relays: str | None,
+):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+
+    extra_tags = None
+    if extra_tags_json:
+        try:
+            parsed = json.loads(extra_tags_json)
+            if not isinstance(parsed, list):
+                click.echo("extra-tags-json must be a JSON array")
+                return
+            extra_tags = parsed
+        except Exception as exc:
+            click.echo(f"Invalid extra-tags-json: {exc}")
+            return
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        mints=MINTS,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    try:
+        result = asyncio.run(
+            acorn_obj.publish_reply(
+                target_event_id=event_id,
+                content=content,
+                target_pubkey=pubkey,
+                target_kind=target_kind,
+                relay_hint=relay_hint,
+                extra_tags=extra_tags,
+                relays=relay_list,
+            )
+        )
+    except Exception as exc:
+        click.echo(f"Failed to publish reply: {exc}")
+        return
+    click.echo(json.dumps(result, indent=2))
+
 @click.command("setowner", help="get profile")
 @click.option('--owner', '-o', default=None, help="set owner npub")
 @click.option('--currency', '-c', default=None, help="set local currency")
@@ -1010,6 +1143,8 @@ cli.add_command(release_lock)
 cli.add_command(get_profile)
 cli.add_command(publish_kind0)
 cli.add_command(publish_kind1)
+cli.add_command(react)
+cli.add_command(reply)
 cli.add_command(tx_history)
 cli.add_command(deposit)
 cli.add_command(proofs)

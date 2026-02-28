@@ -1422,6 +1422,206 @@ class Acorn:
             "relays": self._build_kind1_publish_relays(relays=relays),
         }
 
+    async def publish_reply(
+        self,
+        target_event_id: str,
+        content: str,
+        target_pubkey: str | None = None,
+        target_kind: int | None = None,
+        relay_hint: str | None = None,
+        extra_tags: List[List[str]] | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        target_id = (target_event_id or "").strip()
+        if not target_id:
+            raise ValueError("target_event_id is required")
+        if target_id.startswith("note"):
+            target_id = bech32_to_hex(target_id)
+        if len(target_id) != 64 or not all(ch in string.hexdigits for ch in target_id):
+            raise ValueError("target_event_id must be note1... or 64-char hex id")
+        target_id = target_id.lower()
+        reply_content = (content or "").strip()
+        if not reply_content:
+            raise ValueError("content is required")
+
+        resolved_pubkey = target_pubkey
+        resolved_kind = target_kind
+        if resolved_pubkey and resolved_pubkey.startswith("npub"):
+            resolved_pubkey = bech32_to_hex(resolved_pubkey)
+        if resolved_pubkey and (len(resolved_pubkey) != 64 or not all(ch in string.hexdigits for ch in resolved_pubkey)):
+            raise ValueError("target_pubkey must be npub or 64-char hex")
+        if resolved_pubkey:
+            resolved_pubkey = resolved_pubkey.lower()
+
+        # Optional lookup so caller can provide event id only.
+        if resolved_pubkey is None or resolved_kind is None:
+            lookup_relays = relays if relays else self._build_discovery_relays()
+            if lookup_relays:
+                query_filter = [{
+                    "limit": 1,
+                    "ids": [target_id],
+                }]
+                try:
+                    async with ClientPool(lookup_relays) as c:
+                        lookup_events: List[Event] = await c.query(query_filter)
+                    if lookup_events:
+                        target_evt = lookup_events[0]
+                        if resolved_pubkey is None:
+                            resolved_pubkey = str(target_evt.pub_key).lower()
+                        if resolved_kind is None:
+                            resolved_kind = int(target_evt.kind)
+                except Exception as exc:
+                    self.logger.debug("op=publish_reply status=lookup_failed error=%s", exc)
+
+        tags: List[List[str]] = []
+        # Reply marker included for client interoperability.
+        e_tag: List[str] = ["e", target_id]
+        if relay_hint:
+            e_tag.append(relay_hint)
+        e_tag.append("reply")
+        if resolved_pubkey:
+            e_tag.append(resolved_pubkey)
+        tags.append(e_tag)
+
+        if resolved_pubkey:
+            p_tag: List[str] = ["p", resolved_pubkey]
+            if relay_hint:
+                p_tag.append(relay_hint)
+            tags.append(p_tag)
+
+        if resolved_kind is not None:
+            tags.append(["k", str(resolved_kind)])
+
+        if extra_tags:
+            for each in extra_tags:
+                if each and isinstance(each, list):
+                    tags.append([str(x) for x in each])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for reply publish")
+
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=Event.KIND_TEXT_NOTE,
+                content=reply_content,
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=publish_reply status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "target_event_id": target_id,
+            "content": reply_content,
+            "tags": tags,
+            "relays": publish_relays,
+        }
+
+    async def publish_reaction(
+        self,
+        target_event_id: str,
+        content: str = "❤️",
+        reacted_pubkey: str | None = None,
+        reacted_kind: int | None = None,
+        relay_hint: str | None = None,
+        a_tag: str | None = None,
+        extra_tags: List[List[str]] | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        target_id = (target_event_id or "").strip()
+        if not target_id:
+            raise ValueError("target_event_id is required")
+        if target_id.startswith("note"):
+            target_id = bech32_to_hex(target_id)
+        if len(target_id) != 64 or not all(ch in string.hexdigits for ch in target_id):
+            raise ValueError("target_event_id must be note1... or 64-char hex id")
+        target_id = target_id.lower()
+
+        target_pubhex = reacted_pubkey
+        target_kind = reacted_kind
+        if target_pubhex and target_pubhex.startswith("npub"):
+            target_pubhex = bech32_to_hex(target_pubhex)
+        if target_pubhex and (len(target_pubhex) != 64 or not all(ch in string.hexdigits for ch in target_pubhex)):
+            raise ValueError("reacted_pubkey must be npub or 64-char hex pubkey")
+        if target_pubhex:
+            target_pubhex = target_pubhex.lower()
+
+        # Optional lookup so callers can provide only event id.
+        if target_pubhex is None or target_kind is None:
+            lookup_relays = relays if relays else self._build_discovery_relays()
+            if lookup_relays:
+                query_filter = [{
+                    "limit": 1,
+                    "ids": [target_id],
+                }]
+                try:
+                    async with ClientPool(lookup_relays) as c:
+                        lookup_events: List[Event] = await c.query(query_filter)
+                    if lookup_events:
+                        target_evt = lookup_events[0]
+                        if target_pubhex is None:
+                            target_pubhex = str(target_evt.pub_key).lower()
+                        if target_kind is None:
+                            target_kind = int(target_evt.kind)
+                except Exception as exc:
+                    self.logger.debug("op=publish_reaction status=lookup_failed error=%s", exc)
+
+        tags: List[List[str]] = []
+        e_tag: List[str] = ["e", target_id]
+        if relay_hint:
+            e_tag.append(relay_hint)
+        if target_pubhex:
+            if not relay_hint:
+                e_tag.append("")
+            e_tag.append(target_pubhex)
+        tags.append(e_tag)
+
+        if target_pubhex:
+            p_tag: List[str] = ["p", target_pubhex]
+            if relay_hint:
+                p_tag.append(relay_hint)
+            tags.append(p_tag)
+
+        if target_kind is not None:
+            tags.append(["k", str(target_kind)])
+
+        if a_tag:
+            tags.append(["a", a_tag])
+
+        if extra_tags:
+            for each in extra_tags:
+                if each and isinstance(each, list):
+                    tags.append([str(x) for x in each])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for reaction publish")
+
+        reaction_content = "❤️" if content is None else str(content)
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=7,
+                content=reaction_content,
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=publish_reaction status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "target_event_id": target_id,
+            "content": reaction_content,
+            "tags": tags,
+            "relays": publish_relays,
+        }
+
     async def add_tx_history(   self, 
                                 tx_type:str, 
                                 amount:int, 

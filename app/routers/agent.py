@@ -88,6 +88,27 @@ class AgentPublishKind1Request(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentReactRequest(BaseModel):
+    event_id: str
+    content: str = "❤️"
+    reacted_pubkey: str | None = None
+    reacted_kind: int | None = None
+    relay_hint: str | None = None
+    a_tag: str | None = None
+    extra_tags: list[list[str]] | None = None
+    relays: list[str] | None = None
+
+
+class AgentReplyRequest(BaseModel):
+    event_id: str
+    content: str
+    target_pubkey: str | None = None
+    target_kind: int | None = None
+    relay_hint: str | None = None
+    extra_tags: list[list[str]] | None = None
+    relays: list[str] | None = None
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -831,6 +852,100 @@ async def agent_publish_kind1(
         "status": "OK",
         "event_id": result.get("event_id"),
         "content": result.get("content"),
+        "relays": result.get("relays"),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/react", tags=["agent"])
+async def agent_react(
+    payload: AgentReactRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    target_event_id = (payload.event_id or "").strip()
+    if not target_event_id:
+        raise HTTPException(status_code=400, detail="Missing event_id")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_reaction(
+            target_event_id=target_event_id,
+            content=payload.content,
+            reacted_pubkey=payload.reacted_pubkey,
+            reacted_kind=payload.reacted_kind,
+            relay_hint=payload.relay_hint,
+            a_tag=payload.a_tag,
+            extra_tags=payload.extra_tags,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent react failed")
+        raise HTTPException(status_code=400, detail=f"Reaction publish failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": result.get("event_id"),
+        "target_event_id": result.get("target_event_id"),
+        "content": result.get("content"),
+        "tags": result.get("tags"),
+        "relays": result.get("relays"),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/reply", tags=["agent"])
+async def agent_reply(
+    payload: AgentReplyRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    target_event_id = (payload.event_id or "").strip()
+    content = (payload.content or "").strip()
+    if not target_event_id:
+        raise HTTPException(status_code=400, detail="Missing event_id")
+    if not content:
+        raise HTTPException(status_code=400, detail="Missing content")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_reply(
+            target_event_id=target_event_id,
+            content=content,
+            target_pubkey=payload.target_pubkey,
+            target_kind=payload.target_kind,
+            relay_hint=payload.relay_hint,
+            extra_tags=payload.extra_tags,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent reply failed")
+        raise HTTPException(status_code=400, detail=f"Reply publish failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": result.get("event_id"),
+        "target_event_id": result.get("target_event_id"),
+        "content": result.get("content"),
+        "tags": result.get("tags"),
         "relays": result.get("relays"),
         "timestamp": int(datetime.utcnow().timestamp()),
     }

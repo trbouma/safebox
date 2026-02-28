@@ -52,6 +52,8 @@ Conditional:
 - `POST /agent/zap`
 - `POST /agent/publish_kind0`
 - `POST /agent/publish_kind1`
+- `POST /agent/react`
+- `POST /agent/reply`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
 - `POST /agent/offers/receive/create`
@@ -213,7 +215,36 @@ Identity-separation warning:
 2. Server signs and publishes a kind-1 event on configured relays.
 3. Confirm returned `event_id`.
 
-### 11) Recipient-First Offer Request (Agent Shows QR)
+### 11) Publish Reaction (NIP-25 Kind 7)
+
+1. Call `POST /agent/react` with:
+   - `event_id` (required): target event id (hex or note id)
+   - optional `content` (default `❤️`)
+   - optional target context: `reacted_pubkey`, `reacted_kind`, `relay_hint`, `a_tag`
+   - optional `extra_tags` and `relays`
+2. Server signs and publishes kind-7 reaction tags (`e`, `p`, `k` when available).
+3. Confirm returned `event_id` and `tags`.
+
+Example:
+
+```json
+{
+  "event_id": "<hex_event_id>",
+  "content": "❤️"
+}
+```
+
+### 12) Publish Reply (Kind 1)
+
+1. Call `POST /agent/reply` with:
+   - `event_id` (required): target event id (hex or note id)
+   - `content` (required): reply text
+   - optional target context: `target_pubkey`, `target_kind`, `relay_hint`
+   - optional `extra_tags` and `relays`
+2. Server signs and publishes a kind-1 reply with `e`/`p`/`k` reply tags.
+3. Confirm returned `event_id` and `tags`.
+
+### 13) Recipient-First Offer Request (Agent Shows QR)
 
 Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
 
@@ -265,7 +296,7 @@ Compact behavior:
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
 
-### 12) Sender-Side Offer Dispatch Lifecycle
+### 14) Sender-Side Offer Dispatch Lifecycle
 
 Use this flow when the agent is the sender and needs explicit dispatch states.
 
