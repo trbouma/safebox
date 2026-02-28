@@ -46,6 +46,8 @@ Conditional:
 - `GET /agent/nostr/latest_kind1`
 - `GET /agent/nostr/kind0`
 - `GET /agent/nostr/following/latest_kind1`
+- `POST /agent/nostr/format_mention`
+- `POST /agent/nostr/compose_mentions`
 - `POST /agent/create_invoice`
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
@@ -251,6 +253,21 @@ Identity-separation warning:
    - optional `relays` array override
 2. Server signs and publishes a kind-1 event on configured relays.
 3. Confirm returned `event_id`.
+
+Mentions in posts:
+
+- Preferred format: `nostr:npub1...` (NIP-27 URI form).
+- Fallback format (client-dependent): `@npub1...`.
+- Recommendation: when onboarding a new client/app combination, publish a one-time compatibility post containing both formats and verify rendering on target clients (for example Amethyst/Primal) before standardizing.
+
+Mention helper endpoints:
+
+- `POST /agent/nostr/format_mention`
+  - input: `identifier` + optional `style` (`nostr_uri`, `at_npub`, `both`)
+  - output: normalized mention string and resolved npub/pubkey
+- `POST /agent/nostr/compose_mentions`
+  - input: `base_text`, `identifiers[]`, optional `style`
+  - output: mention-ready post content for direct use with `POST /agent/publish_kind1`
 
 ### 11) Publish Reaction (NIP-25 Kind 7)
 

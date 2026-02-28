@@ -6647,6 +6647,58 @@ class Acorn:
             "created_at": int(event.created_at.timestamp()),
             "content": content_json,
         }
+
+    def format_mention(self, identifier: str, style: str = "nostr_uri") -> Dict[str, Any]:
+        pubhex = self._resolve_pubkey_identifier(identifier)
+        npub = hex_to_bech32(pubhex)
+        normalized_style = (style or "nostr_uri").strip().lower()
+        if normalized_style in ["nostr_uri", "nostr", "uri", "default"]:
+            mention = f"nostr:{npub}"
+            normalized_style = "nostr_uri"
+        elif normalized_style in ["at", "@", "at_npub"]:
+            mention = f"@{npub}"
+            normalized_style = "at_npub"
+        elif normalized_style in ["both", "dual", "test"]:
+            mention = f"nostr:{npub} @{npub}"
+            normalized_style = "both"
+        else:
+            raise ValueError("style must be one of: nostr_uri, at_npub, both")
+
+        return {
+            "identifier": identifier,
+            "pubkey": pubhex,
+            "npub": npub,
+            "style": normalized_style,
+            "mention": mention,
+        }
+
+    def compose_post_with_mentions(
+        self,
+        base_text: str | None,
+        identifiers: List[str],
+        style: str = "nostr_uri",
+    ) -> Dict[str, Any]:
+        if not identifiers:
+            raise ValueError("identifiers must include at least one value")
+        mention_items: List[Dict[str, Any]] = []
+        mention_texts: List[str] = []
+        for each in identifiers:
+            item = self.format_mention(each, style=style)
+            mention_items.append(item)
+            mention_texts.append(item["mention"])
+
+        text_prefix = (base_text or "").strip()
+        mentions_joined = " ".join(mention_texts)
+        if text_prefix:
+            final_text = f"{text_prefix} {mentions_joined}"
+        else:
+            final_text = mentions_joined
+
+        return {
+            "style": mention_items[0]["style"],
+            "mentions": mention_items,
+            "content": final_text,
+        }
     
     async def get_latest_kind1_posts_by_nip05(
         self,

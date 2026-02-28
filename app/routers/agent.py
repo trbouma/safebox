@@ -120,6 +120,17 @@ class AgentUnfollowRequest(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentFormatMentionRequest(BaseModel):
+    identifier: str
+    style: str = "nostr_uri"
+
+
+class AgentComposeMentionsRequest(BaseModel):
+    base_text: str | None = None
+    identifiers: list[str]
+    style: str = "nostr_uri"
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -590,6 +601,49 @@ async def agent_latest_kind1_from_following(
         "status": "OK",
         "count": len(events),
         "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/nostr/format_mention", tags=["agent"])
+async def agent_format_mention(
+    payload: AgentFormatMentionRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    identifier = (payload.identifier or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Missing identifier")
+    try:
+        result = acorn_obj.format_mention(identifier=identifier, style=payload.style)
+    except Exception as exc:
+        logger.exception("Agent format_mention failed")
+        raise HTTPException(status_code=400, detail=f"Mention formatting failed: {exc}")
+    return {
+        "status": "OK",
+        "result": result,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/nostr/compose_mentions", tags=["agent"])
+async def agent_compose_mentions(
+    payload: AgentComposeMentionsRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    if not payload.identifiers:
+        raise HTTPException(status_code=400, detail="identifiers must include at least one value")
+    try:
+        result = acorn_obj.compose_post_with_mentions(
+            base_text=payload.base_text,
+            identifiers=payload.identifiers,
+            style=payload.style,
+        )
+    except Exception as exc:
+        logger.exception("Agent compose_mentions failed")
+        raise HTTPException(status_code=400, detail=f"Mention compose failed: {exc}")
+    return {
+        "status": "OK",
+        "result": result,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
