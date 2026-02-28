@@ -61,6 +61,14 @@ class AgentPayLightningAddressRequest(BaseModel):
     tendered_currency: str | None = None
 
 
+class AgentZapRequest(BaseModel):
+    event: str
+    amount_sats: int | None = None
+    amount: float | None = None
+    currency: str = "SAT"
+    comment: str = "⚡️"
+
+
 class AgentIssueEcashRequest(BaseModel):
     amount: int
     comment: str = "ecash withdrawal"
@@ -192,6 +200,43 @@ def _persist_wallet_balance(acorn_obj: Acorn) -> None:
             wallet.balance = acorn_obj.balance
             session.add(wallet)
             session.commit()
+
+
+async def _resolve_sats_from_request(amount_sats: int | None, amount: float | None, currency: str | None) -> tuple[int, bool, str]:
+    converted_from_currency = False
+    currency_code = (currency or "SAT").strip().upper()
+
+    if amount_sats is not None:
+        sat_amount = int(amount_sats)
+    else:
+        if amount is None:
+            raise HTTPException(status_code=400, detail="Provide amount_sats or amount+currency")
+        amount_value = Decimal(str(amount))
+        if amount_value <= 0:
+            raise HTTPException(status_code=400, detail="amount must be greater than zero")
+        if currency_code == "SAT":
+            sat_amount = int(amount_value)
+        else:
+            try:
+                local_currency = await get_currency_rate(currency_code)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported or unavailable currency code: {currency_code}",
+                ) from exc
+            rate = Decimal(str(local_currency.currency_rate or 0))
+            if rate <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported or unavailable currency code: {currency_code}",
+                )
+            sat_amount = int((amount_value * Decimal("100000000")) / rate)
+            converted_from_currency = True
+
+    if sat_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
+
+    return sat_amount, converted_from_currency, currency_code
 
 
 def _upsert_payment_quote(
@@ -526,41 +571,11 @@ async def agent_pay_lightning_address(
     local_part, domain = lightning_address.split("@", 1)
     if not local_part or not domain:
         raise HTTPException(status_code=400, detail="Invalid lightning_address format")
-    sat_amount: int
-    converted_from_currency = False
-    currency_code = (payload.currency or "SAT").strip().upper()
-    if payload.amount_sats is not None:
-        sat_amount = int(payload.amount_sats)
-    else:
-        if payload.amount is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Provide amount_sats or amount+currency",
-            )
-        amount_value = Decimal(str(payload.amount))
-        if amount_value <= 0:
-            raise HTTPException(status_code=400, detail="amount must be greater than zero")
-        if currency_code == "SAT":
-            sat_amount = int(amount_value)
-        else:
-            try:
-                local_currency = await get_currency_rate(currency_code)
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported or unavailable currency code: {currency_code}",
-                ) from exc
-            rate = Decimal(str(local_currency.currency_rate or 0))
-            if rate <= 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported or unavailable currency code: {currency_code}",
-                )
-            sat_amount = int((amount_value * Decimal("100000000")) / rate)
-            converted_from_currency = True
-
-    if sat_amount <= 0:
-        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero")
+    sat_amount, converted_from_currency, currency_code = await _resolve_sats_from_request(
+        payload.amount_sats,
+        payload.amount,
+        payload.currency,
+    )
 
     tendered_amount = payload.tendered_amount
     if tendered_amount is None:
@@ -589,6 +604,40 @@ async def agent_pay_lightning_address(
         "amount_sats": sat_amount,
         "converted_from_currency": converted_from_currency,
         "fees_paid": final_fees,
+        "balance": acorn_obj.balance,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/zap", tags=["agent"])
+async def agent_zap(
+    payload: AgentZapRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    event = (payload.event or "").strip()
+    if not event:
+        raise HTTPException(status_code=400, detail="Missing event")
+
+    sat_amount, converted_from_currency, currency_code = await _resolve_sats_from_request(
+        payload.amount_sats,
+        payload.amount,
+        payload.currency,
+    )
+    try:
+        message = await acorn_obj.zap(sat_amount, event, payload.comment)
+        await acorn_obj.load_data()
+        _persist_wallet_balance(acorn_obj)
+    except Exception as exc:
+        logger.exception("Agent zap failed")
+        raise HTTPException(status_code=400, detail=f"Zap failed: {exc}")
+
+    return {
+        "status": "OK",
+        "message": message,
+        "event": event,
+        "amount_sats": sat_amount,
+        "currency": currency_code,
+        "converted_from_currency": converted_from_currency,
         "balance": acorn_obj.balance,
         "timestamp": int(datetime.utcnow().timestamp()),
     }

@@ -5095,7 +5095,6 @@ class Acorn:
     
     async def _async_query_zap(self, amount:int, comment:str, filter: List[dict]): 
     # does a one off query to relay prints the events and exits
-        json_obj = {}
         zaps_to_send = []
         event = None
         # print("are we here today", self.relays)
@@ -5116,8 +5115,14 @@ class Acorn:
             raise RuntimeError("no event")
         
         for each in event.tags:
-            if each[0] == "zap":
-                zaps_to_send.append((each[1],each[2],each[3]))
+            if not each or each[0] != "zap":
+                continue
+            if len(each) < 2 or not each[1]:
+                self.logger.warning("op=zap status=skip_invalid_zap_tag tag=%s", each)
+                continue
+            relay_hint = each[2] if len(each) > 2 else None
+            weight_str = each[3] if len(each) > 3 else "1"
+            zaps_to_send.append((each[1], relay_hint, weight_str))
         if zaps_to_send == []:
             zaps_to_send =[(event.pub_key,None,1)]
         
@@ -5125,7 +5130,12 @@ class Acorn:
 
         prs = []
         for each_zap in zaps_to_send:
-            zap_amount = int(amount * float(each_zap[2]))
+            try:
+                split_factor = float(each_zap[2])
+            except (TypeError, ValueError):
+                self.logger.warning("op=zap status=invalid_split default=1 value=%s", each_zap[2])
+                split_factor = 1.0
+            zap_amount = int(amount * split_factor)
             zap_amount = 1 if zap_amount ==0 else zap_amount
             profile_filter =  [{
                 'limit': 1,
@@ -5134,6 +5144,7 @@ class Acorn:
             }]    
             async with ClientPool([self.home_relay]+self.relays) as c:        
                 events_profile = await c.query(profile_filter)
+            lnaddress = None
             try:
                 self.logger.debug("getting profile")
                 event_profile = events_profile[0]  
@@ -5141,23 +5152,27 @@ class Acorn:
                 profile_str =   event_profile.content
                 self.logger.debug(f"profile {profile_str}")
                 profile_obj = json.loads(profile_str)
-                lnaddress = profile_obj['lud16']
+                lnaddress = profile_obj.get("lud16")
+                if not lnaddress:
+                    raise ValueError("profile missing lud16")
                 self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 
             except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
-                {"status": "could not access profile"}
-                self.logger.error("could not get profile")
-                pass
+                self.logger.error("op=zap status=skip_profile author=%s error=%s", each_zap[0], exc)
+                continue
             
             # Now we can create zap request
             self.logger.debug("create zap request")
-            tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
-                        ["relays"] + self.relays,
-                        ["amount",str(zap_amount*1000)],
-                        ["p",each_zap[0]],
-                        ["e",filter[0]['ids'][0]]
-                    ]
+            tags = [
+                ["lnurl", lnaddress_to_lnurl(lnaddress)],
+                ["relays"] + self.relays,
+                ["amount", str(zap_amount * 1000)],
+                ["p", each_zap[0]],
+            ]
+            event_ids = filter[0].get("ids") if filter and isinstance(filter[0], dict) else None
+            if event_ids:
+                tags.append(["e", event_ids[0]])
             zap_request = Zevent(
                                 kind=9734,
                                 content=comment,
@@ -5175,15 +5190,20 @@ class Acorn:
             zap_test = Event().load(zap_dict)
             self.logger.debug(f"zap_test.id: {zap_test.id}")
             self.logger.debug(f"zap test  {zap_test}, {zap_test.is_valid()}")
-            pr,_,_ = zap_address_pay(zap_amount,lnaddress,zap_dict)
+            pr, _, _ = await asyncio.to_thread(zap_address_pay, zap_amount, lnaddress, zap_dict)
+            if not isinstance(pr, str) or not pr:
+                raise RuntimeError("zap callback returned invalid invoice")
             self.logger.debug(f"pay this invoice from the safebox: {pr}")
             prs.append(pr)
-        
+
+        if not prs:
+            raise RuntimeError("No payable zap invoices generated")
         return prs
     async def _async_query_npub(self, amount:int, comment:str, filter: List[dict]):
         prs = []
         async with ClientPool([self.home_relay]+self.relays) as c:        
             events_profile = await c.query(filter)
+            lnaddress = None
             try:
                 self.logger.debug("getting profile")
                 event_profile = events_profile[0]  
@@ -5191,7 +5211,9 @@ class Acorn:
                 profile_str =   event_profile.content
                 self.logger.debug(f"profile {profile_str}")
                 profile_obj = json.loads(profile_str)
-                lnaddress = profile_obj['lud16']
+                lnaddress = profile_obj.get("lud16")
+                if not lnaddress:
+                    raise ValueError("profile missing lud16")
                 self.logger.debug(f" Pay to:{lnaddress}, {lnaddress_to_lnurl(lnaddress)}")
 
                 # Now we can create zap request
@@ -5225,16 +5247,19 @@ class Acorn:
                 # ln_return = lightning_address_pay(amount=amount,lnaddress=lnaddress,comment=comment)
                 # pr = ln_return['pr']
 
-                pr,_,_ = zap_address_pay(amount,lnaddress,zap_dict)
+                pr, _, _ = await asyncio.to_thread(zap_address_pay, amount, lnaddress, zap_dict)
+                if not isinstance(pr, str) or not pr:
+                    raise RuntimeError("zap callback returned invalid invoice")
 
                 self.logger.debug(f"zap pr: {pr}")
                 prs.append(pr)
                
                 
             except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
-                {"status": "could not access profile"}
-                self.logger.error("could not get profile")
+                self.logger.error("op=zap status=profile_error error=%s", exc)
                 pass
+        if not prs:
+            raise RuntimeError("No payable zap invoices generated")
        
         return prs
     

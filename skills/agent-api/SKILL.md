@@ -11,6 +11,7 @@ Primary outcomes:
 - Read transaction history
 - Create and pay Lightning invoices
 - Pay Lightning addresses directly
+- Execute zaps to notes/profiles via agent endpoint
 - Issue and accept Cashu ecash tokens
 - Create recipient-first offer QR payloads so humans can send grants by scanning agent QR
 
@@ -26,6 +27,7 @@ Conditional:
 - `access_key` for authenticated wallet actions
 - `invoice` string for pay flow
 - `lightning_address` and `amount_sats` for direct LN-address pay flow
+- `event` and `amount_sats` (or `amount` + `currency`) for zap flow
 - `amount` (sat integer) for create/issue flows
 - `ecash_token` for accept flow
 
@@ -45,6 +47,7 @@ Conditional:
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
 - `POST /agent/pay_lightning_address`
+- `POST /agent/zap`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
 - `POST /agent/offers/receive/create`
@@ -94,6 +97,8 @@ Expected response includes:
 3. Prefer `SAT` if rate metadata is unavailable for a fiat code.
 4. Then call `POST /agent/pay_lightning_address`.
 
+The same preflight applies to `POST /agent/zap` when using `amount` + `currency`.
+
 ### 4) Pay Invoice
 
 1. Call `POST /agent/pay_invoice` with BOLT11 invoice.
@@ -129,7 +134,22 @@ Why prefer this over manual LNURL flow:
 2. Verify success and `accepted_amount`.
 3. Confirm final wallet state via `GET /agent/balance`.
 
-### 8) Recipient-First Offer Request (Agent Shows QR)
+### 8) Zap Event/Profile
+
+1. Call `POST /agent/zap` with:
+   - `event` (required): `note1...`, `npub1...`, or NIP-05 (`name@domain`)
+   - either `amount_sats` OR `amount` + `currency`
+   - optional `comment`
+2. Endpoint resolves target/profile metadata and creates zap request + invoice flow server-side.
+3. Verify `status == OK`.
+4. Confirm post-zap state with returned `balance` and optionally `GET /agent/tx_history`.
+
+Notes:
+
+- Use `GET /agent/supported_currencies` before fiat-denominated zap requests.
+- If zap metadata/profile lookup fails, endpoint returns `400` with `Zap failed: ...`.
+
+### 9) Recipient-First Offer Request (Agent Shows QR)
 
 Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
 
@@ -181,7 +201,7 @@ Compact behavior:
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
 
-### 9) Sender-Side Offer Dispatch Lifecycle
+### 10) Sender-Side Offer Dispatch Lifecycle
 
 Use this flow when the agent is the sender and needs explicit dispatch states.
 

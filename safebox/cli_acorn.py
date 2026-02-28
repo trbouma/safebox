@@ -511,13 +511,17 @@ def zap(amount:int, event, comment):
     if event == None:
         click.echo("Need an event!")
         return
+    if int(amount) <= 0:
+        click.echo("Amount must be greater than zero.")
+        return
     
     acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,logging_level=LOGGING_LEVEL)
-    asyncio.run(acorn_obj.load_data())
-    # click.echo(f"Zap amount: {amount} to {event}")
-   
-    result_out = asyncio.run(acorn_obj.zap(amount,event,comment))    
-    click.echo(result_out)
+    try:
+        asyncio.run(acorn_obj.load_data())
+        result_out = asyncio.run(acorn_obj.zap(amount,event,comment))
+        click.echo(result_out)
+    except Exception as exc:
+        click.echo(f"Zap failed: {exc}")
 
 @click.command("accept_token", help="Accept cashu token")
 @click.argument('token')
