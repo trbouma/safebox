@@ -6397,6 +6397,173 @@ class Acorn:
 
         return social_profile       
 
+    def _resolve_pubkey_identifier(self, identifier: str) -> str:
+        value = (identifier or "").strip()
+        if not value:
+            raise ValueError("Missing identifier")
+        if "@" in value:
+            pubhex, _ = nip05_to_npub(value)
+            return str(pubhex).lower()
+        if value.startswith("npub"):
+            return bech32_to_hex(value).lower()
+        if len(value) == 64 and all(ch in string.hexdigits for ch in value):
+            return value.lower()
+        raise ValueError("Identifier must be nip05, npub, or 64-char pubhex")
+
+    async def _get_latest_contacts_event(self, relays: List[str] | None = None) -> Event | None:
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            return None
+        query_filter = [{
+            "limit": 1,
+            "authors": [self.pubkey_hex],
+            "kinds": [3],
+        }]
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+        if not events:
+            return None
+        events_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )
+        return events_sorted[0]
+
+    async def _publish_contact_list(self, tags: List[List[str]], relays: List[str] | None = None) -> Dict[str, Any]:
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for contact list publish")
+
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=3,
+                content="",
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=contact_list status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "count": len([t for t in tags if t and t[0] == "p"]),
+            "tags": tags,
+            "relays": publish_relays,
+        }
+
+    async def add_follower(
+        self,
+        identifier: str,
+        relay_hint: str | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        pubhex = self._resolve_pubkey_identifier(identifier)
+        latest_event = await self._get_latest_contacts_event(relays=relays)
+        tags: List[List[str]] = list(latest_event.tags) if latest_event else []
+
+        found = False
+        for each_tag in tags:
+            if each_tag and each_tag[0] == "p" and len(each_tag) > 1 and each_tag[1].lower() == pubhex:
+                found = True
+                if relay_hint:
+                    if len(each_tag) > 2:
+                        each_tag[2] = relay_hint
+                    else:
+                        each_tag.append(relay_hint)
+                break
+
+        if not found:
+            new_tag = ["p", pubhex]
+            if relay_hint:
+                new_tag.append(relay_hint)
+            tags.append(new_tag)
+
+        result = await self._publish_contact_list(tags=tags, relays=relays)
+        result["action"] = "add"
+        result["pubkey"] = pubhex
+        return result
+
+    async def delete_follower(
+        self,
+        identifier: str,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        pubhex = self._resolve_pubkey_identifier(identifier)
+        latest_event = await self._get_latest_contacts_event(relays=relays)
+        tags: List[List[str]] = list(latest_event.tags) if latest_event else []
+        filtered_tags: List[List[str]] = []
+        removed = 0
+        for each_tag in tags:
+            if each_tag and each_tag[0] == "p" and len(each_tag) > 1 and each_tag[1].lower() == pubhex:
+                removed += 1
+                continue
+            filtered_tags.append(each_tag)
+
+        result = await self._publish_contact_list(tags=filtered_tags, relays=relays)
+        result["action"] = "delete"
+        result["pubkey"] = pubhex
+        result["removed"] = removed
+        return result
+
+    async def get_latest_kind1_posts_from_follow_list(
+        self,
+        limit: int = 20,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        latest_contacts = await self._get_latest_contacts_event(relays=relays)
+        if not latest_contacts:
+            return []
+
+        follow_pubkeys: List[str] = []
+        for each_tag in list(latest_contacts.tags):
+            if not each_tag or each_tag[0] != "p" or len(each_tag) < 2:
+                continue
+            each_pub = str(each_tag[1]).lower()
+            if len(each_pub) == 64 and all(ch in string.hexdigits for ch in each_pub):
+                if each_pub not in follow_pubkeys:
+                    follow_pubkeys.append(each_pub)
+
+        if not follow_pubkeys:
+            return []
+
+        limit_value = max(1, min(int(limit), 200))
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": limit_value,
+            "authors": follow_pubkeys,
+            "kinds": [1],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        events_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+
+        return [
+            {
+                "id": str(each_event.id),
+                "event_id": str(each_event.id),
+                "event_id_hex": str(each_event.id),
+                "pubkey": str(each_event.pub_key),
+                "created_at": int(each_event.created_at.timestamp()),
+                "content": str(each_event.content),
+            }
+            for each_event in events_sorted
+        ]
+    
     async def get_kind0_profile_by_identifier(
         self,
         identifier: str,

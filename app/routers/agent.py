@@ -548,6 +548,41 @@ async def agent_latest_kind1_events(
     }
 
 
+@router.get("/nostr/following/latest_kind1", tags=["agent"])
+async def agent_latest_kind1_from_following(
+    limit: int = 20,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        events = await acorn_obj.get_latest_kind1_posts_from_follow_list(
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent latest_kind1_from_following query failed")
+        raise HTTPException(status_code=400, detail=f"Latest kind1 following query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "count": len(events),
+        "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.get("/nostr/kind0", tags=["agent"])
 async def agent_kind0_profile(
     identifier: str,

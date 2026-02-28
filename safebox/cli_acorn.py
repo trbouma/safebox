@@ -1132,6 +1132,50 @@ def get_latest_posts(nip05: str, limit: int, relays: str | None):
         click.echo(each_post.get("content", ""))
         click.echo("-" * 40)
 
+
+@click.command("get_follow_posts", help="Get latest kind 1 posts from your follow list")
+@click.option("--limit", "-l", default=20, help="maximum number of posts to return")
+@click.option("--relays", "-r", default=None, help="comma-separated relay list to override defaults")
+def get_follow_posts(limit: int, relays: str | None):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each)
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    try:
+        posts = asyncio.run(
+            acorn_obj.get_latest_kind1_posts_from_follow_list(
+                limit=limit,
+                relays=relay_list,
+            )
+        )
+    except Exception as exc:
+        click.echo(f"Failed to fetch follow posts: {exc}")
+        return
+
+    if not posts:
+        click.echo("No follow posts found.")
+        return
+
+    for each_post in posts:
+        click.echo(f"id: {each_post.get('id')}")
+        click.echo(f"pubkey: {each_post.get('pubkey')}")
+        click.echo(f"created_at: {each_post.get('created_at')}")
+        click.echo(each_post.get("content", ""))
+        click.echo("-" * 40)
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -1175,6 +1219,7 @@ cli.add_command(get_wot_entities)
 cli.add_command(get_wot_scores)
 cli.add_command(get_social_profile)
 cli.add_command(get_latest_posts)
+cli.add_command(get_follow_posts)
 cli.add_command(create_grant_from_offer)
 cli.add_command(create_request_from_grant)
 
