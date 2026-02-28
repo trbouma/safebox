@@ -43,6 +43,7 @@ Conditional:
 - `GET /agent/balance`
 - `GET /agent/tx_history`
 - `GET /agent/supported_currencies`
+- `GET /agent/nostr/latest_kind1`
 - `POST /agent/create_invoice`
 - `GET /agent/invoice_status/{quote}`
 - `POST /agent/pay_invoice`
@@ -99,6 +100,13 @@ Expected response includes:
 
 The same preflight applies to `POST /agent/zap` when using `amount` + `currency`.
 
+### Nostr Preflight (Before Event Zaps)
+
+1. Call `GET /agent/nostr/latest_kind1?nip05=<name@domain>&limit=<n>`.
+2. Read returned `events[]` and choose the target `event_id` (or `event_id_hex` / `id`).
+3. Pass that value as `event_id` (or `event`) in `POST /agent/zap`.
+4. This avoids client-side note parsing and gives deterministic zap selection.
+
 ### 4) Pay Invoice
 
 1. Call `POST /agent/pay_invoice` with BOLT11 invoice.
@@ -137,7 +145,7 @@ Why prefer this over manual LNURL flow:
 ### 8) Zap Event/Profile
 
 1. Call `POST /agent/zap` with:
-   - `event` (required): `note1...`, `npub1...`, or NIP-05 (`name@domain`)
+   - `event` or `event_id` (one required): `note1...`, `npub1...`, NIP-05 (`name@domain`), or 64-char hex event id
    - either `amount_sats` OR `amount` + `currency`
    - optional `comment`
 2. Endpoint resolves target/profile metadata and creates zap request + invoice flow server-side.
@@ -148,6 +156,14 @@ Notes:
 
 - Use `GET /agent/supported_currencies` before fiat-denominated zap requests.
 - If zap metadata/profile lookup fails, endpoint returns `400` with `Zap failed: ...`.
+
+Zap by recent-event workflow:
+
+1. Fetch recent events:
+   - `GET /agent/nostr/latest_kind1?nip05=trbouma@safebox.dev&limit=5`
+2. Pick `events[i].id` from response.
+3. Zap selected event id:
+   - `POST /agent/zap` with `{"event_id":"<hex_event_id>","amount_sats":21,"comment":"nice post"}`
 
 ### 9) Recipient-First Offer Request (Agent Shows QR)
 

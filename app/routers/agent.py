@@ -62,7 +62,8 @@ class AgentPayLightningAddressRequest(BaseModel):
 
 
 class AgentZapRequest(BaseModel):
-    event: str
+    event: str | None = None
+    event_id: str | None = None
     amount_sats: int | None = None
     amount: float | None = None
     currency: str = "SAT"
@@ -182,7 +183,11 @@ async def _agent_get_acorn(
     if not wallet.nsec:
         raise HTTPException(status_code=500, detail="Wallet is missing nsec")
 
-    acorn_obj = Acorn(nsec=wallet.nsec, home_relay=wallet.home_relay)
+    acorn_obj = Acorn(
+        nsec=wallet.nsec,
+        home_relay=wallet.home_relay,
+        public_relays=settings.PUBLIC_RELAYS,
+    )
     try:
         await acorn_obj.load_data()
     except Exception as exc:
@@ -462,6 +467,48 @@ async def agent_supported_currencies(acorn_obj: Acorn = Depends(_agent_get_acorn
     }
 
 
+@router.get("/nostr/latest_kind1", tags=["agent"])
+async def agent_latest_kind1_events(
+    nip05: str,
+    limit: int = 10,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    nip05_value = (nip05 or "").strip()
+    if not nip05_value or "@" not in nip05_value:
+        raise HTTPException(status_code=400, detail="Invalid nip05 address")
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 100))
+    try:
+        events = await acorn_obj.get_latest_kind1_posts_by_nip05(
+            nip05=nip05_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent latest_kind1 query failed")
+        raise HTTPException(status_code=400, detail=f"Latest kind1 query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "nip05": nip05_value,
+        "count": len(events),
+        "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/create_invoice", tags=["agent"])
 async def agent_create_invoice(
     payload: AgentInvoiceRequest, acorn_obj: Acorn = Depends(_agent_get_acorn)
@@ -614,9 +661,9 @@ async def agent_zap(
     payload: AgentZapRequest,
     acorn_obj: Acorn = Depends(_agent_get_acorn),
 ):
-    event = (payload.event or "").strip()
+    event = (payload.event or payload.event_id or "").strip()
     if not event:
-        raise HTTPException(status_code=400, detail="Missing event")
+        raise HTTPException(status_code=400, detail="Missing event or event_id")
 
     sat_amount, converted_from_currency, currency_code = await _resolve_sats_from_request(
         payload.amount_sats,

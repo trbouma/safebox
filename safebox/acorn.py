@@ -106,6 +106,7 @@ class Acorn:
     trusted_entities: List[str] = None
     user_records = []
     relays: List[str]
+    public_relays: List[str]
     mints: List[str]
     max_proof_event_size: int
     safe_box_items: List[SafeboxItem]
@@ -133,6 +134,7 @@ class Acorn:
     def __init__(   self, 
                     nsec: str, 
                     relays: List[str]|None=None, 
+                    public_relays: List[str]|None=None,
                     mints: List[str]|None=None,
                     home_relay:str|None=None, 
                     max_proof_event_size: int = 16384,
@@ -193,6 +195,7 @@ class Acorn:
             self.privkey_bech32 =   self.k.private_key_bech32()
             self.privkey_hex    =   self.k.private_key_hex()
             self.relays         =   relays
+            self.public_relays  =   public_relays or []
             self.mints          =   mints
             # self.home_mint      = mints[0]
             self.safe_box_items = []
@@ -223,6 +226,13 @@ class Acorn:
 
         
         return None
+
+    def _build_discovery_relays(self) -> List[str]:
+        relay_pool: List[str] = []
+        for each in [self.home_relay] + list(self.relays or []) + list(self.public_relays or []):
+            if each and each not in relay_pool:
+                relay_pool.append(each)
+        return relay_pool
    
     async def load_data(self, force_profile_creation: bool=False):
         self.logger.debug(f"load data. Force profile creation {force_profile_creation}")
@@ -5054,6 +5064,9 @@ class Acorn:
             raise ValueError(f"could not resolve nip05")
             
 
+        if isinstance(event_id, str) and len(event_id) == 64 and all(ch in string.hexdigits for ch in event_id):
+            event_id = event_id.lower()
+
         if event_id.startswith("note"):
             try:
                 event_id = bech32_to_hex(event_id)
@@ -5081,6 +5094,11 @@ class Acorn:
             self.logger.debug(f"Filter: {profile_filter}")
             # raise ValueError(f"You are zapping to a npub {event_id}") 
             out_msg = f"You are zapping {amount} to {orig_address} with {prs}"
+        elif len(event_id) == 64 and all(ch in string.hexdigits for ch in event_id):
+            zap_filter = [{
+                'ids': [event_id.lower()]
+            }]
+            prs = await self._async_query_zap(amount, comment, zap_filter)
         else:
             raise ValueError(f"need a note or npub") 
 
@@ -5097,8 +5115,9 @@ class Acorn:
     # does a one off query to relay prints the events and exits
         zaps_to_send = []
         event = None
+        query_relays = self._build_discovery_relays()
         # print("are we here today", self.relays)
-        async with ClientPool([self.home_relay]+self.relays) as c:        
+        async with ClientPool(query_relays) as c:        
             events = await c.query(filter)
         try:
             event = events[0]  
@@ -5142,7 +5161,7 @@ class Acorn:
                 'authors': [each_zap[0]],
                 'kinds': [0]
             }]    
-            async with ClientPool([self.home_relay]+self.relays) as c:        
+            async with ClientPool(query_relays) as c:        
                 events_profile = await c.query(profile_filter)
             lnaddress = None
             try:
@@ -5166,7 +5185,7 @@ class Acorn:
             self.logger.debug("create zap request")
             tags = [
                 ["lnurl", lnaddress_to_lnurl(lnaddress)],
-                ["relays"] + self.relays,
+                ["relays"] + query_relays,
                 ["amount", str(zap_amount * 1000)],
                 ["p", each_zap[0]],
             ]
@@ -5201,7 +5220,8 @@ class Acorn:
         return prs
     async def _async_query_npub(self, amount:int, comment:str, filter: List[dict]):
         prs = []
-        async with ClientPool([self.home_relay]+self.relays) as c:        
+        query_relays = self._build_discovery_relays()
+        async with ClientPool(query_relays) as c:        
             events_profile = await c.query(filter)
             lnaddress = None
             try:
@@ -5219,7 +5239,7 @@ class Acorn:
                 # Now we can create zap request
                 self.logger.debug("create zap request for profile")
                 tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
-                            ["relays"] + self.relays,
+                            ["relays"] + query_relays,
                             ["amount",str(amount*1000)],
                             ["p",event_profile.pub_key]
                             
@@ -6085,6 +6105,61 @@ class Acorn:
                         social_profile = json.loads(event.content)
 
         return social_profile       
+    
+    async def get_latest_kind1_posts_by_nip05(
+        self,
+        nip05: str,
+        limit: int = 10,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        if not nip05 or "@" not in nip05:
+            raise ValueError("Invalid nip05 address")
+
+        try:
+            pubhex, nip05_relays = nip05_to_npub(nip05)
+        except Exception as exc:
+            raise ValueError(f"Could not resolve nip05: {nip05}") from exc
+
+        limit_value = max(1, min(int(limit), 100))
+        relay_pool: List[str] = []
+        relay_candidates = relays if relays else (nip05_relays or [])
+        if not relay_candidates:
+            relay_candidates = self._build_discovery_relays()
+
+        for each in relay_candidates:
+            if each and each not in relay_pool:
+                relay_pool.append(each)
+
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": limit_value,
+            "authors": [pubhex],
+            "kinds": [1],
+        }]
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        events_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+        return [
+            {
+                "id": str(each_event.id),
+                "event_id": str(each_event.id),
+                "event_id_hex": str(each_event.id),
+                "pubkey": str(each_event.pub_key),
+                "created_at": int(each_event.created_at.timestamp()),
+                "content": str(each_event.content),
+            }
+            for each_event in events_sorted
+        ]
         
 if __name__ == "__main__":
     

@@ -30,6 +30,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
+public_relays = ["wss://relay.damus.io", "wss://relay.primal.net"]
 mints   = ["https://mint.getsafebox.app"]
 wallet  = "default" 
 home_relay = "wss://relay.getsafebox.app"
@@ -56,6 +57,7 @@ else:
    
     config_obj = {  'nsec': Keys().private_key_bech32(), 
                     'relays': relays, 
+                    'public_relays': public_relays,
                     "home_relay": home_relay,
                     "mints": mints, 
                     "wallet": wallet,
@@ -65,6 +67,7 @@ else:
         yaml.dump(config_obj, file)
 
 RELAYS  = config_obj.get('relays',relays)
+PUBLIC_RELAYS = config_obj.get('public_relays', public_relays)
 NSEC    = config_obj.get('nsec',None)
 MINTS   = config_obj.get('mints', mints)
 WALLET  = config_obj.get('wallet', wallet)
@@ -79,6 +82,9 @@ if NSEC == None:
         write_config()
 
     sys.exit()
+
+if 'public_relays' not in config_obj:
+    config_obj['public_relays'] = PUBLIC_RELAYS
 
 write_config()
 
@@ -515,7 +521,13 @@ def zap(amount:int, event, comment):
         click.echo("Amount must be greater than zero.")
         return
     
-    acorn_obj = Acorn(nsec=NSEC, home_relay=HOME_RELAY, relays=RELAYS,logging_level=LOGGING_LEVEL)
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        home_relay=HOME_RELAY,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        logging_level=LOGGING_LEVEL,
+    )
     try:
         asyncio.run(acorn_obj.load_data())
         result_out = asyncio.run(acorn_obj.zap(amount,event,comment))
@@ -838,6 +850,51 @@ def get_social_profile(npub, relays):
     
     click.echo(record_out) 
 
+@click.command("get_latest_posts", help="Get latest kind 1 posts by nip05 and print post content")
+@click.argument("nip05", type=str)
+@click.option("--limit", "-l", default=10, help="maximum number of posts to return")
+@click.option("--relays", "-r", default=None, help="comma-separated relay list to override defaults")
+def get_latest_posts(nip05: str, limit: int, relays: str | None):
+    relay_list = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else "wss://" + each)
+
+    acorn_obj = Acorn(
+        nsec=NSEC,
+        relays=RELAYS,
+        public_relays=PUBLIC_RELAYS,
+        home_relay=HOME_RELAY,
+        logging_level=LOGGING_LEVEL,
+    )
+    asyncio.run(acorn_obj.load_data())
+    try:
+        posts = asyncio.run(
+            acorn_obj.get_latest_kind1_posts_by_nip05(
+                nip05=nip05,
+                limit=limit,
+                relays=relay_list,
+            )
+        )
+    except Exception as exc:
+        click.echo(f"Failed to fetch posts: {exc}")
+        return
+
+    if not posts:
+        click.echo("No posts found.")
+        return
+
+    for each_post in posts:
+        click.echo(f"id: {each_post.get('id')}")
+        click.echo(f"pubkey: {each_post.get('pubkey')}")
+        click.echo(f"created_at: {each_post.get('created_at')}")
+        click.echo(each_post.get("content", ""))
+        click.echo("-" * 40)
+
 cli.add_command(info)
 cli.add_command(init)
 cli.add_command(set)
@@ -876,6 +933,7 @@ cli.add_command(set_wot_entities)
 cli.add_command(get_wot_entities)
 cli.add_command(get_wot_scores)
 cli.add_command(get_social_profile)
+cli.add_command(get_latest_posts)
 cli.add_command(create_grant_from_offer)
 cli.add_command(create_request_from_grant)
 
