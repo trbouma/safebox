@@ -702,7 +702,7 @@ class Acorn:
     relays: List[str] | None = None,
     timeout: int = 60
     ):
-        my_gift = GiftWrap(BasicKeySigner(self.k))
+        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k), kind_gift_wrap=record_kind)
         self.logger.info("op=listen_for_record_sub status=start kind=%s", record_kind)
 
         relays_to_use = relays if relays else [self.home_relay]
@@ -785,7 +785,7 @@ class Acorn:
 
         events_out = []
         my_enc = NIP44Encrypt(self.k)
-        my_gift = GiftWrap(BasicKeySigner(self.k))
+        my_gift = KindOtherGiftWrap(BasicKeySigner(self.k), kind_gift_wrap=record_kind)
         m = hashlib.sha256()
         m.update(self.privkey_hex.encode())
         # m.update(label.encode())
@@ -876,6 +876,7 @@ class Acorn:
                     parsed_record['presenter'] = unwrapped_event.pub_key
                     parsed_record['sender'] = unwrapped_event.pub_key
                     parsed_record['social_name'] = None
+                    parsed_record['timestamp'] = int(unwrapped_event.created_at.timestamp())
 
                 except (ValueError, TypeError, RuntimeError) as e:
                     self.logger.warning("op=get_user_records status=unwrap_failed kind=%s event=%s error=%s", record_kind, each.id, e)
@@ -908,6 +909,7 @@ class Acorn:
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
                     parsed_record['sender'] = each.pub_key
+                    parsed_record['timestamp'] = int(each.created_at.timestamp())
 
                 # check for special wallet record which is a list
                 if isinstance(parsed_record,list):
@@ -919,6 +921,7 @@ class Acorn:
                     parsed_record['id'] = each.id
                     parsed_record['presenter'] = self.pubkey_hex
                     parsed_record['sender'] = each.pub_key
+                    parsed_record['timestamp'] = int(each.created_at.timestamp())
 
             # Convert payload to json
             # See if payload is in stringifed json and convert
@@ -958,6 +961,8 @@ class Acorn:
                 events_out.append(parsed_record)
               
         
+        if events_out:
+            events_out.sort(key=lambda r: int(r.get("timestamp", 0)), reverse=reverse)
         return events_out
 
 
@@ -5604,7 +5609,7 @@ class Acorn:
         since = datetime.now().timestamp()
         # nip59 gift wrapper
         my_k = Keys(AS_K)
-        my_gift = GiftWrap(BasicKeySigner(my_k))
+        my_gift = KindOtherGiftWrap(BasicKeySigner(my_k), kind_gift_wrap=1059)
         send_k = Keys(pub_k=TO_K)
 
         self.logger.info("op=listen_notes status=running")
@@ -5741,7 +5746,7 @@ class Acorn:
 
         # nip59 gift wrapper
         my_k = Keys(AS_K)
-        my_gift = GiftWrap(BasicKeySigner(my_k))
+        my_gift = KindOtherGiftWrap(BasicKeySigner(my_k), kind_gift_wrap=1059)
 
 
   

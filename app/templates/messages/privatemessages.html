@@ -3,6 +3,111 @@
 {% block title %}Private Messages{% endblock %}
 {% block head %}
 {{ super() }}
+<style>
+  :root {
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-panel: #121a33;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+  }
+
+  .center-text {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  }
+
+  .center-text > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .center-text > * + * {
+    margin-top: 12px;
+  }
+
+  h1, h2, h3, h4, h5, p, span, a, label {
+    color: #e8f0f4;
+  }
+
+  .btn-stack {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 600;
+    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
+    width: 90%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+  }
+
+  .btn-stack button {
+    margin-top: 0 !important;
+  }
+
+  #card-container {
+    max-width: 880px;
+    margin: 14px auto;
+    display: grid;
+    gap: 12px;
+  }
+
+  .card {
+    border: 1px solid #3c518b;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  }
+
+  .card:hover {
+    border-color: var(--sb-brand-blue-1);
+    background: #101940;
+    transform: translateY(-1px);
+  }
+
+  .card-title {
+    color: var(--sb-text-main);
+    font-weight: 700;
+  }
+
+  .card-content {
+    color: var(--sb-text-sub);
+    margin-top: 6px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .hint {
+    color: var(--sb-text-sub);
+  }
+
+  @media (max-width: 700px) {
+    .center-text {
+      padding: 14px;
+    }
+    button {
+      width: 100%;
+    }
+  }
+</style>
 <script>
 function goBack() {
   window.history.back();
@@ -21,11 +126,11 @@ function createNewMessage() {
 {% block page_content %}
 <div class="center-text">
   <h1>Private Messages</h1>
-  <button onclick="goBack()">Back</button>
-  <br><br>
-  <button onclick="createNewMessage()">New Message</button>
-  <br><br>
-  Messages are shown newest first.
+  <div class="btn-stack">
+    <button onclick="goBack()">Back</button>
+    <button onclick="createNewMessage()">New Message</button>
+  </div>
+  <p class="hint">Messages are shown newest first.</p>
 </div>
 
 <div id="card-container"></div>
@@ -90,9 +195,10 @@ setDarkMode();
 </script>
 
 <div class="center-text">
-  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-  <br><br>
-  <button onclick="backToProfile()">Home</button>
+  <div class="btn-stack">
+    <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    <button onclick="backToProfile()">Home</button>
+  </div>
 </div>
 {% endblock %}
 

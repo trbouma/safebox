@@ -474,9 +474,23 @@ async def protected_route(    request: Request,
         return RedirectResponse(url="/")
 
     if request.method == "POST":
-        data = await request.json()
+        data = {}
+        content_type = (request.headers.get("content-type") or "").lower()
+        try:
+            if "application/json" in content_type:
+                data = await request.json()
+            else:
+                form_data = await request.form()
+                data = dict(form_data)
+        except Exception:
+            data = {}
+
         print(f"data from post {data}")
-        action_data = data.get("data", None)
+        # Scanner/form posts may use explicit action fields.
+        action_mode = data.get("action_mode", action_mode)
+        action_data = data.get("data", data.get("nauth", action_data))
+        action_amount = data.get("action_amount", action_amount)
+        action_comment = data.get("action_comment", action_comment)
 
     # Preferred explicit query parameters.
     if invoice:
