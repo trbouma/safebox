@@ -6859,12 +6859,14 @@ class Acorn:
             description_raw = _first_tag(tags, "description")
             bolt11_invoice = _first_tag(tags, "bolt11")
             lnurl_provider_pubkey = str(receipt.pub_key)
+            lnurl_provider_npub: str | None = None
             recipient_pubkey = _first_tag(tags, "p")
             p_sender_tag = _first_tag(tags, "P")
             receipt_event_refs = _tag_values(tags, "e")
             zap_request: Dict[str, Any] | None = None
             zapper_pubkey: str | None = None
             zapper_npub: str | None = None
+            zapper_identity_source = "none"
             zap_amount_msat: int | None = None
             zap_comment: str | None = None
             matches_target_event = target_event_id in [each.lower() for each in receipt_event_refs]
@@ -6877,6 +6879,8 @@ class Acorn:
                     if isinstance(parsed_description, dict):
                         zap_request = parsed_description
                         zapper_pubkey = str(zap_request.get("pubkey") or "").lower() or None
+                        if zapper_pubkey:
+                            zapper_identity_source = "description_pubkey"
                         zap_comment = str(zap_request.get("content") or "")
                         req_tags = list(zap_request.get("tags") or [])
                         for each_tag in req_tags:
@@ -6891,6 +6895,13 @@ class Acorn:
 
             if not zapper_pubkey and p_sender_tag:
                 zapper_pubkey = p_sender_tag.lower()
+                zapper_identity_source = "P_tag"
+
+            if len(lnurl_provider_pubkey) == 64 and all(ch in string.hexdigits for ch in lnurl_provider_pubkey):
+                try:
+                    lnurl_provider_npub = hex_to_bech32(lnurl_provider_pubkey)
+                except Exception:
+                    lnurl_provider_npub = None
 
             if zapper_pubkey and len(zapper_pubkey) == 64 and all(ch in string.hexdigits for ch in zapper_pubkey):
                 try:
@@ -6917,9 +6928,11 @@ class Acorn:
                 "receipt_id": str(receipt.id),
                 "created_at": int(receipt.created_at.timestamp()),
                 "lnurl_provider_pubkey": lnurl_provider_pubkey,
+                "lnurl_provider_npub": lnurl_provider_npub,
                 "recipient_pubkey": recipient_pubkey,
                 "zapper_pubkey": zapper_pubkey,
                 "zapper_npub": zapper_npub,
+                "zapper_identity_source": zapper_identity_source,
                 "zap_request_raw": description_raw,
                 "zap_request": zap_request,
                 "zap_comment": zap_comment,

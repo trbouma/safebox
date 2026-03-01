@@ -152,11 +152,14 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 2. Endpoint queries kind `9735` receipts filtered by `#e=<event_id>`.
 3. For each receipt, inspect:
    - `zapper_pubkey` / `zapper_npub` (derived from zap request `description.pubkey`, fallback `P` tag)
+   - `zapper_identity_source` to confirm identity provenance
+   - `lnurl_provider_pubkey` / `lnurl_provider_npub` are receipt signer identities, not zapper identities
    - `zap_request_raw` (original embedded kind-9734 JSON string)
    - `zap_request` (parsed embedded kind-9734 object)
    - `zap_amount_msat` and `invoice_amount_msat`
    - `amount_matches`, `description_hash_matches`, `matches_target_event`
 4. Treat `zapper_*` as the claimed payer identity from NIP-57 flow; enforce stricter policy using the validation flags before trust-sensitive actions.
+5. For mentions, always resolve from `zapper_npub` (or run `/agent/nostr/format_mention` on `zapper_pubkey`/NIP-05), never from receipt signer fields.
 
 ### Following Feed Lookup (Kind-1 from Follow List)
 

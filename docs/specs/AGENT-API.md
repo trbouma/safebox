@@ -344,9 +344,11 @@ Response (example):
       "receipt_id": "67b48a14fb66c60c8f9070bdeb37afdfcc3d08ad01989460448e4081eddda446",
       "created_at": 1674164545,
       "lnurl_provider_pubkey": "9630f464cca6a5147aa8a35f0bcdd3ce485324e732fd39e09233b1d848238f31",
+      "lnurl_provider_npub": "npub1...",
       "recipient_pubkey": "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
       "zapper_pubkey": "97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322",
       "zapper_npub": "npub1...",
+      "zapper_identity_source": "description_pubkey",
       "zap_request_raw": "{\"kind\":9734,...}",
       "zap_request": {
         "kind": 9734,
@@ -370,7 +372,8 @@ Response (example):
 Identity and validation notes:
 
 - `zapper_pubkey` is parsed from embedded zap request `description.pubkey` (fallback to receipt `P` tag).
-- Receipt `pubkey` is the LNURL provider signer, not the zapper.
+- `zapper_identity_source` indicates whether identity came from `description_pubkey`, `P_tag`, or `none`.
+- Receipt `pubkey` (`lnurl_provider_pubkey`) is the LNURL provider signer, not the zapper.
 - Use `amount_matches` and `description_hash_matches` as guardrails before taking trust-sensitive actions.
 - `zap_request_raw` and `zap_request` expose the embedded kind-`9734` request directly for agent-side policy checks.
 
