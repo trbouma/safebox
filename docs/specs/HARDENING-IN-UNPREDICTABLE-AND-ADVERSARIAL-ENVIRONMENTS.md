@@ -218,6 +218,248 @@ Rule:
 
 - Fallbacks are allowed only when they do not weaken required security guarantees.
 
+## Field Discoveries and Applied Fixes (2026-02)
+
+This section captures concrete issues observed during live QR/NFC flow testing, and
+the hardening changes applied so far.
+
+### Discovery 1: scanner handoffs produced `Method Not Allowed`
+
+Observed behavior:
+
+- QR scanner redirects/handoffs hit routes with unsupported method combinations.
+- Flows failed intermittently depending on browser navigation behavior.
+
+Applied changes:
+
+- Added compatibility POST/GET entrypoints for scanner-facing routes:
+  - `POST /records/offerlist`
+  - `GET /records/offerlist-scan`
+  - `POST /records/accept`
+  - `POST /records/present`
+- Scanner now uses POST handoff pages for sensitive `nauth` transfers where possible.
+
+Result:
+
+- Reduced route/method mismatch failures across device/browser variants.
+
+### Discovery 2: `nauth` context loss during Offer-by-QR receive path
+
+Observed behavior:
+
+- Receiver logs showed `scope: None grant: None` in `/records/ws/accept`.
+- Receiver emitted auth response with random nonce.
+- Presenter listener correctly rejected response due to nonce mismatch, causing
+  auth loops and no check-mark completion.
+
+Applied changes:
+
+- For `scope` containing `offer`, scanner now posts `nauth` to `/records/accept`
+  via form POST instead of query redirect.
+- Receiver websocket startup now tolerates missing `nauth` without crashing, but
+  continues to require valid nonce binding for handshake success.
+
+Result:
+
+- Offer-by-QR handshake now preserves session context and nonce continuity.
+
+### Discovery 3: strict KEM gating blocked auth completion
+
+Observed behavior:
+
+- Auth response arrived (`nauth:nembed`), but KEM parse mismatch/absence caused
+  presenter-side websocket loop (`kem_public_key: None`, repeated polling).
+- UI did not advance to check-mark state even though auth traffic existed.
+
+Applied changes:
+
+- Added tolerant KEM extraction logic for multiple `nembed` forms.
+- Added server-side KEM lookup fallback where applicable.
+- Removed hard UI-stage block on embedded KEM in auth completion path; transmittal
+  path resolves KEM with fail-closed behavior if still unavailable.
+
+Result:
+
+- Auth stage can complete deterministically; cryptographic enforcement remains in
+  transmittal boundary.
+
+### Discovery 4: receiver redirect built `record_kind=undefined`
+
+Observed behavior:
+
+- Receiver UI redirected to `/records/grantlist?record_kind=undefined`.
+- Backend returned integer parsing error (`int_parsing`).
+
+Applied changes:
+
+- Receiver page (`acceptrecord`) now redirects only on valid numeric kind.
+- Timeout/non-terminal messages no longer trigger redirect.
+- Backend completion payload includes both `grant_kind` and `record_kind` for
+  compatibility.
+
+Result:
+
+- Removed undefined-kind redirect failures and parsing exceptions.
+
+### Discovery 5: transitional POST bridge pages caused white flash
+
+Observed behavior:
+
+- Scanner POST handoff pages briefly flashed white on mobile/desktop.
+
+Applied changes:
+
+- Unified POST bridge renderer with dark Safebox transition card/spinner.
+- Shortened transition text for single-line mobile readability.
+
+Result:
+
+- Reduced visual instability during scanner-driven flow transitions.
+
+## Remaining Fragility and Risk Concentration
+
+Despite improvements, the following fragility points still require attention.
+
+### 1. Relay eventual consistency and stale-history ambiguity
+
+- Same-kind historical events remain a source of mis-selection risk.
+- Current nonce binding reduces risk but does not eliminate all race windows when
+  multiple active sessions share relay surfaces.
+
+Needed hardening:
+
+- Explicit session IDs in control messages (in addition to nonce).
+- Stronger candidate ordering rules and duplicate suppression by session key.
+
+### 2. Legacy route divergence
+
+- Compatibility routes exist to avoid regressions, but behavior may drift from
+  primary paths over time.
+
+Needed hardening:
+
+- Define one canonical handshake/transmittal route family.
+- Add parity tests that assert identical outcomes between canonical and compat routes.
+
+### 3. Mixed payload contracts (`nauth`, `nauth:nembed`, structured JSON)
+
+- Multiple payload shapes increase parse complexity and error surface.
+
+Needed hardening:
+
+- Formalize message-type registry and envelope contract per kind.
+- Add strict schema validation before state transitions.
+
+### 4. Browser dependency in bootstrap sequencing
+
+- Scanner and websocket behavior still depends on browser navigation semantics.
+- Mobile browser differences can still expose timing-sensitive race conditions.
+
+Needed hardening:
+
+- Add deterministic client state machine with explicit phase transitions.
+- Add browser-matrix regression tests for scan -> auth -> transmittal flows.
+
+### 5. External HTTPS dependency for KEM metadata
+
+- KEM fallback currently uses `/.well-known/kem` lookups over HTTPS.
+- This remains a control-plane dependency that can be disrupted or poisoned.
+
+Needed hardening:
+
+- Prefer relay-native/session-bound KEM exchange where available.
+- Keep HTTPS KEM lookup as bounded compatibility fallback with clear telemetry.
+
+### 6. UI success signaling before end-to-end confirmation
+
+- Some views still infer completion from intermediate websocket states.
+
+Needed hardening:
+
+- Standardize terminal states and only show success after durable commit and/or
+  verifiable receipt conditions.
+
+## Immediate Hardening Backlog
+
+1. Add automated integration tests for:
+   - Offer by QR (same-instance and cross-instance)
+   - Offer by NFC (same-instance and cross-instance)
+   - Request by QR/NFC
+   - Scanner POST bridge handoffs (method and parameter preservation)
+2. Introduce session-id tag in auth/transmittal control messages and bind all
+   stage transitions to `(nonce, session_id)`.
+3. Define and enforce a message schema registry per event kind in backend entrypoints.
+4. Consolidate legacy websocket paths onto canonical routes with deprecation gates.
+5. Add explicit telemetry counters for:
+   - nonce mismatch rejections
+   - KEM parse fallback usage
+   - HTTPS KEM fallback usage
+   - timeout terminal states by flow type
+
+## Operator Quick Checklist (QR/NFC Flow Triage)
+
+Use this checklist during incident triage before deep debugging.
+
+### A. Confirm active branch/config parity
+
+1. Verify service and worker processes are running the same branch/build.
+2. Confirm `AUTH_KIND`, `RECORD_TRANSMITTAL_KIND`, and relay settings match expected environment.
+3. Restart app processes after changing config or branch.
+
+### B. Validate scanner handoff integrity
+
+1. Confirm scanner route used POST handoff for internal `nauth` flows.
+2. Verify receiver route logs include expected `scope` and `grant` (not `None`).
+3. If `scope/grant` are `None`, treat as handoff context loss first, not cryptographic failure.
+
+### C. Validate auth stage completion
+
+1. On presenter side, verify websocket listener resolves auth params and expected nonce.
+2. Check for nonce mismatch warnings.
+3. If auth messages are present but UI does not progress, inspect client-side errors first.
+
+### D. Validate KEM material handling
+
+1. Check whether auth payload includes `nauth:nembed` with KEM fields.
+2. If missing, confirm fallback KEM resolution attempts/logs.
+3. If KEM remains unavailable at transmittal boundary, fail closed and re-authenticate.
+
+### E. Validate transmittal stage
+
+1. Confirm record send invoked with expected kinds (`originating_kind`, `final_kind`).
+2. Confirm recipient is listening on expected transmittal kind and relay set.
+3. Distinguish “no incoming records” from decrypt/storage failures.
+
+### F. Validate receive/store stage
+
+1. Confirm receiver websocket sends terminal payload (`OK`, `ERROR`, `TIMEOUT`).
+2. Confirm redirect parameters include valid numeric `record_kind`/`grant_kind`.
+3. Confirm grant persisted in recipient store, not only rendered in-session.
+
+### G. Minimum log bundle for escalation
+
+Capture these lines together for each failed attempt:
+
+1. scanner handoff target and method
+2. receiver `scope/grant` line
+3. presenter `ws_listen_for_nauth resolved auth params ...`
+4. first `listen for request ...` payload block
+5. KEM parse/fallback lines
+6. final terminal state line (`OK`/`ERROR`/`TIMEOUT`)
+
+### H. Fast decision tree
+
+1. `scope/grant None` on receiver:
+   scanner handoff loss; fix transport path first.
+2. nonce mismatch warnings:
+   stale or cross-session auth event selected; rebind session and retry.
+3. auth received but no check-mark:
+   client-side transition exception or over-strict UI gate.
+4. check-mark shown but no record:
+   transmittal/recipient listener mismatch or transmittal kind drift.
+5. record visible but not stored:
+   persistence path issue; verify receive-offer persistence semantics.
+
 ## Graceful Failure and Rollback Principles
 
 ### Principle 1: Never claim completion before committed state
@@ -256,6 +498,38 @@ In this operating model:
 - graceful degradation protects continuity,
 - fail-closed boundaries protect integrity,
 - rollback/recovery protects assets and records when dependencies are unreliable.
+
+## Comparison to Existing Tap-and-Pay Systems
+
+Safebox QR/NFC flows overlap with traditional tap-and-pay in user interaction shape (scan/tap -> authorize -> complete), but they differ materially in trust boundaries, transport assumptions, and failure handling.
+
+### Baseline comparison
+
+| Dimension | Conventional tap-and-pay (EMV/tokenized wallet rails) | Safebox QR/NFC record-payment model |
+|---|---|---|
+| Primary trust anchor | Scheme/network + acquirer/issuer authorization path | Session-bound cryptographic exchange (`nauth`/`nembed`) + wallet-held keys |
+| Message transport | Mostly managed card-network paths with strong central orchestration | Relay/websocket/event paths with eventual consistency and heterogeneous infra |
+| Session continuity | Terminal/acquirer state machines under scheme rules | Explicit nonce/session binding at application layer |
+| Data minimization at edge | PAN/tokenization standards and terminal policy | Minimal bootstrap payload policy (handshake parameters only) |
+| Failure semantics | Network- and issuer-defined decline/error codes | Application-defined terminal states (`OK`, `ERROR`, `TIMEOUT`) plus fallback classes |
+| Recovery model | Scheme dispute/reversal workflows | Retry/reconcile with signed state and verifiable record transfer evidence |
+| Custody/control posture | Typically custodial or institution-gated | End-user/agent-controlled safebox instances with revocable delegates |
+
+### Where Safebox is stronger (given current assumptions)
+
+1. Protocol-level session binding can be made explicit and inspectable by operators.
+2. Record and payment flow evidence can be retained as independently verifiable events.
+3. Hardening can be applied at the app/protocol edge without waiting for network-rail changes.
+
+### Where conventional rails are currently stronger
+
+1. Operational uniformity across terminals/acquirers (fewer transport variants).
+2. Mature decline/dispute ecosystems and standardized issuer/acquirer recovery procedures.
+3. Lower exposure to relay/eventual-consistency edge cases in typical retail payment scenarios.
+
+### Practical implication
+
+Safebox should not assume card-rail reliability characteristics by default. The hardening model in this document exists specifically because Safebox operates in a more open and variable environment. The design goal is not to mimic centralized rails, but to achieve comparable user trust outcomes through explicit cryptographic session controls, resilient fallbacks, and auditable flow states.
 
 ## Implementation References
 

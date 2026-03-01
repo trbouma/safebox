@@ -260,6 +260,56 @@ def _origin_from_host(host: str) -> str | None:
     return f"https://{host}"
 
 
+def _normalize_relay_list(relays, fallback: list[str] | None = None) -> list[str]:
+    raw_values: list[str] = []
+    if isinstance(relays, (list, tuple, set)):
+        for each in relays:
+            if each is None:
+                continue
+            raw_values.append(str(each).strip())
+    elif isinstance(relays, str):
+        raw_values.extend([part.strip() for part in relays.split(",") if part.strip()])
+
+    if not raw_values and fallback:
+        return _normalize_relay_list(fallback, fallback=None)
+
+    normalized: list[str] = []
+    for each in raw_values:
+        if not each:
+            continue
+        if not each.startswith("wss://") and not each.startswith("ws://"):
+            each = f"wss://{each}"
+        if each not in normalized:
+            normalized.append(each)
+    return normalized
+
+
+def _extract_kem_from_nembed(payload: str | None) -> tuple[str | None, str | None]:
+    if not payload:
+        return None, None
+    parsed_obj = None
+    try:
+        parsed_obj = parse_nembed_compressed(payload)
+    except Exception:
+        parsed_obj = None
+    if parsed_obj is None:
+        try:
+            parsed_obj = parse_nembed(payload)
+        except Exception:
+            parsed_obj = None
+    if not isinstance(parsed_obj, dict):
+        return None, None
+    kem_public_key = parsed_obj.get("kem_public_key")
+    kemalg = parsed_obj.get("kemalg")
+    if (not kem_public_key or not kemalg) and isinstance(parsed_obj.get("kem"), dict):
+        kem_public_key = kem_public_key or parsed_obj["kem"].get("kem_public_key")
+        kemalg = kemalg or parsed_obj["kem"].get("kemalg")
+    if (not kem_public_key or not kemalg) and isinstance(parsed_obj.get("data"), dict):
+        kem_public_key = kem_public_key or parsed_obj["data"].get("kem_public_key")
+        kemalg = kemalg or parsed_obj["data"].get("kemalg")
+    return kem_public_key, kemalg
+
+
 
 @router.get("/issue", tags=["records"]) 
 async def issue_credentials (   request: Request, 
@@ -393,6 +443,34 @@ async def offer_list(      request: Request,
 
                                         })
 
+@router.post("/offerlist", tags=["records", "protected"])
+async def offer_list_post(
+    request: Request,
+    private_mode: str = Form("offer"),
+    kind: int = Form(None),
+    nprofile: str = Form(None),
+    nauth: str = Form(None),
+    card: str = Form(None),
+    recipient_initiated: int = Form(0),
+    recipient_mode: str = Form(None),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """
+    Compatibility POST entrypoint for scanner/form-based redirects.
+    Delegates to canonical offer_list logic to avoid method-mismatch 405s.
+    """
+    return await offer_list(
+        request=request,
+        private_mode=private_mode,
+        kind=kind,
+        nprofile=nprofile,
+        nauth=nauth,
+        card=card,
+        recipient_initiated=recipient_initiated,
+        recipient_mode=recipient_mode,
+        acorn_obj=acorn_obj,
+    )
+
 
 @router.post("/offerlist-scan", tags=["records", "protected"])
 async def offer_list_scan_post(
@@ -405,6 +483,31 @@ async def offer_list_scan_post(
     acorn_obj: Acorn = Depends(get_acorn),
 ):
     """Scanner-only POST handoff to avoid exposing offer flow params in URL."""
+    return await offer_list(
+        request=request,
+        kind=kind,
+        nauth=nauth,
+        card=card,
+        recipient_initiated=recipient_initiated,
+        recipient_mode=recipient_mode,
+        acorn_obj=acorn_obj,
+    )
+
+@router.get("/offerlist-scan", tags=["records", "protected"])
+async def offer_list_scan_get(
+    request: Request,
+    nauth: str = None,
+    kind: int = None,
+    card: str = None,
+    recipient_initiated: int = 1,
+    recipient_mode: str = "auto_send",
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """
+    GET fallback for scanner handoff.
+    Some clients/redirect paths may hit offerlist-scan with GET, so
+    normalize to the same offer_list entrypoint instead of returning 405.
+    """
     return await offer_list(
         request=request,
         kind=kind,
@@ -979,6 +1082,23 @@ async def my_present_records(       request: Request,
 
                                         })
 
+@router.post("/present", tags=["records", "protected"])
+async def my_present_records_post(
+    request: Request,
+    nauth: str = Form(None),
+    nonce: str = Form(None),
+    record_kind: int = Form(None),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Compatibility POST entrypoint for scanner/form handoffs."""
+    return await my_present_records(
+        request=request,
+        nauth=nauth,
+        nonce=nonce,
+        record_kind=record_kind,
+        acorn_obj=acorn_obj,
+    )
+
 @router.get("/retrieve", tags=["records", "protected"])
 async def my_retrieve_records(       request: Request, 
                                 nauth: str = None,
@@ -1258,7 +1378,11 @@ async def accept_records(            request: Request,
     host = request.url.hostname
     scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
     port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/accept?nauth={nauth}"
+    nauth_clean = None if str(nauth).strip().lower() in {"none", "null", ""} else nauth
+    if nauth_clean:
+        ws_url = f"{scheme}://{host}{port}/records/ws/accept?nauth={nauth_clean}"
+    else:
+        ws_url = f"{scheme}://{host}{port}/records/ws/accept"
 
     
 
@@ -1276,9 +1400,22 @@ async def accept_records(            request: Request,
 
                                         })
 
+@router.post("/accept", tags=["records", "protected"])
+async def accept_records_post(
+    request: Request,
+    nauth: str = Form(None),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Compatibility POST entrypoint for scanner/form handoffs."""
+    return await accept_records(
+        request=request,
+        nauth=nauth,
+        acorn_obj=acorn_obj,
+    )
+
 
 @router.websocket("/ws/accept")
-async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn = Depends(get_acorn)):
+async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: Acorn = Depends(get_acorn)):
 
  
     global global_websocket
@@ -1298,15 +1435,31 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     
     print("This is the records websocket after sleep")
     print("nauth")
-    parsed_result = parse_nauth(nauth)
-    npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
-    nonce = parsed_result['values'].get('nonce', '0')
-    auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
-    auth_relays = parsed_result['values'].get("auth_relays",settings.AUTH_RELAYS)
-    transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.RECORD_TRANSMITTAL_KIND)
-    transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.RECORD_TRANSMITTAL_RELAYS)
-    scope = parsed_result['values'].get("scope",None)
-    grant = parsed_result['values'].get("grant",None)
+    nauth_clean = None if str(nauth).strip().lower() in {"none", "null", ""} else nauth
+    npub_initiator = None
+    nonce = generate_nonce(1)
+    auth_kind = settings.AUTH_KIND
+    auth_relays = settings.AUTH_RELAYS
+    transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
+    transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
+    scope = None
+    grant = None
+    if nauth_clean:
+        parsed_result = parse_nauth(nauth_clean)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind",settings.AUTH_KIND)
+        auth_relays = _normalize_relay_list(
+            parsed_result['values'].get("auth_relays"),
+            settings.AUTH_RELAYS,
+        )
+        transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = _normalize_relay_list(
+            parsed_result['values'].get("transmittal_relays"),
+            settings.RECORD_TRANSMITTAL_RELAYS,
+        )
+        scope = parsed_result['values'].get("scope",None)
+        grant = parsed_result['values'].get("grant",None)
     
     
     
@@ -1344,7 +1497,10 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
     response_nauth_with_kem= f"{response_nauth}:{nembedpqc}"
     print(f"response nauth with kem {response_nauth_with_kem}")
 
-    msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
+    if npub_initiator:
+        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
+    else:
+        logger.info("websocket_accept started without nauth; skipping presenter announce and waiting for incoming records")
     print("accepting.... let's poll for the records")
     # await asyncio.sleep(10)
     #FIXME - add in an ack here using auth relays
@@ -1476,6 +1632,7 @@ async def websocket_accept(websocket: WebSocket,  nauth: str, acorn_obj: Acorn =
             "status": "OK",
             "detail": f"all good {acorn_obj.handle} {scope} {grant} {user_records}",
             "grant_kind": first_type,
+            "record_kind": first_type,
         }
         if records_missing_original_blob:
             response_payload["warning"] = (
@@ -2782,6 +2939,7 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                                         ):
 
     print(f"ws nauth: {nauth}")
+    auth_kind = settings.AUTH_KIND
     auth_relays = None
     expected_nonce = None
 
@@ -2790,7 +2948,10 @@ async def ws_listen_for_nauth( websocket: WebSocket,
     if nauth:
         parsed_nauth = parse_nauth(nauth)   
         auth_kind = parsed_nauth['values'].get('auth_kind',   settings.AUTH_KIND)
-        auth_relays = parsed_nauth['values'].get("auth_relays", settings.AUTH_RELAYS)
+        auth_relays = _normalize_relay_list(
+            parsed_nauth['values'].get("auth_relays"),
+            settings.AUTH_RELAYS,
+        )
         expected_nonce = parsed_nauth['values'].get("nonce")
         print(
             "ws_listen_for_nauth resolved auth params "
@@ -2831,12 +2992,44 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                 kem_public_key = None
                 kemalg = None
                 if kem_public_key_nauth:
+                    kem_public_key, kemalg = _extract_kem_from_nembed(kem_public_key_nauth)
+                    if not kem_public_key or not kemalg:
+                        logger.warning("ws_listen_for_nauth invalid or incomplete KEM payload")
+
+                if client_nauth and (not kem_public_key or not kemalg):
                     try:
-                        kem_parsed = parse_nembed_compressed(kem_public_key_nauth)
-                        kem_public_key = kem_parsed.get('kem_public_key')
-                        kemalg = kem_parsed.get('kemalg')
+                        parsed_candidate = parse_nauth(client_nauth)
+                        candidate_scope = parsed_candidate["values"].get("scope")
+                        candidate_auth_relays = parsed_candidate["values"].get("auth_relays") or auth_relays or []
+                        candidate_tx_relays = parsed_candidate["values"].get("transmittal_relays") or []
+
+                        candidate_origins: list[str] = []
+                        seen_origins: set[str] = set()
+
+                        def add_origin(origin: str | None):
+                            if origin and origin not in seen_origins:
+                                seen_origins.add(origin)
+                                candidate_origins.append(origin)
+
+                        def add_origin_from_relay(relay: str | None):
+                            add_origin(_relay_to_http_origin(relay or ""))
+
+                        if isinstance(candidate_scope, str) and candidate_scope.startswith("offer_request:"):
+                            _, _, scope_host = _parse_offer_request_scope(candidate_scope)
+                            add_origin(_origin_from_host(scope_host))
+
+                        for relay in (candidate_tx_relays or []):
+                            add_origin_from_relay(relay)
+                        for relay in (candidate_auth_relays or []):
+                            add_origin_from_relay(relay)
+
+                        resolved_kem_public_key, resolved_kemalg = await _resolve_kem_from_service_hosts(candidate_origins)
+                        if resolved_kem_public_key and resolved_kemalg:
+                            kem_public_key = resolved_kem_public_key
+                            kemalg = resolved_kemalg
+                            logger.info("ws_listen_for_nauth resolved KEM via host hints")
                     except Exception as exc:
-                        logger.warning("ws_listen_for_nauth invalid KEM payload; requiring re-authentication: %s", exc)
+                        logger.debug("ws_listen_for_nauth legacy KEM discovery skipped: %s", exc)
 
                 print(f"this is the kem public key: {kem_public_key} kemalg: {kemalg}")
                 # These parameters get passed along to Step 2a via the browser.
@@ -2855,21 +3048,23 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                     logger.warning("ws_listen_for_nauth ignoring nonce mismatch for candidate response")
                     await asyncio.sleep(1)
                     continue
-                if not kem_public_key or not kemalg:
-                    logger.info("ws_listen_for_nauth waiting for KEM-bearing auth response")
-                    await asyncio.sleep(1)
-                    continue
                 parsed_nauth = parse_nauth(client_nauth)
                 pubhex = parsed_nauth['values'].get('pubhex')
                 transmittal_pubhex = parsed_nauth['values'].get('transmittal_pubhex')
                 transmittal_kind = parsed_nauth['values'].get('transmittal_kind') or settings.RECORD_TRANSMITTAL_KIND
-                transmittal_relays = parsed_nauth['values'].get('transmittal_relays') or settings.RECORD_TRANSMITTAL_RELAYS
+                transmittal_relays = _normalize_relay_list(
+                    parsed_nauth['values'].get('transmittal_relays'),
+                    settings.RECORD_TRANSMITTAL_RELAYS,
+                )
                 
                 # Need to create a new nauth where the transmittal npub points back to the initiator
                 new_nauth = create_nauth (  npub= hex_to_npub(pubhex),
                                             nonce = parsed_nauth['values'].get('nonce'),
                                             auth_kind = parsed_nauth['values'].get('auth_kind') or settings.AUTH_KIND,
-                                            auth_relays = parsed_nauth['values'].get('auth_relays') or settings.AUTH_RELAYS,
+                                            auth_relays = _normalize_relay_list(
+                                                parsed_nauth['values'].get('auth_relays'),
+                                                settings.AUTH_RELAYS,
+                                            ),
                                             transmittal_npub = hex_to_npub(pubhex),
                                             transmittal_kind=  transmittal_kind,
                                             transmittal_relays= transmittal_relays,
@@ -2878,6 +3073,8 @@ async def ws_listen_for_nauth( websocket: WebSocket,
 
                 ) 
 
+                if not kem_public_key or not kemalg:
+                    logger.info("ws_listen_for_nauth proceeding without embedded KEM; transmit path will resolve fallback")
                 #FIXME use a better variable name than nprofile. Also some extra parameters not needed.
                 nprofile = {'nauth': new_nauth, 'name': acorn_obj.handle, 'transmittal_kind': transmittal_kind, 'transmittal_relays': transmittal_relays, "kem_public_key": kem_public_key, 'kemalg': kemalg}
                 print(f"send {client_nauth}") 

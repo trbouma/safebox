@@ -34,12 +34,18 @@
 
   ws.onopen = () => console.log("WebSocket connected");
   ws.onmessage = (event) => {
-      var grant_kind = JSON.parse(event.data).grant_kind;
-      console.log("Message received:", event.data);
-      
-     window.location.href=`/records/grantlist?record_kind=${grant_kind}`;
-      // refreshRecords();
-     
+      const payload = JSON.parse(event.data);
+      console.log("Message received:", payload);
+      if (payload.status === "TIMEOUT") {
+        alert(payload.detail || "Offer receive timed out.");
+        return;
+      }
+      const grantKind = Number.parseInt(payload.grant_kind ?? payload.record_kind, 10);
+      if (!Number.isInteger(grantKind) || grantKind <= 0) {
+        console.warn("acceptrecord received message without valid grant_kind:", payload);
+        return;
+      }
+      window.location.href = `/records/grantlist?record_kind=${grantKind}`;
 
   };
   ws.onclose = () => console.log("WebSocket closed");

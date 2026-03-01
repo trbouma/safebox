@@ -127,9 +127,10 @@ async def get_scan_result(  request: Request,
         if "vcred" in scope:
             return RedirectResponse(f"/credentials/present?nauth={quote(qr_code)}")
         if "offer" in scope:
-            return RedirectResponse(f"/records/accept?nauth={quote(qr_code)}")
+            # Use POST handoff to avoid URL/query loss on some mobile scanners.
+            return _post_accept_scan({"nauth": qr_code})
         if "verifier" in scope:
-            return RedirectResponse(f"/records/present?nauth={quote(qr_code)}")
+            return _post_present_scan({"nauth": qr_code})
         if "vissue" in scope:
             return RedirectResponse(f"/credentials/offer?nauth={quote(qr_code)}")
 
@@ -139,7 +140,7 @@ async def get_scan_result(  request: Request,
             return RedirectResponse(f"/credentials/present?nauth={quote(qr_code)}")
         if referer == "credential-offer":
             return RedirectResponse(f"/credentials/offer?nauth={quote(qr_code)}")
-        return RedirectResponse(f"/safebox/access?nauth={quote(qr_code)}")
+        return _post_access_scan({"nauth": qr_code})
 
     if qr_code[:12].lower() == "nostr:nevent":
         logger.debug("unsupported nostr nevent scan: %s", qr_code)
@@ -243,6 +244,37 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> HTMLRespons
 
 
 def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
+    return _post_form_scan(
+        "/records/offerlist-scan",
+        fields,
+        form_id="scanOfferPost",
+        message="Connecting offer channel...",
+    )
+
+
+def _post_accept_scan(fields: dict[str, str]) -> HTMLResponse:
+    return _post_form_scan(
+        "/records/accept",
+        fields,
+        form_id="scanAcceptPost",
+        message="Connecting receive channel...",
+    )
+
+
+def _post_present_scan(fields: dict[str, str]) -> HTMLResponse:
+    return _post_form_scan("/records/present", fields, message="Connecting presenter...")
+
+
+def _post_access_scan(fields: dict[str, str]) -> HTMLResponse:
+    return _post_form_scan("/safebox/access", fields, message="Connecting Safebox...")
+
+
+def _post_form_scan(
+    action: str,
+    fields: dict[str, str],
+    form_id: str = "scanPostForm",
+    message: str = "Connecting...",
+) -> HTMLResponse:
     inputs = []
     for key, value in fields.items():
         if value is None:
@@ -262,7 +294,6 @@ def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
         --sb-navy: #000060;
         --sb-light: #f6f6f6;
         --sb-blue-1: #5267ec;
-        --sb-blue-2: #5369ec;
       }}
       html, body {{
         margin: 0;
@@ -311,26 +342,15 @@ def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
         to {{ transform: rotate(360deg); }}
       }}
       @media (max-width: 520px) {{
-        .wrap {{
-          padding: 14px;
-        }}
+        .wrap {{ padding: 14px; }}
         .card {{
           width: min(320px, 80vw);
           border-radius: 14px;
           padding: 14px 12px;
         }}
-        .brand {{
-          font-size: 0.95rem;
-          margin-bottom: 6px;
-        }}
-        .msg {{
-          font-size: 0.9rem;
-        }}
-        .spinner {{
-          width: 30px;
-          height: 30px;
-          margin-top: 12px;
-        }}
+        .brand {{ font-size: 0.95rem; margin-bottom: 6px; }}
+        .msg {{ font-size: 0.9rem; }}
+        .spinner {{ width: 30px; height: 30px; margin-top: 12px; }}
       }}
     </style>
   </head>
@@ -338,14 +358,14 @@ def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
     <div class="wrap">
       <div class="card">
         <div class="brand">SAFEBOX</div>
-        <p class="msg">Preparing recipient offer channel...</p>
+        <p class="msg">{escape(message)}</p>
         <div class="spinner" aria-hidden="true"></div>
       </div>
     </div>
-    <form id="scanOfferPost" method="post" action="/records/offerlist-scan">
+    <form id="{escape(form_id, quote=True)}" method="post" action="{escape(action, quote=True)}">
       {''.join(inputs)}
     </form>
-    <script>document.getElementById('scanOfferPost').submit();</script>
+    <script>document.getElementById('{escape(form_id, quote=True)}').submit();</script>
   </body>
 </html>
 """
