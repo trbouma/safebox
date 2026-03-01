@@ -274,6 +274,24 @@ def _persist_wallet_balance(acorn_obj: Acorn) -> None:
             session.commit()
 
 
+def _normalize_relays(raw_relays: list[str] | None) -> list[str]:
+    relay_list: list[str] = []
+    for each in raw_relays or []:
+        value = str(each or "").strip()
+        if not value:
+            continue
+        normalized = value if value.startswith("wss://") else f"wss://{value}"
+        if normalized not in relay_list:
+            relay_list.append(normalized)
+    return relay_list
+
+
+def _agent_default_dm_relays() -> list[str]:
+    # Keep DM send/read defaults aligned to avoid split-brain inbox behavior.
+    # Include home relay plus configured DM and public relay sets.
+    return _normalize_relays([settings.HOME_RELAY] + list(settings.DM_RELAYS or []) + list(settings.PUBLIC_RELAYS or []))
+
+
 async def _resolve_sats_from_request(amount_sats: int | None, amount: float | None, currency: str | None) -> tuple[int, bool, str]:
     converted_from_currency = False
     currency_code = (currency or "SAT").strip().upper()
@@ -715,9 +733,10 @@ async def agent_read_dms(
             relay_list = None
 
     try:
+        effective_relays = relay_list if relay_list is not None else _agent_default_dm_relays()
         messages = await acorn_obj.get_user_records(
             record_kind=kind,
-            relays=relay_list if relay_list is not None else settings.DM_RELAYS,
+            relays=effective_relays,
             reverse=True,
         )
     except Exception as exc:
@@ -1016,13 +1035,8 @@ async def agent_secure_dm(
     if not message:
         raise HTTPException(status_code=400, detail="Missing message")
 
-    raw_relays = payload.relays if payload.relays else settings.PUBLIC_RELAYS
-    relay_list: list[str] = []
-    for each in raw_relays:
-        value = str(each or "").strip()
-        if not value:
-            continue
-        relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+    raw_relays = payload.relays if payload.relays else _agent_default_dm_relays()
+    relay_list = _normalize_relays(raw_relays)
     if not relay_list:
         raise HTTPException(status_code=400, detail="No relays configured for secure_dm")
 
