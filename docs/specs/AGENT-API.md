@@ -12,6 +12,7 @@ This API is additive and isolated from existing web routes, allowing machine cli
 Current scope (initial release):
 
 - Wallet identity/status lookup
+- Custom handle management
 - Balance lookup
 - Supported-currency lookup
 - Private-message read
@@ -110,6 +111,47 @@ curl -sS \
   -H "X-Access-Key: ${API_KEY}" \
   "${BASE_URL}/agent/balance"
 ```
+
+### `POST /agent/set_custom_handle`
+
+Sets a wallet-specific `custom_handle` for agent operations.
+
+Request:
+
+```json
+{
+  "custom_handle": "myagent"
+}
+```
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "custom_handle": "myagent"
+  }' \
+  "${BASE_URL}/agent/set_custom_handle"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "custom_handle": "myagent",
+  "lightning_address": "myagent@skills.example.com",
+  "detail": "Custom handle set to myagent",
+  "timestamp": 1770000000
+}
+```
+
+Validation and errors:
+
+- `400` if `custom_handle` is missing or invalid.
+- `409` if the handle is already taken.
 
 ### `GET /agent/tx_history`
 

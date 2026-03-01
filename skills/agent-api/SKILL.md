@@ -44,6 +44,7 @@ Conditional:
 - `GET /agent/balance`
 - `GET /agent/tx_history`
 - `GET /agent/supported_currencies`
+- `POST /agent/set_custom_handle`
 - `GET /agent/read_dms`
 - `GET /agent/nostr/latest_kind1`
 - `GET /agent/nostr/kind0`
@@ -102,6 +103,15 @@ Expected response includes:
    - Includes `lightning_address` derived from request host.
 2. Call `GET /agent/balance` for lightweight polling or confirmation.
 3. Call `GET /agent/tx_history` for recent transaction audit context.
+
+### 2a) Set Wallet Custom Handle
+
+1. Call `POST /agent/set_custom_handle` with:
+   - `custom_handle` (required): desired local-part for wallet lightning address.
+2. Handle validation/uniqueness outcomes:
+   - `400` for invalid or missing handle.
+   - `409` when the handle is already taken.
+3. Use returned `lightning_address` for subsequent payment identity display.
 
 ### 3) Create Invoice (Receive Payment)
 

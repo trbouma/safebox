@@ -26,6 +26,7 @@ from app.utils import (
     generate_pnr,
     listen_for_request,
     parse_nauth,
+    validate_local_part,
 )
 from monstr.encrypt import Keys
 from safebox.acorn import Acorn
@@ -86,6 +87,10 @@ class AgentPublishKind0Request(BaseModel):
 class AgentPublishKind1Request(BaseModel):
     content: str
     relays: list[str] | None = None
+
+
+class AgentSetCustomHandleRequest(BaseModel):
+    custom_handle: str
 
 
 class AgentSecureDmRequest(BaseModel):
@@ -480,6 +485,48 @@ async def agent_balance(acorn_obj: Acorn = Depends(_agent_get_acorn)):
         "status": "OK",
         "balance": acorn_obj.balance,
         "unit": "sat",
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/set_custom_handle", tags=["agent"])
+async def agent_set_custom_handle(
+    payload: AgentSetCustomHandleRequest,
+    request: Request,
+    x_access_key: str | None = Header(default=None),
+):
+    candidate = (payload.custom_handle or "").strip().lower()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Missing custom_handle")
+    if not validate_local_part(candidate):
+        raise HTTPException(status_code=400, detail="Invalid custom_handle")
+
+    wallet_ref = _resolve_wallet_by_access_key(x_access_key)
+    try:
+        with Session(engine) as session:
+            wallet = session.exec(
+                select(RegisteredSafebox).where(RegisteredSafebox.npub == wallet_ref.npub)
+            ).first()
+            if not wallet:
+                raise HTTPException(status_code=404, detail="Wallet not found")
+            wallet.custom_handle = candidate
+            session.add(wallet)
+            session.commit()
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Custom handle already taken")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Agent set_custom_handle failed")
+        raise HTTPException(status_code=500, detail=f"Set custom handle failed: {exc}")
+
+    host = request.url.hostname or ""
+    lightning_address = f"{candidate}@{host}" if host else candidate
+    return {
+        "status": "OK",
+        "custom_handle": candidate,
+        "lightning_address": lightning_address,
+        "detail": f"Custom handle set to {candidate}",
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
