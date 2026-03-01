@@ -6380,6 +6380,7 @@ class Acorn:
             pubhex = Keys(pub_k=npub).public_key_hex()
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             raise ValueError("Invalid public key")
+        social_profile: Dict[str, Any] = {}
         
         FILTER = [{
                 'limit': 1,                                
@@ -6392,7 +6393,10 @@ class Acorn:
                     events = await c.query(FILTER)
                     if events:
                         event = events[0]
-                        social_profile = json.loads(event.content)
+                        try:
+                            social_profile = json.loads(event.content)
+                        except (json.JSONDecodeError, TypeError) as exc:
+                            social_profile = {}
 
         return social_profile       
 
