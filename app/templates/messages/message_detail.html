@@ -128,9 +128,6 @@ const message = {{ message | tojson }};
 
 function senderLabel(record) {
   if (record.social_name && String(record.social_name).trim() !== "") return record.social_name;
-  if (record.presenter && String(record.presenter).trim() !== "") return record.presenter;
-  if (record.sender && String(record.sender).trim() !== "") return record.sender;
-  if (record.pubkey && String(record.pubkey).trim() !== "") return record.pubkey;
   return "Unknown sender";
 }
 
