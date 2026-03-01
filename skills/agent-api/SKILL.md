@@ -12,6 +12,7 @@ Primary outcomes:
 - Create and pay Lightning invoices
 - Pay Lightning addresses directly
 - Execute zaps to notes/profiles via agent endpoint
+- Send secure direct messages to npub/NIP-05 recipients
 - Issue and accept Cashu ecash tokens
 - Create recipient-first offer QR payloads so humans can send grants by scanning agent QR
 
@@ -43,6 +44,7 @@ Conditional:
 - `GET /agent/balance`
 - `GET /agent/tx_history`
 - `GET /agent/supported_currencies`
+- `GET /agent/read_dms`
 - `GET /agent/nostr/latest_kind1`
 - `GET /agent/nostr/kind0`
 - `GET /agent/nostr/following/latest_kind1`
@@ -55,6 +57,7 @@ Conditional:
 - `POST /agent/zap`
 - `POST /agent/publish_kind0`
 - `POST /agent/publish_kind1`
+- `POST /agent/secure_dm`
 - `POST /agent/react`
 - `POST /agent/reply`
 - `POST /agent/follow`
@@ -173,6 +176,19 @@ Returns latest kind-0 event data with parsed JSON profile content:
 
 Use this when an agent needs authoritative profile metadata before social actions (for example pre-zap context, identity checks, or local profile caching).
 
+### Read Private Messages (NIP-17 Gift Wrap Transport)
+
+Use agent endpoint:
+
+- `GET /agent/read_dms?limit=<n>&kind=1059`
+- optional relay override: `&relays=<relay1,relay2,...>`
+
+Behavior:
+
+- reads incoming gift-wrapped messages using existing wallet record retrieval
+- defaults to kind `1059` (private DM transport)
+- returns newest-first messages with bounded `limit`
+
 ### 4) Pay Invoice
 
 1. Call `POST /agent/pay_invoice` with BOLT11 invoice.
@@ -269,7 +285,26 @@ Mention helper endpoints:
   - input: `base_text`, `identifiers[]`, optional `style`
   - output: mention-ready post content for direct use with `POST /agent/publish_kind1`
 
-### 11) Publish Reaction (NIP-25 Kind 7)
+### 11) Send Secure DM (NIP-44 Gift Wrap)
+
+1. Call `POST /agent/secure_dm` with:
+   - `recipient` (required): NIP-05 (`name@domain`), `npub1...`, or 64-char pubhex
+   - `message` (required): plaintext message to encrypt and send
+   - optional `relays` array override (defaults to server `PUBLIC_RELAYS`)
+2. Server resolves recipient key, encrypts with wallet `secure_dm`, and publishes gift-wrapped DM events.
+3. Confirm `status == OK` and inspect returned relay list.
+
+Example:
+
+```json
+{
+  "recipient": "alice@example.com",
+  "message": "Hello from Safebox agent",
+  "relays": ["wss://relay.damus.io", "wss://relay.primal.net"]
+}
+```
+
+### 12) Publish Reaction (NIP-25 Kind 7)
 
 1. Call `POST /agent/react` with:
    - `event_id` (required): target event id (hex or note id)
@@ -288,7 +323,7 @@ Example:
 }
 ```
 
-### 12) Publish Reply (Kind 1)
+### 13) Publish Reply (Kind 1)
 
 1. Call `POST /agent/reply` with:
    - `event_id` (required): target event id (hex or note id)
@@ -298,7 +333,7 @@ Example:
 2. Server signs and publishes a kind-1 reply with `e`/`p`/`k` reply tags.
 3. Confirm returned `event_id` and `tags`.
 
-### 13) Recipient-First Offer Request (Agent Shows QR)
+### 14) Recipient-First Offer Request (Agent Shows QR)
 
 Use this flow when a human Safebox user will send a grant to the agent wallet by scanning a QR shown by the agent.
 
@@ -350,7 +385,7 @@ Compact behavior:
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
 
-### 14) Sender-Side Offer Dispatch Lifecycle
+### 15) Sender-Side Offer Dispatch Lifecycle
 
 Use this flow when the agent is the sender and needs explicit dispatch states.
 
@@ -465,6 +500,6 @@ Retry guidance:
 
 ## References
 
-- `/Users/trbouma/projects/safebox-2/docs/specs/AGENT-API.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/AGENT-FLOWS.md`
-- `/Users/trbouma/projects/safebox-2/app/routers/agent.py`
+- `docs/specs/AGENT-API.md`
+- `docs/specs/AGENT-FLOWS.md`
+- `app/routers/agent.py`

@@ -865,12 +865,7 @@ async def my_personal_messages(      request: Request,
 
 
     dm_relays = settings.DM_RELAYS
-    print(acorn_obj.pubkey_bech32)
-    since_last = (datetime.now() - timedelta(days=1)).timestamp()
-
-    user_records = await acorn_obj.get_user_records(record_kind=kind,relays=dm_relays, reverse=False)
-   
-    print(f"user_records: {user_records}")
+    user_records = await acorn_obj.get_user_records(record_kind=kind, relays=dm_relays, reverse=True)
     
     
     referer = urllib.parse.urlparse(request.headers.get("referer")).path
@@ -1400,6 +1395,36 @@ async def display_message(     request: Request,
                                             "content": content
                                             
                                         })
+
+@router.get("/messagedetail", tags=["safebox", "protected"])
+async def message_detail(
+    request: Request,
+    message_id: str,
+    kind: int = 1059,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Read-only view for a private message by event id."""
+
+    target_id = (message_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Missing message_id")
+
+    dm_relays = settings.DM_RELAYS
+    user_records = await acorn_obj.get_user_records(record_kind=kind, relays=dm_relays, reverse=True)
+    selected_message = next((record for record in user_records if str(record.get("id", "")).strip() == target_id), None)
+    if selected_message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    return templates.TemplateResponse(
+        "messages/message_detail.html",
+        {
+            "request": request,
+            "message": selected_message,
+            "record_kind": kind,
+            "referer": referer,
+        },
+    )
 
 
 @router.get("/profile/{handle}", response_class=HTMLResponse)

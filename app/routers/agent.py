@@ -88,6 +88,12 @@ class AgentPublishKind1Request(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentSecureDmRequest(BaseModel):
+    recipient: str
+    message: str
+    relays: list[str] | None = None
+
+
 class AgentReactRequest(BaseModel):
     event_id: str
     content: str = "❤️"
@@ -686,6 +692,47 @@ async def agent_kind0_profile(
     }
 
 
+@router.get("/read_dms", tags=["agent"])
+async def agent_read_dms(
+    limit: int = 50,
+    kind: int = 1059,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    safe_limit = max(1, min(int(limit), 200))
+    if kind <= 0:
+        raise HTTPException(status_code=400, detail="Invalid kind")
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        messages = await acorn_obj.get_user_records(
+            record_kind=kind,
+            relays=relay_list if relay_list is not None else settings.DM_RELAYS,
+            reverse=True,
+        )
+    except Exception as exc:
+        logger.exception("Agent read_dms failed")
+        raise HTTPException(status_code=400, detail=f"Read DMs failed: {exc}")
+
+    return {
+        "status": "OK",
+        "kind": kind,
+        "count": min(len(messages), safe_limit),
+        "messages": messages[:safe_limit],
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/create_invoice", tags=["agent"])
 async def agent_create_invoice(
     payload: AgentInvoiceRequest, acorn_obj: Acorn = Depends(_agent_get_acorn)
@@ -953,6 +1000,47 @@ async def agent_publish_kind1(
         "event_id": result.get("event_id"),
         "content": result.get("content"),
         "relays": result.get("relays"),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/secure_dm", tags=["agent"])
+async def agent_secure_dm(
+    payload: AgentSecureDmRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    recipient = (payload.recipient or "").strip()
+    message = (payload.message or "").strip()
+    if not recipient:
+        raise HTTPException(status_code=400, detail="Missing recipient")
+    if not message:
+        raise HTTPException(status_code=400, detail="Missing message")
+
+    raw_relays = payload.relays if payload.relays else settings.PUBLIC_RELAYS
+    relay_list: list[str] = []
+    for each in raw_relays:
+        value = str(each or "").strip()
+        if not value:
+            continue
+        relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+    if not relay_list:
+        raise HTTPException(status_code=400, detail="No relays configured for secure_dm")
+
+    try:
+        result = await acorn_obj.secure_dm(
+            nrecipient=recipient,
+            message=message,
+            dm_relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent secure_dm failed")
+        raise HTTPException(status_code=400, detail=f"Secure DM failed: {exc}")
+
+    return {
+        "status": "OK",
+        "message": result,
+        "recipient": recipient,
+        "relays": relay_list,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 

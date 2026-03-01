@@ -15,8 +15,10 @@ Current agent flows:
 
 - Invite onboarding (`/agent/onboard`)
 - Wallet info/balance (`/agent/info`, `/agent/balance`)
+- Private-message read (`/agent/read_dms`)
 - Lightning invoice create/pay (`/agent/create_invoice`, `/agent/pay_invoice`)
 - Lightning-address payment (`/agent/pay_lightning_address`)
+- Secure direct messaging (`/agent/secure_dm`)
 - Cashu token issue/accept (`/agent/issue_ecash`, `/agent/accept_ecash`)
 
 ## Flow Families
@@ -53,6 +55,14 @@ Current agent flows:
 2. Service resolves LNURL and payment request server-side through existing wallet payment logic.
 3. Service executes payment, reloads wallet state, and persists updated balance snapshot.
 4. API returns payment status, paid fees, and final balance.
+
+### Secure Messaging Flow
+
+1. Agent calls `/agent/secure_dm` with recipient (`npub`, NIP-05, or 64-char pubhex), plaintext message, and optional relay overrides.
+2. Service resolves recipient pubkey, encrypts message using wallet secure-DM path, and gift-wraps for transport.
+3. Service publishes to provided relays or default `PUBLIC_RELAYS`.
+4. API returns dispatch status and relay list.
+5. Agent reads incoming replies/messages via `/agent/read_dms` (default `kind=1059`, newest-first).
 
 ### Ecash Flow
 

@@ -11,6 +11,7 @@ Headline context document:
 - [Human-First Approach](./HUMAN-FIRST-APPROACH.md)
 
 This is the primary framing document for the spec set. It defines the human-first principle, the human-then-agent hardening sequence, and bootstrap-data minimization policy for QR/bech32 handshake channels. Read this first.
+It also defines the explicit Human-Agent Flow Parity Principle: one interoperable protocol surface across human and agent operation.
 
 Architectural companion:
 

@@ -69,6 +69,26 @@ Design principle:
 
 - QR/NFC carry minimal bootstrap material
 - sensitive content is transferred over negotiated secure channels
+- human and agent operation share one interoperable protocol surface (no protocol forks by operator type)
+- capabilities should remain flow-parity compatible across human-to-human, human-to-agent, agent-to-human, and agent-to-agent paths
+
+## Singular Flow Synthesis
+
+Most systems implement one or two interaction channels well, but stop there:
+
+- wallet/payment apps commonly focus on QR + NFC for payment transfer
+- identity/credential systems commonly focus on QR + deep-link handoff (sometimes NFC)
+- messaging systems commonly focus on protocol-native encrypted transport
+
+Safebox synthesizes these partial models into one coherent exchange model:
+
+- multiple initiation directions (presenter-first and verifier-first)
+- human UI and agent API parity over the same semantics
+- QR/NFC bootstrap using protocol envelopes (`nauth`/`nembed`)
+- cross-instance operation with crypto/key-exchange continuity
+- graceful fallback and rollback behavior under relay/service instability
+
+Comparable ecosystems exist in pieces (Lightning wallets, DID/VC stacks, enterprise access systems), but typically do not deliver interchangeable end-to-end flow behavior across human, device, and agent operation as a single model.
 
 ## Why Safebox Uses `nAuth` Instead of OAuth/OID Core Flows
 
@@ -143,6 +163,12 @@ Implication:
 
 - lower central dependency
 - greater operator responsibility for policy, abuse handling, and compliance
+
+Policy layering principle:
+
+- protocol layer stays neutral across human and agent actors
+- institutional controls (for example KYC/AML onboarding, allow/deny policy, risk scoring) are applied by higher-order operator/regulatory systems
+- Safebox does not define a global protocol-level `npub` exclusion model; policy enforcement is context-specific and operator-scoped
 
 ## Holder and Request Binding
 
@@ -255,6 +281,24 @@ Regulator-facing analogy:
 - cutting off the air supply to a premise based only on suspicion is not an appropriate equivalent control.
 
 The Safebox implication is the same: govern operation and accountability at the service/institution boundary while preserving protocol neutrality and due-process-oriented control paths.
+
+## Interface Evolution: Apps to Agent Networks
+
+Safebox anticipates a shift in software shape over time:
+
+- away from logic-heavy, platform-specific mobile "apps" as the primary execution boundary
+- toward cooperating agent networks that transact, verify, and negotiate over protocol-native channels
+- with human interaction delivered through a lightweight interface veneer rather than thick client business logic
+
+In this model, core logic lives in interoperable protocol and agent layers, while UI layers remain thin, replaceable, and channel-adaptive (web, mobile shell, QR/NFC surfaces, command-line operations).
+
+This direction aligns with Safebox's hypermedia-oriented interaction posture: interface state should be progressively discoverable and driven by signed/verified protocol transitions, not hidden in opaque client-side workflow code.
+
+See also:
+
+- [Hypermedia and HATEOAS Application State](./HYPERMEDIA-AND-HATEOAS-APPLICATION-STATE.md)
+- [Human-First Approach](./HUMAN-FIRST-APPROACH.md)
+- [Agent Flows](./AGENT-FLOWS.md)
 
 ## Practical Positioning
 

@@ -1299,13 +1299,7 @@ class Acorn:
             
     async def secure_dm(self,nrecipient:str, message: str, dm_relays: List[str]):
         try:
-            if '@' in nrecipient:
-                npub_hex, relays = nip05_to_npub(nrecipient)
-                
-               
-                dm_relays = dm_relays
-            else:
-                npub_hex = bech32_to_hex(nrecipient)
+            npub_hex = self._resolve_pubkey_identifier(nrecipient)
         except (ValueError, TypeError) as exc:
             raise RuntimeError(f"Could not resolve {nrecipient}") from exc
         

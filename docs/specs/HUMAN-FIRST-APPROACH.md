@@ -18,6 +18,16 @@ Extension principle:
 
 In Safebox terms, human and agent paths should converge on the same security semantics, request/response contracts, and verification outcomes.
 
+### Human-Agent Flow Parity Principle
+
+Safebox adopts a strict flow-parity principle:
+
+- any capability available to a human-operated Safebox SHOULD have an agent-operable path with equivalent security semantics;
+- any capability available to an agent-operated Safebox SHOULD remain interoperable with human-operated Safeboxes without protocol forks;
+- interaction direction SHOULD be symmetric where feasible: human-to-human, human-to-agent, agent-to-human, and agent-to-agent paths should rely on the same core handshake and verification contracts.
+
+This principle exists to prevent split ecosystems, reduce integration fragility, and keep one auditable protocol surface across UI and API operation.
+
 ## Delivery Sequence
 
 Safebox development follows a deliberate sequence:
@@ -114,6 +124,23 @@ Human-first does not mean anti-agent. It means:
 - agents are bounded delegates
 - protocol behavior remains neutral and verifiable
 - institutional controls (policy/compliance/enforcement) operate at governance boundaries, not by weakening protocol invariants
+
+## Protocol Neutrality and Higher-Order Controls
+
+Safebox is agent-ready by design because the protocol treats humans and agents alike at the base layer:
+
+- same identity model (`npub`-anchored actors)
+- same cryptographic and flow contracts
+- same revocation/rotation semantics for delegated components
+
+Safebox itself is not intended to be the universal policy enforcer for institutional controls such as KYC/AML eligibility decisions. Those controls belong to higher layers (operators, regulated institutions, and policy overlays) where legal mandate, jurisdiction, and governance context are defined.
+
+Practical implication:
+
+- Safebox does not implement a global protocol-level ban list for `npub` identities.
+- legitimacy and reputation are established through higher-order controls (trust policy, attestations, institutional onboarding, and risk systems), not by base-protocol discrimination.
+
+Analogy: the Internet does not globally "ban" an IP address as a protocol primitive for suspected misuse in every context; network and service operators apply policy at higher layers. Safebox applies the same separation of concerns for `npub`-based operation.
 
 ## Implementation References
 

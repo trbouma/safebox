@@ -14,10 +14,12 @@ Current scope (initial release):
 - Wallet identity/status lookup
 - Balance lookup
 - Supported-currency lookup
+- Private-message read
 - Invite-based wallet onboarding
 - Invoice creation
 - Invoice payment
 - Lightning-address payment
+- Secure direct messaging
 - Ecash token issuance
 - Ecash token acceptance
 - Offer/grant dispatch lifecycle for agent-driven record sends
@@ -188,6 +190,48 @@ Curl:
 curl -sS \
   -H "X-Access-Key: ${API_KEY}" \
   "${BASE_URL}/agent/supported_currencies"
+```
+
+### `GET /agent/read_dms`
+
+Reads private messages for the authenticated wallet using gift-wrapped message records.
+
+Query params:
+
+- `limit` (optional, default `50`, max `200`)
+- `kind` (optional, default `1059`)
+- `relays` (optional): comma-separated relay list override
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/read_dms?limit=20&kind=1059"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "kind": 1059,
+  "count": 2,
+  "messages": [
+    {
+      "tag": ["message"],
+      "type": "dm",
+      "created_at": "2026-03-01 12:34:56",
+      "payload": "hello",
+      "id": "abc123...",
+      "timestamp": 1772368496,
+      "presenter": "....",
+      "sender": "....",
+      "social_name": "Example"
+    }
+  ],
+  "timestamp": 1772368500
+}
 ```
 
 ### `POST /agent/onboard`
@@ -389,6 +433,51 @@ Response (example):
   "converted_from_currency": false,
   "fees_paid": 2,
   "balance": 9341,
+  "timestamp": 1770000000
+}
+```
+
+### `POST /agent/secure_dm`
+
+Sends a secure direct message from the authenticated Safebox wallet to a recipient.
+
+Request:
+
+```json
+{
+  "recipient": "alice@example.com",
+  "message": "Hello from Safebox agent",
+  "relays": ["wss://relay.damus.io", "wss://relay.primal.net"]
+}
+```
+
+Request fields:
+
+- `recipient` (required): NIP-05 (`name@domain`), `npub1...`, or 64-char pubhex
+- `message` (required): plaintext message payload before encryption
+- `relays` (optional): DM relay override; if omitted, server uses configured `PUBLIC_RELAYS`
+
+Curl:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "alice@example.com",
+    "message": "Hello from Safebox agent"
+  }' \
+  "${BASE_URL}/agent/secure_dm"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "message": "message sent",
+  "recipient": "alice@example.com",
+  "relays": ["wss://relay.damus.io", "wss://relay.primal.net"],
   "timestamp": 1770000000
 }
 ```

@@ -243,8 +243,8 @@ Validation gates (all message types):
 
 ## Implementation References
 
-- `/Users/trbouma/projects/safebox-2/app/routers/records.py`
-- `/Users/trbouma/projects/safebox-2/app/nwc.py`
-- `/Users/trbouma/projects/safebox-2/app/utils.py`
-- `/Users/trbouma/projects/safebox-2/docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
-- `/Users/trbouma/projects/safebox-2/docs/specs/NFC-FLOWS-AND-SECURITY.md`
+- `app/routers/records.py`
+- `app/nwc.py`
+- `app/utils.py`
+- `docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
+- `docs/specs/NFC-FLOWS-AND-SECURITY.md`

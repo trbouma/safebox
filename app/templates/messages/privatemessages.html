@@ -1,146 +1,101 @@
 {% extends "uxbase.html" %}
 
-{% block title %}My Messagese{% endblock %}
+{% block title %}Private Messages{% endblock %}
 {% block head %}
 {{ super() }}
-
-
-
 <script>
-
-async function backToProfile() {
-
-
-window.location.href="/safebox/access" ;
-
-}
-async function goBack() {
-    window.history.back();
+function goBack() {
+  window.history.back();
 }
 
+function backToProfile() {
+  window.location.href = "/safebox/access";
+}
 
+function createNewMessage() {
+  window.location.href = "/safebox/displaymessage?action_mode=add";
+}
 </script>
-
 {% endblock %}
 
 {% block page_content %}
-
-
-
 <div class="center-text">
-    <h1>Private Messages</h1>
-
-    <button onclick="goBack()">Back</button>
-    <br><br>
-    <button onclick="createNewMessage()">New Message</button>
-    <br><br>
-    Click on message to view.    
-    
+  <h1>Private Messages</h1>
+  <button onclick="goBack()">Back</button>
+  <br><br>
+  <button onclick="createNewMessage()">New Message</button>
+  <br><br>
+  Messages are shown newest first.
 </div>
 
 <div id="card-container"></div>
 
 <script>
-  const jsonUserData = {{ user_records | tojson }};
-  
+const jsonUserData = {{ user_records | tojson }};
 
-  // Function to create and add a card
-  function addCard(title, created_at, content,id) {
-    // Create a card element
-    const card = document.createElement('div');
-    card.className = 'card';
+function formatSender(record) {
+  if (record.social_name && String(record.social_name).trim() !== "") return record.social_name;
+  if (record.presenter && String(record.presenter).trim() !== "") return record.presenter;
+  if (record.sender && String(record.sender).trim() !== "") return record.sender;
+  if (record.pubkey && String(record.pubkey).trim() !== "") return record.pubkey;
+  return "Unknown sender";
+}
 
-    // Create and add the title element
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
-    
+function previewText(text, maxLen = 180) {
+  const value = String(text || "");
+  if (value.length <= maxLen) return value;
+  return value.slice(0, maxLen) + "...";
+}
 
-    // Create and add the content element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = created_at;
+function addMessageCard(record) {
+  const card = document.createElement("div");
+  card.className = "card";
 
-    // Create and add the content element
-    const cardContent = document.createElement('div');
-    cardContent.className = 'card-content';
-    cardContent.textContent = content;
+  const title = document.createElement("div");
+  title.className = "card-title";
+  title.textContent = formatSender(record);
 
-    // Create and add the content element
-    const cardID = document.createElement('div');
-    cardID.className = 'card-content';
-    cardID.textContent = id;
+  const createdAt = document.createElement("div");
+  createdAt.className = "card-content";
+  createdAt.textContent = record.created_at || "";
 
+  const content = document.createElement("div");
+  content.className = "card-content";
+  content.textContent = previewText(record.payload || record.content || "");
 
-    
-    // Append title and content to the card
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
-    card.appendChild(cardContent);
-    // card.appendChild(cardID);
+  card.appendChild(title);
+  card.appendChild(createdAt);
+  card.appendChild(content);
 
-    card.addEventListener('click', () => {
-        alert(`You clicked on message: ${id} with: ${content}`);
-        // window.location.href=`/safebox/displaymessage?card=${id}&action_mode=edit`;
-      });
+  card.addEventListener("click", () => {
+    const id = encodeURIComponent(String(record.id || ""));
+    window.location.href = `/safebox/messagedetail?message_id=${id}&kind=1059`;
+  });
 
-    // Append the card to the container
-    const container = document.getElementById('card-container');
-    container.appendChild(card);
+  document.getElementById("card-container").appendChild(card);
+}
+
+if (!Array.isArray(jsonUserData) || jsonUserData.length === 0) {
+  const empty = document.createElement("div");
+  empty.className = "center-text";
+  empty.textContent = "No private messages found.";
+  document.getElementById("card-container").appendChild(empty);
+} else {
+  for (const record of jsonUserData) {
+    addMessageCard(record);
   }
-
-  // Example usage
-  // alert("hello"+ JSON.stringify(jsonUserData)); 
-  for (let record of jsonUserData)
-  {
-    if (record.hasOwnProperty("tag")) {
-        // console.log(`Name: ${record.name}`);
-        addCard(record.social_name, record.created_at, record.payload, record.id);
-    } else {
-        console.log("This record does not have a 'name' property.");
-    }
-    // addCard('Private Data 1', JSON.stringify(record));
-
-  }
-
-async function createNewMessage() {
-// alert("add card!");
-window.location.href=`/safebox/displaymessage?action_mode=add`;
-
-
 }
 
 setDarkMode();
-
 </script>
-   
 
 <div class="center-text">
-    
-
-        
-        
-        
-  <button onclick="addCardtoSafebox()">Add Card</button>
-  <br><br>  
   <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
   <br><br>
   <button onclick="backToProfile()">Home</button>
-      
- 
-
-        
-     
-        
 </div>
-     
-
-
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-
-
 {% endblock %}
