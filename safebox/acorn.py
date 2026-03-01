@@ -6757,6 +6757,182 @@ class Acorn:
             }
             for each_event in events_sorted
         ]
+
+    async def get_latest_kind1_posts_by_author(
+        self,
+        pubhex: str | None = None,
+        limit: int = 10,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        author_pubhex = (pubhex or self.pubkey_hex or "").strip().lower()
+        if not author_pubhex or len(author_pubhex) != 64 or not all(ch in string.hexdigits for ch in author_pubhex):
+            raise ValueError("Invalid author pubhex")
+
+        limit_value = max(1, min(int(limit), 100))
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": limit_value,
+            "authors": [author_pubhex],
+            "kinds": [1],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        events_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+
+        return [
+            {
+                "id": str(each_event.id),
+                "event_id": str(each_event.id),
+                "event_id_hex": str(each_event.id),
+                "pubkey": str(each_event.pub_key),
+                "created_at": int(each_event.created_at.timestamp()),
+                "content": str(each_event.content),
+            }
+            for each_event in events_sorted
+        ]
+
+    async def get_zap_receipts_for_event(
+        self,
+        event_id: str,
+        limit: int = 100,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        target_event_id = (event_id or "").strip()
+        if not target_event_id:
+            raise ValueError("event_id is required")
+
+        if target_event_id.startswith("note"):
+            target_event_id = bech32_to_hex(target_event_id)
+        target_event_id = target_event_id.lower()
+        if len(target_event_id) != 64 or not all(ch in string.hexdigits for ch in target_event_id):
+            raise ValueError("Invalid event_id")
+
+        limit_value = max(1, min(int(limit), 200))
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": limit_value,
+            "kinds": [9735],
+            "#e": [target_event_id],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        def _tag_values(tags: List[List[str]], key: str) -> List[str]:
+            values: List[str] = []
+            for each in tags:
+                if each and each[0] == key and len(each) > 1:
+                    values.append(str(each[1]))
+            return values
+
+        def _first_tag(tags: List[List[str]], key: str) -> str | None:
+            vals = _tag_values(tags, key)
+            return vals[0] if vals else None
+
+        receipts_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+
+        results: List[Dict[str, Any]] = []
+        for receipt in receipts_sorted:
+            tags = list(receipt.tags or [])
+            description_raw = _first_tag(tags, "description")
+            bolt11_invoice = _first_tag(tags, "bolt11")
+            lnurl_provider_pubkey = str(receipt.pub_key)
+            recipient_pubkey = _first_tag(tags, "p")
+            p_sender_tag = _first_tag(tags, "P")
+            receipt_event_refs = _tag_values(tags, "e")
+            zap_request: Dict[str, Any] | None = None
+            zapper_pubkey: str | None = None
+            zapper_npub: str | None = None
+            zap_amount_msat: int | None = None
+            zap_comment: str | None = None
+            matches_target_event = target_event_id in [each.lower() for each in receipt_event_refs]
+            description_hash_matches = None
+            amount_from_invoice_msat: int | None = None
+
+            if description_raw:
+                try:
+                    parsed_description = json.loads(description_raw)
+                    if isinstance(parsed_description, dict):
+                        zap_request = parsed_description
+                        zapper_pubkey = str(zap_request.get("pubkey") or "").lower() or None
+                        zap_comment = str(zap_request.get("content") or "")
+                        req_tags = list(zap_request.get("tags") or [])
+                        for each_tag in req_tags:
+                            if each_tag and each_tag[0] == "amount" and len(each_tag) > 1:
+                                try:
+                                    zap_amount_msat = int(str(each_tag[1]))
+                                except Exception:
+                                    zap_amount_msat = None
+                                break
+                except Exception:
+                    zap_request = None
+
+            if not zapper_pubkey and p_sender_tag:
+                zapper_pubkey = p_sender_tag.lower()
+
+            if zapper_pubkey and len(zapper_pubkey) == 64 and all(ch in string.hexdigits for ch in zapper_pubkey):
+                try:
+                    zapper_npub = hex_to_bech32(zapper_pubkey)
+                except Exception:
+                    zapper_npub = None
+
+            if bolt11_invoice:
+                try:
+                    decoded_invoice = bolt11.decode(bolt11_invoice)
+                    if getattr(decoded_invoice, "amount_msat", None) is not None:
+                        amount_from_invoice_msat = int(decoded_invoice.amount_msat)
+                    if description_raw and getattr(decoded_invoice, "description_hash", None):
+                        description_hash = hashlib.sha256(description_raw.encode("utf-8")).hexdigest()
+                        description_hash_matches = (description_hash == str(decoded_invoice.description_hash))
+                except Exception:
+                    amount_from_invoice_msat = None
+
+            amount_matches = None
+            if zap_amount_msat is not None and amount_from_invoice_msat is not None:
+                amount_matches = (zap_amount_msat == amount_from_invoice_msat)
+
+            results.append({
+                "receipt_id": str(receipt.id),
+                "created_at": int(receipt.created_at.timestamp()),
+                "lnurl_provider_pubkey": lnurl_provider_pubkey,
+                "recipient_pubkey": recipient_pubkey,
+                "zapper_pubkey": zapper_pubkey,
+                "zapper_npub": zapper_npub,
+                "zap_request_raw": description_raw,
+                "zap_request": zap_request,
+                "zap_comment": zap_comment,
+                "zap_amount_msat": zap_amount_msat,
+                "invoice_amount_msat": amount_from_invoice_msat,
+                "amount_matches": amount_matches,
+                "matches_target_event": matches_target_event,
+                "description_hash_matches": description_hash_matches,
+                "bolt11": bolt11_invoice,
+                "raw_tags": tags,
+            })
+
+        return results
         
 if __name__ == "__main__":
     

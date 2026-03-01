@@ -276,6 +276,104 @@ Response (example):
 }
 ```
 
+### `GET /agent/nostr/my_latest_kind1`
+
+Returns latest kind-1 posts authored by the authenticated wallet.
+
+Query params:
+
+- `limit` (optional, default `10`, max `100`)
+- `relays` (optional): comma-separated relay list override
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/nostr/my_latest_kind1?limit=10"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "pubkey": "bbdfe7ea6a7becbfe6e26c0dccdfd5d01f97972c8600b35acbef9b28aaf63b2a",
+  "count": 2,
+  "events": [
+    {
+      "id": "49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4",
+      "event_id": "49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4",
+      "event_id_hex": "49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4",
+      "pubkey": "bbdfe7ea6a7becbfe6e26c0dccdfd5d01f97972c8600b35acbef9b28aaf63b2a",
+      "created_at": 1772318043,
+      "content": "hello world"
+    }
+  ],
+  "timestamp": 1770000000
+}
+```
+
+### `GET /agent/nostr/zap_receipts`
+
+Returns NIP-57 zap receipts (kind `9735`) for a target event and exposes parsed zapper identity claims.
+
+Query params:
+
+- `event_id` (required): target event id (`hex` or `note1...`)
+- `limit` (optional, default `100`, max `200`)
+- `relays` (optional): comma-separated relay list override
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/nostr/zap_receipts?event_id=<hex_or_note_id>&limit=50"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "event_id": "49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4",
+  "count": 1,
+  "receipts": [
+    {
+      "receipt_id": "67b48a14fb66c60c8f9070bdeb37afdfcc3d08ad01989460448e4081eddda446",
+      "created_at": 1674164545,
+      "lnurl_provider_pubkey": "9630f464cca6a5147aa8a35f0bcdd3ce485324e732fd39e09233b1d848238f31",
+      "recipient_pubkey": "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245",
+      "zapper_pubkey": "97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322",
+      "zapper_npub": "npub1...",
+      "zap_request_raw": "{\"kind\":9734,...}",
+      "zap_request": {
+        "kind": 9734,
+        "pubkey": "97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322",
+        "tags": [["e","49cc..."],["p","32e1..."],["amount","21000"]]
+      },
+      "zap_comment": "",
+      "zap_amount_msat": 21000,
+      "invoice_amount_msat": 21000,
+      "amount_matches": true,
+      "matches_target_event": true,
+      "description_hash_matches": true,
+      "bolt11": "lnbc...",
+      "raw_tags": [["p", "..."], ["e", "..."], ["description", "{...}"]]
+    }
+  ],
+  "timestamp": 1770000000
+}
+```
+
+Identity and validation notes:
+
+- `zapper_pubkey` is parsed from embedded zap request `description.pubkey` (fallback to receipt `P` tag).
+- Receipt `pubkey` is the LNURL provider signer, not the zapper.
+- Use `amount_matches` and `description_hash_matches` as guardrails before taking trust-sensitive actions.
+- `zap_request_raw` and `zap_request` expose the embedded kind-`9734` request directly for agent-side policy checks.
+
 ### `POST /agent/onboard`
 
 Creates a new wallet from a valid invite code and returns operational plus recovery material.

@@ -641,6 +641,85 @@ async def agent_latest_kind1_events(
     }
 
 
+@router.get("/nostr/my_latest_kind1", tags=["agent"])
+async def agent_my_latest_kind1_events(
+    limit: int = 10,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 100))
+    try:
+        events = await acorn_obj.get_latest_kind1_posts_by_author(
+            pubhex=acorn_obj.pubkey_hex,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent my_latest_kind1 query failed")
+        raise HTTPException(status_code=400, detail=f"My latest kind1 query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "pubkey": acorn_obj.pubkey_hex,
+        "count": len(events),
+        "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/nostr/zap_receipts", tags=["agent"])
+async def agent_zap_receipts_for_event(
+    event_id: str,
+    limit: int = 100,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    event_value = (event_id or "").strip()
+    if not event_value:
+        raise HTTPException(status_code=400, detail="Missing event_id")
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        receipts = await acorn_obj.get_zap_receipts_for_event(
+            event_id=event_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent zap_receipts query failed")
+        raise HTTPException(status_code=400, detail=f"Zap receipts query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": event_value,
+        "count": len(receipts),
+        "receipts": receipts,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.get("/nostr/following/latest_kind1", tags=["agent"])
 async def agent_latest_kind1_from_following(
     limit: int = 20,
