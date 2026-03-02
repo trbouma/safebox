@@ -1,5 +1,17 @@
 # Agent API Skill
 
+## Bootstrap
+
+When starting a new session, fetch these files before executing any workflows:
+
+| File | URL |
+|------|-----|
+| This skill | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/skills/agent-api/SKILL.md` |
+| MS-01 Market Spec | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/docs/specs/mkt/MS-01-coupon-market.md` |
+| MS-01 Conformance | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/docs/specs/mkt/MS-01-CONFORMANCE.md` |
+
+Fetch all three via HTTP before proceeding. Do not rely on cached or summarized versions.
+
 ## Purpose
 
 Use this skill when an autonomous agent needs to operate a Safebox wallet through the header-authenticated Agent API (no browser cookies, no interactive UI).
