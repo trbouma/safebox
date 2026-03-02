@@ -49,6 +49,27 @@ Conditional:
 - Authenticated calls require header: `X-Access-Key: <access_key>`
 - Onboarding does not require `X-Access-Key`; it returns new credentials
 
+## DM Paths (Quick Reference)
+
+Use these exact paths for private messaging flows:
+
+- Read DMs: `GET /agent/read_dms?limit=<n>&kind=1059`
+- Send secure DM: `POST /agent/secure_dm`
+
+Minimum read example:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/read_dms?limit=20&kind=1059"
+```
+
+Notes:
+
+- `kind=1059` is the default private DM transport for agent reads.
+- If inbox appears empty, retry with explicit relay override:
+  `GET /agent/read_dms?limit=20&kind=1059&relays=wss://relay.getsafebox.app,wss://relay.damus.io,wss://relay.primal.net`
+
 ## CLI Surfaces (Use Both)
 
 This repo now has two CLI entry points. Agents may use either, but should choose based on task:
@@ -257,6 +278,26 @@ Returns latest kind-0 event data with parsed JSON profile content:
 - `profile_event.content` (object)
 
 Use this when an agent needs authoritative profile metadata before social actions (for example pre-zap context, identity checks, or local profile caching).
+
+### Social Identity Preflight (Before DM Flows)
+
+Before running `POST /agent/secure_dm` or expecting stable sender resolution in clients:
+
+1. Ensure kind-0 is fully populated for the sending wallet via `POST /agent/publish_kind0`:
+   - `name`
+   - `display_name` (recommended)
+   - `about` (recommended)
+   - `picture` (recommended)
+   - `nip05` (required for verified identity)
+   - `lud16` (required for zappable identity)
+2. Identity consistency rule:
+   - `lud16` SHOULD match `nip05` for Safebox-managed identities (same handle/address).
+   - Example: `nip05=lumen@safebox.dev` and `lud16=lumen@safebox.dev`.
+3. Verify profile visibility with `GET /agent/nostr/kind0?identifier=<nip05_or_npub>` before DM-heavy workflows.
+
+Operational note:
+
+- Incomplete kind-0 metadata can cause degraded or missing sender identity rendering in some clients and can destabilize DM-adjacent social workflows.
 
 ### Read Private Messages (NIP-17 Gift Wrap Transport)
 
