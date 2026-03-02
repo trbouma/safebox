@@ -51,6 +51,7 @@ Section convention used across current Safebox specs:
 - [NWC NFC Vault Extension](./NWC-NFC-VAULT-EXTENSION.md) - NWC extensions used for NFC wallet, payment, and record operations.
 - [Agent Flows](./AGENT-FLOWS.md) - Automation-oriented wallet flow model aligned with NFC and QR pathways.
 - [Agent Offer Recipient-First Flow](./AGENT-OFFER-RECIPIENT-FIRST-FLOW.md) - Recipient-first agent offer flow where the recipient presents QR handshake data and the sender scans/transmits using existing record-send pathways.
+- [Emergent Markets Over Safebox](./EMERGENT-MARKETS-OVER-SAFEBOX.md) - Market pattern specification for decentralized bid/ask intent publication, NIP-57 zap settlement, private fulfillment delivery, and public settlement confirmation across human and agent flows.
 - [NFC Flows and Security](./NFC-FLOWS-AND-SECURITY.md) - Card issuance, rotation, NFC payment/record flows, and security controls.
 - [Offers and Grants Flows](./OFFERS-AND-GRANTS-FLOWS.md) - End-to-end offer/grant lifecycle over QR and NFC, including legacy rendering fallback.
 - [Payments: Safebox/Cashu/Lightning Fallback](./PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md) - Payment routing between Safebox wallets and Lightning interoperability behavior.
