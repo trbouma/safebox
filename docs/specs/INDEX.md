@@ -28,6 +28,10 @@ Section convention used across current Safebox specs:
 - `Security Considerations`
 - `Implementation References`
 
+## Market Specifications
+
+- [Market Specifications Index](./mkt/INDEX.md) - Numbered market specifications (`MS-*`) for permissionless trading models and agent execution flows.
+
 - [Transport Security and Hybrid Addressing](./TRANSPORT-SECURITY-AND-HYBRID-ADDRESSING.md) - Transport model, TLS assumptions, and hybrid npub/address routing.
 - [Human-First Approach](./HUMAN-FIRST-APPROACH.md) - Headline policy document defining human-agency baseline, agent extension model, QR/bech32 bootstrap strategy, and handshake-data minimization constraints.
 - [Web Wallet User Considerations](./WEB-WALLET-USER-CONSIDERATIONS.md) - User-experience principles and interaction decisions for the web wallet, intended as the baseline for future mobile UX once field-stable.
