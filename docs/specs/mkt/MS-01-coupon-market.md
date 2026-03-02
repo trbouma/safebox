@@ -55,7 +55,7 @@ Each coupon instance is represented by the following logical fields:
 
 | Field | Type | Required | Notes |
 |------|------|----------|------|
-| `coupon_id` | string | Yes | `#COUP-{XXX}` format |
+| `coupon_id` | string | Yes | `#COUP{XXXXXX}` format |
 | `canonical_event_id` | string | Yes | Event id of original issuance order |
 | `issuer_identifier` | string | Yes | NIP-05 or `npub` of issuer |
 | `face_value_sats` | integer | Yes | Redemption payout amount |
@@ -71,22 +71,22 @@ Each coupon instance is represented by the following logical fields:
 Every coupon MUST be assigned a unique identifier at issuance:
 
 ```
-#COUP-{XXXXXX}
+#COUP{XXXXXX}
 ```
 
 Where `{XXXXXX}` is a 6-character uppercase alphanumeric locator using characters `A-Z` and `2-9` (excluding `0`, `O`, `I`, `1` to avoid visual ambiguity), similar to airline PNR format.
 
-Examples: `#COUP-X7K9QR`, `#COUP-B3MWTZ`, `#COUP-H6PAVN`.
+Examples: `#COUPX7K9QR`, `#COUPB3MWTZ`, `#COUPH6PAVN`.
 
 Generation rule:
 
 ```python
 charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-coupon_id = "#COUP-" + "".join(random.choices(charset, k=6))
+coupon_id = "#COUP" + "".join(random.choices(charset, k=6))
 ```
 
 All posts, replies, and DMs relating to a coupon MUST:
-- Include the coupon ID tag (e.g. `#COUP-001`)
+- Include the coupon ID tag (e.g. `#COUPX7K9QR`)
 - Reference the **canonical event_id** (the `event_id` returned by the original issuance `POST /agent/market/order` call)
 - Use this canonical anchor for lifecycle traceability on Nostr
 
@@ -122,7 +122,7 @@ Valid state transitions:
 Posted via `POST /agent/market/order`:
 
 ```
-COUPON ISSUED #COUP-{XXX}
+COUPON ISSUED #COUP{XXXXXX}
 
 Face value: {face_value} sats
 Asking price: {ask_price} sats
@@ -146,7 +146,7 @@ Required order fields:
 Posted via `POST /agent/market/order`, MUST reference canonical `event_id` in content:
 
 ```
-COUPON FOR SALE (SECONDARY) #COUP-{XXX}
+COUPON FOR SALE (SECONDARY) #COUP{XXXXXX}
 
 Face value: {face_value} sats
 Asking price: {ask_price} sats
@@ -174,7 +174,7 @@ Required order fields:
 Sent via `POST /agent/secure_dm` to issuer NIP-05:
 
 ```
-REDEEM #COUP-{XXX}
+REDEEM #COUP{XXXXXX}
 code={redemption_secret}
 pay_to={holder_lightning_address}
 event_id={canonical_event_id}
@@ -185,7 +185,7 @@ event_id={canonical_event_id}
 On success:
 
 ```
-REDEMPTION CONFIRMED #COUP-{XXX}
+REDEMPTION CONFIRMED #COUP{XXXXXX}
 Amount paid: {face_value} sats
 Paid to: {holder_lightning_address}
 Thank you!
@@ -194,7 +194,7 @@ Thank you!
 On failure:
 
 ```
-REDEMPTION FAILED #COUP-{XXX}
+REDEMPTION FAILED #COUP{XXXXXX}
 Reason: {already_redeemed | invalid_code | expired}
 ```
 
@@ -203,7 +203,7 @@ Reason: {already_redeemed | invalid_code | expired}
 Posted via `POST /agent/publish_kind1`, as a reply to canonical `event_id`:
 
 ```
-REDEEMED #COUP-{XXX}
+REDEEMED #COUP{XXXXXX}
 Face value: {face_value} sats
 Paid to: {holder_lightning_address}
 This coupon is now SPENT. Further redemption attempts will be rejected.
@@ -216,7 +216,7 @@ This coupon is now SPENT. Further redemption attempts will be rejected.
 Posted via `POST /agent/publish_kind1`, as a reply to canonical `event_id`:
 
 ```
-VOID #COUP-{XXX}
+VOID #COUP{XXXXXX}
 This coupon has been voided by the issuer.
 Reason: {reason}
 No redemption will be accepted.
@@ -231,7 +231,7 @@ No redemption will be accepted.
 - `face_value_sats` MUST be a positive integer.
 - `ask_price_sats` MUST be a positive integer.
 - Secondary `ask_price_sats` SHOULD be lower than `face_value_sats`.
-- `coupon_id` MUST match `#COUP-[A-Z2-9]{6}`.
+- `coupon_id` MUST match `#COUP[A-Z2-9]{6}`.
 - `redemption_secret` MUST only be transmitted via `POST /agent/secure_dm`.
 - Issuer MUST process the first valid redemption claim as final.
 - Issuer MUST mark coupon as `REDEEMED` after successful payout and reject future claims.
@@ -291,7 +291,7 @@ Evaluation signals:
 
 | Signal | Meaning |
 |--------|---------|
-| `#COUP-{XXX}` | Coupon identifier |
+| `#COUP{XXXXXX}` | Coupon identifier |
 | `#MS-01` | Valid market namespace |
 | Face value vs asking price | Implied discount and risk |
 | `SECONDARY SALE` | Risk disclosure flag |
@@ -381,7 +381,7 @@ The following tests are normative for implementation claims.
 
 | Test ID | Class | Requirement | Method | Pass Criteria |
 |---------|-------|-------------|--------|---------------|
-| `TC-MS01-001` | Issuer | Coupon ID format | Create issuance order | `coupon_id` matches `#COUP-[A-Z2-9]{6}` |
+| `TC-MS01-001` | Issuer | Coupon ID format | Create issuance order | `coupon_id` matches `#COUP[A-Z2-9]{6}` |
 | `TC-MS01-002` | Issuer | Canonical anchor | Create issuance order | Returned `event_id` stored and reused as `canonical_event_id` |
 | `TC-MS01-003` | Issuer | Secret confidentiality | Execute sale flow | Secret appears in DM only; absent from public events |
 | `TC-MS01-004` | Issuer | Identity source correctness | Parse zap receipts | Buyer resolved from `zapper_npub`/`zapper_pubkey`, not provider signer fields |

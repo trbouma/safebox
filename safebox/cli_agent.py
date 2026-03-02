@@ -192,7 +192,7 @@ def _require_access_key(ctx: click.Context) -> str:
 
 
 def _generate_coupon_id() -> str:
-    return "#COUP-" + "".join(secrets.choice(COUPON_CHARSET) for _ in range(6))
+    return "#COUP" + "".join(secrets.choice(COUPON_CHARSET) for _ in range(6))
 
 
 @cli.group("config")
