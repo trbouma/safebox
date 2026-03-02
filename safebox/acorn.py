@@ -792,10 +792,33 @@ class Acorn:
         # label_hash = m.digest().hex()
         decrypt_content = None
 
-        if relays:
-            relays_to_use = relays
+        # Normalize relay inputs to avoid runtime failures from malformed config/env values.
+        # Accepts:
+        # - None -> [home_relay]
+        # - "wss://a,wss://b" -> ["wss://a","wss://b"]
+        # - ["relay.getsafebox.app", "wss://relay.damus.io"] -> normalized wss urls
+        relays_to_use: List[str] = []
+        if relays is None:
+            relays_to_use = [self.home_relay] if self.home_relay else []
+        elif isinstance(relays, str):
+            relays_to_use = [each.strip() for each in relays.split(",") if each and each.strip()]
+        elif isinstance(relays, (list, tuple, set)):
+            relays_to_use = [str(each).strip() for each in relays if each and str(each).strip()]
         else:
-            relays_to_use = [self.home_relay]
+            raise ValueError("relays must be None, comma-separated string, or list-like")
+
+        normalized_relays: List[str] = []
+        for each in relays_to_use:
+            if each.startswith("wss://") or each.startswith("ws://"):
+                normalized_relays.append(each)
+            else:
+                normalized_relays.append(f"wss://{each}")
+        relays_to_use = normalized_relays
+        if not relays_to_use:
+            if self.home_relay:
+                relays_to_use = [self.home_relay]
+            else:
+                raise ValueError("No relays configured for get_user_records")
 
         # handle records that are coming in via giftwraps
         # 1059 are regular DMs
@@ -884,8 +907,19 @@ class Acorn:
             
                 #Add in sender detais
                 if record_kind in [1059]:
-                    social_profile = await self.get_social_profile(npub=unwrapped_event.pub_key,relays=relays_to_use)
-                    parsed_record['social_name'] = social_profile.get('display_name', None)
+                    try:
+                        social_profile = await self.get_social_profile(
+                            npub=unwrapped_event.pub_key,
+                            relays=relays_to_use,
+                        )
+                        parsed_record['social_name'] = social_profile.get('display_name', None)
+                    except Exception as exc:
+                        self.logger.debug(
+                            "op=get_user_records status=social_profile_lookup_failed sender=%s error=%s",
+                            unwrapped_event.pub_key,
+                            exc,
+                        )
+                        parsed_record['social_name'] = None
                 else:
                     parsed_record['social_name'] = None
 
