@@ -89,6 +89,17 @@ class AgentPublishKind1Request(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentMarketOrderRequest(BaseModel):
+    side: str
+    asset: str
+    price_sats: int
+    quantity: str | int | float = "1"
+    order_id: str | None = None
+    content: str | None = None
+    relays: list[str] | None = None
+    flow: str | None = None
+
+
 class AgentSetCustomHandleRequest(BaseModel):
     custom_handle: str
 
@@ -755,6 +766,53 @@ async def agent_latest_kind1_from_following(
     }
 
 
+@router.get("/market/orders", tags=["agent"])
+async def agent_market_orders(
+    limit: int = 50,
+    kind: int = 1,
+    market: str = "safebox-v1",
+    side: str | None = None,
+    asset: str | None = None,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        orders = await acorn_obj.get_market_orders_from_follow_list(
+            limit=safe_limit,
+            kind=int(kind),
+            market=(market or "safebox-v1").strip(),
+            side=side,
+            asset=asset,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent market orders query failed")
+        raise HTTPException(status_code=400, detail=f"Market orders query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "count": len(orders),
+        "kind": int(kind),
+        "market": (market or "safebox-v1").strip(),
+        "side": side,
+        "asset": asset,
+        "orders": orders,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.post("/nostr/format_mention", tags=["agent"])
 async def agent_format_mention(
     payload: AgentFormatMentionRequest,
@@ -1147,6 +1205,41 @@ async def agent_publish_kind1(
         "relays": result.get("relays"),
         "timestamp": int(datetime.utcnow().timestamp()),
     }
+
+
+@router.post("/market/order", tags=["agent"])
+async def agent_create_market_order(
+    payload: AgentMarketOrderRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.create_market_order(
+            side=payload.side,
+            asset=payload.asset,
+            price_sats=payload.price_sats,
+            quantity=payload.quantity,
+            order_id=payload.order_id,
+            content=payload.content,
+            relays=relay_list,
+            flow=payload.flow,
+        )
+    except Exception as exc:
+        logger.exception("Agent market order create failed")
+        raise HTTPException(status_code=400, detail=f"Market order create failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
 
 
 @router.post("/secure_dm", tags=["agent"])

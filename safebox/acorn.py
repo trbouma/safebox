@@ -1421,6 +1421,96 @@ class Acorn:
             "relays": self._build_kind1_publish_relays(relays=relays),
         }
 
+    async def create_market_order(
+        self,
+        side: str,
+        asset: str,
+        price_sats: int,
+        quantity: str | int | float = "1",
+        order_id: str | None = None,
+        content: str | None = None,
+        relays: List[str] | None = None,
+        event_kind: int = Event.KIND_TEXT_NOTE,
+        extra_tags: List[List[str]] | None = None,
+        market: str = "safebox-v1",
+        flow: str | None = None,
+    ) -> Dict[str, Any]:
+        normalized_side = (side or "").strip().lower()
+        if normalized_side in ["buy", "bid"]:
+            side_tag = "bid"
+        elif normalized_side in ["sell", "ask"]:
+            side_tag = "ask"
+        else:
+            raise ValueError("side must be buy/sell (or bid/ask)")
+
+        asset_value = (asset or "").strip()
+        if not asset_value:
+            raise ValueError("asset is required")
+
+        try:
+            px_value = int(price_sats)
+        except Exception as exc:
+            raise ValueError("price_sats must be an integer") from exc
+        if px_value <= 0:
+            raise ValueError("price_sats must be > 0")
+
+        qty_value = str(quantity).strip() if quantity is not None else "1"
+        if not qty_value:
+            qty_value = "1"
+
+        order_value = (order_id or "").strip()
+        if not order_value:
+            order_value = secrets.token_hex(8)
+
+        if content and str(content).strip():
+            body = str(content).strip()
+        else:
+            side_text = "BUY" if side_tag == "bid" else "SELL"
+            body = f"{side_text} {qty_value} {asset_value} @ {px_value} sats"
+
+        tags: List[List[str]] = [
+            ["mkt", market],
+            ["side", side_tag],
+            ["asset", asset_value],
+            ["qty", qty_value],
+            ["px", str(px_value)],
+            ["ord", order_value],
+        ]
+        if flow:
+            tags.append(["flow", str(flow).strip()])
+        if extra_tags:
+            for each in extra_tags:
+                if each and isinstance(each, list):
+                    tags.append([str(x) for x in each if x is not None])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for market order publish")
+
+        async with ClientPool(publish_relays) as c:
+            order_event = Event(
+                kind=int(event_kind),
+                content=body,
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            order_event.sign(self.privkey_hex)
+            c.publish(order_event)
+
+        return {
+            "status": "OK",
+            "event_id": str(order_event.id),
+            "kind": int(event_kind),
+            "side": side_tag,
+            "asset": asset_value,
+            "price_sats": px_value,
+            "quantity": qty_value,
+            "order_id": order_value,
+            "content": body,
+            "tags": tags,
+            "relays": publish_relays,
+        }
+
     async def publish_reply(
         self,
         target_event_id: str,
@@ -6594,6 +6684,111 @@ class Acorn:
             }
             for each_event in events_sorted
         ]
+
+    async def get_market_orders_from_follow_list(
+        self,
+        limit: int = 50,
+        kind: int = 1,
+        market: str = "safebox-v1",
+        side: str | None = None,
+        asset: str | None = None,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        latest_contacts = await self._get_latest_contacts_event(relays=relays)
+        if not latest_contacts:
+            return []
+
+        follow_pubkeys: List[str] = []
+        for each_tag in list(latest_contacts.tags):
+            if not each_tag or each_tag[0] != "p" or len(each_tag) < 2:
+                continue
+            each_pub = str(each_tag[1]).lower()
+            if len(each_pub) == 64 and all(ch in string.hexdigits for ch in each_pub):
+                if each_pub not in follow_pubkeys:
+                    follow_pubkeys.append(each_pub)
+
+        if not follow_pubkeys:
+            return []
+
+        limit_value = max(1, min(int(limit), 200))
+        kind_value = int(kind)
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        # Over-fetch then filter locally for mkt/side/asset tags.
+        query_limit = max(limit_value * 5, 100)
+        query_limit = min(query_limit, 500)
+        query_filter = [{
+            "limit": query_limit,
+            "authors": follow_pubkeys,
+            "kinds": [kind_value],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        normalized_side = (side or "").strip().lower() if side else None
+        if normalized_side in ["buy", "bid"]:
+            normalized_side = "bid"
+        elif normalized_side in ["sell", "ask"]:
+            normalized_side = "ask"
+        elif normalized_side:
+            raise ValueError("side must be buy/sell/bid/ask")
+        normalized_asset = (asset or "").strip() if asset else None
+
+        def _first_tag_value(event_tags: List[List[str]], key: str) -> str | None:
+            for each in event_tags:
+                if each and each[0] == key and len(each) > 1:
+                    return str(each[1])
+            return None
+
+        filtered: List[Event] = []
+        for each_event in events:
+            event_tags = list(each_event.tags or [])
+            mkt_value = _first_tag_value(event_tags, "mkt")
+            if not mkt_value or mkt_value != market:
+                continue
+            side_value = _first_tag_value(event_tags, "side")
+            if normalized_side and (not side_value or side_value.lower() != normalized_side):
+                continue
+            asset_value = _first_tag_value(event_tags, "asset")
+            if normalized_asset and (asset_value != normalized_asset):
+                continue
+            filtered.append(each_event)
+
+        events_sorted = sorted(
+            filtered,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+
+        out: List[Dict[str, Any]] = []
+        for each_event in events_sorted:
+            event_tags = list(each_event.tags or [])
+            out.append(
+                {
+                    "id": str(each_event.id),
+                    "event_id": str(each_event.id),
+                    "event_id_hex": str(each_event.id),
+                    "pubkey": str(each_event.pub_key),
+                    "created_at": int(each_event.created_at.timestamp()),
+                    "kind": int(each_event.kind),
+                    "content": str(each_event.content),
+                    "side": _first_tag_value(event_tags, "side"),
+                    "asset": _first_tag_value(event_tags, "asset"),
+                    "price_sats": _first_tag_value(event_tags, "px"),
+                    "quantity": _first_tag_value(event_tags, "qty"),
+                    "order_id": _first_tag_value(event_tags, "ord"),
+                    "flow": _first_tag_value(event_tags, "flow"),
+                    "tags": event_tags,
+                }
+            )
+
+        return out
     
     async def get_kind0_profile_by_identifier(
         self,

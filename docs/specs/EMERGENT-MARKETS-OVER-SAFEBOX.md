@@ -46,6 +46,73 @@ This specification does not cover:
 
 - Digital artifacts, records, attestations, or service outputs deliverable through Safebox private messaging and/or record transfer.
 
+## Market Microstructure
+
+### Order Types
+
+| Type | Initiator | Opening Signal | Execution Signal |
+| --- | --- | --- | --- |
+| `ASK` | Seller | Kind-1 post with price and asset tags | Buyer zap confirming acceptance |
+| `BID` | Buyer | Kind-1 post with price and asset tags | Seller acknowledgement + buyer zap |
+
+### Five-Layer Stack
+
+| Layer | Technology | Role |
+| --- | --- | --- |
+| Identity | Nostr keypair + NIP-05 | Sovereign participant identity |
+| Communication | Kind-1 posts + replies | Public order intent and negotiation |
+| Payment | NIP-57 zaps | Instant execution and payment signal |
+| Delivery | NIP-17 private DMs | Encrypted delivery of digital goods |
+| Settlement | Kind-1 settlement notes | Public, immutable post-trade evidence |
+
+### Continuous Auction Mapping
+
+The model can evolve into a continuous double auction (CDA) without changing core message types.
+
+| CDA Function | Traditional Exchange | Safebox Emergent Market |
+| --- | --- | --- |
+| Order book | Centralized internal DB | Relay-indexed public kind-1 intents |
+| Match trigger | Matching engine decision | Bilateral acceptance with price crossing |
+| Payment settlement | Clearing/custody rails | Lightning zap finality |
+| Delivery | Custodial transfer mechanisms | NIP-17 encrypted delivery |
+| Settlement evidence | Internal ledger entries | Public settlement events and zap receipts |
+
+Execution price is established by accepted counterparty terms and confirmed by zap execution.
+
+## Permissionless Operation Principles
+
+### Open Participation
+
+Any npub-holder can publish bid/ask intents. Protocol participation is not restricted by Safebox at the base layer.
+
+### No Mandatory Trusted Intermediary
+
+Payment and delivery are coordinated peer-to-peer via zap evidence and encrypted direct delivery. No mandatory escrow layer is required for baseline operation.
+
+### Resilient Market Surface
+
+Order intent and settlement traces are relay-distributed; single relay outages degrade visibility but do not eliminate the market.
+
+### Micropayment-Native Market Granularity
+
+The model supports very small trade sizes in sats, allowing digitally deliverable goods to clear at granularity impractical in legacy venues.
+
+### Human-Agent Parity
+
+The same contracts are executable by humans and agents. Agent automation is an operational extension, not a separate protocol.
+
+## Agentic Execution Loop
+
+A minimal autonomous loop:
+
+1. Observe order intents and detect crossing opportunities.
+2. Publish bid/ask intents or counter-intents.
+3. Execute zap payment.
+4. Verify receipt identity and amount coherence.
+5. Deliver payload privately.
+6. Publish settlement note.
+7. Reconcile P&L and repeat.
+
 ## Message Contracts
 
 ### 1. Public Order Intent (kind `1`)
@@ -122,6 +189,120 @@ Minimal deterministic flow:
 6. Seller delivers payload privately.
 7. Parties publish settlement notes.
 
+## Bid-First Reference Implementation (Current Safebox Profile)
+
+This section defines the concrete implementation profile used by current Safebox agent workflows for the bid-first path.
+
+### A. Bid Post (kind `1`)
+
+Bidder publishes a kind-1 note with parseable market tags:
+
+- `["mkt","safebox-v1"]`
+- `["flow","bid-first"]`
+- `["side","bid"]`
+- `["asset","riddle.answer"]`
+- `["px","21"]` (sats)
+- `["qty","1"]`
+- `["ord","<bid_order_id>"]`
+
+Recommended `content` style:
+
+- Human-readable sentence including the price and requested item.
+
+### B. Seller Acceptance Reply (kind `1` reply)
+
+Seller replies to the bid event and includes linkage tags:
+
+- `["mkt","safebox-v1"]`
+- `["type","accept"]`
+- `["bid","<bid_event_id>"]`
+- `["ord","<bid_order_id>"]`
+- `["px","21"]`
+- `["qty","1"]`
+
+Reply `content` should explicitly instruct bidder to zap the reply event for execution.
+
+### C. Execution Signal (NIP-57 zap)
+
+Bidder zaps the seller’s acceptance reply event id.
+
+Execution is considered initiated when the zap call returns success and considered confirmed when matching `9735` receipt(s) are visible for the acceptance reply event.
+
+### D. Receipt Verification Gate
+
+Seller (or seller agent) queries receipt events for the acceptance reply event id and verifies all of:
+
+1. `matches_target_event == true`
+2. `amount_matches == true` (when amount tag present in embedded request)
+3. `description_hash_matches == true` (when invoice includes description hash)
+4. `zapper_identity_source in {"description_pubkey","P_tag"}`
+
+The seller must not use receipt signer (`lnurl_provider_pubkey`) as payer identity.
+
+### E. Private Delivery (NIP-17 DM)
+
+After verification gate passes, seller sends DM to zapper identity:
+
+- Recipient: `zapper_npub` (preferred) or `zapper_pubkey`
+- Message payload includes:
+  - `trade_id` (derived from order + execution context)
+  - fulfillment content (for example, riddle answer)
+  - optional `artifact_hash` for integrity trace
+
+### F. Public Settlement Confirmation
+
+Bidder replies to original bid thread with settlement confirmation tags:
+
+- `["mkt","safebox-v1"]`
+- `["type","settled"]`
+- `["flow","bid-first"]`
+- `["bid","<bid_event_id>"]`
+- `["ask","<accept_reply_event_id>"]`
+- `["zap_receipt","<receipt_event_id_optional>"]`
+- `["delivery","complete"]`
+
+This note closes the trade in public order-flow state.
+
+### G. Agent Endpoint Sequence
+
+Current `/agent/*` sequence for deterministic execution:
+
+1. `POST /agent/publish_kind1`  
+   Bid creation
+2. `POST /agent/reply`  
+   Seller acceptance reply
+3. `POST /agent/zap`  
+   Bidder zaps acceptance reply event
+4. `GET /agent/nostr/zap_receipts?event_id=<accept_reply_event_id>`  
+   Seller verifies receipt identity + coherence
+5. `POST /agent/secure_dm`  
+   Seller sends private fulfillment
+6. `POST /agent/reply`  
+   Bidder posts settlement confirmation to bid thread
+
+### H. State Machine (Bid-First)
+
+- `OPEN_BID` -> bid posted, awaiting acceptance
+- `ACCEPTED` -> acceptance reply posted
+- `PAYMENT_PENDING` -> zap requested, awaiting verified receipt
+- `PAYMENT_CONFIRMED` -> receipt verification gate passed
+- `DELIVERED` -> private fulfillment DM sent
+- `SETTLED_PUBLIC` -> public settlement confirmation posted
+
+Terminal error states:
+
+- `EXPIRED` -> TTL reached without acceptance/payment
+- `FAILED_PAYMENT_VALIDATION` -> receipt seen but verification gate failed
+- `DELIVERY_FAILED` -> payment confirmed but DM delivery failed after retries
+
+### I. Idempotency and Replay Controls
+
+Implementations should enforce:
+
+- Stable `ord`/`trade_id` identifiers.
+- At-most-once delivery per confirmed payment receipt id.
+- Reconciliation retries on relay lag before moving to failure states.
+
 ## Two-Round Example
 
 Round 1:
@@ -139,6 +320,19 @@ Round 2:
 - Bid: Entropy Seed @ 25 (Nova) -> fill @ 25
 
 This demonstrates repeated price discovery and bilateral settlement using only open protocol messages.
+
+## Progression to Production-Grade Continuous Auction
+
+| Capability | Practical Requirement | Protocol/Implementation Anchor |
+| --- | --- | --- |
+| Order aggregation | Relay indexing for open intents | Kind-1 tags (`mkt`, `side`, `asset`, `px`) |
+| Order expiry | Time-bounded intent validity | Expiration tag conventions (e.g., NIP-40 style) |
+| Partial fills | Multi-fill settlement tracking | Multiple zap receipts + per-fill settlement notes |
+| Market depth views | Aggregated open bid/ask states | Relay queries over structured tags |
+| Reputation | Counterparty execution history | Public settlement trail + verified zap evidence |
+| Price history | Executed trade indexing | Kind-9735 receipts + settlement posts |
+
+These upgrades can be layered without replacing the core flow defined in this document.
 
 ## Agent-Ready Operation
 

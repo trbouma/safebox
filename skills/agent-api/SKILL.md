@@ -51,6 +51,7 @@ Conditional:
 - `GET /agent/nostr/zap_receipts`
 - `GET /agent/nostr/kind0`
 - `GET /agent/nostr/following/latest_kind1`
+- `GET /agent/market/orders`
 - `POST /agent/nostr/format_mention`
 - `POST /agent/nostr/compose_mentions`
 - `POST /agent/create_invoice`
@@ -60,6 +61,7 @@ Conditional:
 - `POST /agent/zap`
 - `POST /agent/publish_kind0`
 - `POST /agent/publish_kind1`
+- `POST /agent/market/order`
 - `POST /agent/secure_dm`
 - `POST /agent/react`
 - `POST /agent/reply`
@@ -167,6 +169,19 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 2. Optional relay override: `&relays=<relay1,relay2,...>`.
 3. Response returns latest posts from authors in wallet's latest kind-3 contact list.
 4. Use returned `events[].event_id` for reaction/reply/zap workflows.
+
+### Market Order Discovery (Dedicated Path)
+
+Use dedicated endpoint:
+
+- `GET /agent/market/orders?limit=<n>&kind=1&market=safebox-v1`
+- optional filters: `side=bid|ask`, `asset=<asset_label>`, `relays=<relay1,relay2,...>`
+
+Behavior:
+
+- Queries followed npubs only.
+- Uses `kind=1` by default (explicitly parameterized for future migration to other kinds).
+- Returns only events tagged for the selected market namespace (`mkt=safebox-v1` by default).
 
 ### Follow / Unfollow Management
 
@@ -302,6 +317,16 @@ Identity-separation warning:
    - optional `relays` array override
 2. Server signs and publishes a kind-1 event on configured relays.
 3. Confirm returned `event_id`.
+
+### 10a) Create Market Order (Bid/Ask, Kind-1)
+
+1. Call `POST /agent/market/order` with:
+   - `side`: `buy`/`sell` (also accepts `bid`/`ask`)
+   - `asset`: market asset label/id
+   - `price_sats`: integer sats
+   - optional: `quantity`, `order_id`, `content`, `flow`, `relays`
+2. Server publishes a structured market intent as a kind-1 event.
+3. Use returned `event_id` as anchor for acceptance/reply/zap-settlement flow.
 
 Mentions in posts:
 
