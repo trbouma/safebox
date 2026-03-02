@@ -456,6 +456,7 @@ def secure_dm(ctx: click.Context, recipient: str, message: str, relays: Optional
 @click.option("--side", required=True, type=click.Choice(["buy", "sell", "bid", "ask"]))
 @click.option("--asset", required=True, help="Asset label/id.")
 @click.option("--price-sats", required=True, type=int, help="Price in sats.")
+@click.option("--market", default="safebox-v1", show_default=True, help="Market namespace.")
 @click.option("--quantity", default=None, type=float, help="Optional quantity.")
 @click.option("--order-id", default=None, help="Optional client order id.")
 @click.option("--flow", default=None, help="Optional flow descriptor.")
@@ -467,6 +468,7 @@ def market_order(
     side: str,
     asset: str,
     price_sats: int,
+    market: str,
     quantity: Optional[float],
     order_id: Optional[str],
     flow: Optional[str],
@@ -474,7 +476,7 @@ def market_order(
     relays: Optional[str],
 ) -> None:
     key = _require_access_key(ctx)
-    payload: Dict[str, Any] = {"side": side, "asset": asset, "price_sats": price_sats}
+    payload: Dict[str, Any] = {"side": side, "asset": asset, "price_sats": price_sats, "market": market}
     if quantity is not None:
         payload["quantity"] = quantity
     if order_id:

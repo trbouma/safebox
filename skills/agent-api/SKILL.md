@@ -345,6 +345,7 @@ Identity-separation warning:
 1. Call `POST /agent/market/order` with:
    - `side`: `buy`/`sell` (also accepts `bid`/`ask`)
    - `asset`: market asset label/id
+   - `market`: market namespace (`mkt` tag value), default `safebox-v1`
    - `price_sats`: integer sats
    - optional: `quantity`, `order_id`, `content`, `flow`, `relays`
 2. Server publishes a structured market intent as a kind-1 event.

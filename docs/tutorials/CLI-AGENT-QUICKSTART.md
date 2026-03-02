@@ -136,6 +136,7 @@ Create order:
 poetry run agent market-order \
   --side sell \
   --asset riddle \
+  --market MS-01 \
   --price-sats 21 \
   --content "Riddle for 21 sats #MS-01"
 ```
@@ -143,7 +144,7 @@ poetry run agent market-order \
 View order book:
 
 ```bash
-poetry run agent market-orders --limit 20 --market safebox-v1
+poetry run agent market-orders --limit 20 --market MS-01
 ```
 
 ## 7. Zap and settle workflow helpers

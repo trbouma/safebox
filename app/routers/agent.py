@@ -94,6 +94,7 @@ class AgentMarketOrderRequest(BaseModel):
     asset: str
     price_sats: int
     quantity: str | int | float = "1"
+    market: str = "safebox-v1"
     order_id: str | None = None
     content: str | None = None
     relays: list[str] | None = None
@@ -1229,6 +1230,7 @@ async def agent_create_market_order(
             asset=payload.asset,
             price_sats=payload.price_sats,
             quantity=payload.quantity,
+            market=(payload.market or "safebox-v1").strip(),
             order_id=payload.order_id,
             content=payload.content,
             relays=relay_list,
