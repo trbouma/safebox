@@ -52,6 +52,7 @@ alembic = "^1.14.1"
 safedaemon = "safebox.safedaemon:main_program"
 safebox = "safebox.cli_acorn:cli"
 acorn = "safebox.cli_acorn:cli"
+agent = "safebox.cli_agent:cli"
 
 
 

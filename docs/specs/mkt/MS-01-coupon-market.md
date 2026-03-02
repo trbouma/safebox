@@ -360,6 +360,9 @@ To claim `MS01-Observer`, implementation MUST:
 - A conformance class is `PASS` only if all mandatory tests for that class pass.
 - Any failed `MUST` test is class `FAIL`.
 - Failed `SHOULD` tests are warnings, not class-failures.
+- Tests MAY be marked as `Protocol`-enforced or `Policy`-enforced in execution records.
+- `TC-MS01-009` is explicitly `Policy`-enforced in MS-01 v1.0.
+- Policy-enforced tests count toward class pass only when clearly labeled as policy in test evidence.
 
 ---
 
@@ -438,6 +441,7 @@ ISSUER                    BUYER/HOLDER              MARKET
 - NIP-01: Basic protocol flow and event model.
 - NIP-57: Lightning zaps and receipt conventions.
 - NIP-17 / NIP-44 transport usage as implemented by Safebox `secure_dm`.
+- MS-01 Conformance Checklist: `docs/specs/mkt/MS-01-CONFORMANCE.md`
 
 ---
 

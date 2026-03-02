@@ -1,0 +1,608 @@
+import json
+import os
+from typing import Any, Dict, Optional
+from urllib.parse import urlparse
+
+import click
+import requests
+import yaml
+
+
+DEFAULT_BASE_URL = "https://safebox.dev"
+DEFAULT_PROFILE = "default"
+CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".safebox-agent")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.yml")
+
+
+def _ensure_config() -> Dict[str, Any]:
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    if not os.path.exists(CONFIG_PATH):
+        cfg = {
+            "default_profile": DEFAULT_PROFILE,
+            "profiles": {
+                DEFAULT_PROFILE: {"base_url": DEFAULT_BASE_URL, "access_key": None, "timeout_seconds": 30}
+            },
+        }
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, default_flow_style=False)
+        return cfg
+
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        loaded = yaml.safe_load(f) or {}
+
+    # Backward-compatible migration from single-profile schema.
+    if "profiles" not in loaded:
+        migrated = {
+            "default_profile": DEFAULT_PROFILE,
+            "profiles": {
+                DEFAULT_PROFILE: {
+                    "base_url": loaded.get("base_url", DEFAULT_BASE_URL),
+                    "access_key": loaded.get("access_key"),
+                    "timeout_seconds": int(loaded.get("timeout_seconds", 30)),
+                }
+            },
+        }
+        _write_config(migrated)
+        return migrated
+
+    normalized_profiles: Dict[str, Dict[str, Any]] = {}
+    for name, profile in (loaded.get("profiles") or {}).items():
+        profile = profile or {}
+        normalized_profiles[name] = {
+            "base_url": (profile.get("base_url") or DEFAULT_BASE_URL).rstrip("/"),
+            "access_key": profile.get("access_key"),
+            "timeout_seconds": int(profile.get("timeout_seconds", 30)),
+        }
+
+    if not normalized_profiles:
+        normalized_profiles = {
+            DEFAULT_PROFILE: {"base_url": DEFAULT_BASE_URL, "access_key": None, "timeout_seconds": 30}
+        }
+
+    default_profile = loaded.get("default_profile") or DEFAULT_PROFILE
+    if default_profile not in normalized_profiles:
+        default_profile = next(iter(normalized_profiles.keys()))
+
+    normalized = {"default_profile": default_profile, "profiles": normalized_profiles}
+    _write_config(normalized)
+    return normalized
+
+
+def _write_config(cfg: Dict[str, Any]) -> None:
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False)
+
+
+def _select_profile(cfg: Dict[str, Any], profile_name: Optional[str]) -> tuple[str, Dict[str, Any]]:
+    selected = profile_name or os.environ.get("SAFEBOX_AGENT_PROFILE") or cfg.get("default_profile") or DEFAULT_PROFILE
+    profiles = cfg.get("profiles", {})
+    profile = profiles.get(selected)
+    if profile is None:
+        available = ", ".join(sorted(profiles.keys())) if profiles else "(none)"
+        raise click.ClickException(f"Unknown profile '{selected}'. Available: {available}")
+    return selected, profile
+
+
+def _coalesce_access_key(cli_value: Optional[str], profile_cfg: Dict[str, Any]) -> Optional[str]:
+    return cli_value or os.environ.get("SAFEBOX_AGENT_ACCESS_KEY") or profile_cfg.get("access_key")
+
+
+def _coalesce_base_url(cli_value: Optional[str], profile_cfg: Dict[str, Any]) -> str:
+    return (
+        cli_value or os.environ.get("SAFEBOX_AGENT_BASE_URL") or profile_cfg.get("base_url") or DEFAULT_BASE_URL
+    ).rstrip("/")
+
+
+def _parse_csv(value: Optional[str]) -> Optional[list[str]]:
+    if not value:
+        return None
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def _request_json(
+    base_url: str,
+    path: str,
+    method: str = "GET",
+    access_key: Optional[str] = None,
+    timeout_seconds: int = 30,
+    params: Optional[Dict[str, Any]] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    headers = {"Content-Type": "application/json"}
+    if access_key:
+        headers["X-Access-Key"] = access_key
+
+    url = f"{base_url}{path}"
+    try:
+        resp = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            params=params,
+            json=payload,
+            timeout=timeout_seconds,
+        )
+    except requests.RequestException as exc:
+        raise click.ClickException(f"HTTP request failed: {exc}") from exc
+
+    if not resp.ok:
+        detail = resp.text
+        try:
+            body = resp.json()
+            detail = body.get("detail") or body
+        except Exception:
+            pass
+        raise click.ClickException(f"{resp.status_code} {resp.reason}: {detail}")
+
+    if not resp.text:
+        return {"status": "OK"}
+
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise click.ClickException(f"Non-JSON response: {resp.text}") from exc
+
+
+@click.group()
+@click.option("--profile", default=None, help="Config profile name (defaults to active profile).")
+@click.option("--base-url", default=None, help="Safebox base URL (defaults to config/env).")
+@click.option("--access-key", default=None, help="Wallet access key (defaults to config/env).")
+@click.option("--timeout", "timeout_seconds", default=None, type=int, help="HTTP timeout seconds.")
+@click.pass_context
+def cli(
+    ctx: click.Context,
+    profile: Optional[str],
+    base_url: Optional[str],
+    access_key: Optional[str],
+    timeout_seconds: Optional[int],
+):
+    """Standalone CLI for Safebox Agent API."""
+    cfg = _ensure_config()
+    profile_name, profile_cfg = _select_profile(cfg, profile)
+    resolved_base_url = _coalesce_base_url(base_url, profile_cfg)
+    resolved_access_key = _coalesce_access_key(access_key, profile_cfg)
+    resolved_timeout = timeout_seconds if timeout_seconds is not None else int(profile_cfg.get("timeout_seconds", 30))
+
+    ctx.obj = {
+        "cfg": cfg,
+        "profile_name": profile_name,
+        "profile_cfg": profile_cfg,
+        "base_url": resolved_base_url,
+        "access_key": resolved_access_key,
+        "timeout_seconds": resolved_timeout,
+    }
+
+
+def _print_json(data: Dict[str, Any]) -> None:
+    click.echo(json.dumps(data, indent=2, ensure_ascii=True))
+
+
+def _require_access_key(ctx: click.Context) -> str:
+    key = ctx.obj.get("access_key")
+    if not key:
+        profile_name = ctx.obj.get("profile_name", DEFAULT_PROFILE)
+        raise click.ClickException(
+            f"Missing access key for profile '{profile_name}'. "
+            "Set with `agent config set --profile <name> --access-key ...` or pass --access-key."
+        )
+    return key
+
+
+@cli.group("config")
+def config_group() -> None:
+    """Read/write local CLI config."""
+
+
+@config_group.command("show")
+def config_show() -> None:
+    cfg = _ensure_config()
+    redacted = {"default_profile": cfg.get("default_profile"), "profiles": {}}
+    for name, profile in (cfg.get("profiles") or {}).items():
+        out = dict(profile)
+        if out.get("access_key"):
+            out["access_key"] = "***redacted***"
+        redacted["profiles"][name] = out
+    _print_json(redacted)
+
+
+@config_group.command("list")
+def config_list() -> None:
+    cfg = _ensure_config()
+    default_profile = cfg.get("default_profile")
+    profiles = sorted((cfg.get("profiles") or {}).keys())
+    _print_json({"default_profile": default_profile, "profiles": profiles})
+
+
+@config_group.command("use")
+@click.argument("profile")
+def config_use(profile: str) -> None:
+    cfg = _ensure_config()
+    profiles = cfg.get("profiles") or {}
+    if profile not in profiles:
+        available = ", ".join(sorted(profiles.keys())) if profiles else "(none)"
+        raise click.ClickException(f"Unknown profile '{profile}'. Available: {available}")
+    cfg["default_profile"] = profile
+    _write_config(cfg)
+    click.echo(f"default profile set to '{profile}'")
+
+
+@config_group.command("set")
+@click.option("--profile", "profile_name", default=None, help="Profile name to write (default: active/default profile).")
+@click.option("--base-url", default=None, help="Safebox base URL.")
+@click.option("--access-key", default=None, help="Wallet access key.")
+@click.option("--timeout", "timeout_seconds", default=None, type=int, help="HTTP timeout seconds.")
+def config_set(
+    profile_name: Optional[str], base_url: Optional[str], access_key: Optional[str], timeout_seconds: Optional[int]
+) -> None:
+    cfg = _ensure_config()
+    profile_to_write = profile_name or cfg.get("default_profile") or DEFAULT_PROFILE
+
+    profiles = cfg.setdefault("profiles", {})
+    profile_cfg = profiles.get(profile_to_write) or {
+        "base_url": DEFAULT_BASE_URL,
+        "access_key": None,
+        "timeout_seconds": 30,
+    }
+
+    if base_url is not None:
+        profile_cfg["base_url"] = base_url.rstrip("/")
+    if access_key is not None:
+        profile_cfg["access_key"] = access_key
+    if timeout_seconds is not None:
+        profile_cfg["timeout_seconds"] = int(timeout_seconds)
+
+    profiles[profile_to_write] = profile_cfg
+    if "default_profile" not in cfg:
+        cfg["default_profile"] = profile_to_write
+
+    _write_config(cfg)
+    click.echo(f"config updated for profile '{profile_to_write}'")
+
+
+@cli.command("onboard")
+@click.option("--invite-code", required=True, help="Safebox onboarding invite code.")
+@click.option("--profile", "target_profile", default=None, help="Profile name to save (default: returned handle).")
+@click.option("--custom-handle", default=None, help="Optional custom lightning handle to claim after onboarding.")
+@click.option(
+    "--publish-profile/--no-publish-profile",
+    default=True,
+    show_default=True,
+    help="Publish kind-0 profile after onboarding.",
+)
+@click.option("--about", default="Safebox agent wallet", show_default=True, help="Kind-0 about field.")
+@click.option("--picture", default=None, help="Kind-0 picture URL.")
+@click.option(
+    "--set-default/--no-set-default",
+    default=True,
+    show_default=True,
+    help="Set saved profile as default profile.",
+)
+@click.option(
+    "--show-secrets/--hide-secrets",
+    default=False,
+    show_default=True,
+    help="Print sensitive onboarding fields (nsec/seed/access_key).",
+)
+@click.pass_context
+def onboard(
+    ctx: click.Context,
+    invite_code: str,
+    target_profile: Optional[str],
+    custom_handle: Optional[str],
+    publish_profile: bool,
+    about: str,
+    picture: Optional[str],
+    set_default: bool,
+    show_secrets: bool,
+) -> None:
+    base_url = ctx.obj["base_url"]
+    timeout_seconds = ctx.obj["timeout_seconds"]
+
+    onboard_resp = _request_json(
+        base_url=base_url,
+        path="/agent/onboard",
+        method="POST",
+        access_key=None,
+        timeout_seconds=timeout_seconds,
+        payload={"invite_code": invite_code},
+    )
+
+    wallet = onboard_resp.get("wallet") or {}
+    handle = wallet.get("handle")
+    access_key = wallet.get("access_key")
+    if not handle or not access_key:
+        raise click.ClickException("Onboard succeeded but response is missing wallet.handle or wallet.access_key.")
+
+    profile_name = target_profile or handle
+    effective_handle = handle
+    custom_handle_resp: Optional[Dict[str, Any]] = None
+    if custom_handle:
+        custom_handle_resp = _request_json(
+            base_url=base_url,
+            path="/agent/set_custom_handle",
+            method="POST",
+            access_key=access_key,
+            timeout_seconds=timeout_seconds,
+            payload={"custom_handle": custom_handle},
+        )
+        effective_handle = custom_handle_resp.get("custom_handle") or custom_handle
+
+    cfg = _ensure_config()
+    profiles = cfg.setdefault("profiles", {})
+    profiles[profile_name] = {
+        "base_url": base_url.rstrip("/"),
+        "access_key": access_key,
+        "timeout_seconds": timeout_seconds,
+    }
+    if set_default:
+        cfg["default_profile"] = profile_name
+    _write_config(cfg)
+
+    kind0_resp: Optional[Dict[str, Any]] = None
+    if publish_profile:
+        parsed = urlparse(base_url)
+        host = parsed.hostname or ""
+        nip05_lud16 = f"{effective_handle}@{host}" if host else effective_handle
+        kind0_payload: Dict[str, Any] = {"name": effective_handle, "nip05": nip05_lud16, "lud16": nip05_lud16}
+        if about:
+            kind0_payload["about"] = about
+        if picture:
+            kind0_payload["picture"] = picture
+        kind0_resp = _request_json(
+            base_url=base_url,
+            path="/agent/publish_kind0",
+            method="POST",
+            access_key=access_key,
+            timeout_seconds=timeout_seconds,
+            payload=kind0_payload,
+        )
+
+    output_wallet = dict(wallet)
+    if not show_secrets:
+        for sensitive_key in ("access_key", "nsec", "seed_phrase", "emergency_code"):
+            if sensitive_key in output_wallet:
+                output_wallet[sensitive_key] = "***redacted***"
+
+    output: Dict[str, Any] = {
+        "status": "OK",
+        "saved_profile": profile_name,
+        "default_profile": cfg.get("default_profile"),
+        "effective_handle": effective_handle,
+        "wallet": output_wallet,
+    }
+    if custom_handle_resp is not None:
+        output["custom_handle"] = {
+            "status": custom_handle_resp.get("status"),
+            "custom_handle": custom_handle_resp.get("custom_handle"),
+            "lightning_address": custom_handle_resp.get("lightning_address"),
+            "detail": custom_handle_resp.get("detail"),
+        }
+    if kind0_resp is not None:
+        output["publish_kind0"] = {
+            "status": kind0_resp.get("status"),
+            "event_id": kind0_resp.get("event_id"),
+            "profile": kind0_resp.get("profile"),
+        }
+    _print_json(output)
+
+
+@cli.command("info")
+@click.pass_context
+def info(ctx: click.Context) -> None:
+    key = _require_access_key(ctx)
+    data = _request_json(ctx.obj["base_url"], "/agent/info", "GET", key, ctx.obj["timeout_seconds"])
+    _print_json(data)
+
+
+@cli.command("balance")
+@click.pass_context
+def balance(ctx: click.Context) -> None:
+    key = _require_access_key(ctx)
+    data = _request_json(ctx.obj["base_url"], "/agent/balance", "GET", key, ctx.obj["timeout_seconds"])
+    _print_json(data)
+
+
+@cli.command("tx-history")
+@click.option("--limit", default=50, type=int, show_default=True)
+@click.pass_context
+def tx_history(ctx: click.Context, limit: int) -> None:
+    key = _require_access_key(ctx)
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/tx_history",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params={"limit": limit},
+    )
+    _print_json(data)
+
+
+@cli.command("read-dms")
+@click.option("--limit", default=20, type=int, show_default=True)
+@click.option("--kind", default=1059, type=int, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def read_dms(ctx: click.Context, limit: int, kind: int, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {"limit": limit, "kind": kind}
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/read_dms", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+@cli.command("secure-dm")
+@click.argument("recipient")
+@click.argument("message")
+@click.option("--relays", default=None, help="Comma-separated relay list override.")
+@click.pass_context
+def secure_dm(ctx: click.Context, recipient: str, message: str, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"recipient": recipient, "message": message}
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/secure_dm", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("market-order")
+@click.option("--side", required=True, type=click.Choice(["buy", "sell", "bid", "ask"]))
+@click.option("--asset", required=True, help="Asset label/id.")
+@click.option("--price-sats", required=True, type=int, help="Price in sats.")
+@click.option("--quantity", default=None, type=float, help="Optional quantity.")
+@click.option("--order-id", default=None, help="Optional client order id.")
+@click.option("--flow", default=None, help="Optional flow descriptor.")
+@click.option("--content", default=None, help="Optional custom content.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_order(
+    ctx: click.Context,
+    side: str,
+    asset: str,
+    price_sats: int,
+    quantity: Optional[float],
+    order_id: Optional[str],
+    flow: Optional[str],
+    content: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"side": side, "asset": asset, "price_sats": price_sats}
+    if quantity is not None:
+        payload["quantity"] = quantity
+    if order_id:
+        payload["order_id"] = order_id
+    if flow:
+        payload["flow"] = flow
+    if content:
+        payload["content"] = content
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/market/order", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("market-orders")
+@click.option("--limit", default=50, type=int, show_default=True)
+@click.option("--kind", default=1, type=int, show_default=True)
+@click.option("--market", default="safebox-v1", show_default=True)
+@click.option("--side", default=None, type=click.Choice(["bid", "ask", "buy", "sell"]))
+@click.option("--asset", default=None)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_orders(
+    ctx: click.Context,
+    limit: int,
+    kind: int,
+    market: str,
+    side: Optional[str],
+    asset: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {"limit": limit, "kind": kind, "market": market}
+    if side:
+        params["side"] = side
+    if asset:
+        params["asset"] = asset
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/market/orders", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+@cli.command("zap")
+@click.option("--event-id", default=None, help="Target event id.")
+@click.option("--event", default=None, help="Target event/npub/nip05 identifier.")
+@click.option("--amount-sats", required=True, type=int)
+@click.option("--comment", default=None)
+@click.pass_context
+def zap(
+    ctx: click.Context, event_id: Optional[str], event: Optional[str], amount_sats: int, comment: Optional[str]
+) -> None:
+    key = _require_access_key(ctx)
+    if not event_id and not event:
+        raise click.ClickException("Provide either --event-id or --event.")
+    payload: Dict[str, Any] = {"amount_sats": amount_sats}
+    if event_id:
+        payload["event_id"] = event_id
+    if event:
+        payload["event"] = event
+    if comment:
+        payload["comment"] = comment
+    data = _request_json(ctx.obj["base_url"], "/agent/zap", "POST", key, ctx.obj["timeout_seconds"], payload=payload)
+    _print_json(data)
+
+
+@cli.command("reply")
+@click.argument("event_id")
+@click.argument("content")
+@click.option("--target-pubkey", default=None)
+@click.option("--target-kind", default=None, type=int)
+@click.option("--relay-hint", default=None)
+@click.pass_context
+def reply(
+    ctx: click.Context,
+    event_id: str,
+    content: str,
+    target_pubkey: Optional[str],
+    target_kind: Optional[int],
+    relay_hint: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"event_id": event_id, "content": content}
+    if target_pubkey:
+        payload["target_pubkey"] = target_pubkey
+    if target_kind is not None:
+        payload["target_kind"] = target_kind
+    if relay_hint:
+        payload["relay_hint"] = relay_hint
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/reply", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("my-posts")
+@click.option("--limit", default=10, type=int, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def my_posts(ctx: click.Context, limit: int, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {"limit": limit}
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/nostr/my_latest_kind1", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+@cli.command("zap-receipts")
+@click.argument("event_id")
+@click.option("--limit", default=50, type=int, show_default=True)
+@click.pass_context
+def zap_receipts(ctx: click.Context, event_id: str, limit: int) -> None:
+    key = _require_access_key(ctx)
+    params = {"event_id": event_id, "limit": limit}
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/nostr/zap_receipts", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+if __name__ == "__main__":
+    cli()

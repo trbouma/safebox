@@ -37,6 +37,28 @@ Conditional:
 - Authenticated calls require header: `X-Access-Key: <access_key>`
 - Onboarding does not require `X-Access-Key`; it returns new credentials
 
+## CLI Surfaces (Use Both)
+
+This repo now has two CLI entry points. Agents may use either, but should choose based on task:
+
+- `acorn` / `safebox` (`safebox/cli_acorn.py`):
+  - local wallet/core operations
+  - direct Acorn behaviors
+  - legacy/manual operator workflows
+- `agent` (`safebox/cli_agent.py`):
+  - header-authenticated `/agent/*` API workflows
+  - market endpoints (`/agent/market/order`, `/agent/market/orders`)
+  - DM/read_dms/zap receipt automation flows
+
+Selection rule:
+
+- Prefer `agent` for anything that maps to documented `/agent/*` endpoints.
+- Use `acorn` for local core tasks not exposed through `/agent/*`.
+
+Non-interference rule:
+
+- Do not modify `safebox/cli_acorn.py` or `safebox/acorn.py` when extending `agent` CLI flows.
+
 ## Canonical Endpoints
 
 - `POST /agent/onboard`
@@ -561,3 +583,5 @@ Retry guidance:
 - `docs/specs/AGENT-API.md`
 - `docs/specs/AGENT-FLOWS.md`
 - `app/routers/agent.py`
+- `safebox/cli_agent.py`
+- `safebox/cli_acorn.py`

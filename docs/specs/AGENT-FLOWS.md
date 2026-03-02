@@ -21,6 +21,11 @@ Current agent flows:
 - Secure direct messaging (`/agent/secure_dm`)
 - Cashu token issue/accept (`/agent/issue_ecash`, `/agent/accept_ecash`)
 
+Execution surface coverage:
+
+- API execution surface (direct HTTP requests to `/agent/*`)
+- Console execution surface (`cli_agent` shell commands mapped to `/agent/*`)
+
 ## Flow Families
 
 ### Onboarding Flow
@@ -78,6 +83,28 @@ Accept:
 2. Service validates token format and redeems/swallows proofs.
 3. Wallet balance/tx history are updated and persisted.
 
+## Execution Surface Flows
+
+### Console Execution Surface Flows
+
+The Console execution surface is a shell/CLI operator path over the same `/agent/*` API contracts.
+
+Current console surface:
+
+- `agent` CLI (`safebox/cli_agent.py`)
+
+Category intent:
+
+- Defines how operators/agents execute existing Agent API flows in terminal environments.
+- Does not introduce a new protocol or new wallet-core semantics.
+- Preserves parity with API flow semantics (onboarding, payments, DMs, market actions).
+
+Operational examples:
+
+- Profile-based execution context selection (`agent --profile <name> ...`)
+- Onboarding from invite code in shell (`agent onboard --invite-code ...`)
+- Optional post-onboarding profile publish (`agent onboard --publish-profile`)
+
 ## Relationship to NFC and QR
 
 Agent flows reuse the same wallet core (`Acorn`) used by NFC and QR routes, but replace UI interaction with explicit API calls.  
@@ -121,6 +148,8 @@ This sequencing reduces regression risk, keeps UX-critical trust paths stable, a
 
 - `app/routers/agent.py`
 - `docs/specs/AGENT-API.md`
+- `docs/tutorials/CLI-AGENT-QUICKSTART.md`
 - `docs/specs/NFC-FLOWS-AND-SECURITY.md`
 - `docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
+- `safebox/cli_agent.py`
 - `skills/agent-api/SKILL.md`

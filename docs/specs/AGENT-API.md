@@ -31,6 +31,18 @@ Out of scope (current release):
 - Policy-scoped API permissions
 - Signed request replay protection
 
+## Execution Surfaces
+
+Agent API supports multiple execution surfaces over the same `/agent/*` contracts:
+
+- API execution surface: direct HTTP clients (curl, SDKs, service-to-service callers).
+- Console execution surface: shell commands via `agent` CLI (`safebox/cli_agent.py`).
+
+Execution-surface rule:
+
+- Console/shell flows are an operator interface layer and do not define a separate protocol.
+- Wire behavior, auth model, and endpoint semantics remain those defined in this Agent API spec.
+
 ## Authentication Model
 
 Agent routes use:

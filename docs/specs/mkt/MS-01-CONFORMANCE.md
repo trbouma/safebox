@@ -2,7 +2,7 @@
 **Spec**: `MS-01`  
 **Version**: `1.0`  
 **Date**: `2026-03-02`  
-**Primary Spec**: `/Users/trbouma/projects/safebox-2/docs/specs/mkt/MS-01-coupon-market.md`
+**Primary Spec**: `docs/specs/mkt/MS-01-coupon-market.md`
 
 ---
 
@@ -69,20 +69,20 @@ Fill once per run:
 
 Use `PASS`, `FAIL`, or `N/A` in the Result column.
 
-| Test ID | Class | Result | Evidence (event ids / tx ids / logs) | Notes |
-|---------|-------|--------|----------------------------------------|-------|
-| `TC-MS01-001` | Issuer | | | |
-| `TC-MS01-002` | Issuer | | | |
-| `TC-MS01-003` | Issuer | | | |
-| `TC-MS01-004` | Issuer | | | |
-| `TC-MS01-005` | Issuer | | | |
-| `TC-MS01-006` | Issuer | | | |
-| `TC-MS01-007` | Trader | | | |
-| `TC-MS01-008` | Trader | | | |
-| `TC-MS01-009` | Trader | | | |
-| `TC-MS01-010` | Observer | | | |
-| `TC-MS01-011` | Observer | | | |
-| `TC-MS01-012` | Issuer/Trader | | | |
+| Test ID | Class | Enforcement | Result | Evidence (event ids / tx ids / logs) | Notes |
+|---------|-------|-------------|--------|----------------------------------------|-------|
+| `TC-MS01-001` | Issuer | Protocol | | | |
+| `TC-MS01-002` | Issuer | Protocol | | | |
+| `TC-MS01-003` | Issuer | Protocol | | | |
+| `TC-MS01-004` | Issuer | Protocol | | | |
+| `TC-MS01-005` | Issuer | Protocol | | | |
+| `TC-MS01-006` | Issuer | Protocol | | | |
+| `TC-MS01-007` | Trader | Protocol | | | |
+| `TC-MS01-008` | Trader | Protocol | | | |
+| `TC-MS01-009` | Trader | Policy | | | |
+| `TC-MS01-010` | Observer | Protocol | | | |
+| `TC-MS01-011` | Observer | Protocol | | | |
+| `TC-MS01-012` | Issuer/Trader | Protocol | | | |
 
 ---
 
@@ -201,6 +201,7 @@ Steps:
 
 Pass:
 - Attempt blocked or skipped by policy/state.
+- Record this test as `Policy Pass` (not cryptographic/protocol enforcement).
 
 ## 6.10 `TC-MS01-010` Discovery Filtering
 
@@ -294,6 +295,9 @@ Final declaration:
 - `MS01-Trader`: `PASS` / `FAIL`
 - `MS01-Observer`: `PASS` / `FAIL`
 
+Policy note:
+- A class may pass with policy-enforced checks (for example `TC-MS01-009`) only if those checks are explicitly marked `Policy` in the run ledger and notes.
+
 ---
 
 ## 9. Sign-Off
@@ -303,4 +307,3 @@ Final declaration:
 | Test Runner | | | |
 | Reviewer | | | |
 | Approver | | | |
-
