@@ -71,10 +71,19 @@ Each coupon instance is represented by the following logical fields:
 Every coupon MUST be assigned a unique identifier at issuance:
 
 ```
-#COUP-{XXX}
+#COUP-{XXXXXX}
 ```
 
-Where `{XXX}` is a zero-padded integer (e.g. `#COUP-001`, `#COUP-042`).
+Where `{XXXXXX}` is a 6-character uppercase alphanumeric locator using characters `A-Z` and `2-9` (excluding `0`, `O`, `I`, `1` to avoid visual ambiguity), similar to airline PNR format.
+
+Examples: `#COUP-X7K9QR`, `#COUP-B3MWTZ`, `#COUP-H6PAVN`.
+
+Generation rule:
+
+```python
+charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+coupon_id = "#COUP-" + "".join(random.choices(charset, k=6))
+```
 
 All posts, replies, and DMs relating to a coupon MUST:
 - Include the coupon ID tag (e.g. `#COUP-001`)
@@ -222,7 +231,7 @@ No redemption will be accepted.
 - `face_value_sats` MUST be a positive integer.
 - `ask_price_sats` MUST be a positive integer.
 - Secondary `ask_price_sats` SHOULD be lower than `face_value_sats`.
-- `coupon_id` MUST match `#COUP-[0-9]{3,}`.
+- `coupon_id` MUST match `#COUP-[A-Z2-9]{6}`.
 - `redemption_secret` MUST only be transmitted via `POST /agent/secure_dm`.
 - Issuer MUST process the first valid redemption claim as final.
 - Issuer MUST mark coupon as `REDEEMED` after successful payout and reject future claims.
@@ -372,7 +381,7 @@ The following tests are normative for implementation claims.
 
 | Test ID | Class | Requirement | Method | Pass Criteria |
 |---------|-------|-------------|--------|---------------|
-| `TC-MS01-001` | Issuer | Coupon ID format | Create issuance order | `coupon_id` matches `#COUP-[0-9]{3,}` |
+| `TC-MS01-001` | Issuer | Coupon ID format | Create issuance order | `coupon_id` matches `#COUP-[A-Z2-9]{6}` |
 | `TC-MS01-002` | Issuer | Canonical anchor | Create issuance order | Returned `event_id` stored and reused as `canonical_event_id` |
 | `TC-MS01-003` | Issuer | Secret confidentiality | Execute sale flow | Secret appears in DM only; absent from public events |
 | `TC-MS01-004` | Issuer | Identity source correctness | Parse zap receipts | Buyer resolved from `zapper_npub`/`zapper_pubkey`, not provider signer fields |

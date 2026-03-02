@@ -173,6 +173,12 @@ Check zap receipts on an event:
 poetry run agent zap-receipts <event_id_hex> --limit 50
 ```
 
+Generate spec-compliant coupon IDs (`#COUP-[A-Z2-9]{6}`):
+
+```bash
+poetry run agent coupon-id --count 3
+```
+
 ## 8. Troubleshooting
 
 - `401 Unauthorized`: access key is missing/invalid.

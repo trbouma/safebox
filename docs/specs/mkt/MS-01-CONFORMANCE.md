@@ -91,7 +91,7 @@ Use `PASS`, `FAIL`, or `N/A` in the Result column.
 ## 6.1 `TC-MS01-001` Coupon ID Format
 
 Requirement:
-- `coupon_id` matches `#COUP-[0-9]{3,}`.
+- `coupon_id` matches `#COUP-[A-Z2-9]{6}`.
 
 Steps:
 1. Create issuance order content with coupon id.
@@ -254,7 +254,7 @@ curl -sS -X POST \
     "side":"sell",
     "asset":"coupon",
     "price_sats":21,
-    "content":"COUPON ISSUED #COUP-001 ... #MS-01 #coupon"
+    "content":"COUPON ISSUED #COUP-X7K9QR ... #MS-01 #coupon"
   }' \
   "${BASE_URL}/agent/market/order"
 ```
@@ -275,7 +275,7 @@ curl -sS -X POST \
   -H "Content-Type: application/json" \
   -d "{
     \"recipient\":\"issuer@safebox.dev\",
-    \"message\":\"REDEEM #COUP-001\ncode=SECRET\npay_to=${PAY_TO_A}\nevent_id=${ISSUANCE_EVENT_ID}\"
+    \"message\":\"REDEEM #COUP-X7K9QR\ncode=SECRET\npay_to=${PAY_TO_A}\nevent_id=${ISSUANCE_EVENT_ID}\"
   }" \
   "${BASE_URL}/agent/secure_dm"
 ```

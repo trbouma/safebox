@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -10,6 +11,7 @@ import yaml
 
 DEFAULT_BASE_URL = "https://safebox.dev"
 DEFAULT_PROFILE = "default"
+COUPON_CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".safebox-agent")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.yml")
 
@@ -189,6 +191,10 @@ def _require_access_key(ctx: click.Context) -> str:
     return key
 
 
+def _generate_coupon_id() -> str:
+    return "#COUP-" + "".join(secrets.choice(COUPON_CHARSET) for _ in range(6))
+
+
 @cli.group("config")
 def config_group() -> None:
     """Read/write local CLI config."""
@@ -258,6 +264,15 @@ def config_set(
 
     _write_config(cfg)
     click.echo(f"config updated for profile '{profile_to_write}'")
+
+
+@cli.command("coupon-id")
+@click.option("--count", default=1, type=int, show_default=True, help="Number of coupon IDs to generate.")
+def coupon_id(count: int) -> None:
+    if count < 1 or count > 100:
+        raise click.ClickException("count must be between 1 and 100")
+    ids = [_generate_coupon_id() for _ in range(count)]
+    _print_json({"status": "OK", "count": len(ids), "coupon_ids": ids})
 
 
 @cli.command("onboard")
