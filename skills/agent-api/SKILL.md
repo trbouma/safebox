@@ -4,13 +4,16 @@
 
 When starting a new session, fetch these files before executing any workflows:
 
-| File | URL |
+| File | Path |
 |------|-----|
-| This skill | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/skills/agent-api/SKILL.md` |
-| MS-01 Market Spec | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/docs/specs/mkt/MS-01-coupon-market.md` |
-| MS-01 Conformance | `https://raw.githubusercontent.com/trbouma/safebox/refs/heads/codex/market-making/docs/specs/mkt/MS-01-CONFORMANCE.md` |
+| This skill | `skills/agent-api/SKILL.md` |
+| MS-01 Market Spec | `docs/specs/mkt/MS-01-coupon-market.md` |
+| MS-01 Conformance | `docs/specs/mkt/MS-01-CONFORMANCE.md` |
+| WS Conformance | `docs/specs/WS-CONFORMANCE.md` |
 
-Fetch all three via HTTP before proceeding. Do not rely on cached or summarized versions.
+Resolve paths from the repository root of the current checkout (current branch).
+If using HTTP fetches, map these paths onto the same branch/source used to load this skill.
+Do not rely on cached or summarized versions.
 
 ## Purpose
 
@@ -55,6 +58,7 @@ Use these exact paths for private messaging flows:
 
 - Read DMs: `GET /agent/read_dms?limit=<n>&kind=1059`
 - Send secure DM: `POST /agent/secure_dm`
+- Stream DMs (WS): `WS /agent/ws/read_dms?limit=<n>&kind=1059`
 
 Minimum read example:
 
@@ -101,11 +105,17 @@ Non-interference rule:
 - `GET /agent/supported_currencies`
 - `POST /agent/set_custom_handle`
 - `GET /agent/read_dms`
+- `WS /agent/ws/read_dms`
 - `GET /agent/nostr/latest_kind1`
+- `GET /agent/nostr/discovery/latest_kind1`
 - `GET /agent/nostr/my_latest_kind1`
 - `GET /agent/nostr/zap_receipts`
 - `GET /agent/nostr/kind0`
 - `GET /agent/nostr/following/latest_kind1`
+- `WS /agent/ws/nostr/latest_kind1`
+- `WS /agent/ws/nostr/discovery/latest_kind1`
+- `WS /agent/ws/nostr/my_latest_kind1`
+- `WS /agent/ws/nostr/following/latest_kind1`
 - `GET /agent/market/orders`
 - `POST /agent/nostr/format_mention`
 - `POST /agent/nostr/compose_mentions`
@@ -193,9 +203,16 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 ### Nostr Preflight (Before Event Zaps)
 
 1. Call `GET /agent/nostr/latest_kind1?nip05=<name@domain>&limit=<n>`.
+   - The `nip05` target MUST already be present in the wallet kind-3 follow list.
+   - If not followed, endpoint returns `403`.
 2. Read returned `events[]` and choose the target `event_id` (or `event_id_hex` / `id`).
 3. Pass that value as `event_id` (or `event`) in `POST /agent/zap`.
 4. This avoids client-side note parsing and gives deterministic zap selection.
+
+Discovery variant:
+
+- If the target is not in follow-list scope, use:
+  `GET /agent/nostr/discovery/latest_kind1?nip05=<name@domain>&limit=<n>`
 
 ### Self Post Lookup (Authenticated Wallet)
 
@@ -224,6 +241,53 @@ The same preflight applies to `POST /agent/zap` when using `amount` + `currency`
 2. Optional relay override: `&relays=<relay1,relay2,...>`.
 3. Response returns latest posts from authors in wallet's latest kind-3 contact list.
 4. Use returned `events[].event_id` for reaction/reply/zap workflows.
+
+### Kind-1 Streaming (WebSocket)
+
+Use these endpoints when an agent needs push-style updates instead of polling:
+
+- `WS /agent/ws/nostr/latest_kind1?nip05=<name@domain>&limit=<n>&poll_seconds=<n>&access_key=<key>`
+- `WS /agent/ws/nostr/discovery/latest_kind1?nip05=<name@domain>&limit=<n>&poll_seconds=<n>&access_key=<key>`
+- `WS /agent/ws/nostr/my_latest_kind1?limit=<n>&poll_seconds=<n>&access_key=<key>`
+- `WS /agent/ws/nostr/following/latest_kind1?limit=<n>&poll_seconds=<n>&access_key=<key>`
+
+Access rule:
+
+- `ws/nostr/latest_kind1` only streams for identifiers in the wallet kind-3 follow list.
+- `ws/nostr/discovery/latest_kind1` is unrestricted by follow-list and intended for open lookup.
+- For broad discovery, use `ws/nostr/following/latest_kind1`.
+
+Auth notes:
+
+- Preferred: send `X-Access-Key` header during websocket handshake.
+- Fallback: pass `access_key` query parameter if client cannot set websocket headers.
+
+Stream payload types:
+
+- `type=connected`: connection accepted and stream initialized
+- `type=events`: changed event set detected, includes full `events[]`
+- `type=heartbeat`: no change detected at this poll interval
+
+Post-deploy validation:
+
+- Run WebSocket smoke checks in `docs/specs/AGENT-API.md`:
+  - `WS-CONN-001`
+  - `WS-DATA-002`
+  - `WS-HEARTBEAT-003`
+  - `WS-POLICY-004`
+  - `WS-FALLBACK-005`
+- Runnable command reference: `docs/specs/WS-CONFORMANCE.md`
+
+Environment compatibility:
+
+- Some browser/sandbox runtimes expose `WebSocket` but do not reliably return async stream callbacks to the agent.
+- If WS streaming is unavailable or unreadable, fall back to polling with equivalent `GET` endpoints:
+  - `WS /agent/ws/read_dms` -> `GET /agent/read_dms`
+  - `WS /agent/ws/nostr/latest_kind1` -> `GET /agent/nostr/latest_kind1`
+  - `WS /agent/ws/nostr/discovery/latest_kind1` -> `GET /agent/nostr/discovery/latest_kind1`
+  - `WS /agent/ws/nostr/my_latest_kind1` -> `GET /agent/nostr/my_latest_kind1`
+  - `WS /agent/ws/nostr/following/latest_kind1` -> `GET /agent/nostr/following/latest_kind1`
+- Keep the same filters (`nip05`, `limit`, `relays`) and poll interval policy when using `GET`.
 
 ### Market Order Discovery (Dedicated Path)
 
@@ -311,6 +375,12 @@ Behavior:
 - reads incoming gift-wrapped messages using existing wallet record retrieval
 - defaults to kind `1059` (private DM transport)
 - returns newest-first messages with bounded `limit`
+
+DM streaming variant:
+
+- `WS /agent/ws/read_dms?limit=<n>&kind=1059&poll_seconds=<n>&access_key=<key>`
+- same `kind`/`relays` semantics as `GET /agent/read_dms`
+- emits `connected`, `messages`, and `heartbeat` frames
 
 ### 4) Pay Invoice
 
