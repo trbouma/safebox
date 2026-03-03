@@ -5494,6 +5494,8 @@ class Acorn:
     async def zap(self, amount:int, event_id, comment): 
         out_msg = ""
         prs = []
+        skipped_invoice_requests = 0
+        last_invoice_error: str | None = None
         orig_address = event_id
 
         try:
@@ -5668,13 +5670,36 @@ class Acorn:
             zap_test = Event().load(zap_dict)
             self.logger.debug(f"zap_test.id: {zap_test.id}")
             self.logger.debug(f"zap test  {zap_test}, {zap_test.is_valid()}")
-            pr, _, _ = await asyncio.to_thread(zap_address_pay, zap_amount, lnaddress, zap_dict)
+            try:
+                pr, _, _ = await asyncio.to_thread(zap_address_pay, zap_amount, lnaddress, zap_dict)
+            except Exception as exc:
+                skipped_invoice_requests += 1
+                last_invoice_error = str(exc)
+                self.logger.error(
+                    "op=zap status=skip_invoice_request lnaddress=%s amount=%s error=%s",
+                    lnaddress,
+                    zap_amount,
+                    exc,
+                )
+                continue
             if not isinstance(pr, str) or not pr:
-                raise RuntimeError("zap callback returned invalid invoice")
+                skipped_invoice_requests += 1
+                last_invoice_error = "zap callback returned invalid invoice"
+                self.logger.error(
+                    "op=zap status=skip_invoice_request lnaddress=%s amount=%s error=%s",
+                    lnaddress,
+                    zap_amount,
+                    last_invoice_error,
+                )
+                continue
             self.logger.debug(f"pay this invoice from the safebox: {pr}")
             prs.append(pr)
 
         if not prs:
+            if skipped_invoice_requests > 0:
+                raise RuntimeError(
+                    f"No payable zap invoices generated (invoice request failures: {skipped_invoice_requests}; last_error={last_invoice_error})"
+                )
             if skipped_profiles > 0:
                 raise RuntimeError(
                     "No payable zap invoices generated (target profile missing lud16 or not found on relays)"
@@ -5683,6 +5708,8 @@ class Acorn:
         return prs
     async def _async_query_npub(self, amount:int, comment:str, filter: List[dict]):
         prs = []
+        skipped_invoice_requests = 0
+        last_invoice_error: str | None = None
         query_relays = self._build_discovery_relays()
         async with ClientPool(query_relays) as c:        
             events_profile = await c.query(filter)
@@ -5731,9 +5758,30 @@ class Acorn:
                 # ln_return = lightning_address_pay(amount=amount,lnaddress=lnaddress,comment=comment)
                 # pr = ln_return['pr']
 
-                pr, _, _ = await asyncio.to_thread(zap_address_pay, amount, lnaddress, zap_dict)
-                if not isinstance(pr, str) or not pr:
-                    raise RuntimeError("zap callback returned invalid invoice")
+                pr = None
+                invoice_request_failed = False
+                try:
+                    pr, _, _ = await asyncio.to_thread(zap_address_pay, amount, lnaddress, zap_dict)
+                except Exception as exc:
+                    invoice_request_failed = True
+                    skipped_invoice_requests += 1
+                    last_invoice_error = str(exc)
+                    self.logger.error(
+                        "op=zap status=skip_profile_invoice_request lnaddress=%s amount=%s error=%s",
+                        lnaddress,
+                        amount,
+                        exc,
+                    )
+                if (not invoice_request_failed) and (not isinstance(pr, str) or not pr):
+                    skipped_invoice_requests += 1
+                    last_invoice_error = "zap callback returned invalid invoice"
+                    self.logger.error(
+                        "op=zap status=skip_profile_invoice_request lnaddress=%s amount=%s error=%s",
+                        lnaddress,
+                        amount,
+                        last_invoice_error,
+                    )
+                    raise RuntimeError(last_invoice_error)
 
                 self.logger.debug(f"zap pr: {pr}")
                 prs.append(pr)
@@ -5743,6 +5791,10 @@ class Acorn:
                 self.logger.error("op=zap status=profile_error error=%s", exc)
                 pass
         if not prs:
+            if skipped_invoice_requests > 0:
+                raise RuntimeError(
+                    f"No payable zap invoices generated (invoice request failures: {skipped_invoice_requests}; last_error={last_invoice_error})"
+                )
             raise RuntimeError("No payable zap invoices generated")
        
         return prs
