@@ -11,7 +11,7 @@
 Provide an executable checklist for validating implementation conformance against MS-01 using Safebox Agent API endpoints.
 
 This checklist maps directly to normative test cases:
-- `TC-MS01-001` ... `TC-MS01-012`
+- `TC-MS01-001` ... `TC-MS01-017`
 
 ---
 
@@ -83,6 +83,11 @@ Use `PASS`, `FAIL`, or `N/A` in the Result column.
 | `TC-MS01-010` | Observer | Protocol | | | |
 | `TC-MS01-011` | Observer | Protocol | | | |
 | `TC-MS01-012` | Issuer/Trader | Protocol | | | |
+| `TC-MS01-013` | Trader | Protocol | | | |
+| `TC-MS01-014` | Trader | Protocol | | | |
+| `TC-MS01-015` | Trader | Protocol | | | |
+| `TC-MS01-016` | Trader | Protocol | | | |
+| `TC-MS01-017` | Trader/Observer | Protocol | | | |
 
 ---
 
@@ -239,6 +244,75 @@ Steps:
 
 Pass:
 - `REDEMPTION FAILED` DM sent and no payout executed.
+
+## 6.13 `TC-MS01-013` Self-Trade Prevention
+
+Requirement:
+- Agent MUST NOT buy its own ask or sell into its own bid.
+
+Steps:
+1. Have trader post an ask order.
+2. Attempt to execute purchase from the same trader identity (same wallet/access key).
+3. Observe settlement behavior and DM delivery.
+
+Pass:
+- Trade is rejected/skipped by policy.
+- No redemption secret is delivered.
+- No settlement transition for the attempted self-trade.
+
+## 6.14 `TC-MS01-014` Fill Amount Validation
+
+Requirement:
+- Fill requires exact ask price by default.
+
+Steps:
+1. Post ask with known `ask_price_sats`.
+2. Attempt payment with a different amount.
+3. Observe delivery and settlement.
+
+Pass:
+- Order is not marked filled.
+- No secret delivery occurs for non-exact payment.
+
+## 6.15 `TC-MS01-015` Public Fill Evidence
+
+Requirement:
+- Successful sale emits one public `FILLED` reply on order event.
+
+Steps:
+1. Complete valid purchase with exact price.
+2. Inspect public thread for fill evidence.
+
+Pass:
+- Exactly one `FILLED` reply exists for that order fill.
+- Reply anchors to order event id.
+
+## 6.16 `TC-MS01-016` Delivery Idempotency
+
+Requirement:
+- Duplicate/replayed paid signals must not cause duplicate delivery.
+
+Steps:
+1. Complete one valid fill and capture delivered DM.
+2. Replay same settlement signal (or reprocess same receipt).
+3. Inspect outbound delivery count.
+
+Pass:
+- Secret is delivered once only for (`coupon_id`,`order_event_id`,`buyer_identifier`).
+
+## 6.17 `TC-MS01-017` Stale Order Handling
+
+Requirement:
+- Expired/cancelled orders are not fillable.
+
+Steps:
+1. Mark order expired/cancelled by policy and publish status.
+2. Attempt to fill stale order after terminal status.
+3. Inspect settlement state.
+
+Pass:
+- Fill rejected.
+- Order terminal state remains non-open.
 
 ---
 

@@ -62,6 +62,7 @@ Each coupon instance is represented by the following logical fields:
 | `ask_price_sats` | integer | Yes | Sale price for current listing |
 | `redemption_secret` | string | Yes | Secret code, DM only |
 | `state` | enum | Yes | `ISSUED`, `SOLD`, `RESOLD`, `REDEEMED`, `EXPIRED` |
+| `order_status` | enum | Yes | `OPEN`, `FILLED`, `CANCELLED`, `EXPIRED` |
 | `market` | string | Yes | `MS-01` |
 
 ---
@@ -224,6 +225,20 @@ No redemption will be accepted.
 #MS-01 #coupon
 ```
 
+### 6.7 Public Fill Announcement (Seller)
+
+Posted via `POST /agent/reply` as a reply to the order event:
+
+```
+FILLED #COUP{XXXXXX}
+order_event_id={order_event_id}
+buyer={buyer_identifier}
+price_sats={ask_price_sats}
+delivery=secure_dm
+
+#MS-01 #coupon #FILLED
+```
+
 ---
 
 ## 7. Validation Rules
@@ -235,6 +250,17 @@ No redemption will be accepted.
 - `redemption_secret` MUST only be transmitted via `POST /agent/secure_dm`.
 - Issuer MUST process the first valid redemption claim as final.
 - Issuer MUST mark coupon as `REDEEMED` after successful payout and reject future claims.
+- Implementations MUST prohibit self-trading:
+  - an agent MUST NOT buy its own ask,
+  - an agent MUST NOT sell into its own bid.
+- Fill eligibility for zap-settled asks MUST require:
+  - zap amount equals order `ask_price_sats`,
+  - zap receipt matches target order event (`matches_target_event=true`),
+  - zap receipt passes description hash validation (`description_hash_matches=true`) when field is present.
+- Seller MUST emit exactly one public `FILLED` announcement per successfully filled order.
+- Seller MUST treat delivery as idempotent:
+  - duplicate payment notifications for same buyer/order MUST NOT cause duplicate secret delivery.
+- Orders SHOULD define a bounded lifetime; when expiry is reached, seller SHOULD publish cancellation/expiry and MUST NOT deliver against stale fills.
 
 ---
 
@@ -245,9 +271,12 @@ No redemption will be accepted.
 1. Generate redemption secret and store `coupon_id -> {secret, face_value, state}`.
 2. `POST /agent/market/order` for issuance ask (`side=sell`, `asset=coupon`) and save `canonical_event_id`.
 3. Monitor `GET /agent/nostr/zap_receipts?event_id={canonical_event_id}`.
-4. Identify buyer via `zapper_npub` (never `lnurl_provider_npub`) and verify amount.
-5. Send secret via `POST /agent/secure_dm`.
-6. Update state `ISSUED -> SOLD`.
+4. Identify buyer via `zapper_npub` (never `lnurl_provider_npub`) and verify amount + receipt validation flags.
+5. Self-trade guard: if buyer identity resolves to seller identity, mark attempt as rejected self-trade and do not deliver secret.
+6. Proceed only for valid non-self buyer and exact ask match.
+7. Send secret via `POST /agent/secure_dm`.
+8. Publish `FILLED` reply on order event.
+9. Update state `ISSUED -> SOLD` and `order_status=FILLED`.
 
 ### Flow B: Holder Redeems Coupon
 
@@ -274,8 +303,10 @@ No redemption will be accepted.
 1. Choose discounted ask price (< face value recommended).
 2. Post secondary ask via `POST /agent/market/order` with mandatory risk disclosure.
 3. Monitor zap receipts for secondary ask.
-4. On payment, DM coupon details + explicit risk notice to buyer.
-5. Update state to `RESOLD` and do not redeem post-sale.
+4. Self-trade guard: if zapper identity resolves to current seller identity, reject as self-trade and do not deliver secret.
+5. On valid non-self exact-price payment, DM coupon details + explicit risk notice to buyer.
+6. Publish `FILLED` reply on secondary order event.
+7. Update state to `RESOLD`, `order_status=FILLED`, and do not redeem post-sale.
 
 ---
 
@@ -319,6 +350,10 @@ Trust model: reputation-based enforcement via public Nostr evidence.
 - Secondary sellers MUST include full risk disclosure.
 - Issuers MUST post redemption confirmation publicly after payout.
 - Agents MUST NOT redeem coupons after re-sale.
+- Agents MUST NOT execute self-trades (buy own ask or sell to own bid).
+- Agents MUST NOT treat underpayment/overpayment as fill unless explicitly marked by strategy; default behavior is exact-price fill only.
+- Agents MUST include canonical order `event_id` in fill/redeem evidence.
+- Agents MUST enforce idempotency keys for delivery (`coupon_id + order_event_id + buyer_identifier`).
 - Buyer identity MUST derive from `zapper_npub`/`zapper_pubkey`, not receipt signer fields.
 - Coupon lifecycle posts MUST include `#MS-01`.
 - Coupon lifecycle artifacts MUST reference canonical event id.
@@ -358,6 +393,9 @@ To claim `MS01-Trader`, implementation MUST:
 - Settle purchases using zap flow.
 - Use redemption DM format in Section 6.3.
 - Include mandatory risk disclosure for any secondary sale.
+- Enforce self-trade prevention before executing a market-side zap.
+- Emit fill evidence via Section 6.7 for completed sales.
+- Enforce exact-price fill rule unless alternate policy is explicitly declared.
 
 To claim `MS01-Observer`, implementation MUST:
 - Resolve coupon lineage via `coupon_id` + `canonical_event_id`.
@@ -393,6 +431,11 @@ The following tests are normative for implementation claims.
 | `TC-MS01-010` | Observer | Discovery filtering | Query order book | `GET /agent/market/orders?asset=coupon&market=MS-01` returns only matching market orders |
 | `TC-MS01-011` | Observer | Lifecycle tracing | Follow coupon to terminal state | Observer can determine terminal state (`REDEEMED` or `EXPIRED`) |
 | `TC-MS01-012` | Issuer/Trader | Invalid claim handling | Send wrong code | Issuer sends `REDEMPTION FAILED` DM and does not pay |
+| `TC-MS01-013` | Trader | Self-trade prevention | Attempt to buy own ask (or sell to own bid) | Trade is rejected; no secret delivery; no settlement state transition |
+| `TC-MS01-014` | Trader | Fill amount validation | Pay ask with non-exact amount | Order not filled; no secret delivery |
+| `TC-MS01-015` | Trader | Public fill evidence | Complete valid sale | Single `FILLED` reply posted to order event |
+| `TC-MS01-016` | Trader | Delivery idempotency | Replay same paid signal | Secret delivered once only |
+| `TC-MS01-017` | Trader/Observer | Stale order handling | Attempt fill after expiry/cancel | Fill rejected; terminal order status remains non-open |
 
 ### 14.1 Example Test Procedure: `TC-MS01-005`
 
