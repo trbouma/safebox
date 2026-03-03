@@ -4345,6 +4345,9 @@ class Acorn:
     async def swap_proofs(self, incoming_swap_proofs: List[Proof]):
         '''This function swaps proofs'''
         self.logger.debug("Swap proofs")
+        if not incoming_swap_proofs:
+            raise RuntimeError("No proofs supplied for swap")
+
         swap_amount =0
         count = 0
         
@@ -4352,13 +4355,18 @@ class Acorn:
         timeout = httpx.Timeout(30.0, connect=5.0)
         
         #keyset_url = f"{self.mints[0]}/v1/keysets"
-        keyset_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keysets"
+        proof_keyset = incoming_swap_proofs[0].id
+        mint_base = self.known_mints.get(proof_keyset)
+        if not mint_base:
+            raise RuntimeError(f"Unknown mint for keyset id: {proof_keyset}")
+
+        keyset_url = f"{mint_base}/v1/keysets"
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(keyset_url, headers=headers)
             response.raise_for_status()
             keyset = response.json()['keysets'][0]['id']
 
-        swap_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/swap"
+        swap_url = f"{mint_base}/v1/swap"
         swap_proofs = []
         blinded_swap_proofs = []
         blinded_values =[]
@@ -4393,11 +4401,29 @@ class Acorn:
         try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                    if response.status_code >= 400:
+                        body = response.text[:500]
+                        self.logger.error(
+                            "op=swap_proofs status=swap_http_error mint=%s keyset=%s code=%s body=%s",
+                            mint_base,
+                            proof_keyset,
+                            response.status_code,
+                            body,
+                        )
                     response.raise_for_status()
                     promises = response.json()['signatures']
 
-                    mint_key_url = f"{self.known_mints[incoming_swap_proofs[0].id]}/v1/keys/{keyset}"
+                    mint_key_url = f"{mint_base}/v1/keys/{keyset}"
                     response = await client.get(mint_key_url, headers=headers)
+                    if response.status_code >= 400:
+                        body = response.text[:500]
+                        self.logger.error(
+                            "op=swap_proofs status=keys_http_error mint=%s keyset=%s code=%s body=%s",
+                            mint_base,
+                            keyset,
+                            response.status_code,
+                            body,
+                        )
                     response.raise_for_status()
                     keys = response.json()["keysets"][0]["keys"]
                 # print(keys)
@@ -4426,6 +4452,15 @@ class Acorn:
                     new_proofs.append(proof)
                     # print(proofs)
                     i+=1
+        except httpx.HTTPStatusError as e:
+                response_text = ""
+                try:
+                    response_text = (e.response.text or "")[:500]
+                except Exception:
+                    response_text = ""
+                raise RuntimeError(
+                    f"Problem with swap HTTP {e.response.status_code} on {swap_url}: {response_text}"
+                ) from e
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
                 raise RuntimeError(f"Problem with swap {e}")
 
@@ -5528,6 +5563,7 @@ class Acorn:
     # does a one off query to relay prints the events and exits
         zaps_to_send = []
         event = None
+        skipped_profiles = 0
         query_relays = self._build_discovery_relays()
         # print("are we here today", self.relays)
         async with ClientPool(query_relays) as c:        
@@ -5573,8 +5609,16 @@ class Acorn:
                 'limit': 1,
                 'authors': [each_zap[0]],
                 'kinds': [0]
-            }]    
-            async with ClientPool(query_relays) as c:        
+            }]
+
+            profile_relays = list(query_relays)
+            relay_hint = str(each_zap[1] or "").strip()
+            if relay_hint:
+                normalized_hint = relay_hint if relay_hint.startswith("wss://") else f"wss://{relay_hint}"
+                if normalized_hint not in profile_relays:
+                    profile_relays = [normalized_hint] + profile_relays
+
+            async with ClientPool(profile_relays) as c:
                 events_profile = await c.query(profile_filter)
             lnaddress = None
             try:
@@ -5591,6 +5635,7 @@ class Acorn:
 
                 
             except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                skipped_profiles += 1
                 self.logger.error("op=zap status=skip_profile author=%s error=%s", each_zap[0], exc)
                 continue
             
@@ -5630,6 +5675,10 @@ class Acorn:
             prs.append(pr)
 
         if not prs:
+            if skipped_profiles > 0:
+                raise RuntimeError(
+                    "No payable zap invoices generated (target profile missing lud16 or not found on relays)"
+                )
             raise RuntimeError("No payable zap invoices generated")
         return prs
     async def _async_query_npub(self, amount:int, comment:str, filter: List[dict]):
