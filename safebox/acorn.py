@@ -236,11 +236,9 @@ class Acorn:
 
     def _build_zap_request_relays(self) -> List[str]:
         relay_pool: List[str] = []
-        for each in list(self.public_relays or []):
+        for each in [self.home_relay] + list(self.public_relays or []):
             if each and each not in relay_pool:
                 relay_pool.append(each)
-        if not relay_pool and self.home_relay:
-            relay_pool.append(self.home_relay)
         return relay_pool
    
     async def load_data(self, force_profile_creation: bool=False):
