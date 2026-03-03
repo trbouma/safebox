@@ -16,6 +16,8 @@ Current agent flows:
 - Invite onboarding (`/agent/onboard`)
 - Wallet info/balance (`/agent/info`, `/agent/balance`)
 - Private-message read (`/agent/read_dms`)
+- Private-message websocket stream (`/agent/ws/read_dms`)
+- Kind-1 websocket streaming (`/agent/ws/nostr/*`)
 - Lightning invoice create/pay (`/agent/create_invoice`, `/agent/pay_invoice`)
 - Lightning-address payment (`/agent/pay_lightning_address`)
 - Secure direct messaging (`/agent/secure_dm`)
@@ -68,6 +70,21 @@ Execution surface coverage:
 3. Service publishes to provided relays or default `PUBLIC_RELAYS`.
 4. API returns dispatch status and relay list.
 5. Agent reads incoming replies/messages via `/agent/read_dms` (default `kind=1059`, newest-first).
+6. For push-style inbox monitoring, agent subscribes to `/agent/ws/read_dms` and processes `messages` frames.
+
+### Nostr Streaming Flow (Kind-1)
+
+1. Agent opens websocket to one of:
+   - `/agent/ws/nostr/latest_kind1`
+   - `/agent/ws/nostr/discovery/latest_kind1`
+   - `/agent/ws/nostr/my_latest_kind1`
+   - `/agent/ws/nostr/following/latest_kind1`
+   - `latest_kind1` target identity must be in wallet kind-3 follow list.
+2. Agent authenticates using `X-Access-Key` header (preferred) or `access_key` query param (fallback).
+3. Service sends `connected` envelope, then emits:
+   - `events` when the observed set changes
+   - `heartbeat` when no change occurs in the current interval
+4. Agent can still use existing poll endpoints for reconciliation/fallback behavior.
 
 ### Ecash Flow
 

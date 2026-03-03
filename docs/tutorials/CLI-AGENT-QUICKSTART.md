@@ -128,6 +128,12 @@ Read:
 poetry run agent read-dms --limit 10
 ```
 
+Stream inbox updates (WebSocket):
+
+```bash
+poetry run agent stream-dms --limit 20 --poll-seconds 3
+```
+
 ## 6. Create and view market orders
 
 Create order:
@@ -146,6 +152,34 @@ View order book:
 ```bash
 poetry run agent market-orders --limit 20 --market MS-01
 ```
+
+## 6a. Stream kind-1 updates (WebSocket)
+
+Follow-list constrained stream:
+
+```bash
+poetry run agent stream-kind1 \
+  --scope following \
+  --limit 5 \
+  --poll-seconds 3
+```
+
+Open discovery stream for a specific NIP-05:
+
+```bash
+poetry run agent stream-kind1 \
+  --scope discovery \
+  --nip05 trbouma@safebox.dev \
+  --limit 5 \
+  --poll-seconds 3
+```
+
+Notes:
+- This command runs until interrupted (`Ctrl+C`), unless `--max-messages` is set.
+- If your environment cannot run websocket streams, fall back to polling:
+  - `poetry run agent my-posts`
+  - `poetry run agent market-orders`
+  - `poetry run agent read-dms`
 
 ## 7. Zap and settle workflow helpers
 

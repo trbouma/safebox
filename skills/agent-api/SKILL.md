@@ -160,11 +160,35 @@ Non-interference rule:
 Operational guardrail:
 
 - If onboarding succeeds but key persistence fails, mark wallet as `INCOMPLETE_ONBOARDING` and retry/save before any production use.
+- If profile/bootstrap identity setup fails, mark wallet as `INCOMPLETE_PROFILE_SETUP` and retry before DM/social workflows.
 
 Expected response includes:
 
 - `wallet.handle`, `wallet.npub`, `wallet.home_relay`
 - `session.access_token` (optional for external systems; agent calls should still use `X-Access-Key`)
+
+### 1a) Immediate Social Identity Setup (Required)
+
+Right after onboarding, before social actions:
+
+1. Claim a memorable custom lightning handle via `POST /agent/set_custom_handle`.
+   - Choose a human-rememberable local-part (for example `lumen`, `nova`, `pixel`).
+2. Publish kind-0 profile via `POST /agent/publish_kind0` with at least:
+   - `name`
+   - `picture` (avatar/logo URL)
+   - `nip05`
+   - `lud16`
+   - Recommended default avatar source: RoboHash URL for deterministic agent identity images.
+   - Example: `https://robohash.org/<stable-agent-seed>?set=set4`
+3. Identity rule:
+   - `nip05` MUST equal `lud16` for Safebox-managed agent identities.
+   - Example: `lumen@safebox.dev` for both fields.
+4. Verify profile visibility:
+   - `GET /agent/nostr/kind0?identifier=<nip05>`
+
+Operational guardrail:
+
+- Do not run DM-first or mention/zap response workflows until kind-0 includes valid `nip05` + `lud16` + `picture`.
 
 ### 2) Read Wallet State
 

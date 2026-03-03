@@ -1,8 +1,9 @@
 import json
 import os
 import secrets
+import asyncio
 from typing import Any, Dict, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 
 import click
 import requests
@@ -144,6 +145,57 @@ def _request_json(
         return resp.json()
     except ValueError as exc:
         raise click.ClickException(f"Non-JSON response: {resp.text}") from exc
+
+
+def _ws_base_url(http_base_url: str) -> str:
+    parsed = urlparse(http_base_url)
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    host = parsed.netloc or parsed.path
+    if not host:
+        raise click.ClickException(f"Invalid base URL for websocket conversion: {http_base_url}")
+    return f"{scheme}://{host}"
+
+
+async def _stream_ws_json(
+    ws_url: str,
+    access_key: Optional[str],
+    timeout_seconds: int,
+    max_messages: Optional[int],
+) -> None:
+    try:
+        import websockets  # type: ignore
+    except Exception as exc:
+        raise click.ClickException(
+            "websockets package is required for streaming. Install dependencies with `poetry install`."
+        ) from exc
+
+    headers = {}
+    if access_key:
+        headers["X-Access-Key"] = access_key
+
+    msg_count = 0
+    try:
+        async with websockets.connect(
+            ws_url,
+            additional_headers=headers if headers else None,
+            open_timeout=timeout_seconds,
+            close_timeout=timeout_seconds,
+        ) as ws:
+            while True:
+                raw = await ws.recv()
+                try:
+                    parsed = json.loads(raw)
+                    click.echo(json.dumps(parsed, indent=2, ensure_ascii=True))
+                except Exception:
+                    click.echo(str(raw))
+
+                msg_count += 1
+                if max_messages is not None and msg_count >= max_messages:
+                    break
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        raise click.ClickException(f"WebSocket stream failed: {exc}") from exc
 
 
 @click.group()
@@ -448,6 +500,135 @@ def read_dms(ctx: click.Context, limit: int, kind: int, relays: Optional[str]) -
         ctx.obj["base_url"], "/agent/read_dms", "GET", key, ctx.obj["timeout_seconds"], params=params
     )
     _print_json(data)
+
+
+@cli.command("stream-kind1")
+@click.option(
+    "--scope",
+    required=True,
+    type=click.Choice(["latest", "discovery", "my", "following"]),
+    help="Streaming scope.",
+)
+@click.option("--nip05", default=None, help="Required for scope=latest|discovery.")
+@click.option("--limit", default=10, type=int, show_default=True)
+@click.option("--poll-seconds", default=5.0, type=float, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.option(
+    "--auth-query/--auth-header",
+    default=False,
+    show_default=True,
+    help="Send access_key in query string instead of X-Access-Key header.",
+)
+@click.option(
+    "--max-messages",
+    default=None,
+    type=int,
+    help="Stop after N messages (default: stream until interrupted).",
+)
+@click.pass_context
+def stream_kind1(
+    ctx: click.Context,
+    scope: str,
+    nip05: Optional[str],
+    limit: int,
+    poll_seconds: float,
+    relays: Optional[str],
+    auth_query: bool,
+    max_messages: Optional[int],
+) -> None:
+    key = _require_access_key(ctx)
+    ws_base = _ws_base_url(ctx.obj["base_url"])
+
+    path_map = {
+        "latest": "/agent/ws/nostr/latest_kind1",
+        "discovery": "/agent/ws/nostr/discovery/latest_kind1",
+        "my": "/agent/ws/nostr/my_latest_kind1",
+        "following": "/agent/ws/nostr/following/latest_kind1",
+    }
+    path = path_map[scope]
+
+    if scope in {"latest", "discovery"} and not nip05:
+        raise click.ClickException("--nip05 is required for scope=latest or scope=discovery.")
+    if max_messages is not None and max_messages < 1:
+        raise click.ClickException("--max-messages must be >= 1.")
+
+    params: Dict[str, Any] = {"limit": limit, "poll_seconds": poll_seconds}
+    if nip05:
+        params["nip05"] = nip05
+    if relays:
+        params["relays"] = relays
+    if auth_query:
+        params["access_key"] = key
+
+    ws_url = f"{ws_base}{path}?{urlencode(params)}"
+    click.echo(json.dumps({"status": "CONNECTING", "url": ws_url, "scope": scope}, ensure_ascii=True))
+
+    try:
+        asyncio.run(
+            _stream_ws_json(
+                ws_url=ws_url,
+                access_key=None if auth_query else key,
+                timeout_seconds=int(ctx.obj["timeout_seconds"]),
+                max_messages=max_messages,
+            )
+        )
+    except KeyboardInterrupt:
+        click.echo(json.dumps({"status": "STOPPED", "reason": "keyboard_interrupt"}, ensure_ascii=True))
+
+
+@cli.command("stream-dms")
+@click.option("--limit", default=20, type=int, show_default=True)
+@click.option("--kind", default=1059, type=int, show_default=True)
+@click.option("--poll-seconds", default=5.0, type=float, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.option(
+    "--auth-query/--auth-header",
+    default=False,
+    show_default=True,
+    help="Send access_key in query string instead of X-Access-Key header.",
+)
+@click.option(
+    "--max-messages",
+    default=None,
+    type=int,
+    help="Stop after N messages (default: stream until interrupted).",
+)
+@click.pass_context
+def stream_dms(
+    ctx: click.Context,
+    limit: int,
+    kind: int,
+    poll_seconds: float,
+    relays: Optional[str],
+    auth_query: bool,
+    max_messages: Optional[int],
+) -> None:
+    key = _require_access_key(ctx)
+    ws_base = _ws_base_url(ctx.obj["base_url"])
+
+    if max_messages is not None and max_messages < 1:
+        raise click.ClickException("--max-messages must be >= 1.")
+
+    params: Dict[str, Any] = {"limit": limit, "kind": kind, "poll_seconds": poll_seconds}
+    if relays:
+        params["relays"] = relays
+    if auth_query:
+        params["access_key"] = key
+
+    ws_url = f"{ws_base}/agent/ws/read_dms?{urlencode(params)}"
+    click.echo(json.dumps({"status": "CONNECTING", "url": ws_url, "scope": "dms"}, ensure_ascii=True))
+
+    try:
+        asyncio.run(
+            _stream_ws_json(
+                ws_url=ws_url,
+                access_key=None if auth_query else key,
+                timeout_seconds=int(ctx.obj["timeout_seconds"]),
+                max_messages=max_messages,
+            )
+        )
+    except KeyboardInterrupt:
+        click.echo(json.dumps({"status": "STOPPED", "reason": "keyboard_interrupt"}, ensure_ascii=True))
 
 
 @cli.command("secure-dm")

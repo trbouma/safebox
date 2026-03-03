@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
@@ -232,6 +232,11 @@ def _extract_client_ip(request: Request) -> str:
     return client or "unknown"
 
 
+def _extract_client_ip_websocket(websocket: WebSocket) -> str:
+    client = websocket.client.host if websocket.client else ""
+    return client or "unknown"
+
+
 def _enforce_rate_limit(scope_key: str, rpm: int, burst: int) -> None:
     if not settings.AGENT_RATE_LIMIT_ENABLED:
         return
@@ -280,6 +285,32 @@ async def _agent_get_acorn(
     return acorn_obj
 
 
+async def _agent_get_acorn_websocket(websocket: WebSocket) -> Acorn:
+    header_key = (websocket.headers.get("x-access-key") or "").strip()
+    query_key = (websocket.query_params.get("access_key") or "").strip()
+    access_key = header_key or query_key
+
+    ip = _extract_client_ip_websocket(websocket)
+    limit_key = access_key.lower() if access_key else f"ip:{ip}"
+    _enforce_rate_limit(limit_key, settings.AGENT_RPM, settings.AGENT_BURST)
+
+    wallet = _resolve_wallet_by_access_key(access_key)
+    if not wallet.nsec:
+        raise HTTPException(status_code=500, detail="Wallet is missing nsec")
+
+    acorn_obj = Acorn(
+        nsec=wallet.nsec,
+        home_relay=wallet.home_relay,
+        public_relays=settings.PUBLIC_RELAYS,
+    )
+    try:
+        await acorn_obj.load_data()
+    except Exception as exc:
+        logger.warning("Agent websocket wallet load failed for handle=%s: %s", wallet.handle, exc)
+        raise HTTPException(status_code=500, detail="Unable to load wallet state")
+    return acorn_obj
+
+
 def _persist_wallet_balance(acorn_obj: Acorn) -> None:
     with Session(engine) as session:
         wallet = session.exec(
@@ -301,6 +332,43 @@ def _normalize_relays(raw_relays: list[str] | None) -> list[str]:
         if normalized not in relay_list:
             relay_list.append(normalized)
     return relay_list
+
+
+def _parse_relays_csv(relays: str | None) -> list[str] | None:
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+    return relay_list
+
+
+async def _is_identifier_followed(
+    acorn_obj: Acorn,
+    identifier: str,
+    relays: list[str] | None = None,
+) -> bool:
+    try:
+        target_pubhex = acorn_obj._resolve_pubkey_identifier(identifier)
+    except Exception:
+        return False
+
+    latest_contacts = await acorn_obj._get_latest_contacts_event(relays=relays)
+    if not latest_contacts:
+        return False
+
+    for each_tag in list(latest_contacts.tags):
+        if not each_tag or each_tag[0] != "p" or len(each_tag) < 2:
+            continue
+        each_pub = str(each_tag[1]).strip().lower()
+        if each_pub == target_pubhex:
+            return True
+    return False
 
 
 def _agent_default_dm_relays() -> list[str]:
@@ -634,6 +702,16 @@ async def agent_latest_kind1_events(
             relay_list = None
 
     safe_limit = max(1, min(int(limit), 100))
+    if not await _is_identifier_followed(
+        acorn_obj=acorn_obj,
+        identifier=nip05_value,
+        relays=relay_list,
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Identifier is not followed by this wallet",
+        )
+
     try:
         events = await acorn_obj.get_latest_kind1_posts_by_nip05(
             nip05=nip05_value,
@@ -647,6 +725,40 @@ async def agent_latest_kind1_events(
     return {
         "status": "OK",
         "nip05": nip05_value,
+        "count": len(events),
+        "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/nostr/discovery/latest_kind1", tags=["agent"])
+async def agent_discovery_latest_kind1_events(
+    nip05: str,
+    limit: int = 10,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    nip05_value = (nip05 or "").strip()
+    if not nip05_value or "@" not in nip05_value:
+        raise HTTPException(status_code=400, detail="Invalid nip05 address")
+
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 100))
+
+    try:
+        events = await acorn_obj.get_latest_kind1_posts_by_nip05(
+            nip05=nip05_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent discovery latest_kind1 query failed")
+        raise HTTPException(status_code=400, detail=f"Discovery latest kind1 query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "nip05": nip05_value,
+        "scope": "discovery",
         "count": len(events),
         "events": events,
         "timestamp": int(datetime.utcnow().timestamp()),
@@ -765,6 +877,333 @@ async def agent_latest_kind1_from_following(
         "events": events,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
+
+
+async def _agent_stream_kind1_events(
+    websocket: WebSocket,
+    fetch_events,
+    poll_seconds: float,
+    context: dict | None = None,
+):
+    # Emit updates only when the top event ids change to limit duplicate payloads.
+    last_event_ids: list[str] | None = None
+    poll_interval = max(1.0, min(float(poll_seconds), 60.0))
+    base_context = context or {}
+
+    await websocket.send_json(
+        {
+            "status": "OK",
+            "type": "connected",
+            "poll_seconds": poll_interval,
+            **base_context,
+            "timestamp": int(datetime.utcnow().timestamp()),
+        }
+    )
+
+    while True:
+        try:
+            events = await fetch_events()
+            current_event_ids = [str(each.get("event_id") or each.get("id") or "") for each in events]
+            if current_event_ids != last_event_ids:
+                await websocket.send_json(
+                    {
+                        "status": "OK",
+                        "type": "events",
+                        "count": len(events),
+                        "events": events,
+                        **base_context,
+                        "timestamp": int(datetime.utcnow().timestamp()),
+                    }
+                )
+                last_event_ids = current_event_ids
+            else:
+                await websocket.send_json(
+                    {
+                        "status": "OK",
+                        "type": "heartbeat",
+                        "count": len(events),
+                        **base_context,
+                        "timestamp": int(datetime.utcnow().timestamp()),
+                    }
+                )
+            await asyncio.sleep(poll_interval)
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            logger.exception("Agent websocket stream failed")
+            await websocket.send_json(
+                {
+                    "status": "ERROR",
+                    "detail": f"Stream error: {exc}",
+                    **base_context,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+            )
+            await asyncio.sleep(poll_interval)
+
+
+async def _agent_stream_dm_messages(
+    websocket: WebSocket,
+    fetch_messages,
+    poll_seconds: float,
+    context: dict | None = None,
+):
+    # Emit updates only when the most-recent message ids/timestamps change.
+    last_message_keys: list[str] | None = None
+    poll_interval = max(1.0, min(float(poll_seconds), 60.0))
+    base_context = context or {}
+
+    await websocket.send_json(
+        {
+            "status": "OK",
+            "type": "connected",
+            "poll_seconds": poll_interval,
+            **base_context,
+            "timestamp": int(datetime.utcnow().timestamp()),
+        }
+    )
+
+    while True:
+        try:
+            messages = await fetch_messages()
+            current_keys = [
+                str(each.get("id") or each.get("timestamp") or each.get("created_at") or "")
+                for each in messages
+            ]
+            if current_keys != last_message_keys:
+                await websocket.send_json(
+                    {
+                        "status": "OK",
+                        "type": "messages",
+                        "count": len(messages),
+                        "messages": messages,
+                        **base_context,
+                        "timestamp": int(datetime.utcnow().timestamp()),
+                    }
+                )
+                last_message_keys = current_keys
+            else:
+                await websocket.send_json(
+                    {
+                        "status": "OK",
+                        "type": "heartbeat",
+                        "count": len(messages),
+                        **base_context,
+                        "timestamp": int(datetime.utcnow().timestamp()),
+                    }
+                )
+            await asyncio.sleep(poll_interval)
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            logger.exception("Agent websocket DM stream failed")
+            await websocket.send_json(
+                {
+                    "status": "ERROR",
+                    "detail": f"DM stream error: {exc}",
+                    **base_context,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+            )
+            await asyncio.sleep(poll_interval)
+
+
+@router.websocket("/ws/nostr/latest_kind1")
+async def agent_ws_latest_kind1_events(
+    websocket: WebSocket,
+    nip05: str,
+    limit: int = 10,
+    relays: str | None = None,
+    poll_seconds: float = 5.0,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    nip05_value = (nip05 or "").strip()
+    if not nip05_value or "@" not in nip05_value:
+        await websocket.send_json({"status": "ERROR", "detail": "Invalid nip05 address"})
+        await websocket.close(code=1008)
+        return
+
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 100))
+    if not await _is_identifier_followed(
+        acorn_obj=acorn_obj,
+        identifier=nip05_value,
+        relays=relay_list,
+    ):
+        await websocket.send_json(
+            {
+                "status": "ERROR",
+                "detail": "Identifier is not followed by this wallet",
+            }
+        )
+        await websocket.close(code=1008)
+        return
+
+    async def _fetch():
+        return await acorn_obj.get_latest_kind1_posts_by_nip05(
+            nip05=nip05_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+
+    await _agent_stream_kind1_events(
+        websocket=websocket,
+        fetch_events=_fetch,
+        poll_seconds=poll_seconds,
+        context={"nip05": nip05_value},
+    )
+
+
+@router.websocket("/ws/nostr/discovery/latest_kind1")
+async def agent_ws_discovery_latest_kind1_events(
+    websocket: WebSocket,
+    nip05: str,
+    limit: int = 10,
+    relays: str | None = None,
+    poll_seconds: float = 5.0,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    nip05_value = (nip05 or "").strip()
+    if not nip05_value or "@" not in nip05_value:
+        await websocket.send_json({"status": "ERROR", "detail": "Invalid nip05 address"})
+        await websocket.close(code=1008)
+        return
+
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 100))
+
+    async def _fetch():
+        return await acorn_obj.get_latest_kind1_posts_by_nip05(
+            nip05=nip05_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+
+    await _agent_stream_kind1_events(
+        websocket=websocket,
+        fetch_events=_fetch,
+        poll_seconds=poll_seconds,
+        context={"nip05": nip05_value, "scope": "discovery"},
+    )
+
+
+@router.websocket("/ws/nostr/my_latest_kind1")
+async def agent_ws_my_latest_kind1_events(
+    websocket: WebSocket,
+    limit: int = 10,
+    relays: str | None = None,
+    poll_seconds: float = 5.0,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 100))
+
+    async def _fetch():
+        return await acorn_obj.get_latest_kind1_posts_by_author(
+            pubhex=acorn_obj.pubkey_hex,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+
+    await _agent_stream_kind1_events(
+        websocket=websocket,
+        fetch_events=_fetch,
+        poll_seconds=poll_seconds,
+        context={"pubkey": acorn_obj.pubkey_hex},
+    )
+
+
+@router.websocket("/ws/nostr/following/latest_kind1")
+async def agent_ws_latest_kind1_from_following(
+    websocket: WebSocket,
+    limit: int = 20,
+    relays: str | None = None,
+    poll_seconds: float = 5.0,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 200))
+
+    async def _fetch():
+        return await acorn_obj.get_latest_kind1_posts_from_follow_list(
+            limit=safe_limit,
+            relays=relay_list,
+        )
+
+    await _agent_stream_kind1_events(
+        websocket=websocket,
+        fetch_events=_fetch,
+        poll_seconds=poll_seconds,
+    )
+
+
+@router.websocket("/ws/read_dms")
+async def agent_ws_read_dms(
+    websocket: WebSocket,
+    limit: int = 50,
+    kind: int = 1059,
+    relays: str | None = None,
+    poll_seconds: float = 5.0,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    safe_limit = max(1, min(int(limit), 200))
+    if kind <= 0:
+        await websocket.send_json({"status": "ERROR", "detail": "Invalid kind"})
+        await websocket.close(code=1008)
+        return
+
+    relay_list = _parse_relays_csv(relays)
+    effective_relays = relay_list if relay_list is not None else _agent_default_dm_relays()
+
+    async def _fetch():
+        messages = await acorn_obj.get_user_records(
+            record_kind=kind,
+            relays=effective_relays,
+            reverse=True,
+        )
+        return messages[:safe_limit]
+
+    await _agent_stream_dm_messages(
+        websocket=websocket,
+        fetch_messages=_fetch,
+        poll_seconds=poll_seconds,
+        context={"kind": kind},
+    )
 
 
 @router.get("/market/orders", tags=["agent"])

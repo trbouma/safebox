@@ -288,6 +288,29 @@ Response (example):
 }
 ```
 
+### `WS /agent/ws/read_dms`
+
+Streams private messages for the authenticated wallet using gift-wrapped message records.
+
+Query params:
+
+- `limit` (optional, default `50`, max `200`)
+- `kind` (optional, default `1059`)
+- `relays` (optional): comma-separated relay list override
+- `poll_seconds` (optional, default `5`, clamped to `1..60`)
+- `access_key` (optional fallback): wallet access key if websocket headers are unavailable
+
+Auth:
+
+- Preferred: `X-Access-Key` websocket handshake header
+- Fallback: `access_key` query parameter
+
+Message envelope:
+
+- `type=connected`: stream initialized
+- `type=messages`: changed inbox detected (includes `messages[]`)
+- `type=heartbeat`: no change in current poll interval
+
 ### `GET /agent/nostr/my_latest_kind1`
 
 Returns latest kind-1 posts authored by the authenticated wallet.
@@ -325,6 +348,128 @@ Response (example):
   "timestamp": 1770000000
 }
 ```
+
+### `WS /agent/ws/nostr/latest_kind1`
+
+Streams latest kind-1 events for a target NIP-05 identity.
+Target identity must be present in the authenticated wallet's latest kind-3 follow list.
+If not followed, connection is closed with policy error (`1008`) after an error payload.
+
+Query params:
+
+- `nip05` (required): NIP-05 identity (`name@domain`)
+- `limit` (optional, default `10`, max `100`)
+- `relays` (optional): comma-separated relay list override
+- `poll_seconds` (optional, default `5`, clamped to `1..60`)
+- `access_key` (optional fallback): wallet access key if websocket headers are unavailable
+
+Auth:
+
+- Preferred: `X-Access-Key` websocket handshake header
+- Fallback: `access_key` query parameter
+
+Message envelope:
+
+- `type=connected`: stream initialized
+- `type=events`: changed event set detected (includes `events[]`)
+- `type=heartbeat`: no change in current poll interval
+
+### `GET /agent/nostr/discovery/latest_kind1`
+
+Returns latest kind-1 posts for a target NIP-05 identity without follow-list restriction.
+
+Query params:
+
+- `nip05` (required): NIP-05 identity (`name@domain`)
+- `limit` (optional, default `10`, max `100`)
+- `relays` (optional): comma-separated relay list override
+
+### `WS /agent/ws/nostr/discovery/latest_kind1`
+
+Streams latest kind-1 events for a target NIP-05 identity without follow-list restriction.
+
+Query params:
+
+- `nip05` (required): NIP-05 identity (`name@domain`)
+- `limit` (optional, default `10`, max `100`)
+- `relays` (optional): comma-separated relay list override
+- `poll_seconds` (optional, default `5`, clamped to `1..60`)
+- `access_key` (optional fallback): wallet access key if websocket headers are unavailable
+
+### `WS /agent/ws/nostr/my_latest_kind1`
+
+Streams latest kind-1 events authored by the authenticated wallet.
+
+Query params:
+
+- `limit` (optional, default `10`, max `100`)
+- `relays` (optional): comma-separated relay list override
+- `poll_seconds` (optional, default `5`, clamped to `1..60`)
+- `access_key` (optional fallback): wallet access key if websocket headers are unavailable
+
+### `WS /agent/ws/nostr/following/latest_kind1`
+
+Streams latest kind-1 events from accounts in the wallet follow list.
+
+Query params:
+
+- `limit` (optional, default `20`, max `200`)
+- `relays` (optional): comma-separated relay list override
+- `poll_seconds` (optional, default `5`, clamped to `1..60`)
+- `access_key` (optional fallback): wallet access key if websocket headers are unavailable
+
+## WebSocket Conformance Smoke Tests
+
+Use these checks to validate WS behavior after deploy:
+
+Canonical runnable guide:
+
+- `docs/specs/WS-CONFORMANCE.md`
+
+### WS-CONN-001 (Auth + Connected Frame)
+
+For each WS endpoint:
+
+- connect with valid auth (`X-Access-Key` header preferred; `access_key` query fallback)
+- expect first frame with:
+  - `status: "OK"`
+  - `type: "connected"`
+
+### WS-DATA-002 (Change Frame)
+
+For each WS endpoint:
+
+- cause a relevant state change (new DM or new kind-1 post)
+- expect subsequent frame with:
+  - `status: "OK"`
+  - `type: "messages"` for `/agent/ws/read_dms`, or `type: "events"` for `/agent/ws/nostr/*`
+  - non-empty `messages[]` or `events[]` when data exists
+
+### WS-HEARTBEAT-003 (No-Change Frame)
+
+With no new data during one poll interval:
+
+- expect:
+  - `status: "OK"`
+  - `type: "heartbeat"`
+
+### WS-POLICY-004 (Follow Scope Guard)
+
+For `/agent/ws/nostr/latest_kind1` with an unfollowed `nip05`:
+
+- expect error payload
+- expect socket close with policy code `1008`
+
+### WS-FALLBACK-005 (GET Equivalence)
+
+If WS transport is unavailable in runtime:
+
+- use equivalent `GET` path and confirm same logical result set:
+  - `/agent/ws/read_dms` -> `/agent/read_dms`
+  - `/agent/ws/nostr/latest_kind1` -> `/agent/nostr/latest_kind1`
+  - `/agent/ws/nostr/discovery/latest_kind1` -> `/agent/nostr/discovery/latest_kind1`
+  - `/agent/ws/nostr/my_latest_kind1` -> `/agent/nostr/my_latest_kind1`
+  - `/agent/ws/nostr/following/latest_kind1` -> `/agent/nostr/following/latest_kind1`
 
 ### `GET /agent/nostr/zap_receipts`
 
