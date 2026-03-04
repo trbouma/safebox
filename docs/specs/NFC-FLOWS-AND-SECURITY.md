@@ -450,9 +450,14 @@ Flow:
 2. Offerer taps recipient card and captures token.
 3. `acceptoffertoken` parses token and runs card preflight:
    - `POST /.well-known/card-status`
+   - Token parsing supports both:
+     - modern `nembed` payloads (`h`,`k`, optional metadata), and
+     - legacy raw token payloads (no embedded host metadata)
+   - If token host is absent (legacy mode), service host defaults to current request host.
 4. Preflight is advisory for stability:
    - If it passes, proceed normally.
    - If it fails due to timeout/network/proxy transport issues, continue with warning logs.
+   - If it fails with definitive validity status (invalid/revoked), fail closed.
 5. Service signs token and calls `/.well-known/offer` (authoritative check).
 6. Vault validates token, resolves active secret, and emits NWC `offer_record`.
 7. Recipient wallet handles offer flow and transmittal.
@@ -479,9 +484,14 @@ Flow:
 2. Requester taps presenter card and captures token.
 3. `acceptprooftoken` parses token and runs card preflight:
    - `POST /.well-known/card-status`
+   - Token parsing supports both:
+     - modern `nembed` payloads (`h`,`k`, optional metadata), and
+     - legacy raw token payloads (no embedded host metadata)
+   - If token host is absent (legacy mode), service host defaults to current request host.
 4. Preflight is advisory for stability:
    - If it passes, proceed normally.
    - If it fails for transport reasons, continue with warning logs.
+   - If it fails with definitive validity status (invalid/revoked), fail closed.
 5. Service signs token and calls `/.well-known/proof` (authoritative check).
 6. Vault validates token, checks PIN, and emits NWC `present_record`.
 7. Presenter wallet returns records over transmittal channels.
@@ -529,7 +539,8 @@ Endpoints:
 Behavior:
 
 - Card-status preflight (`/.well-known/card-status`) is still executed.
-- Preflight failure no longer hard-fails the flow.
+- Preflight transport failures (timeout/network/proxy path) are advisory.
+- Preflight definitive validity failures (invalid/revoked card) are fail-closed.
 - The flow proceeds to authoritative vault endpoints (`/.well-known/offer`, `/.well-known/proof`).
 
 Reason:
@@ -544,6 +555,44 @@ Reason:
 - Invalid/revoked card secrets still fail.
 - Signature verification still required.
 - Decrypt/parse errors still fail.
+
+### 2A. NFC Token Format Compatibility
+
+Endpoints:
+
+- `POST /records/acceptoffertoken`
+- `POST /records/acceptprooftoken`
+
+Behavior:
+
+- NFC record flows accept both:
+  - modern `nembed` token payloads, and
+  - legacy raw token payloads from older cards.
+- Legacy-mode host resolution defaults to the current request host when card payload does not include host metadata.
+
+Reason:
+
+- Prevent regressions after QR and host/relay hardening.
+- Preserve interoperability with already-issued cards while keeping authoritative vault checks unchanged.
+
+### 2B. Origin Normalization for Vault Calls
+
+Endpoints:
+
+- `/.well-known/card-status`
+- `/.well-known/offer`
+- `/.well-known/proof`
+- `/.well-known/kem`
+
+Behavior:
+
+- Caller normalizes host/origin before constructing `/.well-known/*` URLs.
+- Vault calls use normalized origin instead of naive string concatenation.
+
+Reason:
+
+- Avoid malformed URL construction and host-format drift across dev/prod and cross-instance paths.
+- Keep NFC offer/request behavior aligned with QR-hardened routing semantics.
 
 ### 3. Better Upstream Error Propagation
 

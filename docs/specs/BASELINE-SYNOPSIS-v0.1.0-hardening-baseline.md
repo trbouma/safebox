@@ -110,6 +110,27 @@ Impact:
 - added explicit auth/transmittal relay-resolution logs for diagnosis
 - reduced ambiguous extra signaling (removed trailing duplicate auth resend in NFC offer ingest path)
 
+## G. NFC Token Compatibility and Origin Normalization
+
+- restored compatibility in NFC record ingress endpoints:
+  - `POST /records/acceptoffertoken`
+  - `POST /records/acceptprooftoken`
+- token decode now supports both:
+  - modern `nembed` card payloads (`h`,`k`, optional metadata), and
+  - legacy raw token payloads from already-issued cards
+- legacy token fallback behavior:
+  - when no host metadata is present in token payload, endpoint defaults host resolution to current request host
+- normalized origin handling added before calling vault endpoints:
+  - `/.well-known/card-status`
+  - `/.well-known/offer`
+  - `/.well-known/proof`
+  - `/.well-known/kem`
+
+Operational outcome:
+
+- NFC Offer by card and Request by card remain compatible after QR hardening changes.
+- Dev-to-dev and mixed-card (new + older issued cards) paths no longer regress due to strict token-format assumptions.
+
 ## E. Validation and Content Integrity
 
 - event verification gated to true signed-event payloads

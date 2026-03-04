@@ -191,19 +191,22 @@ def _parse_offer_request_scope(scope: str | None) -> tuple[Optional[int], Option
     recipient_host = str(parts[3]).strip() if len(parts) >= 4 else None
     return grant_kind, offer_kind, recipient_host
 
-async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
+async def _preflight_card_status(host_or_origin: str, token: str, pubkey: str, sig: str) -> tuple[bool, str, bool]:
     """Fail fast for rotated/revoked NFC cards before starting record vault flows."""
-    status_url = f"https://{host}/.well-known/card-status"
+    origin = _origin_from_host(host_or_origin)
+    if not origin:
+        return False, "Invalid card host.", True
+    status_url = f"{origin}/.well-known/card-status"
     headers = {"Content-Type": "application/json"}
     payload = {"token": token, "pubkey": pubkey, "sig": sig}
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             response = await client.post(status_url, json=payload, headers=headers)
     except httpx.TimeoutException:
-        logger.warning("Card status preflight timeout for host=%s", host)
+        logger.warning("Card status preflight timeout for origin=%s", origin)
         return False, "Card validation timed out.", False
     except httpx.RequestError as exc:
-        logger.warning("Card status preflight network error for host=%s: %s", host, exc)
+        logger.warning("Card status preflight network error for origin=%s: %s", origin, exc)
         return False, "Card validation network error.", False
 
     if response.status_code == 200:
@@ -211,7 +214,7 @@ async def _preflight_card_status(host: str, token: str, pubkey: str, sig: str) -
     if response.status_code in (401, 404):
         return False, "Card is invalid or rotated. Re-issue the NFC card.", True
 
-    logger.warning("Card status preflight failed host=%s code=%s body=%s", host, response.status_code, response.text)
+    logger.warning("Card status preflight failed origin=%s code=%s body=%s", origin, response.status_code, response.text)
     return False, f"Card validation failed with HTTP {response.status_code}.", True
 
 
@@ -3116,16 +3119,22 @@ async def accept_proof_token( request: Request,
     if not token_to_use:
         return {"status": "ERROR", "detail": "Missing proof token."}
 
+    host = request.url.hostname or ""
+    proof_token_to_use = token_to_use
+    nfc_default = ["Holder", "default"]
     try:
         parsed_nembed = parse_nembed_compressed(token_to_use)
-        host = parsed_nembed["h"]
-        proof_token_to_use = parsed_nembed["k"]
-        nfc_default = parsed_nembed.get("n", ["Holder", "default"])
+        host = parsed_nembed.get("h") or host
+        proof_token_to_use = parsed_nembed.get("k") or proof_token_to_use
+        nfc_default = parsed_nembed.get("n", nfc_default)
     except (KeyError, TypeError, ValueError) as exc:
-        logger.warning("Invalid NFC proof token payload: %s", exc)
-        return {"status": "ERROR", "detail": "Invalid NFC proof token payload."}
+        # Backward compatibility: allow legacy cards that store raw token material.
+        logger.info("acceptprooftoken using legacy raw token fallback: %s", exc)
 
-    vault_url = f"https://{host}/.well-known/proof"
+    origin = _origin_from_host(host)
+    if not origin:
+        return {"status": "ERROR", "detail": "Invalid NFC proof token host."}
+    vault_url = f"{origin}/.well-known/proof"
 
     print(f"proof token: {token_to_use} acquired pin: {proof_token.pin} record kind {record_kind_to_use} label to use: {label_to_use} nfc default: {nfc_default}")
 
@@ -3138,7 +3147,7 @@ async def accept_proof_token( request: Request,
     
     sig = sign_payload(proof_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
-    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, proof_token_to_use, pubkey, sig)
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(origin, proof_token_to_use, pubkey, sig)
     if not card_ok:
         if preflight_definitive:
             logger.warning("Proof preflight rejected host=%s detail=%s", host, card_detail)
@@ -3166,8 +3175,8 @@ async def accept_proof_token( request: Request,
             response.raise_for_status()
             vault_response = response.json()
     except httpx.TimeoutException:
-        logger.warning("Proof vault timeout for host=%s", host)
-        return {"status": "ERROR", "detail": "Proof vault request timed out."}
+            logger.warning("Proof vault timeout for origin=%s", origin)
+            return {"status": "ERROR", "detail": "Proof vault request timed out."}
     except httpx.HTTPStatusError as exc:
         response_text = ""
         try:
@@ -3175,18 +3184,18 @@ async def accept_proof_token( request: Request,
         except ValueError:
             response_text = exc.response.text
         logger.warning(
-            "Proof vault HTTP error %s for host=%s body=%s",
+            "Proof vault HTTP error %s for origin=%s body=%s",
             exc.response.status_code,
-            host,
+            origin,
             response_text,
         )
         detail_text = response_text or f"Proof vault returned HTTP {exc.response.status_code}."
         return {"status": "ERROR", "detail": detail_text}
     except httpx.RequestError as exc:
-        logger.warning("Proof vault network error for host=%s: %s", host, exc)
+        logger.warning("Proof vault network error for origin=%s: %s", origin, exc)
         return {"status": "ERROR", "detail": "Proof vault network error."}
     except ValueError:
-        logger.warning("Proof vault returned non-JSON response for host=%s", host)
+        logger.warning("Proof vault returned non-JSON response for origin=%s", origin)
         return {"status": "ERROR", "detail": "Proof vault returned an invalid response."}
     
     print(vault_response)
@@ -3218,15 +3227,20 @@ async def accept_offer_token( request: Request,
     if not token_to_use:
         return {"status": "ERROR", "detail": "Missing offer token."}
 
+    host = request.url.hostname or ""
+    offer_token_to_use = token_to_use
     try:
         parsed_nembed = parse_nembed_compressed(token_to_use)
-        host = parsed_nembed["h"]
-        offer_token_to_use = parsed_nembed["k"]
+        host = parsed_nembed.get("h") or host
+        offer_token_to_use = parsed_nembed.get("k") or offer_token_to_use
     except (KeyError, TypeError, ValueError) as exc:
-        logger.warning("Invalid NFC offer token payload: %s", exc)
-        return {"status": "ERROR", "detail": "Invalid NFC offer token payload."}
+        # Backward compatibility: allow legacy cards that store raw token material.
+        logger.info("acceptoffertoken using legacy raw token fallback: %s", exc)
 
-    offer_url = f"https://{host}/.well-known/offer"
+    origin = _origin_from_host(host)
+    if not origin:
+        return {"status": "ERROR", "detail": "Invalid NFC offer token host."}
+    offer_url = f"{origin}/.well-known/offer"
 
     print(f"proof token: {token_to_use}")
 
@@ -3234,7 +3248,7 @@ async def accept_offer_token( request: Request,
     
     sig = sign_payload(offer_token_to_use, k.private_key_hex())
     pubkey = k.public_key_hex()
-    card_ok, card_detail, preflight_definitive = await _preflight_card_status(host, offer_token_to_use, pubkey, sig)
+    card_ok, card_detail, preflight_definitive = await _preflight_card_status(origin, offer_token_to_use, pubkey, sig)
     if not card_ok:
         if preflight_definitive:
             logger.warning("Offer preflight rejected host=%s detail=%s", host, card_detail)
@@ -3251,7 +3265,7 @@ async def accept_offer_token( request: Request,
     ):
         # NFC flows may not always have browser-captured KEM state yet.
         # Resolve recipient KEM directly from the target host as fallback.
-        kem_url = f"https://{host}/.well-known/kem"
+        kem_url = f"{origin}/.well-known/kem"
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 kem_response = await client.get(kem_url)
@@ -3259,9 +3273,9 @@ async def accept_offer_token( request: Request,
                 kem_payload = kem_response.json()
             kem_public_key = kem_payload.get("kem_public_key")
             kemalg = kem_payload.get("kemalg")
-            logger.info("acceptoffertoken resolved KEM from host=%s", host)
+            logger.info("acceptoffertoken resolved KEM from origin=%s", origin)
         except Exception as exc:
-            logger.warning("acceptoffertoken unable to resolve KEM from host=%s: %s", host, exc)
+            logger.warning("acceptoffertoken unable to resolve KEM from origin=%s: %s", origin, exc)
             return {"status": "ERROR", "detail": "Recipient channel is not quantum-safe yet. Please re-authenticate and retry."}
 
     if (
@@ -3289,8 +3303,8 @@ async def accept_offer_token( request: Request,
             response.raise_for_status()
             response_json = response.json()
     except httpx.TimeoutException:
-        logger.warning("Offer vault timeout for host=%s", host)
-        return {"status": "ERROR", "detail": "Offer vault request timed out."}
+            logger.warning("Offer vault timeout for origin=%s", origin)
+            return {"status": "ERROR", "detail": "Offer vault request timed out."}
     except httpx.HTTPStatusError as exc:
         response_text = ""
         try:
@@ -3298,18 +3312,18 @@ async def accept_offer_token( request: Request,
         except ValueError:
             response_text = exc.response.text
         logger.warning(
-            "Offer vault HTTP error %s for host=%s body=%s",
+            "Offer vault HTTP error %s for origin=%s body=%s",
             exc.response.status_code,
-            host,
+            origin,
             response_text,
         )
         detail_text = response_text or f"Offer vault returned HTTP {exc.response.status_code}."
         return {"status": "ERROR", "detail": detail_text}
     except httpx.RequestError as exc:
-        logger.warning("Offer vault network error for host=%s: %s", host, exc)
+        logger.warning("Offer vault network error for origin=%s: %s", origin, exc)
         return {"status": "ERROR", "detail": "Offer vault network error."}
     except ValueError:
-        logger.warning("Offer vault returned non-JSON response for host=%s", host)
+        logger.warning("Offer vault returned non-JSON response for origin=%s", origin)
         return {"status": "ERROR", "detail": "Offer vault returned an invalid response."}
     
     print(f"response from vault: {response_json}")
