@@ -98,6 +98,8 @@ Canonical `order_details` object:
 }
 ```
 
+`redemption_provider` is OPTIONAL in public `order_details`.
+
 Canonical ask id:
 
 `ask_id = sha256(issuer_pubkey || canonical_json(order_details) || commitment_hash)`
@@ -107,6 +109,7 @@ Requirements:
 - `canonical_json` MUST use stable key order and deterministic UTF-8 serialization.
 - `commitment_hash` MUST be full hex digest (64 chars).
 - Ask validation MUST fail if recomputed `ask_id` mismatches published `ask_id`.
+- `redemption_provider` MAY be omitted from `order_details` for privacy/security.
 - If present in `order_details`, `redemption_provider` MUST be included in canonical serialization for `ask_id` derivation.
 
 ---
