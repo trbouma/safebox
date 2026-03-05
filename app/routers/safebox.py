@@ -1,12 +1,14 @@
 import urllib.parse
 from collections import defaultdict
+import base64
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request, APIRouter, Response, Form, Header, Cookie, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from fastapi.templating import Jinja2Templates
 import asyncio,qrcode, io, urllib
+import cbor2
 
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.moduledrawers.pil import RoundedModuleDrawer
@@ -37,12 +39,13 @@ from urllib.parse import quote, unquote
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request
 from sqlmodel import Field, Session, SQLModel, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret, creqPayRequest
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
 from app.branding import build_templates, get_branding_for_request
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
+from safebox.models import TokenV3
 
 import logging, jwt
 from sqlalchemy.exc import IntegrityError
@@ -65,6 +68,40 @@ templates = build_templates()
 router = APIRouter()
 
 # SQLModel.metadata.create_all(engine,checkfirst=True)
+
+
+def _b64_pad(value: str) -> str:
+    return value + ("=" * ((4 - len(value) % 4) % 4))
+
+
+def _decode_creq(creq: str) -> dict[str, Any]:
+    if not isinstance(creq, str) or not creq.lower().startswith("creqa"):
+        raise ValueError("Invalid Cashu payment request prefix.")
+    payload = creq[5:].strip()
+    if not payload:
+        raise ValueError("Empty Cashu payment request.")
+
+    padded = _b64_pad(payload)
+    decoders = (base64.urlsafe_b64decode, base64.b64decode)
+    for decode_fn in decoders:
+        try:
+            decoded = decode_fn(padded.encode("utf-8"))
+            parsed = cbor2.loads(decoded)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+    raise ValueError("Invalid Cashu payment request payload.")
+
+
+def _normalize_creq_transports(raw_transports: Any) -> list[dict[str, Any]]:
+    if raw_transports is None:
+        return []
+    if isinstance(raw_transports, dict):
+        return [raw_transports]
+    if isinstance(raw_transports, list):
+        return [t for t in raw_transports if isinstance(t, dict)]
+    return []
 
 
 async def notify_user(npub: str, payload: dict) -> None:
@@ -734,6 +771,134 @@ async def ln_pay_invoice(   request: Request,
 
     
     return {"status": "OK", "detail": msg_out}
+
+
+@router.post("/paycreq", tags=["protected"])
+async def pay_creq_request(
+    request: Request,
+    creq_request: creqPayRequest,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    try:
+        parsed = _decode_creq(creq_request.creq)
+    except ValueError as exc:
+        return {"status": "ERROR", "detail": str(exc)}
+
+    if parsed.get("nut10") is not None:
+        return {
+            "status": "ERROR",
+            "detail": "NUT-10 locking conditions in payment requests are not supported yet.",
+        }
+
+    request_amount = parsed.get("a")
+    request_unit = (parsed.get("u") or "").strip().lower()
+    if request_amount is not None:
+        if not isinstance(request_amount, int) or request_amount <= 0:
+            return {"status": "ERROR", "detail": "Invalid amount in payment request."}
+        if request_unit != "sat":
+            return {"status": "ERROR", "detail": "Only sat-denominated payment requests are supported."}
+        sat_amount = request_amount
+    else:
+        if creq_request.amount is None:
+            return {"status": "ERROR", "detail": "Payment request did not include amount; enter one before sending."}
+        if (creq_request.currency or "SAT").upper() != "SAT":
+            return {"status": "ERROR", "detail": "Only SAT currency is supported for amount overrides."}
+        sat_amount = int(creq_request.amount)
+        if sat_amount <= 0:
+            return {"status": "ERROR", "detail": "Amount must be greater than zero."}
+
+    if sat_amount > acorn_obj.balance:
+        return {"status": "ERROR", "detail": "Insufficient balance for this payment request."}
+
+    # Mint restrictions require mint selection support in issue_token; keep strict to avoid surprises.
+    if parsed.get("m"):
+        return {
+            "status": "ERROR",
+            "detail": "Mint-restricted payment requests are not supported yet.",
+        }
+
+    transports = _normalize_creq_transports(parsed.get("t"))
+    selected_transport: dict[str, Any] | None = None
+    for each in transports:
+        t_type = str(each.get("t", "")).strip().lower()
+        target = str(each.get("a", "")).strip()
+        if t_type in {"post", "nostr"} and target:
+            selected_transport = each
+            break
+
+    if not selected_transport:
+        return {
+            "status": "ERROR",
+            "detail": "No supported transport found in payment request. Supported: post, nostr.",
+        }
+
+    memo = (creq_request.memo or parsed.get("d") or "").strip()
+    payment_id = parsed.get("i")
+    if payment_id is not None and not isinstance(payment_id, str):
+        return {"status": "ERROR", "detail": "Invalid payment id in request."}
+
+    try:
+        cashu_token = await acorn_obj.issue_token(amount=sat_amount, comment=memo or "NUT-18 payment request")
+        token_obj = TokenV3.deserialize(cashu_token)
+    except Exception as exc:
+        logger.warning("paycreq issue_token failed: %s", exc)
+        return {"status": "ERROR", "detail": f"Unable to prepare token: {exc}"}
+
+    if not token_obj.token or not token_obj.token[0].mint:
+        return {"status": "ERROR", "detail": "Issued token missing mint information."}
+
+    transport_type = str(selected_transport.get("t", "")).strip().lower()
+    transport_target = str(selected_transport.get("a", "")).strip()
+    payload = {
+        "mint": token_obj.token[0].mint,
+        "unit": token_obj.unit or "sat",
+        # DLEQ is optional in NUT-18 payloads; do not require it for issued proofs.
+        "proofs": [proof.to_dict(include_dleq=False) for proof in token_obj.token[0].proofs],
+    }
+    if payment_id:
+        payload["id"] = payment_id
+    if memo:
+        payload["memo"] = memo
+
+    try:
+        if transport_type == "post":
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(transport_target, json=payload, headers={"Content-Type": "application/json"})
+                response.raise_for_status()
+            return {"status": "OK", "detail": f"Payment request sent via POST for {sat_amount} sats."}
+
+        if transport_type == "nostr":
+            if not transport_target.lower().startswith("nprofile"):
+                return {"status": "ERROR", "detail": "Nostr transport target must be an nprofile."}
+
+            parsed_target = parse_nostr_bech32(transport_target)
+            pubhex = parsed_target.get("values", {}).get("pubhex")
+            relays = parsed_target.get("values", {}).get("relay") or settings.RELAYS
+            if not pubhex:
+                return {"status": "ERROR", "detail": "Could not parse nprofile recipient."}
+            npub_target = hex_to_npub(pubhex)
+            await acorn_obj.secure_transmittal(
+                nrecipient=npub_target,
+                message=json.dumps(payload),
+                dm_relays=relays,
+                kind=1059,
+            )
+            return {"status": "OK", "detail": f"Payment request sent via Nostr for {sat_amount} sats."}
+
+        return {"status": "ERROR", "detail": "Unsupported transport type."}
+    except httpx.TimeoutException:
+        return {"status": "ERROR", "detail": "Payment request transport timed out."}
+    except httpx.HTTPStatusError as exc:
+        detail = f"Receiver returned HTTP {exc.response.status_code}."
+        try:
+            detail = exc.response.json().get("detail", detail)
+        except Exception:
+            if exc.response.text:
+                detail = exc.response.text
+        return {"status": "ERROR", "detail": detail}
+    except Exception as exc:
+        logger.exception("paycreq transport failed")
+        return {"status": "ERROR", "detail": f"Transport failed: {exc}"}
 
 @router.post("/issueecash", tags=["protected"])
 async def issue_ecash(   request: Request, 

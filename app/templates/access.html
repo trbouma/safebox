@@ -1126,6 +1126,18 @@ function setActions(local_action_mode,local_action_data) {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
   }
+  if (local_action_mode=="creq"){
+      const recipientAmount = document.getElementById("ln_recipient_amount");
+      const recipientMemo = document.getElementById("ln_recipient_memo");
+      if (recipientAmount && action_amount) {
+        recipientAmount.value = action_amount;
+      }
+      if (recipientMemo && action_comment) {
+        recipientMemo.value = action_comment;
+      }
+      userMessage("Cashu payment request detected. Amount and memo were loaded from QR.", "INFO");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if ((local_action_mode || "").length > 0 && window.history && window.history.replaceState) {
       window.history.replaceState({}, "", "/safebox/access");
   }
@@ -1192,6 +1204,40 @@ async function lnPayAddress() {
   var ln_comment = recipient_memo.value;
   var ln_currency = ln_select_currency.value;
   // alert("Pay! " + ln_address + " " + ln_amount + " with comment "+ ln_comment);
+
+  if (action_mode == "creq" && (action_data || "").toLowerCase().startsWith("creqa")) {
+    const proceed = confirm("Send this Cashu payment request now?");
+    if (!proceed) {
+      userMessage("Payment canceled.", "INFO");
+      return;
+    }
+
+    const old_creq_text = pay_button.textContent;
+    pay_button.textContent = "Sending Cashu payment...";
+    pay_button.disabled = true;
+    try {
+      const submit_creq_data = {
+        creq: action_data,
+        memo: ln_comment,
+        amount: ln_amount ? Number(ln_amount) : null,
+        currency: ln_currency
+      };
+      await fetch('/safebox/paycreq', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(submit_creq_data)
+      })
+      .then((response) => response.json())
+      .then((data) => getlnPayStatus(data));
+    } catch (error) {
+      userMessage("Cashu payment request failed. Please try again.", "ERROR");
+    } finally {
+      pay_button.textContent = old_creq_text;
+      pay_button.disabled = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return;
+  }
 
   if (recipient_address.value == "NFC Tag") {
     const proceed = confirm("Get ready to tap your NFC card. Press OK to continue.");

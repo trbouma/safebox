@@ -68,6 +68,12 @@ class lnPayInvoice(BaseModel):
     invoice: str 
     comment: str = None
 
+class creqPayRequest(BaseModel):
+    creq: str
+    memo: str | None = None
+    amount: float | None = None
+    currency: str = "SAT"
+
 
 class lnInvoice(BaseModel):
     amount: float

@@ -1,8 +1,11 @@
 import logging
+import base64
 from html import escape
+from typing import Any
 from urllib.parse import quote, unquote, urlparse, urlencode, parse_qsl, urlunparse
 
 import bolt11
+import cbor2
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -110,6 +113,21 @@ async def get_scan_result(  request: Request,
     if qr_code[:6] == "cashuA":
         return _redirect_access(ecash=qr_code)
 
+    if qr_code[:5].lower() == "creqa":
+        parsed_creq = _parse_creq_payment_request(qr_code)
+        if not parsed_creq:
+            logger.warning("Invalid NUT-18 payment request scanned")
+            return _redirect_access(
+                action_comment="Invalid Cashu payment request.",
+            )
+        return _redirect_access(
+            action_mode="creq",
+            action_data=qr_code,
+            action_amount=parsed_creq.get("a"),
+            action_comment=parsed_creq.get("d", "Cashu payment request scanned."),
+            currency=parsed_creq.get("u", "SAT").upper(),
+        )
+
     if qr_code[:8].lower() == "nprofile":
         return _redirect_access(nprofile=qr_code)
 
@@ -180,6 +198,57 @@ def _extract_ln_address_fields(address: str) -> tuple[str, float, str | None]:
         currency = local_part[2]
     normalized_address = f"{name}@{address_parts[1]}"
     return normalized_address, amount, currency
+
+
+def _parse_creq_payment_request(qr_code: str) -> dict[str, Any] | None:
+    payload = qr_code[5:]
+    if not payload:
+        return None
+
+    parsed_obj = _decode_cbor_b64(payload)
+    if not isinstance(parsed_obj, dict):
+        return None
+
+    amount = parsed_obj.get("a")
+    unit = parsed_obj.get("u")
+    if amount is not None:
+        if not isinstance(amount, int) or amount < 0:
+            return None
+        if not isinstance(unit, str) or not unit.strip():
+            return None
+    if unit is not None and not isinstance(unit, str):
+        return None
+
+    description = parsed_obj.get("d")
+    if description is not None and not isinstance(description, str):
+        return None
+
+    return parsed_obj
+
+
+def _decode_cbor_b64(encoded: str) -> dict[str, Any] | None:
+    # Accept urlsafe base64 (spec) and plain base64 (legacy local generators).
+    padded = _add_b64_padding(encoded.strip())
+    decoders = (
+        base64.urlsafe_b64decode,
+        base64.b64decode,
+    )
+    for decode_func in decoders:
+        try:
+            raw = decode_func(padded.encode("utf-8"))
+            payload = cbor2.loads(raw)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            continue
+    return None
+
+
+def _add_b64_padding(value: str) -> str:
+    pad_len = (-len(value)) % 4
+    if pad_len == 0:
+        return value
+    return f"{value}{'=' * pad_len}"
 
 
 def _redirect_access(**params: object) -> RedirectResponse:
