@@ -5636,6 +5636,8 @@ class Acorn:
         zaps_to_send = []
         event = None
         skipped_profiles = 0
+        skipped_invoice_requests = 0
+        last_invoice_error: str | None = None
         query_relays = self._build_discovery_relays()
         # print("are we here today", self.relays)
         async with ClientPool(query_relays) as c:        
@@ -5665,18 +5667,46 @@ class Acorn:
             zaps_to_send.append((each[1], relay_hint, weight_str))
         if zaps_to_send == []:
             zaps_to_send =[(event.pub_key,None,1)]
+
+        normalized_targets: List[tuple[str, str | None, float]] = []
+        total_weight = 0.0
+        for target_pubkey, relay_hint, weight_value in zaps_to_send:
+            try:
+                parsed_weight = float(weight_value)
+            except (TypeError, ValueError):
+                self.logger.warning("op=zap status=invalid_split default=1 value=%s", weight_value)
+                parsed_weight = 1.0
+            if parsed_weight <= 0:
+                self.logger.warning("op=zap status=nonpositive_split default=1 value=%s", weight_value)
+                parsed_weight = 1.0
+            normalized_targets.append((target_pubkey, relay_hint, parsed_weight))
+            total_weight += parsed_weight
+        if total_weight <= 0:
+            raise RuntimeError("Invalid zap split weights")
+
+        allocated_sats: List[int] = []
+        remainders: List[tuple[float, int]] = []
+        used_sats = 0
+        for idx, (_, _, target_weight) in enumerate(normalized_targets):
+            raw_allocation = (amount * target_weight) / total_weight
+            sat_allocation = int(raw_allocation)
+            allocated_sats.append(sat_allocation)
+            used_sats += sat_allocation
+            remainders.append((raw_allocation - sat_allocation, idx))
+        remaining_sats = int(amount) - used_sats
+        if remaining_sats > 0:
+            remainders.sort(reverse=True)
+            for _, target_idx in remainders[:remaining_sats]:
+                allocated_sats[target_idx] += 1
         
-        self.logger.debug(f"zaps to send: {zaps_to_send}")
+        self.logger.debug("zaps to send normalized=%s allocated_sats=%s", normalized_targets, allocated_sats)
 
         prs = []
-        for each_zap in zaps_to_send:
-            try:
-                split_factor = float(each_zap[2])
-            except (TypeError, ValueError):
-                self.logger.warning("op=zap status=invalid_split default=1 value=%s", each_zap[2])
-                split_factor = 1.0
-            zap_amount = int(amount * split_factor)
-            zap_amount = 1 if zap_amount ==0 else zap_amount
+        for idx, each_zap in enumerate(normalized_targets):
+            zap_amount = allocated_sats[idx]
+            if zap_amount <= 0:
+                self.logger.debug("op=zap status=skip_zero_split target=%s", each_zap[0])
+                continue
             profile_filter =  [{
                 'limit': 1,
                 'authors': [each_zap[0]],
@@ -5714,6 +5744,8 @@ class Acorn:
             # Now we can create zap request
             self.logger.debug("create zap request")
             zap_request_relays = self._build_zap_request_relays()
+            if not zap_request_relays:
+                raise RuntimeError("No relays configured for zap request publish")
             tags = [
                 ["lnurl", lnaddress_to_lnurl(lnaddress)],
                 ["relays"] + zap_request_relays,
@@ -5799,6 +5831,8 @@ class Acorn:
                 # Now we can create zap request
                 self.logger.debug("create zap request for profile")
                 zap_request_relays = self._build_zap_request_relays()
+                if not zap_request_relays:
+                    raise RuntimeError("No relays configured for zap request publish")
                 tags =  [   ["lnurl",lnaddress_to_lnurl(lnaddress)],
                             ["relays"] + zap_request_relays,
                             ["amount",str(amount*1000)],
@@ -6879,15 +6913,27 @@ class Acorn:
             reverse=True,
         )[:limit_value]
 
-        return [
-            {
+        def _kind1_event_to_dict(each_event: Event) -> Dict[str, Any]:
+            event_tags = list(each_event.tags or [])
+            reply_event_ids: List[str] = []
+            for each_tag in event_tags:
+                if each_tag and each_tag[0] == "e" and len(each_tag) > 1:
+                    reply_event_ids.append(str(each_tag[1]))
+            return {
                 "id": str(each_event.id),
                 "event_id": str(each_event.id),
                 "event_id_hex": str(each_event.id),
                 "pubkey": str(each_event.pub_key),
                 "created_at": int(each_event.created_at.timestamp()),
                 "content": str(each_event.content),
+                "is_reply": bool(reply_event_ids),
+                "reply_to_event_ids": reply_event_ids,
+                "reply_to_primary_event_id": reply_event_ids[0] if reply_event_ids else None,
+                "tags": event_tags,
             }
+
+        return [
+            _kind1_event_to_dict(each_event)
             for each_event in events_sorted
         ]
 
@@ -7148,15 +7194,27 @@ class Acorn:
             key=lambda each_event: int(each_event.created_at.timestamp()),
             reverse=True,
         )[:limit_value]
-        return [
-            {
+
+        def _kind1_event_to_dict(each_event: Event) -> Dict[str, Any]:
+            event_tags = list(each_event.tags or [])
+            reply_event_ids: List[str] = []
+            for each_tag in event_tags:
+                if each_tag and each_tag[0] == "e" and len(each_tag) > 1:
+                    reply_event_ids.append(str(each_tag[1]))
+            return {
                 "id": str(each_event.id),
                 "event_id": str(each_event.id),
                 "event_id_hex": str(each_event.id),
                 "pubkey": str(each_event.pub_key),
                 "created_at": int(each_event.created_at.timestamp()),
                 "content": str(each_event.content),
+                "is_reply": bool(reply_event_ids),
+                "reply_to_event_ids": reply_event_ids,
+                "reply_to_primary_event_id": reply_event_ids[0] if reply_event_ids else None,
+                "tags": event_tags,
             }
+        return [
+            _kind1_event_to_dict(each_event)
             for each_event in events_sorted
         ]
 
@@ -7193,15 +7251,27 @@ class Acorn:
             reverse=True,
         )[:limit_value]
 
-        return [
-            {
+        def _kind1_event_to_dict(each_event: Event) -> Dict[str, Any]:
+            event_tags = list(each_event.tags or [])
+            reply_event_ids: List[str] = []
+            for each_tag in event_tags:
+                if each_tag and each_tag[0] == "e" and len(each_tag) > 1:
+                    reply_event_ids.append(str(each_tag[1]))
+            return {
                 "id": str(each_event.id),
                 "event_id": str(each_event.id),
                 "event_id_hex": str(each_event.id),
                 "pubkey": str(each_event.pub_key),
                 "created_at": int(each_event.created_at.timestamp()),
                 "content": str(each_event.content),
+                "is_reply": bool(reply_event_ids),
+                "reply_to_event_ids": reply_event_ids,
+                "reply_to_primary_event_id": reply_event_ids[0] if reply_event_ids else None,
+                "tags": event_tags,
             }
+
+        return [
+            _kind1_event_to_dict(each_event)
             for each_event in events_sorted
         ]
 
@@ -7210,6 +7280,7 @@ class Acorn:
         event_id: str,
         limit: int = 100,
         relays: List[str] | None = None,
+        strict: bool = False,
     ) -> List[Dict[str, Any]]:
         target_event_id = (event_id or "").strip()
         if not target_event_id:
@@ -7326,6 +7397,15 @@ class Acorn:
             if zap_amount_msat is not None and amount_from_invoice_msat is not None:
                 amount_matches = (zap_amount_msat == amount_from_invoice_msat)
 
+            verified = bool(matches_target_event)
+            if description_hash_matches is not None:
+                verified = verified and bool(description_hash_matches)
+            if amount_matches is not None:
+                verified = verified and bool(amount_matches)
+
+            if strict and not verified:
+                continue
+
             results.append({
                 "receipt_id": str(receipt.id),
                 "created_at": int(receipt.created_at.timestamp()),
@@ -7343,6 +7423,7 @@ class Acorn:
                 "amount_matches": amount_matches,
                 "matches_target_event": matches_target_event,
                 "description_hash_matches": description_hash_matches,
+                "verified": verified,
                 "bolt11": bolt11_invoice,
                 "raw_tags": tags,
             })

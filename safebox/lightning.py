@@ -83,9 +83,21 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
     if not callback:
         raise RuntimeError("Lightning address missing callback for zap")
 
+    amount_msat = int(amount * 1000)
+    min_sendable = zap_parms.get("minSendable")
+    max_sendable = zap_parms.get("maxSendable")
+    try:
+        if min_sendable is not None and amount_msat < int(min_sendable):
+            raise RuntimeError(f"Zap amount below minSendable ({min_sendable} msat)")
+        if max_sendable is not None and amount_msat > int(max_sendable):
+            raise RuntimeError(f"Zap amount above maxSendable ({max_sendable} msat)")
+    except (TypeError, ValueError):
+        # Ignore malformed range hints from receiver; callback will enforce server-side.
+        pass
+
     data_to_send = {
         "lnurl": lnurl,
-        "amount": int(amount * 1000),
+        "amount": amount_msat,
         "nostr": json.dumps(zap_dict),
     }
     ln_return = requests.get(callback, params=data_to_send, timeout=LN_HTTP_TIMEOUT)
@@ -95,5 +107,4 @@ def zap_address_pay(amount: int, lnaddress: str, zap_dict: dict):
         raise RuntimeError("Zap callback did not return invoice")
 
     return pr, allows_nostr, nostr_pubkey
-
 

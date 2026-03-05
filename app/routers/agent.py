@@ -823,6 +823,7 @@ async def agent_my_latest_kind1_events(
 async def agent_zap_receipts_for_event(
     event_id: str,
     limit: int = 100,
+    strict: bool = False,
     relays: str | None = None,
     acorn_obj: Acorn = Depends(_agent_get_acorn),
 ):
@@ -847,6 +848,7 @@ async def agent_zap_receipts_for_event(
             event_id=event_value,
             limit=safe_limit,
             relays=relay_list,
+            strict=bool(strict),
         )
     except Exception as exc:
         logger.exception("Agent zap_receipts query failed")
@@ -855,6 +857,7 @@ async def agent_zap_receipts_for_event(
     return {
         "status": "OK",
         "event_id": event_value,
+        "strict": bool(strict),
         "count": len(receipts),
         "receipts": receipts,
         "timestamp": int(datetime.utcnow().timestamp()),
