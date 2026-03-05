@@ -11,8 +11,9 @@ Numbering convention:
 
 | ID | Title | Version | Status | File |
 |----|-------|---------|--------|------|
-| `MS-01` | Safebox Coupon Market Specification | `1.0` | Draft | [MS-01-coupon-market.md](./MS-01-coupon-market.md) |
-| `MS-01` | Conformance Checklist | `1.0` | Draft | [MS-01-CONFORMANCE.md](./MS-01-CONFORMANCE.md) |
+| `MS-00` | Market Conventions | `1.0` | Draft | [MS-00-market-conventions.md](./MS-00-market-conventions.md) |
+| `MS-01` | Safebox Coupon Market Specification | `1.1` | Draft | [MS-01-coupon-market.md](./MS-01-coupon-market.md) |
+| `MS-01` | Conformance Checklist | `1.1` | Draft | [MS-01-CONFORMANCE.md](./MS-01-CONFORMANCE.md) |
 
 ## Notes
 

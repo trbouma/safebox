@@ -101,6 +101,23 @@ class AgentMarketOrderRequest(BaseModel):
     flow: str | None = None
 
 
+class AgentDeriveTokenSecretHashRequest(BaseModel):
+    spec_id: str = "MS01"
+    token_id: str
+    redemption_secret: str
+    issuer_pubkey: str | None = None
+    hash_alg: str = "sha256"
+
+
+class AgentVerifyTokenSecretHashRequest(BaseModel):
+    expected_hash: str
+    spec_id: str = "MS01"
+    token_id: str
+    redemption_secret: str
+    issuer_pubkey: str | None = None
+    hash_alg: str = "sha256"
+
+
 class AgentSetCustomHandleRequest(BaseModel):
     custom_handle: str
 
@@ -840,6 +857,48 @@ async def agent_zap_receipts_for_event(
         "event_id": event_value,
         "count": len(receipts),
         "receipts": receipts,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/nostr/replies", tags=["agent"])
+async def agent_replies_for_event(
+    event_id: str,
+    limit: int = 100,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    event_value = (event_id or "").strip()
+    if not event_value:
+        raise HTTPException(status_code=400, detail="Missing event_id")
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        replies = await acorn_obj.get_replies_for_event(
+            event_id=event_value,
+            limit=safe_limit,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent replies query failed")
+        raise HTTPException(status_code=400, detail=f"Replies query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "event_id": event_value,
+        "count": len(replies),
+        "replies": replies,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
@@ -1681,6 +1740,61 @@ async def agent_create_market_order(
 
     result["timestamp"] = int(datetime.utcnow().timestamp())
     return result
+
+
+@router.post("/market/secret_hash/derive", tags=["agent"])
+async def agent_derive_market_secret_hash(
+    payload: AgentDeriveTokenSecretHashRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        hash_value = acorn_obj.derive_token_secret_hash(
+            spec_id=payload.spec_id,
+            token_id=payload.token_id,
+            redemption_secret=payload.redemption_secret,
+            issuer_identifier=payload.issuer_pubkey,
+            hash_alg=payload.hash_alg,
+        )
+    except Exception as exc:
+        logger.exception("Agent derive market secret hash failed")
+        raise HTTPException(status_code=400, detail=f"Derive secret hash failed: {exc}")
+
+    return {
+        "status": "OK",
+        "spec_id": str(payload.spec_id or "").strip().upper(),
+        "token_id": str(payload.token_id or "").strip(),
+        "hash_alg": str(payload.hash_alg or "").strip().lower(),
+        "secret_hash": hash_value,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/market/secret_hash/verify", tags=["agent"])
+async def agent_verify_market_secret_hash(
+    payload: AgentVerifyTokenSecretHashRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        is_valid = acorn_obj.verify_token_secret_hash(
+            expected_hash=payload.expected_hash,
+            spec_id=payload.spec_id,
+            token_id=payload.token_id,
+            redemption_secret=payload.redemption_secret,
+            issuer_identifier=payload.issuer_pubkey,
+            hash_alg=payload.hash_alg,
+        )
+    except Exception as exc:
+        logger.exception("Agent verify market secret hash failed")
+        raise HTTPException(status_code=400, detail=f"Verify secret hash failed: {exc}")
+
+    return {
+        "status": "OK",
+        "valid": bool(is_valid),
+        "spec_id": str(payload.spec_id or "").strip().upper(),
+        "token_id": str(payload.token_id or "").strip(),
+        "hash_alg": str(payload.hash_alg or "").strip().lower(),
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
 
 
 @router.post("/secure_dm", tags=["agent"])

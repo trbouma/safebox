@@ -1,9 +1,9 @@
 # MS-01: Safebox Coupon Market Specification
-**Version**: 1.0  
+**Version**: 1.1  
 **Status**: Draft  
 **Tag**: `#MS-01`  
 **Market Namespace**: `mkt=MS-01`  
-**Date**: 2026-03-02
+**Date**: 2026-03-04
 
 ---
 
@@ -12,6 +12,8 @@
 Define a permissionless, Lightning-settled coupon issuance, trading, and redemption market over Nostr + Safebox Agent API.
 
 Coupons carry a face value redeemable in sats. Secondary sales are explicitly permitted at a discount, with mandatory risk disclosure. Trust is enforced by Nostr's public record and Lightning payment finality without a central authority.
+
+Implementations SHOULD apply shared market field/unit conventions from `MS-00`. If an `MS-01` extension introduces token-denominated pricing, it MUST follow `MS-00` canonical normalization rules (including `SAT_PER_1K_TOKEN` and explicit `token_basis`).
 
 ---
 
@@ -61,7 +63,10 @@ Each coupon instance is represented by the following logical fields:
 | `face_value_sats` | integer | Yes | Redemption payout amount |
 | `ask_price_sats` | integer | Yes | Sale price for current listing |
 | `redemption_secret` | string | Yes | Secret code, DM only |
-| `state` | enum | Yes | `ISSUED`, `SOLD`, `RESOLD`, `REDEEMED`, `EXPIRED` |
+| `secret_hash` | string | Yes | Commitment hash for redemption secret preimage |
+| `hash_alg` | string | Yes | `sha256` in MS-01 v1.x |
+| `lock_expiry` | string | Yes | ISO-8601 UTC timestamp for lock validity |
+| `state` | enum | Yes | `ISSUED`, `LOCKED`, `SOLD`, `RESOLD`, `REDEEMED`, `EXPIRED` |
 | `order_status` | enum | Yes | `OPEN`, `FILLED`, `CANCELLED`, `EXPIRED` |
 | `market` | string | Yes | `MS-01` |
 
@@ -96,23 +101,51 @@ All posts, replies, and DMs relating to a coupon MUST:
 ## 5. Coupon State Machine
 
 ```
-ISSUED -> SOLD (primary) -> [REDEEMED | RESOLD]
-                                  |
-                              RESOLD (n times)
-                                  |
-                            REDEEMED | EXPIRED
+ISSUED -> LOCKED -> SOLD (primary) -> [REDEEMED | RESOLD]
+                                           |
+                                       RESOLD (n times)
+                                           |
+                                     REDEEMED | EXPIRED
 ```
 
 Valid state transitions:
 
 | From | To | Trigger |
 |------|----|---------|
-| `ISSUED` | `SOLD` | Buyer zaps issuance ASK |
+| `ISSUED` | `LOCKED` | Issuer publishes ask with `secret_hash` commitment |
+| `LOCKED` | `SOLD` | Buyer zaps issuance ASK |
 | `SOLD` | `REDEEMED` | Holder sends valid redemption DM to issuer |
 | `SOLD` | `RESOLD` | Holder posts secondary ASK and buyer zaps |
 | `RESOLD` | `REDEEMED` | Holder sends valid redemption DM to issuer |
 | `RESOLD` | `RESOLD` | Further secondary sale |
 | `ANY` | `EXPIRED` | Issuer posts void announcement |
+
+---
+
+## 5.1 Clearing and Settlement Primitives
+
+MS-01 uses the following lifecycle primitives:
+
+- `Order`: Coupon sell intent (`POST /agent/market/order`) where quantity is `1` coupon.
+- `Quote`: Public price visibility derived from posted ask/bid content.
+- `Match`: Compatible order/payment conditions are satisfied.
+- `Trade`: Executed agreement (`coupon_id`, `price_sats`, buyer, seller) creating obligations.
+- `Capability Lock`: Issuer publishes `secret_hash` commitment before sale.
+- `Clearing`: Buyer owes sats; seller owes redemption capability (preimage delivery).
+- `Secret Reveal`: Seller delivers redemption preimage privately via DM.
+- `Settlement`: Sats transfer and buyer receives redeemable capability; obligation is extinguished.
+
+Hash-lock model:
+
+- Issuer generates high-entropy `redemption_secret` (minimum 128 bits).
+- Issuer computes `secret_hash` and publishes commitment at issuance.
+- Redemption succeeds only when presented preimage recomputes to canonical `secret_hash`.
+
+Recommended derivation:
+
+```python
+secret_hash = sha256(f"MS01|{coupon_id}|{issuer_pubkey}|{redemption_secret}")
+```
 
 ---
 
@@ -128,6 +161,9 @@ COUPON ISSUED #COUP{XXXXXX}
 Face value: {face_value} sats
 Asking price: {ask_price} sats
 Issuer: {issuer_nip05}
+Hash Alg: sha256
+Secret Hash: {secret_hash}
+Lock Expiry: {lock_expiry}
 
 Zap {ask_price} sats to purchase.
 Redemption code delivered by private DM on payment confirmed.
@@ -140,6 +176,9 @@ Required order fields:
 - `side`: `sell`
 - `asset`: `coupon`
 - `price_sats`: `{ask_price}`
+- `hash_alg`: `sha256`
+- `secret_hash`: `{secret_hash}`
+- `lock_expiry`: `{lock_expiry}`
 - `content`: above template
 
 ### 6.2 Secondary Sale ASK
@@ -152,6 +191,9 @@ COUPON FOR SALE (SECONDARY) #COUP{XXXXXX}
 Face value: {face_value} sats
 Asking price: {ask_price} sats
 Original issuer: {issuer_nip05}
+Hash Alg: sha256
+Secret Hash: {secret_hash}
+Lock Expiry: {lock_expiry}
 
 SECONDARY SALE RISK DISCLOSURE:
 The issuer has previously seen this redemption code.
@@ -168,6 +210,9 @@ Required order fields:
 - `side`: `sell`
 - `asset`: `coupon`
 - `price_sats`: `{ask_price}`
+- `hash_alg`: `sha256`
+- `secret_hash`: canonical issuance `secret_hash`
+- `lock_expiry`: canonical issuance `lock_expiry` (or stricter earlier expiry)
 - `content`: above template (risk disclosure is mandatory)
 
 ### 6.3 Redemption DM (Holder -> Issuer)
@@ -180,6 +225,10 @@ code={redemption_secret}
 pay_to={holder_lightning_address}
 event_id={canonical_event_id}
 ```
+
+Issuer verification rule:
+- Issuer MUST recompute commitment from `code` and compare against canonical `secret_hash`.
+- Mismatch MUST fail as `invalid_code` and MUST NOT trigger payout.
 
 ### 6.4 Redemption Confirmation DM (Issuer -> Holder)
 
@@ -234,6 +283,7 @@ FILLED #COUP{XXXXXX}
 order_event_id={order_event_id}
 buyer={buyer_identifier}
 price_sats={ask_price_sats}
+secret_hash={secret_hash}
 delivery=secure_dm
 
 #MS-01 #coupon #FILLED
@@ -248,8 +298,13 @@ delivery=secure_dm
 - Secondary `ask_price_sats` SHOULD be lower than `face_value_sats`.
 - `coupon_id` MUST match `#COUP[A-Z2-9]{6}`.
 - `redemption_secret` MUST only be transmitted via `POST /agent/secure_dm`.
+- Issuance MUST include `secret_hash`, `hash_alg=sha256`, and `lock_expiry`.
+- `lock_expiry` MUST be in the future when issuance is published.
+- Redemption MUST fail after `lock_expiry`.
 - Issuer MUST process the first valid redemption claim as final.
 - Issuer MUST mark coupon as `REDEEMED` after successful payout and reject future claims.
+- Issuer MUST verify redemption preimage against canonical `secret_hash` before payout.
+- `redemption_secret` MUST provide at least 128 bits of entropy.
 - Implementations MUST prohibit self-trading:
   - an agent MUST NOT buy its own ask,
   - an agent MUST NOT sell into its own bid.
@@ -268,15 +323,17 @@ delivery=secure_dm
 
 ### Flow A: Issuer Creates and Sells Coupon
 
-1. Generate redemption secret and store `coupon_id -> {secret, face_value, state}`.
-2. `POST /agent/market/order` for issuance ask (`side=sell`, `asset=coupon`) and save `canonical_event_id`.
-3. Monitor `GET /agent/nostr/zap_receipts?event_id={canonical_event_id}`.
-4. Identify buyer via `zapper_npub` (never `lnurl_provider_npub`) and verify amount + receipt validation flags.
-5. Self-trade guard: if buyer identity resolves to seller identity, mark attempt as rejected self-trade and do not deliver secret.
-6. Proceed only for valid non-self buyer and exact ask match.
-7. Send secret via `POST /agent/secure_dm`.
-8. Publish `FILLED` reply on order event.
-9. Update state `ISSUED -> SOLD` and `order_status=FILLED`.
+1. Generate high-entropy redemption secret and store `coupon_id -> {secret, secret_hash, hash_alg, lock_expiry, face_value, state}`.
+2. Compute `secret_hash` with `hash_alg=sha256` and set a future `lock_expiry`.
+3. `POST /agent/market/order` for issuance ask (`side=sell`, `asset=coupon`) including hash-lock fields and save `canonical_event_id`.
+4. Update state `ISSUED -> LOCKED`.
+5. Monitor `GET /agent/nostr/zap_receipts?event_id={canonical_event_id}`.
+6. Identify buyer via `zapper_npub` (never `lnurl_provider_npub`) and verify amount + receipt validation flags.
+7. Self-trade guard: if buyer identity resolves to seller identity, mark attempt as rejected self-trade and do not deliver secret.
+8. Proceed only for valid non-self buyer and exact ask match.
+9. Send secret via `POST /agent/secure_dm`.
+10. Publish `FILLED` reply on order event including `secret_hash`.
+11. Update state `LOCKED -> SOLD` and `order_status=FILLED`.
 
 ### Flow B: Holder Redeems Coupon
 
@@ -288,13 +345,14 @@ delivery=secure_dm
 ### Flow C: Issuer Processes Redemption Request
 
 1. Monitor incoming DMs and parse redeem requests.
-2. Validate coupon existence, exact code match, and non-redeemed/non-void state.
-3. On valid:
+2. Validate coupon existence, exact code match, non-redeemed/non-void state, and non-expired `lock_expiry`.
+3. Recompute preimage hash and verify it matches canonical `secret_hash`.
+4. On valid:
    - `POST /agent/pay_lightning_address`
    - DM confirmation
    - public redemption announcement reply to canonical event
    - update state to `REDEEMED`
-4. On invalid:
+5. On invalid:
    - DM failure response
    - no public redemption post for invalid attempts
 
@@ -383,10 +441,12 @@ An implementation MAY claim one or more of:
 
 To claim `MS01-Issuer`, implementation MUST:
 - Create coupon orders via `POST /agent/market/order` with `asset=coupon`.
+- Publish `secret_hash`, `hash_alg=sha256`, and `lock_expiry` on issuance.
 - Deliver redemption secrets via `POST /agent/secure_dm` only.
-- Validate redemption claims against stored coupon state and secret.
+- Validate redemption claims against stored coupon state and secret preimage hash.
 - Pay valid claims via `POST /agent/pay_lightning_address`.
 - Publish redemption result as public reply to `canonical_event_id`.
+- Reject redemption after `lock_expiry`.
 
 To claim `MS01-Trader`, implementation MUST:
 - Discover orders via `GET /agent/market/orders`.
@@ -396,6 +456,7 @@ To claim `MS01-Trader`, implementation MUST:
 - Enforce self-trade prevention before executing a market-side zap.
 - Emit fill evidence via Section 6.7 for completed sales.
 - Enforce exact-price fill rule unless alternate policy is explicitly declared.
+- Preserve canonical `secret_hash`/`hash_alg` when posting secondary listings.
 
 To claim `MS01-Observer`, implementation MUST:
 - Resolve coupon lineage via `coupon_id` + `canonical_event_id`.
@@ -436,6 +497,11 @@ The following tests are normative for implementation claims.
 | `TC-MS01-015` | Trader | Public fill evidence | Complete valid sale | Single `FILLED` reply posted to order event |
 | `TC-MS01-016` | Trader | Delivery idempotency | Replay same paid signal | Secret delivered once only |
 | `TC-MS01-017` | Trader/Observer | Stale order handling | Attempt fill after expiry/cancel | Fill rejected; terminal order status remains non-open |
+| `TC-MS01-018` | Issuer | Hash-lock commitment | Create issuance order | Issuance includes `secret_hash` and `hash_alg=sha256` |
+| `TC-MS01-019` | Issuer/Trader | Preimage match settlement | Redeem with correct preimage | Redemption succeeds only when preimage hash matches canonical `secret_hash` |
+| `TC-MS01-020` | Issuer/Trader | Preimage mismatch rejection | Redeem with incorrect preimage | `invalid_code` failure and no payout |
+| `TC-MS01-021` | Trader/Observer | Secondary hash continuity | Post secondary ask | Secondary listing reuses canonical `secret_hash` and `hash_alg` |
+| `TC-MS01-022` | Issuer/Observer | Lock expiry enforcement | Attempt sale/redeem after `lock_expiry` | Stale lock is rejected and not newly settled |
 
 ### 14.1 Example Test Procedure: `TC-MS01-005`
 
@@ -502,3 +568,4 @@ ISSUER                    BUYER/HOLDER              MARKET
 | Version | Date | Notes |
 |---------|------|-------|
 | 1.0 | 2026-03-02 | Initial draft |
+| 1.1 | 2026-03-04 | Added hash-lock clearing primitives, commitment fields, `LOCKED` state, and conformance tests `TC-MS01-018..022`. |

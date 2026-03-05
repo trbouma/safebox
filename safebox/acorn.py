@@ -1453,6 +1453,78 @@ class Acorn:
             "relays": self._build_kind1_publish_relays(relays=relays),
         }
 
+    @staticmethod
+    def _normalize_issuer_pubkey(issuer_identifier: str) -> str:
+        """Normalize issuer identifier to 64-char lowercase pubkey hex."""
+        raw_value = str(issuer_identifier or "").strip()
+        if not raw_value:
+            raise ValueError("issuer identifier is required")
+
+        resolved_value = raw_value
+        if raw_value.startswith("npub"):
+            resolved_value = npub_to_hex(raw_value)
+        elif "@" in raw_value:
+            pubkey_hex, _ = nip05_to_npub(raw_value)
+            resolved_value = str(pubkey_hex or "").strip()
+
+        normalized = resolved_value.lower()
+        if len(normalized) != 64 or not all(ch in string.hexdigits for ch in normalized):
+            raise ValueError("issuer identifier must resolve to 64-char pubkey hex")
+        return normalized
+
+    def derive_token_secret_hash(
+        self,
+        spec_id: str,
+        token_id: str,
+        redemption_secret: str,
+        issuer_identifier: str | None = None,
+        hash_alg: str = "sha256",
+    ) -> str:
+        """Derive deterministic token secret hash for market settlement commitments."""
+        normalized_alg = str(hash_alg or "").strip().lower()
+        if normalized_alg != "sha256":
+            raise ValueError("Unsupported hash_alg; only sha256 is supported")
+
+        normalized_spec = str(spec_id or "").strip().upper()
+        if not normalized_spec:
+            raise ValueError("spec_id is required")
+
+        normalized_token_id = str(token_id or "").strip()
+        if not normalized_token_id:
+            raise ValueError("token_id is required")
+
+        normalized_secret = str(redemption_secret or "").strip()
+        if not normalized_secret:
+            raise ValueError("redemption_secret is required")
+
+        issuer_ref = str(issuer_identifier or "").strip() or str(self.pubkey_hex or "").strip()
+        normalized_issuer = self._normalize_issuer_pubkey(issuer_ref)
+
+        preimage = f"{normalized_spec}|{normalized_token_id}|{normalized_issuer}|{normalized_secret}"
+        return hashlib.sha256(preimage.encode("utf-8")).hexdigest()
+
+    def verify_token_secret_hash(
+        self,
+        expected_hash: str,
+        spec_id: str,
+        token_id: str,
+        redemption_secret: str,
+        issuer_identifier: str | None = None,
+        hash_alg: str = "sha256",
+    ) -> bool:
+        expected = str(expected_hash or "").strip().lower()
+        if len(expected) != 64 or not all(ch in string.hexdigits for ch in expected):
+            return False
+
+        derived = self.derive_token_secret_hash(
+            spec_id=spec_id,
+            token_id=token_id,
+            redemption_secret=redemption_secret,
+            issuer_identifier=issuer_identifier,
+            hash_alg=hash_alg,
+        )
+        return secrets.compare_digest(derived, expected)
+
     async def create_market_order(
         self,
         side: str,
@@ -7274,6 +7346,74 @@ class Acorn:
                 "bolt11": bolt11_invoice,
                 "raw_tags": tags,
             })
+
+        return results
+
+    async def get_replies_for_event(
+        self,
+        event_id: str,
+        limit: int = 100,
+        relays: List[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        target_event_id = (event_id or "").strip()
+        if not target_event_id:
+            raise ValueError("event_id is required")
+
+        if target_event_id.startswith("note"):
+            target_event_id = bech32_to_hex(target_event_id)
+        target_event_id = target_event_id.lower()
+        if len(target_event_id) != 64 or not all(ch in string.hexdigits for ch in target_event_id):
+            raise ValueError("Invalid event_id")
+
+        limit_value = max(1, min(int(limit), 200))
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_filter = [{
+            "limit": limit_value,
+            "kinds": [1],
+            "#e": [target_event_id],
+        }]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query(query_filter)
+
+        if not events:
+            return []
+
+        def _tag_values(tags: List[List[str]], key: str) -> List[str]:
+            values: List[str] = []
+            for each in tags:
+                if each and each[0] == key and len(each) > 1:
+                    values.append(str(each[1]))
+            return values
+
+        events_sorted = sorted(
+            events,
+            key=lambda each_event: int(each_event.created_at.timestamp()),
+            reverse=True,
+        )[:limit_value]
+
+        results: List[Dict[str, Any]] = []
+        for each_event in events_sorted:
+            tags = list(each_event.tags or [])
+            reply_refs = [value.lower() for value in _tag_values(tags, "e")]
+            is_direct_reply = bool(reply_refs) and reply_refs[0] == target_event_id
+
+            results.append(
+                {
+                    "id": str(each_event.id),
+                    "event_id": str(each_event.id),
+                    "event_id_hex": str(each_event.id),
+                    "pubkey": str(each_event.pub_key),
+                    "created_at": int(each_event.created_at.timestamp()),
+                    "content": str(each_event.content),
+                    "reply_to_event_ids": reply_refs,
+                    "is_direct_reply": is_direct_reply,
+                    "tags": tags,
+                }
+            )
 
         return results
         

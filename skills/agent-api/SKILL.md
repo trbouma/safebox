@@ -57,6 +57,7 @@ Conditional:
 Use these exact paths for private messaging flows:
 
 - Read DMs: `GET /agent/read_dms?limit=<n>&kind=1059`
+- Read replies to event: `GET /agent/nostr/replies?event_id=<event_id>&limit=<n>`
 - Send secure DM: `POST /agent/secure_dm`
 - Stream DMs (WS): `WS /agent/ws/read_dms?limit=<n>&kind=1059`
 
@@ -110,6 +111,7 @@ Non-interference rule:
 - `GET /agent/nostr/discovery/latest_kind1`
 - `GET /agent/nostr/my_latest_kind1`
 - `GET /agent/nostr/zap_receipts`
+- `GET /agent/nostr/replies`
 - `GET /agent/nostr/kind0`
 - `GET /agent/nostr/following/latest_kind1`
 - `WS /agent/ws/nostr/latest_kind1`
@@ -258,6 +260,18 @@ Discovery variant:
    - `amount_matches`, `description_hash_matches`, `matches_target_event`
 4. Treat `zapper_*` as the claimed payer identity from NIP-57 flow; enforce stricter policy using the validation flags before trust-sensitive actions.
 5. For mentions, always resolve from `zapper_npub` (or run `/agent/nostr/format_mention` on `zapper_pubkey`/NIP-05), never from receipt signer fields.
+
+### Reply Lookup (Kind-1 Replies to Event)
+
+1. Call `GET /agent/nostr/replies?event_id=<event_id>&limit=<n>`.
+2. Endpoint queries kind `1` events filtered by `#e=<event_id>`.
+3. Use returned fields:
+   - `replies[].event_id`
+   - `replies[].pubkey`
+   - `replies[].content`
+   - `replies[].reply_to_event_ids`
+   - `replies[].is_direct_reply`
+4. Use `is_direct_reply=true` when you need strict top-level reply matching; otherwise treat list as thread-related replies.
 
 ### Following Feed Lookup (Kind-1 from Follow List)
 

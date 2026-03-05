@@ -691,6 +691,79 @@ def market_order(
     _print_json(data)
 
 
+@cli.command("market-secret-hash-derive")
+@click.option("--spec-id", default="MS01", show_default=True)
+@click.option("--token-id", required=True, help="Token id (MS-01 coupon_id).")
+@click.option("--redemption-secret", required=True, help="Redemption secret preimage.")
+@click.option("--issuer-pubkey", default=None, help="Optional issuer pubkey/npub/nip05 override.")
+@click.option("--hash-alg", default="sha256", show_default=True)
+@click.pass_context
+def market_secret_hash_derive(
+    ctx: click.Context,
+    spec_id: str,
+    token_id: str,
+    redemption_secret: str,
+    issuer_pubkey: Optional[str],
+    hash_alg: str,
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "token_id": token_id,
+        "redemption_secret": redemption_secret,
+        "hash_alg": hash_alg,
+    }
+    if issuer_pubkey:
+        payload["issuer_pubkey"] = issuer_pubkey
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/secret_hash/derive",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-secret-hash-verify")
+@click.option("--expected-hash", required=True, help="Expected full hash (hex).")
+@click.option("--spec-id", default="MS01", show_default=True)
+@click.option("--token-id", required=True, help="Token id (MS-01 coupon_id).")
+@click.option("--redemption-secret", required=True, help="Redemption secret preimage.")
+@click.option("--issuer-pubkey", default=None, help="Optional issuer pubkey/npub/nip05 override.")
+@click.option("--hash-alg", default="sha256", show_default=True)
+@click.pass_context
+def market_secret_hash_verify(
+    ctx: click.Context,
+    expected_hash: str,
+    spec_id: str,
+    token_id: str,
+    redemption_secret: str,
+    issuer_pubkey: Optional[str],
+    hash_alg: str,
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "expected_hash": expected_hash,
+        "spec_id": spec_id,
+        "token_id": token_id,
+        "redemption_secret": redemption_secret,
+        "hash_alg": hash_alg,
+    }
+    if issuer_pubkey:
+        payload["issuer_pubkey"] = issuer_pubkey
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/secret_hash/verify",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
 @cli.command("market-orders")
 @click.option("--limit", default=50, type=int, show_default=True)
 @click.option("--kind", default=1, type=int, show_default=True)
@@ -798,6 +871,22 @@ def zap_receipts(ctx: click.Context, event_id: str, limit: int) -> None:
     params = {"event_id": event_id, "limit": limit}
     data = _request_json(
         ctx.obj["base_url"], "/agent/nostr/zap_receipts", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+@cli.command("replies")
+@click.argument("event_id")
+@click.option("--limit", default=50, type=int, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def replies(ctx: click.Context, event_id: str, limit: int, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {"event_id": event_id, "limit": limit}
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/nostr/replies", "GET", key, ctx.obj["timeout_seconds"], params=params
     )
     _print_json(data)
 

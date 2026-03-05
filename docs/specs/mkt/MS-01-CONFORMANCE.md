@@ -1,7 +1,7 @@
 # MS-01 Conformance Checklist
 **Spec**: `MS-01`  
-**Version**: `1.0`  
-**Date**: `2026-03-02`  
+**Version**: `1.1`  
+**Date**: `2026-03-04`  
 **Primary Spec**: `docs/specs/mkt/MS-01-coupon-market.md`
 
 ---
@@ -11,7 +11,7 @@
 Provide an executable checklist for validating implementation conformance against MS-01 using Safebox Agent API endpoints.
 
 This checklist maps directly to normative test cases:
-- `TC-MS01-001` ... `TC-MS01-017`
+- `TC-MS01-001` ... `TC-MS01-022`
 
 ---
 
@@ -60,7 +60,7 @@ Fill once per run:
 | Date/Time (UTC) | |
 | Base URL | |
 | Relay set | |
-| Spec version under test | 1.0 |
+| Spec version under test | 1.1 |
 | Notes | |
 
 ---
@@ -88,6 +88,11 @@ Use `PASS`, `FAIL`, or `N/A` in the Result column.
 | `TC-MS01-015` | Trader | Protocol | | | |
 | `TC-MS01-016` | Trader | Protocol | | | |
 | `TC-MS01-017` | Trader/Observer | Protocol | | | |
+| `TC-MS01-018` | Issuer | Protocol | | | |
+| `TC-MS01-019` | Issuer/Trader | Protocol | | | |
+| `TC-MS01-020` | Issuer/Trader | Protocol | | | |
+| `TC-MS01-021` | Trader/Observer | Protocol | | | |
+| `TC-MS01-022` | Issuer/Observer | Protocol | | | |
 
 ---
 
@@ -314,6 +319,73 @@ Pass:
 - Fill rejected.
 - Order terminal state remains non-open.
 
+## 6.18 `TC-MS01-018` Hash-Lock Commitment
+
+Requirement:
+- Issuance includes `secret_hash` and `hash_alg=sha256`.
+
+Steps:
+1. Create issuance ask.
+2. Inspect order content and stored coupon metadata.
+3. Confirm commitment fields are present.
+
+Pass:
+- `secret_hash` exists.
+- `hash_alg` is exactly `sha256`.
+
+## 6.19 `TC-MS01-019` Preimage Match Settlement
+
+Requirement:
+- Redemption succeeds only when preimage hash matches canonical `secret_hash`.
+
+Steps:
+1. Capture canonical issuance with `secret_hash`.
+2. Submit redemption DM with correct preimage.
+3. Verify issuer recomputation path and payout.
+
+Pass:
+- Redemption succeeds and payout occurs only for matching preimage.
+
+## 6.20 `TC-MS01-020` Preimage Mismatch Rejection
+
+Requirement:
+- Incorrect preimage is rejected without payout.
+
+Steps:
+1. Submit redemption DM with incorrect preimage.
+2. Observe issuer response and tx history.
+
+Pass:
+- `REDEMPTION FAILED` with `invalid_code`.
+- No payout executed.
+
+## 6.21 `TC-MS01-021` Secondary Hash Continuity
+
+Requirement:
+- Secondary listing reuses canonical `secret_hash`/`hash_alg`.
+
+Steps:
+1. Create canonical issuance and note commitment fields.
+2. Post secondary listing for same coupon.
+3. Compare secondary fields against canonical issuance.
+
+Pass:
+- Secondary listing preserves same `secret_hash` and `hash_alg`.
+
+## 6.22 `TC-MS01-022` Lock Expiry Enforcement
+
+Requirement:
+- Orders/redemptions after `lock_expiry` are rejected.
+
+Steps:
+1. Create coupon with short `lock_expiry`.
+2. Wait until expiry.
+3. Attempt new fill and redemption.
+
+Pass:
+- Expired lock is rejected for settlement.
+- No new payout or valid fill occurs after expiry.
+
 ---
 
 ## 7. Optional Curl Templates
@@ -328,6 +400,9 @@ curl -sS -X POST \
     "side":"sell",
     "asset":"coupon",
     "price_sats":21,
+    "hash_alg":"sha256",
+    "secret_hash":"<sha256-hex>",
+    "lock_expiry":"2026-12-31T23:59:59Z",
     "content":"COUPON ISSUED #COUPX7K9QR ... #MS-01 #coupon"
   }' \
   "${BASE_URL}/agent/market/order"
@@ -360,9 +435,9 @@ curl -sS -X POST \
 
 | Class | Mandatory Tests | Result |
 |------|------------------|--------|
-| `MS01-Issuer` | `001,002,003,004,005,006,012` | |
-| `MS01-Trader` | `007,008,009,012` | |
-| `MS01-Observer` | `010,011` | |
+| `MS01-Issuer` | `001,002,003,004,005,006,012,018,019,020,022` | |
+| `MS01-Trader` | `007,008,009,012,013,014,015,016,017,019,020,021` | |
+| `MS01-Observer` | `010,011,021,022` | |
 
 Final declaration:
 - `MS01-Issuer`: `PASS` / `FAIL`
