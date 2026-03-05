@@ -30,7 +30,7 @@ relays  = [ "wss://nostr-pub.wellorder.net",
             "wss://relay.primal.net",
             "wss://nos.lol"
         ]
-public_relays = ["wss://relay.damus.io", "wss://relay.primal.net"]
+public_relays = ["wss://relay.getsafebox.app", "wss://relay.damus.io", "wss://relay.primal.net"]
 mints   = ["https://mint.getsafebox.app"]
 wallet  = "default" 
 home_relay = "wss://relay.getsafebox.app"

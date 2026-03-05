@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     DB_POOL_RECYCLE_SECONDS: int = 1800
     DB_POOL_TIMEOUT_SECONDS: int = 30
     RELAYS: List = ['wss://relay.getsafebox.app']
-    PUBLIC_RELAYS: List = ['wss://relay.damus.io', 'wss://relay.primal.net']
+    PUBLIC_RELAYS: List = ['wss://relay.getsafebox.app', 'wss://relay.damus.io', 'wss://relay.primal.net']
     ECASH_RELAYS: List = ['wss://relay.getsafebox.app']
     MINTS: List = ['https://mint.getsafebox.app']
     IP_INFO_TOKEN: str = "notset"

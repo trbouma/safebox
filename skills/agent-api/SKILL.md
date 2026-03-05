@@ -7,6 +7,8 @@ When starting a new session, fetch these files before executing any workflows:
 | File | Path |
 |------|-----|
 | This skill | `skills/agent-api/SKILL.md` |
+| MS-02 Market Spec | `docs/specs/mkt/MS-02-capability-market.md` |
+| MS-02 Conformance | `docs/specs/mkt/MS-02-CONFORMANCE.md` |
 | MS-01 Market Spec | `docs/specs/mkt/MS-01-coupon-market.md` |
 | MS-01 Conformance | `docs/specs/mkt/MS-01-CONFORMANCE.md` |
 | WS Conformance | `docs/specs/WS-CONFORMANCE.md` |
@@ -129,6 +131,8 @@ Non-interference rule:
 - `POST /agent/publish_kind0`
 - `POST /agent/publish_kind1`
 - `POST /agent/market/order`
+- `POST /agent/market/ms02/derive_capability`
+- `POST /agent/market/ms02/construct_ask`
 - `POST /agent/secure_dm`
 - `POST /agent/react`
 - `POST /agent/reply`
@@ -216,6 +220,69 @@ Operational guardrail:
    - poll `GET /agent/invoice_status/{quote}`
    - terminal state is `quote_status: PAID`
 4. Optionally confirm final wallet state with `GET /agent/balance` or `GET /agent/tx_history`.
+
+### 3a) MS-02 Ask Construction (Generic Capability Profile)
+
+Use the dedicated constructor before publishing an MS-02 ask:
+
+1. Prepare capability artifacts:
+   - `capability_ref`
+   - `commitment_hash`
+2. Call `POST /agent/market/ms02/construct_ask` with:
+   - required: `capability_ref`, `price_sats`, `expiry`, `commitment_hash`
+   - optional: `capability_scheme` (defaults to `nostr_keypair_v1`)
+   - optional: `content_format` (`yaml` default, `plain` supported)
+3. Use returned:
+   - `content` (human-readable ask preview)
+   - `tags`, `order_details_jcs`, and `ask_id` (authoritative machine data)
+4. Publish ask with `POST /agent/market/order` using `market=MS-02` and returned `content`.
+
+Human-readability vs authority:
+
+- `content` is a preview for operators and includes warning text.
+- Long identifiers are shortened in YAML display fields (`*_display`).
+- Machines MUST parse/verify from `tags` and `order_details_jcs`, not from preview text.
+
+Example:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${SELLER_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capability_ref":"npub1...",
+    "price_sats":21,
+    "expiry":"2026-03-31T23:59:59Z",
+    "commitment_hash":"7f3a9c2d41b8d4479c31c6f3a4b7a1e1d0f9d8c7b6a5e4d3c2b1a09182736455"
+  }' \
+  "${BASE_URL}/agent/market/ms02/construct_ask"
+```
+
+### 3b) MS-02 `nostr_keypair_v1` Capability Helper
+
+Agent API helper endpoint:
+
+- `POST /agent/market/ms02/derive_capability`
+- Body: optional `{ "nsec": "nsec1..." }`
+- If `nsec` is omitted, a fresh capability `nsec` is generated and returned.
+
+Local helper method (equivalent behavior):
+
+- `Acorn.derive_ms02_nostr_capability_from_nsec(nsec=None)`
+
+Returns:
+
+- `nsec` (the supplied or newly generated capability secret)
+- `capability_scheme=nostr_keypair_v1`
+- `capability_ref=<derived npub>`
+- `commitment_hash=<sha256(raw_private_key_bytes)>`
+- `hash_alg=sha256`
+
+Security guidance:
+
+- For stronger key hygiene, derive capability artifacts outside shared/server runtime.
+- Prefer sending only `capability_ref` and `commitment_hash` to remote systems.
+- If using `/agent/market/ms02/derive_capability`, treat returned `nsec` as highly sensitive and avoid logging it.
 
 ### Currency Preflight (Before Address Payments)
 

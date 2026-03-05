@@ -1,6 +1,6 @@
 # MS-02 Conformance Checklist
 **Spec**: `MS-02`  
-**Version**: `1.0`  
+**Version**: `1.1`  
 **Date**: `2026-03-05`  
 **Primary Spec**: `docs/specs/mkt/MS-02-capability-market.md`
 
@@ -26,7 +26,7 @@ Required:
   - `BUYER_B` (competing buyer)
   - `PROVIDER` (or provider simulator)
 - Valid `X-Access-Key` for wallet actors.
-- Relay setup stable enough for ask publication, zaps, and DM delivery.
+- Relay setup stable enough for ask publication, settlement receipts, and DM delivery.
 
 Suggested environment variables:
 
@@ -65,7 +65,9 @@ Fill once per run:
 | Base URL | |
 | Provider URL | |
 | Relay set | |
-| Spec version under test | 1.0 |
+| Spec version under test | 1.1 |
+| Capability scheme under test | |
+| Settlement method under test | |
 | Notes | |
 
 ---
@@ -89,18 +91,18 @@ Use `PASS`, `FAIL`, or `N/A`.
 
 ## 6. Execution Steps by Test Case
 
-## 6.1 `TC-MS02-001` Fresh Capability Keypair
+## 6.1 `TC-MS02-001` Fresh Capability Material
 
 Requirement:
-- Each entitlement uses a unique redemption keypair/`npub`.
+- Each entitlement uses unique capability material, producing unique `capability_ref`.
 
 Steps:
-1. Prepare two capabilities for two entitlements.
+1. Prepare two capabilities for two entitlements under the same `capability_scheme`.
 2. Publish two asks from seller.
-3. Extract `npub` values from ask payloads/tags/content.
+3. Extract `capability_ref` values from ask payloads/tags/content.
 
 Pass:
-- `npub` values are distinct.
+- `capability_ref` values are distinct.
 
 ## 6.2 `TC-MS02-002` Commitment Publication
 
@@ -123,8 +125,10 @@ Requirement:
 
 Steps:
 1. Capture published `issuer_pubkey`, `order_details`, `commitment_hash`, `ask_id`.
-2. Recompute deterministic id using canonical serialization.
-3. Compare with published `ask_id`.
+2. Canonicalize `order_details` using RFC 8785 (JCS).
+3. Recompute deterministic id using:
+   `sha256(issuer_pubkey || canonical_json(order_details) || commitment_hash)`.
+4. Compare with published `ask_id`.
 
 Pass:
 - Exact match.
@@ -135,13 +139,15 @@ Requirement:
 - First sender reaching required amount wins settlement.
 
 Steps:
-1. Buyer A sends partial zaps.
-2. Buyer B sends zaps and reaches total first (or vice versa).
+1. Buyer A sends partial settlement receipts.
+2. Buyer B sends receipts and reaches total first (or vice versa).
 3. Seller finalizes settlement for first fully funded sender.
+4. If tie occurs in same processing window, evaluate documented tie-break policy.
 
 Pass:
-- Winner is the first sender at `sum(sender_zaps) == price_sats`.
-- Capability delivered only to winner.
+- Winner is first sender at `sum(sender_settlements) >= price_sats`.
+- Capability secret delivered only to winner.
+- Tie-break behavior matches documented deterministic rule.
 
 ## 6.5 `TC-MS02-005` Expiry Enforcement
 
@@ -151,7 +157,7 @@ Requirement:
 Steps:
 1. Create ask with short expiry.
 2. Wait until expired.
-3. Attempt additional zap and settlement completion.
+3. Attempt additional settlement and settlement completion.
 
 Pass:
 - Ask is treated closed; no new winner; no capability delivery post-expiry.
@@ -159,31 +165,35 @@ Pass:
 ## 6.6 `TC-MS02-006` Capability Verification
 
 Requirement:
-- Delivered `nsec` verifies against published commitment and ask binding.
+- Delivered `capability_secret` verifies against published commitment and ask binding.
 
 Steps:
-1. Winning buyer receives `nsec` via DM/secure channel.
-2. Decode `nsec -> sk`.
-3. Compute `sha256(sk)` and compare to `commitment_hash`.
+1. Winning buyer receives secret via DM/secure channel.
+2. Run scheme-specific commitment verification to derive hash from secret.
+3. Compare derived hash to `commitment_hash`.
 4. Recompute `ask_id` and compare to published value.
 
 Pass:
-- Both commitment and ask-id checks succeed.
+- Commitment check succeeds.
+- Ask-id check succeeds.
 
-## 6.7 `TC-MS02-007` Signature Challenge Verification
+Note:
+- For `nostr_keypair_v1`, verify `sha256(sk_i) == commitment_hash` where `sk_i` is decoded from delivered `nsec`.
+
+## 6.7 `TC-MS02-007` Challenge Verification
 
 Requirement:
-- Provider challenge is signed by capability key and verified.
+- Provider challenge is verified using capability control proof.
 
 Steps:
-1. Buyer submits `npub` to provider.
+1. Buyer submits `capability_ref` to provider.
 2. Provider sends challenge nonce.
-3. Buyer signs challenge with capability key.
-4. Provider verifies signature.
+3. Buyer proves control with scheme-specific method.
+4. Provider verifies proof.
 
 Pass:
-- Valid signature accepted.
-- Invalid signature variant rejected.
+- Valid proof accepted.
+- Invalid proof variant rejected.
 
 ## 6.8 `TC-MS02-008` Single-Use Enforcement
 
@@ -191,7 +201,7 @@ Requirement:
 - Second redemption attempt fails after first success.
 
 Steps:
-1. Complete one successful redemption for capability `npub`.
+1. Complete one successful redemption for capability `capability_ref`.
 2. Repeat redemption attempt with same capability.
 
 Pass:
@@ -217,7 +227,9 @@ Record at minimum:
 - Ask event id
 - Published `ask_id`
 - Published `commitment_hash`
-- Zap receipt ids used for winner decision
+- Published `capability_scheme`
+- Published `capability_ref`
+- Settlement receipt ids used for winner decision
 - Capability delivery evidence id (DM event id or secure channel log id)
 - Redemption transaction id / provider request id
 - Spent-marker evidence for single-use enforcement
@@ -240,7 +252,7 @@ curl -sS -X POST \
   }' \
   "${BASE_URL}/agent/market/order"
 
-# 2) Check zaps for ask event
+# 2) Check settlement receipts for ask event
 curl -sS \
   -H "X-Access-Key: ${SELLER_KEY}" \
   "${BASE_URL}/agent/nostr/zap_receipts?event_id=<ASK_EVENT_ID>&limit=100"
@@ -253,3 +265,4 @@ curl -sS \
 | Version | Date | Notes |
 |---------|------|-------|
 | `1.0` | 2026-03-05 | Initial conformance checklist for MS-02 capability market lifecycle. |
+| `1.1` | 2026-03-05 | Aligned checklist terminology and pass criteria to generic capability model (`capability_scheme/ref/secret`), RFC 8785 ask determinism, and deterministic tie-break semantics. |

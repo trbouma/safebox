@@ -1525,6 +1525,249 @@ class Acorn:
         )
         return secrets.compare_digest(derived, expected)
 
+    @staticmethod
+    def derive_ms02_nostr_capability_from_nsec(nsec: str | None = None) -> Dict[str, Any]:
+        """
+        Derive `nostr_keypair_v1` capability fields for MS-02 from an nsec.
+
+        Security note:
+        For stronger key hygiene, callers SHOULD perform this derivation outside
+        shared/server runtime and only submit derived public artifacts
+        (`capability_ref`, `commitment_hash`) to remote services.
+        """
+        nsec_value = str(nsec or "").strip()
+        if not nsec_value:
+            nsec_value = Keys().private_key_bech32()
+
+        try:
+            capability_key = Keys(priv_k=nsec_value)
+            priv_hex = str(capability_key.private_key_hex() or "").strip().lower()
+            npub = str(capability_key.public_key_bech32() or "").strip()
+        except Exception as exc:
+            raise ValueError("invalid nsec") from exc
+
+        if len(priv_hex) != 64 or not all(ch in string.hexdigits for ch in priv_hex):
+            raise ValueError("invalid nsec private key material")
+        if not npub.startswith("npub"):
+            raise ValueError("could not derive npub from nsec")
+
+        commitment_hash = hashlib.sha256(bytes.fromhex(priv_hex)).hexdigest()
+        return {
+            "status": "OK",
+            "nsec": nsec_value,
+            "capability_scheme": "nostr_keypair_v1",
+            "capability_ref": npub,
+            "commitment_hash": commitment_hash,
+            "hash_alg": "sha256",
+        }
+
+    @staticmethod
+    def _canonical_json_ms02(obj: Dict[str, Any]) -> str:
+        # RFC 8785 reference profile; for MS-02 fields (string/int), stable key ordering
+        # and compact separators provide deterministic cross-runtime output.
+        return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    @staticmethod
+    def _parse_iso8601_utc(expiry: str) -> datetime:
+        expiry_value = str(expiry or "").strip()
+        if not expiry_value:
+            raise ValueError("expiry is required")
+        if expiry_value.endswith("Z"):
+            expiry_value = expiry_value[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(expiry_value)
+        except Exception as exc:
+            raise ValueError("expiry must be ISO-8601") from exc
+        if parsed.tzinfo is None:
+            raise ValueError("expiry must include UTC timezone (e.g. Z)")
+        return parsed.astimezone(timezone.utc)
+
+    @staticmethod
+    def _render_ms02_order_details_yaml(order_details: Dict[str, Any]) -> str:
+        lines = ["order_details:"]
+        for key, value in order_details.items():
+            if isinstance(value, str):
+                safe_value = value.replace("\\", "\\\\").replace('"', '\\"')
+                lines.append(f'  {key}: "{safe_value}"')
+            else:
+                lines.append(f"  {key}: {value}")
+        return "\\n".join(lines)
+
+    @staticmethod
+    def _human_display_id(value: str, head: int = 12, tail: int = 8) -> str:
+        raw = str(value or "").strip()
+        if len(raw) <= (head + tail + 3):
+            return raw
+        return f"{raw[:head]}...{raw[-tail:]}"
+
+    def construct_ms02_ask(
+        self,
+        capability_scheme: str | None,
+        capability_ref: str,
+        price_sats: int,
+        expiry: str,
+        commitment_hash: str,
+        instrument: str = "service_entitlement",
+        quantity: int = 1,
+        redemption_provider: str | None = None,
+        provider_commitment: str | None = None,
+        settlement_method: str = "nip57_zap_v1",
+        market: str = "MS-02",
+        hash_alg: str = "sha256",
+        content_format: str = "yaml",
+    ) -> Dict[str, Any]:
+        scheme = str(capability_scheme or "nostr_keypair_v1").strip()
+        if not scheme:
+            raise ValueError("capability_scheme is required")
+
+        cap_ref = str(capability_ref or "").strip()
+        if not cap_ref:
+            raise ValueError("capability_ref is required")
+
+        inst = str(instrument or "").strip()
+        if not inst:
+            raise ValueError("instrument is required")
+
+        try:
+            px = int(price_sats)
+        except Exception as exc:
+            raise ValueError("price_sats must be integer") from exc
+        if px <= 0:
+            raise ValueError("price_sats must be > 0")
+
+        try:
+            qty = int(quantity)
+        except Exception as exc:
+            raise ValueError("quantity must be integer") from exc
+        if qty <= 0:
+            raise ValueError("quantity must be > 0")
+
+        expiry_dt = self._parse_iso8601_utc(expiry)
+        now_utc = datetime.now(timezone.utc)
+        if expiry_dt <= now_utc:
+            raise ValueError("expiry must be in the future")
+        expiry_utc = expiry_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+        normalized_hash_alg = str(hash_alg or "").strip().lower()
+        if normalized_hash_alg != "sha256":
+            raise ValueError("hash_alg must be sha256")
+
+        commitment = str(commitment_hash or "").strip().lower()
+        if len(commitment) != 64 or not all(ch in string.hexdigits for ch in commitment):
+            raise ValueError("commitment_hash must be 64-char hex")
+
+        if provider_commitment:
+            provider_commitment = str(provider_commitment).strip().lower()
+            if len(provider_commitment) != 64 or not all(ch in string.hexdigits for ch in provider_commitment):
+                raise ValueError("provider_commitment must be 64-char hex when provided")
+
+        settlement = str(settlement_method or "").strip()
+        if not settlement:
+            raise ValueError("settlement_method is required")
+
+        order_details: Dict[str, Any] = {
+            "instrument": inst,
+            "capability_scheme": scheme,
+            "capability_ref": cap_ref,
+            "quantity": qty,
+            "price_sats": px,
+            "expiry": expiry_utc,
+            "settlement_method": settlement,
+        }
+        if redemption_provider:
+            order_details["redemption_provider"] = str(redemption_provider).strip()
+
+        issuer_pubkey = str(self.pubkey_hex or "").strip().lower()
+        if len(issuer_pubkey) != 64 or not all(ch in string.hexdigits for ch in issuer_pubkey):
+            raise ValueError("wallet pubkey must be 64-char hex")
+
+        canonical_order = self._canonical_json_ms02(order_details)
+        ask_preimage = f"{issuer_pubkey}{canonical_order}{commitment}"
+        ask_id = hashlib.sha256(ask_preimage.encode("utf-8")).hexdigest()
+
+        tags: List[List[str]] = [
+            ["mkt", str(market or "MS-02").strip()],
+            ["side", "ask"],
+            ["asset", inst],
+            ["qty", str(qty)],
+            ["px", str(px)],
+            ["ord", ask_id[:16]],
+            ["ms", "MS-02"],
+            ["cap_scheme", scheme],
+            ["cap_ref", cap_ref],
+            ["hash_alg", normalized_hash_alg],
+            ["commitment_hash", commitment],
+            ["ask_id", ask_id],
+            ["expiry", expiry_utc],
+            ["settlement_method", settlement],
+            # Canonical JSON order_details string for deterministic machine parsing.
+            ["order_details_jcs", canonical_order],
+        ]
+        if redemption_provider:
+            tags.append(["redemption_provider", str(redemption_provider).strip()])
+        if provider_commitment:
+            tags.append(["provider_commitment", provider_commitment])
+
+        content_lines = [
+            "ASK #MS02",
+            "WARNING: Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification.",
+            f"instrument={inst}",
+            f"capability_scheme={scheme}",
+            f"capability_ref={cap_ref}",
+            f"quantity={qty}",
+            f"price_sats={px}",
+            f"expiry={expiry_utc}",
+            f"settlement_method={settlement}",
+            f"hash_alg={normalized_hash_alg}",
+            f"commitment_hash={commitment}",
+            f"ask_id={ask_id}",
+        ]
+        if redemption_provider:
+            content_lines.append(f"redemption_provider={str(redemption_provider).strip()}")
+        if provider_commitment:
+            content_lines.append(f"provider_commitment={provider_commitment}")
+        content_lines.append("#MS02 #capability")
+        plain_content = "\\n".join(content_lines)
+        display_cap_ref = self._human_display_id(cap_ref, head=14, tail=8)
+        display_commitment = self._human_display_id(commitment, head=12, tail=8)
+        display_ask_id = self._human_display_id(ask_id, head=12, tail=8)
+
+        content_mode = str(content_format or "yaml").strip().lower()
+        if content_mode not in {"yaml", "plain"}:
+            raise ValueError("content_format must be yaml or plain")
+        yaml_content = "\\n".join(
+            [
+                "ASK #MS02",
+                'warning: "Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification."',
+                self._render_ms02_order_details_yaml(order_details),
+                f'hash_alg: "{normalized_hash_alg}"',
+                f'capability_ref_display: "{display_cap_ref}"',
+                f'commitment_hash_display: "{display_commitment}"',
+                f'ask_id_display: "{display_ask_id}"',
+                '#tags: ["MS02", "capability"]',
+            ]
+        )
+        if redemption_provider:
+            yaml_content += f'\\nredemption_provider: "{str(redemption_provider).strip()}"'
+        if provider_commitment:
+            yaml_content += f'\\nprovider_commitment: "{provider_commitment}"'
+
+        return {
+            "status": "OK",
+            "market": str(market or "MS-02").strip(),
+            "issuer_pubkey": issuer_pubkey,
+            "hash_alg": normalized_hash_alg,
+            "commitment_hash": commitment,
+            "ask_id": ask_id,
+            "order_details": order_details,
+            "tags": tags,
+            "content": yaml_content if content_mode == "yaml" else plain_content,
+            "content_yaml": yaml_content,
+            "content_plain": plain_content,
+            "content_format": content_mode,
+            "canonical_order_details": canonical_order,
+        }
+
     async def create_market_order(
         self,
         side: str,

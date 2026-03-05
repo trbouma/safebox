@@ -101,6 +101,26 @@ class AgentMarketOrderRequest(BaseModel):
     flow: str | None = None
 
 
+class AgentMS02ConstructAskRequest(BaseModel):
+    capability_scheme: str = "nostr_keypair_v1"
+    capability_ref: str
+    price_sats: int
+    expiry: str
+    commitment_hash: str
+    instrument: str = "service_entitlement"
+    quantity: int = 1
+    redemption_provider: str | None = None
+    provider_commitment: str | None = None
+    settlement_method: str = "nip57_zap_v1"
+    market: str = "MS-02"
+    hash_alg: str = "sha256"
+    content_format: str = "yaml"
+
+
+class AgentMS02DeriveCapabilityRequest(BaseModel):
+    nsec: str | None = None
+
+
 class AgentDeriveTokenSecretHashRequest(BaseModel):
     spec_id: str = "MS01"
     token_id: str
@@ -1741,6 +1761,54 @@ async def agent_create_market_order(
         logger.exception("Agent market order create failed")
         raise HTTPException(status_code=400, detail=f"Market order create failed: {exc}")
 
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/construct_ask", tags=["agent"])
+async def agent_construct_ms02_ask(
+    payload: AgentMS02ConstructAskRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        result = acorn_obj.construct_ms02_ask(
+            capability_scheme=payload.capability_scheme,
+            capability_ref=payload.capability_ref,
+            price_sats=payload.price_sats,
+            expiry=payload.expiry,
+            commitment_hash=payload.commitment_hash,
+            instrument=payload.instrument,
+            quantity=payload.quantity,
+            redemption_provider=payload.redemption_provider,
+            provider_commitment=payload.provider_commitment,
+            settlement_method=payload.settlement_method,
+            market=payload.market,
+            hash_alg=payload.hash_alg,
+            content_format=payload.content_format,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 ask construct failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 ask construct failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/derive_capability", tags=["agent"])
+async def agent_derive_ms02_capability(
+    payload: AgentMS02DeriveCapabilityRequest,
+    _acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        result = Acorn.derive_ms02_nostr_capability_from_nsec(payload.nsec)
+    except Exception as exc:
+        logger.exception("Agent MS-02 capability derivation failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 capability derivation failed: {exc}")
+
+    result["warning"] = (
+        "Sensitive: nsec is returned. For stronger key hygiene, "
+        "derive capability artifacts outside shared/server runtime when possible."
+    )
     result["timestamp"] = int(datetime.utcnow().timestamp())
     return result
 
