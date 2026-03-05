@@ -158,6 +158,9 @@ Rules:
 Policy note:
 
 - Partial payment refund behavior is implementation policy; if no refund policy exists, this MUST be disclosed in ask content.
+- Due to the atomic and microtransaction nature of this protocol, partial order fulfillment is not prohibited, but is strongly discouraged.
+- If zaps are received from multiple competing buyers, refund or non-refund behavior is at seller discretion.
+- Seller refund behavior is a policy decision; implementations are RECOMMENDED to avoid refunds by default to reduce griefing surface.
 
 ### 6.7 Secret Delivery
 
