@@ -76,6 +76,7 @@ The key words `MUST`, `MUST NOT`, `SHOULD`, `SHOULD NOT`, and `MAY` in this docu
 | `quantity` | integer | Yes | typically `1` |
 | `price_sats` | integer | Yes | required zap total |
 | `expiry` | string | Yes | ISO-8601 UTC |
+| `redemption_provider` | string | No | provider endpoint, `npub`, or provider-defined locator; optional in public ask |
 | `hash_alg` | string | Yes | `sha256` |
 | `commitment_hash` | string | Yes | `sha256(sk_i)` hex |
 | `ask_id` | string | Yes | deterministic identifier |
@@ -92,7 +93,8 @@ Canonical `order_details` object:
   "npub": "<npub_i>",
   "quantity": 1,
   "price_sats": 21,
-  "expiry": "2026-03-31T23:59:59Z"
+  "expiry": "2026-03-31T23:59:59Z",
+  "redemption_provider": "npub1..."
 }
 ```
 
@@ -105,6 +107,7 @@ Requirements:
 - `canonical_json` MUST use stable key order and deterministic UTF-8 serialization.
 - `commitment_hash` MUST be full hex digest (64 chars).
 - Ask validation MUST fail if recomputed `ask_id` mismatches published `ask_id`.
+- If present in `order_details`, `redemption_provider` MUST be included in canonical serialization for `ask_id` derivation.
 
 ---
 
@@ -165,6 +168,14 @@ Policy note:
 ### 6.7 Secret Delivery
 
 On successful settlement, seller delivers `nsec_i` privately to winning buyer (DM or secure equivalent).
+
+Delivery payload SHOULD include:
+
+- `nsec_i` (required)
+- `redemption_provider` (required unless already disclosed in public `order_details`)
+- `provider_hint` (optional provider-defined metadata)
+
+If `redemption_provider` is intentionally omitted from public ask content for privacy/security reasons, seller MUST include it in secret delivery to enable redemption.
 
 ### 6.8 Buyer Verification
 
