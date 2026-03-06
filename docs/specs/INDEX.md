@@ -40,6 +40,7 @@ Section convention used across current Safebox specs:
 - [Fiduciary Considerations for Service Operators](./FIDUCIARY-CONSIDERATIONS-FOR-SERVICE-OPERATORS.md) - Operator fiduciary/compliance considerations for payments, records stewardship, private-key responsibility, and lawful process handling.
 - [Branding and Host Resolution](./BRANDING-AND-HOST-RESOLUTION.md) - Host-based branding lookup, fallback/bootstrap behavior, and deployment guidance.
 - [Agent API](./AGENT-API.md) - Header-authenticated machine API for automation clients (OpenClaw-style agents) using wallet access keys instead of browser cookies.
+- [Redemption Service Specification](./REDEMPTION-SERVICE-SPEC.md) - Generic provider secret registration and challenge/response redemption contract with redemption-counter enforcement.
 - [Database Backends and Migrations](./DATABASE-BACKENDS-AND-MIGRATIONS.md) - SQLite/PostgreSQL backend support, centralized engine behavior, and Alembic migration workflow.
 - [Acorn Resiliency and Guards](./ACORN-RESILIENCY-AND-GUARDS.md) - Runtime guard model for Acorn under unreliable/adversarial conditions, including lock safety, failure handling, and rollback strategy.
 - [Hardening in Unpredictable and Adversarial Environments](./HARDENING-IN-UNPREDICTABLE-AND-ADVERSARIAL-ENVIRONMENTS.md) - Cross-cutting hardening model covering shared failure modes, fallback classes, fail-closed boundaries, and graceful rollback/recovery patterns across all flow families.
