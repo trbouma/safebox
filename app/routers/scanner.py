@@ -132,7 +132,11 @@ async def get_scan_result(  request: Request,
         return _redirect_access(nprofile=qr_code)
 
     if qr_code[:5].lower() == "nauth":
-        parsed_nauth = parse_nauth(qr_code)
+        try:
+            parsed_nauth = parse_nauth(qr_code)
+        except Exception:
+            logger.warning("Invalid nauth payload scanned: %s", qr_code)
+            return _redirect_access(action_comment="Invalid or unsupported authentication QR.")
         logger.debug("scanner parsed nauth: %s", parsed_nauth)
 
         scope = parsed_nauth.get("values", {}).get("scope", "")

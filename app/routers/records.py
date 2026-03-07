@@ -777,6 +777,12 @@ async def transmit_records(        request: Request,
         transmit_consultation.originating_kind,
         transmit_consultation.final_kind,
     )
+    logger.info(
+        "Transmit context (nauth_present=%s kem_present=%s kemalg=%s)",
+        bool((transmit_consultation.nauth or "").strip()),
+        bool((transmit_consultation.kem_public_key or "").strip()),
+        transmit_consultation.kemalg,
+    )
 
     try:
         parsed_nauth = parse_nauth(transmit_consultation.nauth)
@@ -812,6 +818,19 @@ async def transmit_records(        request: Request,
                 if origin and origin not in seen_origins:
                     seen_origins.add(origin)
                     candidate_origins.append(origin)
+
+            # Same-instance fallback: try current request host first.
+            # This avoids relay-host-only lookups (for example relay.getsafebox.app)
+            # when sender and recipient are on the same Safebox service host.
+            request_host = request.url.hostname or ""
+            request_port = request.url.port
+            if request_host:
+                if request_port and request_port not in (80, 443):
+                    request_host = f"{request_host}:{request_port}"
+                request_origin = _origin_from_host(request_host)
+                if request_origin and request_origin not in seen_origins:
+                    seen_origins.add(request_origin)
+                    candidate_origins.append(request_origin)
 
             # Preferred: recipient service host embedded by request-offer scope.
             # Format: offer_request:<grant_kind>:<offer_kind>:<recipient_host>
@@ -915,6 +934,7 @@ async def transmit_records(        request: Request,
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,json.dumps(transmittal_obj), dm_relays=transmittal_relays,kind=transmittal_kind)
 
         detail = f"Successfully transmitted kind {transmit_consultation.final_kind} to {transmittal_npub} via {transmittal_relays}"
+        logger.info("Transmit success: %s", detail)
 
         return {"status": status, "detail": detail}
     except HTTPException:
@@ -928,6 +948,7 @@ async def transmit_records(        request: Request,
         status = "ERROR"
         detail = f"Error: {e}"
     
+    logger.info("Transmit result status=%s detail=%s", status, detail)
 
     return {"status": status, "detail": detail} 
 

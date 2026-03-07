@@ -109,6 +109,7 @@ Non-interference rule:
 - `POST /agent/set_custom_handle`
 - `GET /agent/read_dms`
 - `WS /agent/ws/read_dms`
+- `WS /agent/ws/offers/receive/{intent_id}`
 - `GET /agent/nostr/latest_kind1`
 - `GET /agent/nostr/discovery/latest_kind1`
 - `GET /agent/nostr/my_latest_kind1`
@@ -140,7 +141,9 @@ Non-interference rule:
 - `POST /agent/unfollow`
 - `POST /agent/issue_ecash`
 - `POST /agent/accept_ecash`
+- `POST /agent/terminal/ascii_qr`
 - `POST /agent/offers/receive/create`
+- `GET /agent/offers/receive/{intent_id}/wait`
 - `POST /agent/offers/create`
 - `GET /agent/offers/{offer_id}/status`
 - `POST /agent/offers/{offer_id}/capture`
@@ -648,27 +651,40 @@ Use this flow when a human Safebox user will send a grant to the agent wallet by
 
 1. Call `POST /agent/offers/receive/create` with:
    - optional `ttl_seconds` and `compact_qr` (default `true`)
+   - optional `include_ascii_qr=true` to receive a terminal-renderable text QR in the same response
    - optional `grant_kind` and `grant_name` metadata (not required for handshake)
 2. Display `qr_text` (or `qr_image_url`) to the human sender.
+   - For terminal-native agents, print `ascii_qr` when requested.
 3. Sender scans QR from Safebox offer UI.
 4. Sender transmits grant through existing offer flow.
+5. Agent waits for grant with:
+   - `GET /agent/offers/receive/{intent_id}/wait?timeout_seconds=<n>&poll_seconds=<n>`
+   - or websocket stream `WS /agent/ws/offers/receive/{intent_id}?timeout_seconds=<n>&poll_seconds=<n>`
 
 Expected response includes:
 
 - `intent.intent_id`, `intent.expires_at`
 - `recipient.recipient_nauth`
 - `qr_payload`, `qr_text`, `qr_image_url`
+- optional `ascii_qr` (present only when `include_ascii_qr=true`)
 
 Field usage:
 
 - Agent management fields: `status`, `intent`, and `recipient`.
 - Human scan fields: `qr_text` (raw `recipient_nauth`) or `qr_image_url`.
+- Terminal render field: `ascii_qr` (human-agent boundary over terminal sessions).
 - Structured optional context: `qr_payload` (for debugging/advanced clients).
 
 Protocol note:
 
 - Recipient-side nauth uses `scope=offer_request`.
 - Scanner routing is expected to detect `offer_request` and redirect into records offer flow instead of generic accept flow.
+
+Flow model note:
+
+- Human-to-human and human-to-agent use the same relay/auth protocol primitives (`21061` auth, `21062` transmittal).
+- Human-to-agent is intent-driven; handshake completion and record ingest are separate stages.
+- Do not treat handshake success as completion until ingest/persist succeeds.
 
 ### Copy/Paste Quickstart For OpenClaw
 
@@ -681,18 +697,69 @@ curl -sS -X POST \
   -H "Content-Type: application/json" \
   -d '{
     "ttl_seconds": 120,
-    "compact_qr": true
+    "compact_qr": true,
+    "include_ascii_qr": true
   }' \
   "${BASE_URL}/agent/offers/receive/create"
 ```
 
-Use returned `qr_text` (raw `recipient_nauth`) as the QR content the human scans.
+Use returned `ascii_qr` for terminal display and `qr_text` (raw `recipient_nauth`) as canonical QR payload content.
+
+Then wait for delivery using the returned `intent.intent_id`:
+
+```bash
+INTENT_ID="<intent_id_from_create_response>"
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/offers/receive/${INTENT_ID}/wait?timeout_seconds=120&poll_seconds=2"
+```
+
+Wait endpoint behavior:
+
+- Returns `status=OK` with `grant` when a new grant is received during the window.
+- Returns `status=TIMEOUT` when no grant arrives before timeout/expiry.
+- Uses optional `relays` query override for record lookup.
+
+WebSocket wait behavior:
+
+- `WS /agent/ws/offers/receive/{intent_id}` emits:
+  - `type=connected` when stream is active
+  - `type=heartbeat` while waiting
+  - `type=received` with `grant` when delivery is detected
+  - `type=timeout` if no grant arrives before timeout/expiry
+- Auth the same as other agent websockets:
+  - preferred: `X-Access-Key` header
+  - fallback: `?access_key=<key>` query parameter
+- HTTP fallback remains:
+  - `GET /agent/offers/receive/{intent_id}/wait`
+
+Terminal success criteria (recipient-first):
+
+1. Handshake completes for the active intent.
+2. At least one new transmittal record is observed for the matched presenter/context.
+3. Record decrypt + `put_record` persist succeeds.
+4. Wait endpoint/stream reaches terminal receive state (`status=OK` with `grant` or `type=received`).
+
+Troubleshooting guidance:
+
+1. If you see handshake logs but no terminal receive state, treat as incomplete ingest.
+2. If the receiver loop repeats with seen IDs only, regenerate a fresh intent/QR and retry to avoid stale replay windows.
+3. Timeout without `grant` means the sender path did not produce a matching transmittal for this intent window.
+4. Validate completion using API state (`wait`/WS terminal payload), not sender UI success alone.
 
 Compact behavior:
 
 - `compact_qr=true` (default): `qr_text` stays raw `recipient_nauth`; structured metadata is available in `qr_payload`.
 - `compact_qr=false`: QR includes explicit auth/transmittal relay metadata and KEM public metadata.
 - Backward compatibility: `compact` is accepted as an alias for older clients.
+- `include_ascii_qr=true`: embed text QR directly in create response (preferred for terminal agents).
+
+Fallback text-QR helper:
+
+- `POST /agent/terminal/ascii_qr` with body:
+  - `qr_text` (required)
+  - `invert` (optional, default `true`)
+- Use when a flow returns only `qr_text` and terminal rendering is needed after the fact.
 
 ### 15) Sender-Side Offer Dispatch Lifecycle
 
@@ -811,6 +878,7 @@ Retry guidance:
 
 - `docs/specs/AGENT-API.md`
 - `docs/specs/AGENT-FLOWS.md`
+- `docs/specs/AGENT-OFFER-RECIPIENT-FIRST-FLOW.md`
 - `app/routers/agent.py`
 - `safebox/cli_agent.py`
 - `safebox/cli_acorn.py`

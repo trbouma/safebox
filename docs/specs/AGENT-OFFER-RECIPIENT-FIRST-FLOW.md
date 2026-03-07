@@ -32,6 +32,43 @@ Out of scope (for this phase):
 5. Scanner detects `scope=offer_request` and redirects into records offer flow.
 6. Sender-side flow continues; grant/offer selection remains sender-context driven.
 
+## Flow Model Differences
+
+The protocol primitives are the same across human and agent flows (`nauth`, auth relay kind `21061`, transmittal relay kind `21062`), but execution model is different.
+
+### Human-to-Human (Browser Session Model)
+
+1. Recipient UI creates `nauth` and starts a live websocket listener.
+2. Sender scans QR and immediately completes auth handshake from the current record-offer page context.
+3. Sender transmits records after handshake.
+4. Recipient websocket receives and ingests records in the same active browser flow.
+5. UI can immediately render success/failure because session state and receive loop are co-located.
+
+### Human-to-Agent (Intent Model)
+
+1. Agent creates a receive intent (`intent_id`) and `recipient_nauth`.
+2. Agent exposes QR/text payload to human sender.
+3. Human scans and completes auth handshake from the offer UI.
+4. Agent receives handshake completion asynchronously and then starts transmittal ingest polling/listening for kind `21062`.
+5. Agent persists ingested records to wallet storage, updates intent status, and returns terminal websocket state (`received`/`timeout`/`error`).
+
+### Why Agent Flow Needs Extra Logic
+
+1. The agent is not guaranteed to share an active browser session with the sender; receive state must be explicitly tracked by `intent_id`.
+2. Handshake and transmittal are decoupled in time; agent logic must gate ingestion on successful handshake completion.
+3. Poll/listen loops must deduplicate seen event IDs and stop on terminal conditions to avoid replay loops.
+4. Persistence is a first-class step for agents; "received by websocket" is not sufficient without `put_record` success.
+
+### Terminal Conditions
+
+The agent receive loop should transition to terminal state when any one of the following occurs:
+
+1. At least one valid transmittal is decrypted and persisted (`received`).
+2. Intent timeout window expires before a valid transmittal (`timeout`).
+3. Fatal ingest error is encountered (`error`).
+
+This differs from human UI flow, where visual completion may be driven by page-level events and immediate websocket closure.
+
 ## API Contract
 
 ### `POST /agent/offers/receive/create`

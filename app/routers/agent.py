@@ -1,4 +1,9 @@
 import asyncio
+import base64
+import hashlib
+import hmac
+import io
+import json
 import logging
 import secrets
 import time
@@ -9,6 +14,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+import qrcode
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 
@@ -19,16 +25,20 @@ from app.rates import get_currency_rate, get_currency_rates
 from app.routers import records as records_router
 from app.tasks import handle_payment
 from app.utils import (
+    create_nembed_compressed,
     create_jwt_token,
     create_nauth,
     extract_leading_numbers,
     generate_nonce,
     generate_pnr,
+    hex_to_npub,
     listen_for_request,
     parse_nauth,
     validate_local_part,
 )
 from monstr.encrypt import Keys
+from safebox.monstrmore import ExtendedNIP44Encrypt
+import oqs
 from safebox.acorn import Acorn
 
 router = APIRouter()
@@ -219,6 +229,8 @@ class AgentOfferReceiveCreateRequest(BaseModel):
     grant_name: str | None = None
     ttl_seconds: int = 120
     compact_qr: bool = True
+    include_ascii_qr: bool = False
+    recipient_host: str | None = None
     # Backward-compatible alias for older clients.
     compact: bool | None = None
 
@@ -229,6 +241,20 @@ class AgentOfferCaptureRequest(BaseModel):
 
 class AgentOfferSendRequest(BaseModel):
     recipient_nauth: str | None = None
+
+
+class AgentAsciiQrRequest(BaseModel):
+    qr_text: str
+    invert: bool = True
+
+
+def _build_ascii_qr(qr_text: str, invert: bool = True) -> str:
+    qr = qrcode.QRCode()
+    qr.add_data(qr_text)
+    qr.make(fit=True)
+    out = io.StringIO()
+    qr.print_ascii(out=out, invert=bool(invert))
+    return out.getvalue()
 
 
 def _resolve_wallet_by_access_key(access_key: str | None) -> RegisteredSafebox:
@@ -565,6 +591,313 @@ def _offer_status_payload(offer: dict) -> dict:
         "created_at": offer["created_at"],
         "updated_at": offer["updated_at"],
     }
+
+
+def _resolve_receive_intent_for_wallet(intent_id: str, acorn_obj: Acorn) -> dict:
+    intent = _AGENT_OFFER_RECEIVE_INTENTS.get(intent_id)
+    if intent and intent.get("owner_npub") != acorn_obj.pubkey_bech32:
+        raise HTTPException(status_code=403, detail="Receive intent does not belong to this wallet")
+    if not intent:
+        decoded_intent = _decode_receive_intent_token(intent_id)
+        if not decoded_intent:
+            raise HTTPException(status_code=404, detail="Receive intent not found")
+        if decoded_intent.get("owner_npub") != acorn_obj.pubkey_bech32:
+            raise HTTPException(status_code=403, detail="Receive intent does not belong to this wallet")
+        intent = decoded_intent
+    return intent
+
+
+def _record_has_original_artifact(record: dict) -> bool:
+    if not isinstance(record, dict):
+        return False
+    payload = record.get("payload")
+    if isinstance(payload, dict):
+        if payload.get("original_record") is not None:
+            return True
+        if payload.get("pqc_encrypted_original") is not None:
+            return True
+    return any(record.get(key) is not None for key in ("original_record", "pqc_encrypted_original", "origsha256", "blobref", "blobsha256"))
+
+
+def _grant_kind_values() -> list[int]:
+    kinds: list[int] = []
+    for each in list(settings.GRANT_KINDS or []):
+        try:
+            kind_value = int(each[0]) if isinstance(each, (list, tuple)) else int(each)
+        except Exception:
+            continue
+        if kind_value not in kinds:
+            kinds.append(kind_value)
+    return kinds
+
+
+def _external_scheme(request: Request) -> str:
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    if forwarded_proto in {"http", "https"}:
+        return forwarded_proto
+    host = (request.url.hostname or "").strip().lower()
+    if host in {"localhost", "127.0.0.1"}:
+        return "http"
+    return "https"
+
+
+def _intent_signing_key() -> bytes:
+    secret = (
+        str(getattr(config, "SERVICE_NSEC", "") or "").strip()
+        or str(settings.SERVICE_SECRET_KEY or "").strip()
+        or "safebox-dev-intent-key"
+    )
+    return secret.encode("utf-8")
+
+
+def _encode_receive_intent_token(payload: dict) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    sig = hmac.new(_intent_signing_key(), body.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"rxi_{body}.{sig}"
+
+
+def _decode_receive_intent_token(token: str) -> dict | None:
+    value = str(token or "").strip()
+    if not value.startswith("rxi_") or "." not in value:
+        return None
+    body_part, sig_part = value[4:].rsplit(".", 1)
+    expected_sig = hmac.new(_intent_signing_key(), body_part.encode("ascii"), hashlib.sha256).hexdigest()
+    if not secrets.compare_digest(expected_sig, sig_part):
+        return None
+    padded = body_part + ("=" * (-len(body_part) % 4))
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+        obj = json.loads(decoded.decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    try:
+        expires_at = int(obj.get("expires_at") or 0)
+    except Exception:
+        expires_at = 0
+    now_ts = int(datetime.utcnow().timestamp())
+    if expires_at <= 0 or now_ts > expires_at + 5:
+        return None
+    obj.setdefault("intent_id", value)
+    obj.setdefault("status", "WAITING_SEND")
+    obj.setdefault("updated_at", now_ts)
+    return obj
+
+
+def _resolve_offer_kind_for_grant(grant_kind: int | None) -> int | None:
+    if grant_kind is None:
+        return None
+    grant_label = None
+    for each in list(settings.GRANT_KINDS or []):
+        if not isinstance(each, (list, tuple)) or len(each) < 2:
+            continue
+        try:
+            if int(each[0]) == int(grant_kind):
+                grant_label = str(each[1])
+                break
+        except Exception:
+            continue
+    if not grant_label:
+        return None
+
+    for each in list(settings.OFFER_KINDS or []):
+        if not isinstance(each, (list, tuple)) or len(each) < 2:
+            continue
+        try:
+            if str(each[1]) == grant_label:
+                return int(each[0])
+        except Exception:
+            continue
+    return None
+
+
+def _grant_summary_row(record: dict, grant_kind: int) -> dict:
+    return {
+        "grant_kind": grant_kind,
+        "id": record.get("id"),
+        "event_id": record.get("id"),
+        "tag": (record.get("tag") or [None])[0] if isinstance(record.get("tag"), list) else record.get("tag"),
+        "type": record.get("type"),
+        "content": record.get("content"),
+        "created_at": record.get("created_at"),
+        "timestamp": record.get("timestamp"),
+        "presenter": record.get("presenter"),
+        "sender": record.get("sender"),
+        "has_original_record": _record_has_original_artifact(record),
+    }
+
+
+async def _ingest_offer_transmittals(
+    acorn_obj: Acorn,
+    transmittal_kind: int,
+    transmittal_relays: list[str] | None,
+    since_ts: int,
+    seen_transmittal_ids: set[str],
+    expected_presenter_hex: str | None = None,
+) -> list[dict]:
+    """Consume 21062-like transmittal records and persist them as local grant records."""
+    ingested_rows: list[dict] = []
+    print(f"listening for request on {transmittal_kind}")
+    try:
+        incoming_records = await acorn_obj.get_user_records(
+            record_kind=transmittal_kind,
+            since=since_ts,
+            relays=transmittal_relays,
+            reverse=True,
+        )
+    except Exception as exc:
+        logger.warning("Agent transmittal poll failed kind=%s error=%s", transmittal_kind, exc)
+        print("listen for request []")
+        return ingested_rows
+    if not incoming_records and since_ts is not None:
+        # Relay/index clock skew can hide same-flow events behind strict `since`.
+        # Fall back to full query and filter client-side.
+        try:
+            incoming_records = await acorn_obj.get_user_records(
+                record_kind=transmittal_kind,
+                since=None,
+                relays=transmittal_relays,
+                reverse=True,
+            )
+        except Exception:
+            incoming_records = []
+    print(f"listen for request {incoming_records}")
+
+    for each in incoming_records:
+        event_id = str(each.get("id") or "").strip()
+        if event_id and event_id in seen_transmittal_ids:
+            print(f"agent transmittal skip_seen_id id={event_id}")
+            continue
+
+        try:
+            record_ts = int(each.get("timestamp") or 0)
+        except Exception:
+            record_ts = 0
+        if since_ts is not None and record_ts and record_ts < int(since_ts):
+            print(f"agent transmittal skip_old id={event_id} ts={record_ts} since={since_ts}")
+            continue
+
+        if expected_presenter_hex:
+            expected_norm = str(expected_presenter_hex).strip().lower()
+            sender_norm = str(each.get("sender") or "").strip().lower()
+            presenter_norm = str(each.get("presenter") or "").strip().lower()
+            if sender_norm != expected_norm and presenter_norm != expected_norm:
+                print(
+                    f"agent transmittal skip_presenter_mismatch id={event_id} sender={sender_norm[:8]} presenter={presenter_norm[:8]}"
+                )
+                continue
+
+        payload_value = each.get("payload")
+        decrypted_original = None
+
+        record_ciphertext = each.get("ciphertext")
+        record_kemalg = each.get("kemalg")
+        if record_ciphertext and record_kemalg:
+            try:
+                pqc = oqs.KeyEncapsulation(record_kemalg, bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                kem_shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                print(f"This is the shared secret: {kem_shared_secret.hex()}")
+                k_pqc = Keys(priv_k=kem_shared_secret.hex())
+                my_enc = ExtendedNIP44Encrypt(k_pqc)
+                encrypted_payload = each.get("pqc_encrypted_payload")
+                encrypted_original = each.get("pqc_encrypted_original")
+                if encrypted_payload:
+                    payload_value = my_enc.decrypt(payload=encrypted_payload, for_pub_k=k_pqc.public_key_hex())
+                    try:
+                        print(f"decrypted payload to put in content: {payload_value} compare to content: {each.get('payload')}")
+                    except Exception:
+                        pass
+                if encrypted_original:
+                    print("there is an original record in the presentation!")
+                    decrypted_original = my_enc.decrypt(payload=encrypted_original, for_pub_k=k_pqc.public_key_hex())
+                    print(f"decrypted original for presentation: {decrypted_original}")
+            except Exception as exc:
+                logger.warning(
+                    "Agent transmittal PQC decrypt skipped id=%s kind=%s: %s",
+                    event_id,
+                    each.get("type"),
+                    exc,
+                )
+        print(f"parse record json: {each}")
+
+        raw_tag = each.get("tag")
+        if isinstance(raw_tag, list) and raw_tag:
+            record_name = str(raw_tag[0])
+        else:
+            record_name = str(each.get("content") or "received-offer")
+
+        try:
+            record_kind = int(each.get("type") or each.get("kind") or transmittal_kind)
+        except Exception:
+            record_kind = transmittal_kind
+
+        record_value = payload_value
+        if not isinstance(record_value, str):
+            record_value = json.dumps(record_value)
+
+        record_origin = each.get("presenter") or each.get("sender")
+        try:
+            if isinstance(record_origin, str) and len(record_origin) == 64:
+                record_origin = hex_to_npub(record_origin)
+        except Exception:
+            pass
+
+        try:
+            await acorn_obj.put_record(
+                record_name=record_name,
+                record_value=record_value,
+                record_kind=record_kind,
+                record_origin=record_origin,
+            )
+            if event_id:
+                seen_transmittal_ids.add(event_id)
+            print(f"agent transmittal persist_ok id={event_id} name={record_name} kind={record_kind}")
+            if decrypted_original:
+                blob_result = await acorn_obj.transfer_blob(
+                    record_name=record_name,
+                    record_kind=record_kind,
+                    record_origin=record_origin,
+                    blobxfer=decrypted_original,
+                    blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+                    blossom_home_server=settings.BLOSSOM_HOME_SERVER,
+                )
+                if blob_result.get("status") != "OK":
+                    logger.warning(
+                        "Agent transmittal transfer_blob non-fatal status record=%s kind=%s status=%s reason=%s",
+                        record_name,
+                        record_kind,
+                        blob_result.get("status"),
+                        blob_result.get("reason"),
+                    )
+            print(
+                f"agent transmittal ingest_complete id={event_id} name={record_name} kind={record_kind} "
+                f"blob_status={blob_result.get('status') if decrypted_original else 'SKIPPED'}"
+            )
+        except Exception as exc:
+            logger.warning("Agent transmittal persist failed record=%s kind=%s: %s", record_name, record_kind, exc)
+            print(f"agent transmittal persist_failed id={event_id} name={record_name} kind={record_kind} err={exc}")
+            continue
+
+        ingested_rows.append(
+            {
+                "grant_kind": record_kind,
+                "id": event_id or None,
+                "event_id": event_id or None,
+                "tag": record_name,
+                "type": str(record_kind),
+                "content": each.get("content"),
+                "created_at": each.get("created_at"),
+                "timestamp": each.get("timestamp"),
+                "presenter": each.get("presenter"),
+                "sender": each.get("sender"),
+                "has_original_record": bool(decrypted_original or each.get("pqc_encrypted_original")),
+            }
+        )
+        print("incoming record  successful!")
+
+    return ingested_rows
 
 
 @router.get("/info", tags=["agent"])
@@ -1288,6 +1621,297 @@ async def agent_ws_read_dms(
     )
 
 
+@router.websocket("/ws/offers/receive/{intent_id}")
+async def agent_ws_receive_offer(
+    websocket: WebSocket,
+    intent_id: str,
+    timeout_seconds: int = 120,
+    poll_seconds: float = 2.0,
+    relays: str | None = None,
+):
+    await websocket.accept()
+    try:
+        acorn_obj = await _agent_get_acorn_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail})
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+
+    try:
+        intent = _resolve_receive_intent_for_wallet(intent_id=intent_id, acorn_obj=acorn_obj)
+    except HTTPException as exc:
+        await websocket.send_json({"status": "ERROR", "detail": exc.detail, "intent_id": intent_id})
+        await websocket.close(code=4403 if exc.status_code == 403 else 1011)
+        return
+
+    safe_timeout = max(5, min(int(timeout_seconds), 600))
+    poll_interval = max(0.5, min(float(poll_seconds), 5.0))
+    relay_list = _parse_relays_csv(relays)
+
+    now_ts = int(datetime.utcnow().timestamp())
+    expires_at = int(intent.get("expires_at") or now_ts)
+    if now_ts >= expires_at:
+        intent["status"] = "EXPIRED"
+        intent["updated_at"] = now_ts
+        await websocket.send_json(
+            {
+                "status": "TIMEOUT",
+                "type": "timeout",
+                "detail": "Receive intent already expired",
+                "intent": {
+                    "intent_id": intent["intent_id"],
+                    "status": intent["status"],
+                    "expires_at": intent["expires_at"],
+                    "updated_at": intent["updated_at"],
+                },
+                "timestamp": now_ts,
+            }
+        )
+        await websocket.close(code=1000)
+        return
+
+    grant_kind = intent.get("grant_kind")
+    if grant_kind is not None:
+        grant_kinds = [int(grant_kind)]
+    else:
+        grant_kinds = _grant_kind_values()
+        if not grant_kinds:
+            await websocket.send_json({"status": "ERROR", "detail": "No configured grant kinds", "intent_id": intent_id})
+            await websocket.close(code=1011)
+            return
+
+    since_ts = max(0, int(intent.get("created_at") or now_ts) - 5)
+    auth_since_ts = max(0, int(intent.get("created_at") or now_ts) - 5)
+    transmittal_since_ts = since_ts
+    deadline = min(time.monotonic() + safe_timeout, time.monotonic() + max(1, expires_at - now_ts))
+    handshake_complete = False
+    expected_presenter_hex: str | None = None
+
+    recipient_nauth = str(intent.get("recipient_nauth") or "").strip()
+    if not recipient_nauth:
+        await websocket.send_json({"status": "ERROR", "detail": "Receive intent missing recipient_nauth", "intent_id": intent_id})
+        await websocket.close(code=1011)
+        return
+    parsed_intent_nauth = parse_nauth(recipient_nauth)
+    expected_nonce = parsed_intent_nauth.get("values", {}).get("nonce")
+    auth_kind = parsed_intent_nauth.get("values", {}).get("auth_kind", settings.AUTH_KIND)
+    auth_relays = _normalize_relays(parsed_intent_nauth.get("values", {}).get("auth_relays") or settings.AUTH_RELAYS)
+    transmittal_kind = int(parsed_intent_nauth.get("values", {}).get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND))
+    transmittal_relays = _normalize_relays(
+        parsed_intent_nauth.get("values", {}).get("transmittal_relays") or settings.RECORD_TRANSMITTAL_RELAYS
+    )
+    if relay_list is None:
+        relay_list = transmittal_relays or _normalize_relays(settings.RECORD_TRANSMITTAL_RELAYS)
+    seen_transmittal_ids: set[str] = set()
+
+    await websocket.send_json(
+        {
+            "status": "OK",
+            "type": "connected",
+            "intent": {
+                "intent_id": intent["intent_id"],
+                "status": intent.get("status", "WAITING_SEND"),
+                "grant_kind": intent.get("grant_kind"),
+                "grant_name": intent.get("grant_name"),
+                "expires_at": intent.get("expires_at"),
+                "updated_at": intent.get("updated_at"),
+            },
+            "poll_seconds": poll_interval,
+            "handshake_complete": handshake_complete,
+            "timestamp": int(datetime.utcnow().timestamp()),
+        }
+    )
+
+    while time.monotonic() < deadline:
+        try:
+            if not handshake_complete:
+                candidate_nauth, _, _ = await listen_for_request(
+                    acorn_obj=acorn_obj,
+                    kind=auth_kind,
+                    since_now=auth_since_ts,
+                    relays=auth_relays,
+                    expected_nonce=expected_nonce,
+                )
+                auth_since_ts = int(datetime.utcnow().timestamp()) - 1
+                if candidate_nauth and isinstance(candidate_nauth, str):
+                    try:
+                        parsed_presenter = parse_nauth(candidate_nauth)
+                        presenter_pubhex = parsed_presenter.get("values", {}).get("pubhex")
+                        if not presenter_pubhex:
+                            raise ValueError("Presenter pubhex missing")
+                        presenter_npub = hex_to_npub(presenter_pubhex)
+                        presenter_auth_kind = parsed_presenter.get("values", {}).get("auth_kind", settings.AUTH_KIND)
+                        presenter_auth_relays = _normalize_relays(
+                            parsed_presenter.get("values", {}).get("auth_relays") or settings.AUTH_RELAYS
+                        )
+
+                        kem_material = {
+                            "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+                            "kemalg": settings.PQC_KEMALG,
+                        }
+                        kem_nembed = create_nembed_compressed(kem_material)
+                        response_message = f"{recipient_nauth}:{kem_nembed}"
+                        await acorn_obj.secure_transmittal(
+                            nrecipient=presenter_npub,
+                            message=response_message,
+                            kind=presenter_auth_kind,
+                            dm_relays=presenter_auth_relays,
+                        )
+                        handshake_complete = True
+                        expected_presenter_hex = str(presenter_pubhex or "").strip().lower() or None
+                        # Only accept transmittals produced after handshake completion.
+                        transmittal_since_ts = max(transmittal_since_ts, int(datetime.utcnow().timestamp()) - 2)
+                        print(
+                            f"agent ws handshake complete intent_id={intent_id} presenter={presenter_npub} auth_relays={presenter_auth_relays}"
+                        )
+                        logger.info(
+                            "Agent websocket receive-offer handshake completed intent_id=%s presenter=%s",
+                            intent_id,
+                            presenter_npub,
+                        )
+                    except Exception as exc:
+                        print(f"agent ws handshake failure intent_id={intent_id}: {exc}")
+                        logger.exception("Agent websocket receive-offer handshake response failed intent_id=%s", intent_id)
+
+            if handshake_complete:
+                ingested_rows = await _ingest_offer_transmittals(
+                    acorn_obj=acorn_obj,
+                    transmittal_kind=transmittal_kind,
+                    transmittal_relays=relay_list,
+                    since_ts=transmittal_since_ts,
+                    seen_transmittal_ids=seen_transmittal_ids,
+                    expected_presenter_hex=expected_presenter_hex,
+                )
+                for grant_row in ingested_rows:
+                    try:
+                        ingested_kind = int(grant_row.get("grant_kind") or 0)
+                    except Exception:
+                        ingested_kind = 0
+                    if ingested_kind not in grant_kinds:
+                        continue
+                    intent["status"] = "RECEIVED"
+                    intent["received_event_id"] = grant_row.get("event_id")
+                    intent["received_grant_kind"] = ingested_kind
+                    intent["updated_at"] = int(datetime.utcnow().timestamp())
+                    await websocket.send_json(
+                        {
+                            "status": "OK",
+                            "type": "received",
+                            "detail": "Grant received",
+                            "intent": {
+                                "intent_id": intent["intent_id"],
+                                "status": intent["status"],
+                                "grant_kind": intent.get("grant_kind"),
+                                "grant_name": intent.get("grant_name"),
+                                "expires_at": intent.get("expires_at"),
+                                "updated_at": intent.get("updated_at"),
+                                "received_event_id": intent.get("received_event_id"),
+                                "received_grant_kind": intent.get("received_grant_kind"),
+                            },
+                            "grant": grant_row,
+                            "timestamp": int(datetime.utcnow().timestamp()),
+                        }
+                    )
+                    await websocket.close(code=1000)
+                    return
+
+            for each_kind in grant_kinds:
+                records = await acorn_obj.get_user_records(
+                    record_kind=each_kind,
+                    relays=relay_list,
+                    reverse=True,
+                )
+                for record in records:
+                    try:
+                        record_ts = int(record.get("timestamp") or 0)
+                    except Exception:
+                        record_ts = 0
+                    if record_ts < since_ts:
+                        continue
+
+                    grant_row = _grant_summary_row(record=record, grant_kind=each_kind)
+                    intent["status"] = "RECEIVED"
+                    intent["received_event_id"] = grant_row.get("event_id")
+                    intent["received_grant_kind"] = each_kind
+                    intent["updated_at"] = int(datetime.utcnow().timestamp())
+
+                    await websocket.send_json(
+                        {
+                            "status": "OK",
+                            "type": "received",
+                            "detail": "Grant received",
+                            "intent": {
+                                "intent_id": intent["intent_id"],
+                                "status": intent["status"],
+                                "grant_kind": intent.get("grant_kind"),
+                                "grant_name": intent.get("grant_name"),
+                                "expires_at": intent.get("expires_at"),
+                                "updated_at": intent.get("updated_at"),
+                                "received_event_id": intent.get("received_event_id"),
+                                "received_grant_kind": intent.get("received_grant_kind"),
+                            },
+                            "grant": grant_row,
+                            "timestamp": int(datetime.utcnow().timestamp()),
+                        }
+                    )
+                    await websocket.close(code=1000)
+                    return
+
+            remaining = max(0, int(deadline - time.monotonic()))
+            await websocket.send_json(
+                {
+                    "status": "OK",
+                    "type": "heartbeat",
+                    "intent_id": intent_id,
+                    "handshake_complete": handshake_complete,
+                    "remaining_seconds": remaining,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+            )
+            await asyncio.sleep(poll_interval)
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            logger.exception("Agent websocket receive-offer stream failed intent_id=%s", intent_id)
+            await websocket.send_json(
+                {
+                    "status": "ERROR",
+                    "type": "error",
+                    "detail": f"Receive stream error: {exc}",
+                    "intent_id": intent_id,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+            )
+            await asyncio.sleep(poll_interval)
+
+    intent["status"] = "TIMEOUT"
+    intent["updated_at"] = int(datetime.utcnow().timestamp())
+    try:
+        await websocket.send_json(
+            {
+                "status": "TIMEOUT",
+                "type": "timeout",
+                "detail": "No grant received before timeout",
+                "intent": {
+                    "intent_id": intent["intent_id"],
+                    "status": intent["status"],
+                    "grant_kind": intent.get("grant_kind"),
+                    "grant_name": intent.get("grant_name"),
+                    "expires_at": intent.get("expires_at"),
+                    "updated_at": intent.get("updated_at"),
+                },
+                "timestamp": int(datetime.utcnow().timestamp()),
+            }
+        )
+    except WebSocketDisconnect:
+        logger.info("Agent websocket receive-offer disconnected before timeout send intent_id=%s", intent_id)
+    finally:
+        try:
+            await websocket.close(code=1000)
+        except Exception:
+            pass
+
+
 @router.get("/market/orders", tags=["agent"])
 async def agent_market_orders(
     limit: int = 50,
@@ -1454,6 +2078,283 @@ async def agent_read_dms(
         "kind": kind,
         "count": min(len(messages), safe_limit),
         "messages": messages[:safe_limit],
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/grants", tags=["agent"])
+async def agent_grants(
+    grant_kind: int | None = None,
+    limit: int = 100,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    safe_limit = max(1, min(int(limit), 500))
+
+    relay_list = _parse_relays_csv(relays)
+
+    if grant_kind is not None:
+        if int(grant_kind) <= 0:
+            raise HTTPException(status_code=400, detail="Invalid grant_kind")
+        grant_kinds = [int(grant_kind)]
+    else:
+        grant_kinds = _grant_kind_values()
+        if not grant_kinds:
+            raise HTTPException(status_code=500, detail="No configured grant kinds")
+
+    records_by_kind: dict[int, list[dict]] = {}
+    combined: list[dict] = []
+
+    for each_kind in grant_kinds:
+        try:
+            records = await acorn_obj.get_user_records(
+                record_kind=each_kind,
+                relays=relay_list,
+                reverse=True,
+            )
+        except Exception as exc:
+            logger.exception("Agent grants query failed for kind=%s", each_kind)
+            raise HTTPException(status_code=400, detail=f"Grant query failed for kind {each_kind}: {exc}")
+
+        rows: list[dict] = []
+        for record in records:
+            row = _grant_summary_row(record=record, grant_kind=each_kind)
+            rows.append(row)
+            combined.append(row)
+
+        if rows:
+            records_by_kind[each_kind] = rows[:safe_limit]
+        else:
+            records_by_kind[each_kind] = []
+
+    combined.sort(key=lambda r: int(r.get("timestamp") or 0), reverse=True)
+
+    if grant_kind is not None:
+        return {
+            "status": "OK",
+            "grant_kind": int(grant_kind),
+            "count": min(len(records_by_kind[int(grant_kind)]), safe_limit),
+            "grants": records_by_kind[int(grant_kind)][:safe_limit],
+            "timestamp": int(datetime.utcnow().timestamp()),
+        }
+
+    return {
+        "status": "OK",
+        "grant_kinds": grant_kinds,
+        "count": min(len(combined), safe_limit),
+        "grants": combined[:safe_limit],
+        "by_kind": records_by_kind,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/offers/receive/{intent_id}/wait", tags=["agent"])
+async def agent_wait_receive_offer(
+    intent_id: str,
+    timeout_seconds: int = 120,
+    poll_seconds: float = 2.0,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    intent = _resolve_receive_intent_for_wallet(intent_id=intent_id, acorn_obj=acorn_obj)
+
+    safe_timeout = max(5, min(int(timeout_seconds), 600))
+    safe_poll = max(0.5, min(float(poll_seconds), 5.0))
+    relay_list = _parse_relays_csv(relays)
+
+    now_ts = int(datetime.utcnow().timestamp())
+    expires_at = int(intent.get("expires_at") or now_ts)
+    if now_ts >= expires_at:
+        intent["status"] = "EXPIRED"
+        intent["updated_at"] = now_ts
+        return {
+            "status": "TIMEOUT",
+            "detail": "Receive intent already expired",
+            "intent": {
+                "intent_id": intent["intent_id"],
+                "status": intent["status"],
+                "expires_at": intent["expires_at"],
+                "updated_at": intent["updated_at"],
+            },
+            "timestamp": now_ts,
+        }
+
+    grant_kind = intent.get("grant_kind")
+    if grant_kind is not None:
+        grant_kinds = [int(grant_kind)]
+    else:
+        grant_kinds = _grant_kind_values()
+        if not grant_kinds:
+            raise HTTPException(status_code=500, detail="No configured grant kinds")
+
+    listen_deadline = min(time.monotonic() + safe_timeout, time.monotonic() + max(1, expires_at - now_ts))
+    since_ts = max(0, int(intent.get("created_at") or now_ts) - 5)
+    auth_since_ts = max(0, int(intent.get("created_at") or now_ts) - 5)
+    transmittal_since_ts = since_ts
+    handshake_complete = False
+    expected_presenter_hex: str | None = None
+
+    recipient_nauth = str(intent.get("recipient_nauth") or "").strip()
+    if not recipient_nauth:
+        raise HTTPException(status_code=500, detail="Receive intent missing recipient_nauth")
+    parsed_intent_nauth = parse_nauth(recipient_nauth)
+    expected_nonce = parsed_intent_nauth.get("values", {}).get("nonce")
+    auth_kind = parsed_intent_nauth.get("values", {}).get("auth_kind", settings.AUTH_KIND)
+    auth_relays = _normalize_relays(parsed_intent_nauth.get("values", {}).get("auth_relays") or settings.AUTH_RELAYS)
+    transmittal_kind = int(parsed_intent_nauth.get("values", {}).get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND))
+    transmittal_relays = _normalize_relays(
+        parsed_intent_nauth.get("values", {}).get("transmittal_relays") or settings.RECORD_TRANSMITTAL_RELAYS
+    )
+    if relay_list is None:
+        relay_list = transmittal_relays or _normalize_relays(settings.RECORD_TRANSMITTAL_RELAYS)
+    seen_transmittal_ids: set[str] = set()
+
+    while time.monotonic() < listen_deadline:
+        if not handshake_complete:
+            candidate_nauth, _, _ = await listen_for_request(
+                acorn_obj=acorn_obj,
+                kind=auth_kind,
+                since_now=auth_since_ts,
+                relays=auth_relays,
+                expected_nonce=expected_nonce,
+            )
+            auth_since_ts = int(datetime.utcnow().timestamp()) - 1
+            if candidate_nauth and isinstance(candidate_nauth, str):
+                try:
+                    parsed_presenter = parse_nauth(candidate_nauth)
+                    presenter_pubhex = parsed_presenter.get("values", {}).get("pubhex")
+                    if not presenter_pubhex:
+                        raise ValueError("Presenter pubhex missing")
+                    presenter_npub = hex_to_npub(presenter_pubhex)
+                    presenter_auth_kind = parsed_presenter.get("values", {}).get("auth_kind", settings.AUTH_KIND)
+                    presenter_auth_relays = _normalize_relays(
+                        parsed_presenter.get("values", {}).get("auth_relays") or settings.AUTH_RELAYS
+                    )
+
+                    kem_material = {
+                        "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
+                        "kemalg": settings.PQC_KEMALG,
+                    }
+                    kem_nembed = create_nembed_compressed(kem_material)
+                    response_message = f"{recipient_nauth}:{kem_nembed}"
+                    await acorn_obj.secure_transmittal(
+                        nrecipient=presenter_npub,
+                        message=response_message,
+                        kind=presenter_auth_kind,
+                        dm_relays=presenter_auth_relays,
+                    )
+                    handshake_complete = True
+                    expected_presenter_hex = str(presenter_pubhex or "").strip().lower() or None
+                    # Only accept transmittals produced after handshake completion.
+                    transmittal_since_ts = max(transmittal_since_ts, int(datetime.utcnow().timestamp()) - 2)
+                    print(
+                        f"agent wait handshake complete intent_id={intent_id} presenter={presenter_npub} auth_relays={presenter_auth_relays}"
+                    )
+                    logger.info(
+                        "Agent receive wait handshake completed intent_id=%s presenter=%s",
+                        intent_id,
+                        presenter_npub,
+                    )
+                except Exception as exc:
+                    print(f"agent wait handshake failure intent_id={intent_id}: {exc}")
+                    logger.exception("Agent receive wait handshake response failed intent_id=%s", intent_id)
+
+        if handshake_complete:
+            ingested_rows = await _ingest_offer_transmittals(
+                acorn_obj=acorn_obj,
+                transmittal_kind=transmittal_kind,
+                transmittal_relays=relay_list,
+                since_ts=transmittal_since_ts,
+                seen_transmittal_ids=seen_transmittal_ids,
+                expected_presenter_hex=expected_presenter_hex,
+            )
+            for grant_row in ingested_rows:
+                try:
+                    ingested_kind = int(grant_row.get("grant_kind") or 0)
+                except Exception:
+                    ingested_kind = 0
+                if ingested_kind not in grant_kinds:
+                    continue
+                intent["status"] = "RECEIVED"
+                intent["received_event_id"] = grant_row.get("event_id")
+                intent["received_grant_kind"] = ingested_kind
+                intent["updated_at"] = int(datetime.utcnow().timestamp())
+                return {
+                    "status": "OK",
+                    "detail": "Grant received",
+                    "handshake_complete": handshake_complete,
+                    "intent": {
+                        "intent_id": intent["intent_id"],
+                        "status": intent["status"],
+                        "grant_kind": intent.get("grant_kind"),
+                        "grant_name": intent.get("grant_name"),
+                        "expires_at": intent["expires_at"],
+                        "updated_at": intent["updated_at"],
+                        "received_event_id": intent.get("received_event_id"),
+                        "received_grant_kind": intent.get("received_grant_kind"),
+                    },
+                    "grant": grant_row,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+
+        for each_kind in grant_kinds:
+            try:
+                records = await acorn_obj.get_user_records(
+                    record_kind=each_kind,
+                    relays=relay_list,
+                    reverse=True,
+                )
+            except Exception as exc:
+                logger.exception("Agent receive wait query failed for kind=%s intent=%s", each_kind, intent_id)
+                raise HTTPException(status_code=400, detail=f"Receive wait query failed for kind {each_kind}: {exc}")
+
+            for record in records:
+                try:
+                    record_ts = int(record.get("timestamp") or 0)
+                except Exception:
+                    record_ts = 0
+                if record_ts < since_ts:
+                    continue
+
+                grant_row = _grant_summary_row(record=record, grant_kind=each_kind)
+                intent["status"] = "RECEIVED"
+                intent["received_event_id"] = grant_row.get("event_id")
+                intent["received_grant_kind"] = each_kind
+                intent["updated_at"] = int(datetime.utcnow().timestamp())
+                return {
+                    "status": "OK",
+                    "detail": "Grant received",
+                    "handshake_complete": handshake_complete,
+                    "intent": {
+                        "intent_id": intent["intent_id"],
+                        "status": intent["status"],
+                        "grant_kind": intent.get("grant_kind"),
+                        "grant_name": intent.get("grant_name"),
+                        "expires_at": intent["expires_at"],
+                        "updated_at": intent["updated_at"],
+                        "received_event_id": intent.get("received_event_id"),
+                        "received_grant_kind": intent.get("received_grant_kind"),
+                    },
+                    "grant": grant_row,
+                    "timestamp": int(datetime.utcnow().timestamp()),
+                }
+
+        await asyncio.sleep(safe_poll)
+
+    intent["status"] = "TIMEOUT"
+    intent["updated_at"] = int(datetime.utcnow().timestamp())
+    return {
+        "status": "TIMEOUT",
+        "detail": "No grant received before timeout",
+        "handshake_complete": handshake_complete,
+        "intent": {
+            "intent_id": intent["intent_id"],
+            "status": intent["status"],
+            "grant_kind": intent.get("grant_kind"),
+            "grant_name": intent.get("grant_name"),
+            "expires_at": intent["expires_at"],
+            "updated_at": intent["updated_at"],
+        },
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
@@ -2208,6 +3109,35 @@ async def agent_create_offer_receive(
 
     compact_qr = payload.compact_qr if payload.compact is None else payload.compact
 
+    host = request.url.hostname or ""
+    port = request.url.port
+    if host:
+        if port and ((request.url.scheme == "https" and port != 443) or (request.url.scheme == "http" and port != 80)):
+            inferred_recipient_host = f"{host}:{port}"
+        else:
+            inferred_recipient_host = host
+    else:
+        inferred_recipient_host = ""
+
+    requested_host = (payload.recipient_host or "").strip()
+    if requested_host:
+        parsed_requested = urllib.parse.urlparse(
+            requested_host if "://" in requested_host else f"https://{requested_host}"
+        )
+        host_part = (parsed_requested.hostname or "").strip()
+        if parsed_requested.port and host_part:
+            recipient_host = f"{host_part}:{parsed_requested.port}"
+        else:
+            recipient_host = host_part
+    else:
+        recipient_host = inferred_recipient_host
+
+    scope_value = "offer_request"
+    if recipient_host:
+        scope_grant_kind = int(grant_kind) if grant_kind is not None else 0
+        scope_offer_kind = _resolve_offer_kind_for_grant(grant_kind) or 0
+        scope_value = f"offer_request:{scope_grant_kind}:{scope_offer_kind}:{recipient_host}"
+
     transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
     if compact_qr:
         nonce = generate_nonce(length=1)
@@ -2227,16 +3157,15 @@ async def agent_create_offer_receive(
         transmittal_kind=transmittal_kind,
         transmittal_relays=transmittal_relays,
         name=acorn_obj.handle,
-        scope="offer_request",
+        scope=scope_value,
         grant="offer_request",
     )
 
-    intent_id = f"rx_{secrets.token_urlsafe(9)}"
     now_ts = int(datetime.utcnow().timestamp())
     expires_at = now_ts + ttl_seconds
 
-    _AGENT_OFFER_RECEIVE_INTENTS[intent_id] = {
-        "intent_id": intent_id,
+    intent_payload = {
+        "v": 1,
         "owner_npub": acorn_obj.pubkey_bech32,
         "status": "WAITING_SEND",
         "grant_kind": grant_kind,
@@ -2245,6 +3174,12 @@ async def agent_create_offer_receive(
         "created_at": now_ts,
         "updated_at": now_ts,
         "expires_at": expires_at,
+    }
+    intent_id = _encode_receive_intent_token(intent_payload)
+
+    _AGENT_OFFER_RECEIVE_INTENTS[intent_id] = {
+        "intent_id": intent_id,
+        **intent_payload,
     }
 
     qr_payload = {
@@ -2267,13 +3202,12 @@ async def agent_create_offer_receive(
     if grant_name:
         qr_payload["grant_name"] = grant_name
     qr_text = recipient_nauth
-    host = request.url.hostname or ""
-    scheme = request.url.scheme or "https"
+    scheme = _external_scheme(request)
     qr_image_url = (
         f"{scheme}://{host}/safebox/qr/{urllib.parse.quote(qr_text, safe='')}" if host else None
     )
 
-    return {
+    response_payload = {
         "status": "OK",
         "intent": {
             "intent_id": intent_id,
@@ -2285,10 +3219,41 @@ async def agent_create_offer_receive(
         },
         "recipient": {
             "recipient_nauth": recipient_nauth,
+            "recipient_host": recipient_host or None,
         },
         "qr_payload": qr_payload,
         "qr_text": qr_text,
         "qr_image_url": qr_image_url,
+    }
+    if payload.include_ascii_qr:
+        response_payload["ascii_qr"] = _build_ascii_qr(qr_text=qr_text, invert=True)
+    return response_payload
+
+
+@router.post("/terminal/ascii_qr", tags=["agent"])
+async def agent_terminal_ascii_qr(
+    request: Request,
+    payload: AgentAsciiQrRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    _ = acorn_obj
+    qr_text = (payload.qr_text or "").strip()
+    if not qr_text:
+        raise HTTPException(status_code=400, detail="Missing qr_text")
+
+    ascii_qr = _build_ascii_qr(qr_text=qr_text, invert=payload.invert)
+    host = request.url.hostname or ""
+    scheme = _external_scheme(request)
+    qr_image_url = (
+        f"{scheme}://{host}/safebox/qr/{urllib.parse.quote(qr_text, safe='')}" if host else None
+    )
+
+    return {
+        "status": "OK",
+        "qr_text": qr_text,
+        "ascii_qr": ascii_qr,
+        "qr_image_url": qr_image_url,
+        "timestamp": int(datetime.utcnow().timestamp()),
     }
 
 

@@ -10,6 +10,10 @@ At a high level:
 - **Grant**: the resulting issued record received by the counterparty.
 - **Original Record**: optional blob payload linked to offer/grant views and transferred through blob endpoints.
 
+For detailed differences between browser session flows (human-to-human) and intent-driven agent receive flows (human-to-agent), see:
+
+- `docs/specs/AGENT-OFFER-RECIPIENT-FIRST-FLOW.md` (`Flow Model Differences`)
+
 ## Scope
 
 Included:

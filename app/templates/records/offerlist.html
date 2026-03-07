@@ -104,6 +104,21 @@ function getActiveRecipientNauth() {
   return null;
 }
 
+function getDefaultOfferLabel() {
+  const requestedCard = (preselectedCard || "").trim();
+  if (requestedCard) return requestedCard;
+  for (const each of (jsonUserData || [])) {
+    const tag = each && each.tag;
+    if (Array.isArray(tag) && tag.length > 0 && String(tag[0] || "").trim()) {
+      return String(tag[0]).trim();
+    }
+    if (typeof tag === "string" && tag.trim()) {
+      return tag.trim();
+    }
+  }
+  return "";
+}
+
 function cacheRecipientKemForNauth(nauthValue) {
   if (!nauthValue || nauthValue === "None") return;
   if (!global_kem_public_key || !global_kemalg) return;
@@ -534,6 +549,7 @@ async function offerRecord() {
     
     if (global_transmit_nauth=="None" && client_nauth == "None" ) {
       alert(`Please authenticate your credential recipient!`);
+      consoleLog("offerRecord aborted: no recipient nauth available.");
       return;
     }
 
@@ -549,6 +565,10 @@ async function offerRecord() {
     } else {
       nauth_to_transmit = global_transmit_nauth;
     }
+    consoleLog(
+      `offerRecord begin: nauth_source=${global_transmit_nauth == "None" ? "client_nauth" : "global_transmit_nauth"} `
+      + `label_input='${document.getElementById('record_label')?.value?.trim() || ""}' preselected='${(preselectedCard || "").trim()}'`
+    );
    
 
 
@@ -561,8 +581,18 @@ async function offerRecord() {
    };
 
   if (!submit_data.record_name) {
-    alert("Please enter/select an offer label before transmitting.");
-    return;
+    const fallbackLabel = getDefaultOfferLabel();
+    if (fallbackLabel) {
+      submit_data.record_name = fallbackLabel;
+      const labelInput = document.getElementById("record_label");
+      if (labelInput && !labelInput.value) {
+        labelInput.value = fallbackLabel;
+      }
+      consoleLog(`Auto-selected offer label: '${fallbackLabel}'`);
+    } else {
+      alert("Please enter/select an offer label before transmitting.");
+      return;
+    }
   }
   consoleLog(
     `Auto-transmit trigger: record='${submit_data.record_name}' offer_kind=${selectedOfferKind} grant_kind=${selectedGrantKind}`
@@ -578,19 +608,18 @@ async function offerRecord() {
   const response = await fetch('/records/transmit', {
        method: "POST",
        headers: {"Content-Type": "application/json"},        
-       body: JSON.stringify(submit_data)         
+      body: JSON.stringify(submit_data)         
       });
+  consoleLog(`offerRecord transmit HTTP status=${response.status}`);
   const data = await response.json();
   const detailText = formatApiDetail(data.detail);
+  consoleLog(`offerRecord transmit result status='${data.status}' detail='${detailText}'`);
   if (!response.ok || data.status !== "OK") {
     alert(detailText || "Offer transmit failed.");
     return;
   }
   alert(`Done! ${data.status}`);
-  // Reset to a clean offer list URL after successful transmit.
-  // This removes handshake/bootstrap query params and avoids accidental
-  // auto-send retriggers on refresh/back navigation.
-  window.location.href = `/records/offerlist?kind=${selectedOfferKind}`;
+  consoleLog("offerRecord success: staying on page for debugging (redirect disabled).");
 }
 
 
@@ -621,6 +650,13 @@ if (document.readyState === "loading") {
   bootstrapRecipientAutoSend();
 }
 
+window.addEventListener("DOMContentLoaded", () => {
+  consoleLog(
+    `offerlist loaded: recipientInitiated=${recipientInitiated} recipientMode='${recipientMode}' `
+    + `preselectedCard='${(preselectedCard || "").trim()}' clientNauthPresent=${client_nauth && client_nauth !== "None"}`
+  );
+});
+
 
 </script>
    
@@ -637,6 +673,15 @@ if (document.readyState === "loading") {
   <hr>
   <br>
   Kind: {{record_kind}}
+</div>
+
+<div class="center-text" style="margin-top: 16px;">
+  <textarea
+    id="log"
+    readonly
+    style="width: 90%; min-height: 140px; font-family: monospace; font-size: 12px;"
+    placeholder="Flow log appears here..."
+  ></textarea>
 </div>
 
 
