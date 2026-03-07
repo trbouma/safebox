@@ -228,19 +228,33 @@ async def websocket_endpoint(
     websocket: WebSocket,
     acorn_obj: Acorn = Depends(get_acorn),
 ):
+    async def _safe_send_json(payload: dict) -> bool:
+        try:
+            await websocket.send_json(payload)
+            return True
+        except WebSocketDisconnect:
+            logger.info("POS websocket disconnected during send")
+            return False
+        except Exception as exc:
+            logger.debug("POS websocket send failed: %s", exc)
+            return False
+
     if not acorn_obj:
         await websocket.accept()
-        await websocket.send_json({"status": "ERROR", "detail": "Authentication required"})
-        await websocket.close(code=1008)
+        sent = await _safe_send_json({"status": "ERROR", "detail": "Authentication required"})
+        if sent:
+            await websocket.close(code=1008)
         return
 
     await websocket.accept()
 
-    await websocket.send_json({
+    sent = await _safe_send_json({
         "status": "OK",
         "action": "init",
         "detail": f"Connected to: {acorn_obj.handle}",
     })
+    if not sent:
+        return
     try:
         while True:
             data = await websocket.receive_text()  # raw message
@@ -254,19 +268,23 @@ async def websocket_endpoint(
                 if message.get("action") == "get_balance":
                     if acorn_obj:
                         await acorn_obj.load_data()
-                        await websocket.send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance})
+                        if not await _safe_send_json({"status": "OK", "action": "get_balance", "detail": acorn_obj.balance}):
+                            break
                     else:
-                        await websocket.send_json({"status": "ERROR", "action": "get_balance","detail": "Not found"})
+                        if not await _safe_send_json({"status": "ERROR", "action": "get_balance","detail": "Not found"}):
+                            break
 
                 elif message.get("action") == "nfc_token":
                     if not acorn_obj:
-                        await websocket.send_json({"status": "ERROR", "action": "nfc_token", "detail": "Not connected"})
+                        if not await _safe_send_json({"status": "ERROR", "action": "nfc_token", "detail": "Not connected"}):
+                            break
                         continue
                     nfc_token = message.get("value")
                     nfc_amount = message.get("amount")
                     nfc_currency = message.get("currency")
                     nfc_comment = message.get("comment")
-                    await websocket.send_json({"status": "OK", "action": "nfc_token", "detail": "Processing payment..."})
+                    if not await _safe_send_json({"status": "OK", "action": "nfc_token", "detail": "Processing payment..."}):
+                        break
                     try:
                         # Reuse the hardened NFC request flow used by /safebox/access.
                         from app.routers.safebox import request_nfc_payment
@@ -284,22 +302,27 @@ async def websocket_endpoint(
                         )
                         status = response_json.get("status", "INFO")
                         detail = response_json.get("detail", "Payment request submitted.")
-                        await websocket.send_json({"status": status, "action": "nfc_token", "detail": detail})
+                        if not await _safe_send_json({"status": status, "action": "nfc_token", "detail": detail}):
+                            break
                     except Exception as exc:
                         logger.exception("POS NFC payment request failed")
-                        await websocket.send_json({"status": "ERROR", "action": "nfc_token", "detail": f"NFC payment error: {exc}"})
+                        if not await _safe_send_json({"status": "ERROR", "action": "nfc_token", "detail": f"NFC payment error: {exc}"}):
+                            break
                     
 
 
 
                 else:
-                    await websocket.send_json({"status": "ERROR", "action": message.get("action"), "detail": "unknown action"})
+                    if not await _safe_send_json({"status": "ERROR", "action": message.get("action"), "detail": "unknown action"}):
+                        break
 
             except json.JSONDecodeError:
-                await websocket.send_json({"status": "ERROR", "detail": "Invalid JSON format"})
+                if not await _safe_send_json({"status": "ERROR", "detail": "Invalid JSON format"}):
+                    break
             except Exception as exc:
                 logger.exception("POS websocket action processing failed")
-                await websocket.send_json({"status": "ERROR", "detail": f"Processing failed: {exc}"})
+                if not await _safe_send_json({"status": "ERROR", "detail": f"Processing failed: {exc}"}):
+                    break
 
     except WebSocketDisconnect:
         logger.info("POS websocket disconnected")

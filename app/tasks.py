@@ -42,6 +42,39 @@ LOGGING_LEVEL=20
 # SQLModel.metadata.create_all(engine, checkfirst=True)
 logger = logging.getLogger(__name__)
 
+
+def _exception_chain_text(exc: Exception) -> str:
+    """Flatten exception + cause/context chain into a searchable string."""
+    parts: List[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current and id(current) not in seen:
+        seen.add(id(current))
+        text = str(current).strip()
+        if text:
+            parts.append(text)
+        current = current.__cause__ or current.__context__
+    return " | ".join(parts)
+
+
+def _is_proof_rejection_or_swap_recommended(exc: Exception) -> bool:
+    """
+    Heuristic matcher for proof-set rejection / stale-proof cases where a swap
+    often recovers the wallet state.
+    """
+    msg = _exception_chain_text(exc).lower()
+    markers = [
+        "proof",
+        "already spent",
+        "already been spent",
+        "swap for payment",
+        "you need to swap",
+        "insufficient balance in any one keyset",
+        "keyset",
+        "melt request failed",
+    ]
+    return any(marker in msg for marker in markers)
+
 async def periodic_task():
     while True:
         # poll_for_payment()
@@ -615,12 +648,45 @@ async def task_pay_multi(
     status = "SENT"
     msg_out = "Payment sent."
     try:
-        msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
-
+        msg_out, fee = await acorn_obj.pay_multi(
+            amount=amount,
+            lnaddress=lnaddress,
+            comment=comment,
+            tendered_amount=amount,
+            tendered_currency=tendered_currency,
+        )
     except Exception as e:
-        msg_out =f"{e}"
-        status = "ERROR"
-        print(msg_out, status)
+        if _is_proof_rejection_or_swap_recommended(e):
+            logger.warning(
+                "op=task_pay_multi status=retry_swap_start reason=%s",
+                _exception_chain_text(e),
+            )
+            try:
+                await acorn_obj.swap_multi_consolidate()
+                msg_out, fee = await acorn_obj.pay_multi(
+                    amount=amount,
+                    lnaddress=lnaddress,
+                    comment=comment,
+                    tendered_amount=amount,
+                    tendered_currency=tendered_currency,
+                )
+                status = "SENT"
+                msg_out = f"{msg_out} (auto-recovered after swap)"
+                logger.info("op=task_pay_multi status=retry_swap_success")
+            except Exception as retry_exc:
+                msg_out = f"{retry_exc}"
+                status = "ERROR"
+                logger.warning(
+                    "op=task_pay_multi status=retry_swap_failed reason=%s",
+                    _exception_chain_text(retry_exc),
+                )
+        else:
+            msg_out = f"{e}"
+            status = "ERROR"
+            logger.warning(
+                "op=task_pay_multi status=failed_non_retry reason=%s",
+                _exception_chain_text(e),
+            )
     finally:
         fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:
@@ -669,14 +735,39 @@ async def task_pay_multi_invoice(
     status = "SENT"
     msg_out = "Payment sent."
     try:
-        # msg_out,fee = await acorn_obj.pay_multi(amount=amount,lnaddress=lnaddress,comment=comment, tendered_amount=amount,tendered_currency=tendered_currency)
-
-        msg_out, final_fees,_,_,_ = await  acorn_obj.pay_multi_invoice(lninvoice=lninvoice, comment=comment)
-
+        msg_out, final_fees, _, _, _ = await acorn_obj.pay_multi_invoice(
+            lninvoice=lninvoice,
+            comment=comment,
+        )
     except Exception as e:
-        msg_out =f"{e}"
-        status = "ERROR"
-        print(msg_out, status)
+        if _is_proof_rejection_or_swap_recommended(e):
+            logger.warning(
+                "op=task_pay_multi_invoice status=retry_swap_start reason=%s",
+                _exception_chain_text(e),
+            )
+            try:
+                await acorn_obj.swap_multi_consolidate()
+                msg_out, final_fees, _, _, _ = await acorn_obj.pay_multi_invoice(
+                    lninvoice=lninvoice,
+                    comment=comment,
+                )
+                status = "SENT"
+                msg_out = f"{msg_out} (auto-recovered after swap)"
+                logger.info("op=task_pay_multi_invoice status=retry_swap_success")
+            except Exception as retry_exc:
+                msg_out = f"{retry_exc}"
+                status = "ERROR"
+                logger.warning(
+                    "op=task_pay_multi_invoice status=retry_swap_failed reason=%s",
+                    _exception_chain_text(retry_exc),
+                )
+        else:
+            msg_out = f"{e}"
+            status = "ERROR"
+            logger.warning(
+                "op=task_pay_multi_invoice status=failed_non_retry reason=%s",
+                _exception_chain_text(e),
+            )
     finally:
         fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:

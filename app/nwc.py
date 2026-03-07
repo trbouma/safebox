@@ -956,7 +956,7 @@ async def listen_notes_connected(url):
         run_task = asyncio.create_task(c.run())
 
         try:
-            await c.wait_connect(timeout=10)
+            await c.wait_connect(timeout=30)
             logger.info("[%s] Connected and listening...", url)
 
             c.subscribe(
