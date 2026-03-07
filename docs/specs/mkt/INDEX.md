@@ -14,7 +14,7 @@ Numbering convention:
 | `MS-00` | Market Conventions | `1.2` | Draft | [MS-00-market-conventions.md](./MS-00-market-conventions.md) |
 | `MS-01` | Safebox Coupon Market Specification | `1.1` | Draft | [MS-01-coupon-market.md](./MS-01-coupon-market.md) |
 | `MS-01` | Conformance Checklist | `1.1` | Draft | [MS-01-CONFORMANCE.md](./MS-01-CONFORMANCE.md) |
-| `MS-02` | Hash-Committed Capability Market | `1.0` | Draft | [MS-02-capability-market.md](./MS-02-capability-market.md) |
+| `MS-02` | Hash-Committed Entitlement Market | `2.0` | Draft | [MS-02-entitlement-market.md](./MS-02-entitlement-market.md) |
 | `MS-02` | Conformance Checklist | `1.0` | Draft | [MS-02-CONFORMANCE.md](./MS-02-CONFORMANCE.md) |
 
 ## Notes

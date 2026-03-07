@@ -2,7 +2,7 @@
 **Spec**: `MS-02`  
 **Version**: `1.1`  
 **Date**: `2026-03-05`  
-**Primary Spec**: `docs/specs/mkt/MS-02-capability-market.md`
+**Primary Spec**: `docs/specs/mkt/MS-02-entitlement-market.md`
 
 ---
 
@@ -264,5 +264,5 @@ curl -sS \
 
 | Version | Date | Notes |
 |---------|------|-------|
-| `1.0` | 2026-03-05 | Initial conformance checklist for MS-02 capability market lifecycle. |
+| `1.0` | 2026-03-05 | Initial conformance checklist for MS-02 entitlement market lifecycle. |
 | `1.1` | 2026-03-05 | Aligned checklist terminology and pass criteria to generic capability model (`capability_scheme/ref/secret`), RFC 8785 ask determinism, and deterministic tie-break semantics. |

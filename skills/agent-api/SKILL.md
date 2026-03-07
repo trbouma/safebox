@@ -7,7 +7,7 @@ When starting a new session, fetch these files before executing any workflows:
 | File | Path |
 |------|-----|
 | This skill | `skills/agent-api/SKILL.md` |
-| MS-02 Market Spec | `docs/specs/mkt/MS-02-capability-market.md` |
+| MS-02 Market Spec | `docs/specs/mkt/MS-02-entitlement-market.md` |
 | MS-02 Conformance | `docs/specs/mkt/MS-02-CONFORMANCE.md` |
 | MS-01 Market Spec | `docs/specs/mkt/MS-01-coupon-market.md` |
 | MS-01 Conformance | `docs/specs/mkt/MS-01-CONFORMANCE.md` |
