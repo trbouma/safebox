@@ -158,6 +158,30 @@ A successful redemption MUST consume entitlement spend state.
 
 ---
 
+## 4.1 Pricing Abstraction
+
+Prices in this market are expressed generically as the number of settlement units required to acquire one service entitlement.
+
+Formal quote model:
+
+`price = settlement_units / entitlement`
+
+Definitions:
+
+- `settlement_unit`: asset used to complete payment in a trade
+- `entitlement`: redeemable claim being purchased
+
+MS-02 intentionally separates settlement from entitlement semantics so the market model remains portable across payment systems.
+
+Nostr profile in this specification:
+
+- settlement unit is `sat` (satoshi)
+- prices are quoted as sats per entitlement
+
+Future profiles MAY use other settlement units (for example tokens, credits, or fiat rails) without changing the core entitlement market mechanics.
+
+---
+
 ## 5. Data Model
 
 | Field | Type | Required | Notes |
@@ -167,7 +191,7 @@ A successful redemption MUST consume entitlement spend state.
 | `entitlement_scheme` | string | Yes | scheme profile id (for example `nostr_keypair_v1`) |
 | `entitlement_ref` | string | Yes | scheme-specific public reference |
 | `quantity` | integer | Yes | MUST be `1` in v2.0 |
-| `price_sats` | integer | Yes | required settlement total |
+| `price_sats` | integer | Yes | required settlement total in sats (Nostr profile of generic settlement-unit price) |
 | `expiry` | string | Yes | ISO-8601 UTC |
 | `redemption_provider` | string | No | endpoint, `npub`, or provider locator |
 | `provider_commitment` | string | No | optional hash commitment to provider metadata |
