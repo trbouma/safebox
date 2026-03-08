@@ -22,6 +22,8 @@ templates = build_templates()
 
 router = APIRouter()
 
+SCAN_REDIRECT_STATUS = 303
+
 
 @router.get("/scan", tags=["scanner"], response_class=HTMLResponse)
 async def get_scanner(  request: Request, 
@@ -65,7 +67,7 @@ async def get_scan_result(  request: Request,
     referer = (referer or "none").strip()
     qr_code = _normalize_scan_payload(qr_code)
     if not qr_code:
-        return RedirectResponse("/safebox/access")
+        return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
 
     logger.debug("scan payload normalized: %s", qr_code)
 
@@ -92,7 +94,7 @@ async def get_scan_result(  request: Request,
                 )
         except Exception:
             logger.exception("Failed to decode LNURL in scanresult")
-        return RedirectResponse("/safebox/access")
+        return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
 
     if qr_code[:4].lower() == "lnbc":
         action_amount = 0
@@ -145,33 +147,51 @@ async def get_scan_result(  request: Request,
         if scope.startswith("present_request"):
             return _redirect_present_request_scan(qr_code)
         if "prover" in scope:
-            return RedirectResponse(f"/credentials/presentationrequest?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/credentials/presentationrequest?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         if "vcred" in scope:
-            return RedirectResponse(f"/credentials/present?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/credentials/present?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         if "offer" in scope:
             # Use POST handoff to avoid URL/query loss on some mobile scanners.
             return _post_accept_scan({"nauth": qr_code})
         if "verifier" in scope:
             return _post_present_scan({"nauth": qr_code})
         if "vissue" in scope:
-            return RedirectResponse(f"/credentials/offer?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/credentials/offer?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
 
         if referer == "health-data":
-            return RedirectResponse(f"/safebox/health?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/safebox/health?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         if referer == "my-credentials":
-            return RedirectResponse(f"/credentials/present?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/credentials/present?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         if referer == "credential-offer":
-            return RedirectResponse(f"/credentials/offer?nauth={quote(qr_code)}")
+            return RedirectResponse(
+                f"/credentials/offer?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         return _post_access_scan({"nauth": qr_code})
 
     if qr_code[:12].lower() == "nostr:nevent":
         logger.debug("unsupported nostr nevent scan: %s", qr_code)
-        return RedirectResponse("/safebox/access")
+        return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
 
     if qr_code[:5].lower() == "https":
-        return RedirectResponse(qr_code)
+        return RedirectResponse(qr_code, status_code=SCAN_REDIRECT_STATUS)
 
-    return RedirectResponse("/safebox/access")
+    return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
 
 
 def _normalize_scan_payload(raw_payload: str | None) -> str:
@@ -258,8 +278,11 @@ def _add_b64_padding(value: str) -> str:
 def _redirect_access(**params: object) -> RedirectResponse:
     clean_params = {key: value for key, value in params.items() if value is not None}
     if not clean_params:
-        return RedirectResponse("/safebox/access")
-    return RedirectResponse(f"/safebox/access?{urlencode(clean_params)}")
+        return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
+    return RedirectResponse(
+        f"/safebox/access?{urlencode(clean_params)}",
+        status_code=SCAN_REDIRECT_STATUS,
+    )
 
 
 def _redirect_offer_request_scan(nauth: str, referer: str | None) -> HTMLResponse | RedirectResponse:
@@ -470,8 +493,12 @@ def _redirect_present_request_scan(nauth: str) -> RedirectResponse:
     target_qs = f"&target={quote(target)}" if target else ""
     if grant_kind is not None:
         return RedirectResponse(
-            f"/records/request?grant_kind={grant_kind}&mode=request&presenter_nauth={quote(nauth)}{target_qs}"
+            f"/records/request?grant_kind={grant_kind}&mode=request&presenter_nauth={quote(nauth)}{target_qs}",
+            status_code=SCAN_REDIRECT_STATUS,
         )
-    return RedirectResponse(f"/records/request?mode=request&presenter_nauth={quote(nauth)}{target_qs}")
+    return RedirectResponse(
+        f"/records/request?mode=request&presenter_nauth={quote(nauth)}{target_qs}",
+        status_code=SCAN_REDIRECT_STATUS,
+    )
     
       
