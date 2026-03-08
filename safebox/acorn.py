@@ -4790,6 +4790,8 @@ class Acorn:
         headers = { "Content-Type": "application/json"}
         timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        if not keyset_proofs:
+            raise RuntimeError("No proofs available to swap.")
         combined_proofs = []
         combined_proof_objs =[]
         proof_objs = []
@@ -5702,6 +5704,7 @@ class Acorn:
     async def issue_token(self, amount:int, comment:str = "ecash withdrawal"):
 
         lock_acquired = False
+        token_serialized = None
         try:
             await self.acquire_lock()
             lock_acquired = True
@@ -5730,6 +5733,10 @@ class Acorn:
                
                 self.logger.error("op=issue_token status=no_single_keyset amount=%s", amount)
                 raise ValueError("Insufficient balance in a single keyset; swap required.")
+
+            mint_for_keyset = self.known_mints.get(chosen_keyset)
+            if not mint_for_keyset:
+                raise RuntimeError(f"Missing mint mapping for keyset {chosen_keyset}")
             
             proofs_to_use = []
             proof_amount = 0
@@ -5787,10 +5794,11 @@ class Acorn:
 
 
             
-            tokens = TokenV3Token(mint=self.known_mints[chosen_keyset],
+            tokens = TokenV3Token(mint=mint_for_keyset,
                                             proofs=spend_proofs)
             
             v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
+            token_serialized = v3_token.serialize()
             # print("proofs remaining:", proofs_remaining)
         except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
             self.logger.error("op=issue_token status=failed amount=%s error=%s", amount, e)
@@ -5799,10 +5807,17 @@ class Acorn:
             if lock_acquired:
                 await self.release_lock()
 
+        if token_serialized is None:
+            raise RuntimeError("Error issuing token: token serialization failed")
+
         self.balance -= amount
-        await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
+        try:
+            await self.add_tx_history(tx_type='D',amount=amount,comment=comment)
+        except Exception as exc:
+            # Issuance is already committed once proofs are persisted.
+            self.logger.warning("op=issue_token status=tx_history_failed amount=%s error=%s", amount, exc)
         
-        return v3_token.serialize()   
+        return token_serialized   
 
     async def zap(self, amount:int, event_id, comment): 
         out_msg = ""

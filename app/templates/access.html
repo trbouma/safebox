@@ -700,6 +700,54 @@ function consoleLog(data) {
   }
 
   let nfcSuccessCelebrating = false;
+  let nfcSettlementWatchTimer = null;
+  let nfcSettlementWatchDeadline = 0;
+
+  function stopNfcSettlementWatch() {
+    if (nfcSettlementWatchTimer) {
+      clearInterval(nfcSettlementWatchTimer);
+      nfcSettlementWatchTimer = null;
+    }
+    nfcSettlementWatchDeadline = 0;
+  }
+
+  function startNfcSettlementWatch(baselineBalance) {
+    stopNfcSettlementWatch();
+    const baseline = Number(baselineBalance);
+    if (!Number.isFinite(baseline)) return;
+
+    nfcSettlementWatchDeadline = Date.now() + 30000;
+    nfcSettlementWatchTimer = setInterval(async () => {
+      try {
+        const resp = await fetch("/safebox/poll");
+        const data = await resp.json();
+        const polledBalance = Number(data?.balance);
+        if (!Number.isFinite(polledBalance)) {
+          if (Date.now() > nfcSettlementWatchDeadline) {
+            stopNfcSettlementWatch();
+          }
+          return;
+        }
+
+        if (polledBalance < baseline) {
+          stopNfcSettlementWatch();
+          checkBalance(polledBalance);
+          celebrateNfcPayment("NFC payment confirmed.");
+          scheduleAccessReload(1200);
+          return;
+        }
+
+        if (Date.now() > nfcSettlementWatchDeadline) {
+          stopNfcSettlementWatch();
+          userMessage("Payment submitted. Confirmation is still pending.", "INFO");
+        }
+      } catch (err) {
+        if (Date.now() > nfcSettlementWatchDeadline) {
+          stopNfcSettlementWatch();
+        }
+      }
+    }, 2000);
+  }
 
   function celebrateSuccess() {
     const flashEl = document.getElementById("successFlash");
@@ -882,7 +930,8 @@ const submit_data =   { "nembed": nfc_token,
                         "amount": nfc_amount, 
                         "comment": nfc_comment};
 
-                        
+const nfcBaselineBalance = Number(starting_balance);
+
 await fetch('/safebox/paytonfctag', {
 method: "POST",
 headers: {"Content-Type": "application/json"},        
@@ -896,10 +945,13 @@ body: JSON.stringify(submit_data)
   userMessage(detail, status);
   consoleLog(detail);
   if (status === "OK") {
+    stopNfcSettlementWatch();
     celebrateNfcPayment(detail);
   } else if (status === "PENDING") {
     document.getElementById("img_qr_display").src = "/img/circle-256.gif";
+    startNfcSettlementWatch(nfcBaselineBalance);
   } else {
+    stopNfcSettlementWatch();
     showNfcAlert(detail);
     document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
   }
@@ -907,6 +959,7 @@ body: JSON.stringify(submit_data)
   // window.location.href="/safebox/access?action_comment=Complete" ;
 })
 .catch((error) => {
+  stopNfcSettlementWatch();
   consoleLog(`NFC payment error: ${error}`);
   userMessage("NFC payment failed. Please try again.", "ERROR");
   showNfcAlert("NFC payment failed. Please try again.");
@@ -1365,12 +1418,14 @@ function getInvoiceStatus(ln_invoice_status) {
       const detail = payload.detail || "NFC payment update";
       userMessage(detail, status);
       if (status === "ERROR") {
+        stopNfcSettlementWatch();
         showNfcAlert(detail);
       }
       if (typeof payload.balance !== "undefined") {
         checkBalance(Number(payload.balance));
       }
       if (status === "OK") {
+        stopNfcSettlementWatch();
         clearRequestPaymentFields();
         celebrateNfcPayment(detail);
         scheduleAccessReload(900);
@@ -1388,6 +1443,7 @@ function getInvoiceStatus(ln_invoice_status) {
       }
       markBalanceUpdated();
       if (status === "SENT") {
+        stopNfcSettlementWatch();
         document.getElementById("img_qr_display").src = "/img/green-check.png";
         if (!reset_to_home_scheduled) {
           scheduleAccessReload(1200);
@@ -1453,6 +1509,7 @@ function getInvoiceStatus(ln_invoice_status) {
                         }, 5000);
 
       if (status == "SENT" && !reset_to_home_scheduled) {
+        stopNfcSettlementWatch();
         scheduleAccessReload(1200);
       }
 
