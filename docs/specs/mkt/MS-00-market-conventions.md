@@ -1,7 +1,7 @@
 # MS-00: Market Conventions
-**Version**: `1.2`  
+**Version**: `1.3`  
 **Status**: Draft  
-**Date**: 2026-03-04  
+**Date**: 2026-03-09  
 
 ---
 
@@ -113,7 +113,25 @@ Conformance rule:
 
 ---
 
-## 9. Example
+## 9. L402 Interoperability (Optional)
+
+`L402` MAY be implemented as an adapter for HTTP/API paywalled access.
+
+Conformance guidance:
+
+- `MS-01` and `MS-02` implementations are NOT REQUIRED to implement `L402`.
+- Native Nostr + zap settlement flows remain canonical for current Safebox market specs.
+- If implemented, `L402` SHOULD be treated as an additional access layer, not a replacement for market settlement and redemption records.
+
+Use `L402` when:
+
+- exposing paid HTTP APIs to non-Nostr clients
+- requiring `402 Payment Required` challenge/response compatibility
+- integrating with third-party ecosystems that already support `L402`
+
+---
+
+## 10. Example
 
 ```json
 {
@@ -132,10 +150,11 @@ Conformance rule:
 
 ---
 
-## 10. Revision History
+## 11. Revision History
 
 | Version | Date | Notes |
 |---------|------|-------|
 | `1.0` | 2026-03-04 | Initial market conventions document with normalized token pricing primitive. |
 | `1.1` | 2026-03-04 | Updated canonical price to `effective_price = sats / tokens`, generalized beyond inference tokens, and added `token_definition`. |
 | `1.2` | 2026-03-04 | Added `secret_hash_display` readability convention and clarified full-hash-only conformance requirements. |
+| `1.3` | 2026-03-09 | Added optional `L402` interoperability guidance as a non-required adapter layer for HTTP/API access. |
