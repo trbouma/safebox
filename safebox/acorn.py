@@ -3527,6 +3527,10 @@ class Acorn:
         # my_enc = NIP44Encrypt(self.k)
         my_enc = ExtendedNIP44Encrypt(self.k)
 
+        if not proofs_arg:
+            self.logger.info("op=add_proofs_obj status=skip_empty_batch")
+            return
+
         if replicate_relays:
             write_relays = replicate_relays
             
