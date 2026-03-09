@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import inspect
+import random
 from monstr.relay.relay import Relay
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from monstr.client.client import Client, ClientPool
@@ -951,12 +952,14 @@ async def listen_notes(url):
 
 async def listen_notes_connected(url):
     logger = logging.getLogger(__name__)
+    attempt = 0
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
 
         try:
             await c.wait_connect(timeout=30)
+            attempt = 0
             logger.info("[%s] Connected and listening...", url)
 
             c.subscribe(
@@ -987,7 +990,17 @@ async def listen_notes_connected(url):
             if _is_expected_ws_close_exc(exc):
                 logger.debug("[%s] Suppressed expected websocket close exception", url)
             else:
-                logger.warning("[%s] Listener error, restarting in 5s: %r", url, exc)
+                attempt += 1
+                base = min(30.0, 1.5 * (2 ** min(attempt, 5)))
+                jitter = random.uniform(0.0, 0.8)
+                delay = base + jitter
+                logger.warning(
+                    "[%s] Listener error (attempt=%s), restarting in %.2fs: %r",
+                    url,
+                    attempt,
+                    delay,
+                    exc,
+                )
 
         finally:
             if not run_task.done():
@@ -1002,70 +1015,10 @@ async def listen_notes_connected(url):
 
             await _close_client(c)
             # During app shutdown we propagate CancelledError immediately and skip restart delay.
-            with suppress(asyncio.CancelledError):
-                await asyncio.sleep(5)
+            if attempt > 0:
+                base = min(30.0, 1.5 * (2 ** min(attempt, 5)))
+                jitter = random.uniform(0.0, 0.8)
+                delay = base + jitter
+                with suppress(asyncio.CancelledError):
+                    await asyncio.sleep(delay)
 
-
-
-async def listen_notes_query(url):
-    while True:
-        c = Client(url)
-        
-
-        try:
-
-            print("do a query")
-            events = await c.query(
-                
-                filters={
-                    'limit': 4096,
-                    'kinds': [23194]
-                    
-                }
-            )
-            print(f"events: {events}")
-            for each in events:
-                my_handler(c,"test", each)
-
-        except:
-            pass
-
-
-        await asyncio.sleep(5)  # short delay before retrying
-
-async def listen_notes_periodic(url):
-    while True:
-        run_task = asyncio.create_task(listen_notes(url))
-        try:
-            # Let the task run for 60 seconds
-            await asyncio.sleep(600)
-        except asyncio.CancelledError:
-            print("Periodic listener cancelled. Shutting down...")
-            run_task.cancel()
-            try:
-                await run_task
-            except Exception:
-                pass
-            raise
-        else:
-            print("Restarting listen_notes_connected...")
-
-            # Cancel the task after the sleep if it's still running
-            if not run_task.done():
-                run_task.cancel()
-                try:
-                    await run_task
-                except Exception:
-                    pass
-
-
-async def listen_nwc():
-    print(f"listening for nwc {os.getpid()}")
-    relay_urls = list(dict.fromkeys(settings.NWC_RELAYS or ["wss://relay.getsafebox.app"]))
-    for relay_url in relay_urls:
-        print(f"nwc listener subscribing relay: {relay_url}")
-        asyncio.create_task(listen_notes(relay_url))
-
-if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
-    asyncio.run(listen_nwc())

@@ -40,12 +40,12 @@ from app.appmodels import RegisteredSafebox
 from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
 
 from app.relay import run_relay
-from app.nwc import listen_nwc, listen_notes, listen_notes_connected, listen_notes_query
+from app.nwc import listen_notes_connected
 from safebox.acorn import Acorn
 import sys
 
 lock_path = "/tmp/monstr_listener.lock"
-listener_task = None
+listener_tasks: list[asyncio.Task] = []
 relay_task = None
 logger = logging.getLogger(__name__)
 previous_loop_exception_handler = None
@@ -169,7 +169,7 @@ async def lifespan(app: FastAPI):
     logger.info("Application startup complete")
     # Create Task
     # task = asyncio.create_task(periodic_task(SETTINGS.REFRESH_CURRENCY_INTERVAL, stop_event))
-    global listener_task
+    global listener_tasks
     lock_path = "/tmp/monstr_listener.lock"
     file_lock = FileLock(lock_path)
     
@@ -185,24 +185,27 @@ async def lifespan(app: FastAPI):
     
     # The single event handling is now done in nwc.py, so all listeners can be running
     if config.NWC_NSEC:
-        logger.info("[PID %s] Starting nwc listener", os.getpid())
-        url = SETTINGS.NWC_RELAYS[0]
-        listener_task = asyncio.create_task(listen_notes_connected(url))
+        relay_urls = list(dict.fromkeys(SETTINGS.NWC_RELAYS or ["wss://relay.getsafebox.app"]))
+        logger.info("[PID %s] Starting nwc listeners for %s relay(s)", os.getpid(), len(relay_urls))
+        listener_tasks = [asyncio.create_task(listen_notes_connected(url)) for url in relay_urls]
     else:
         logger.info("[PID %s] NWC listener disabled: NWC_NSEC not configured", os.getpid())
 
     
     yield
 
-    if listener_task:
-        logger.info("Shutting down listener")
-        listener_task.cancel()
-        try:
-            await listener_task
-        except asyncio.CancelledError:
-            pass
-        except Exception as exc:
-            logger.debug("Suppressed listener shutdown exception: %r", exc)
+    if listener_tasks:
+        logger.info("Shutting down %s listener task(s)", len(listener_tasks))
+        for task in listener_tasks:
+            task.cancel()
+        for task in listener_tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.debug("Suppressed listener shutdown exception: %r", exc)
+        listener_tasks = []
 
     if relay_task:
         logger.info("Shutting down relay")
