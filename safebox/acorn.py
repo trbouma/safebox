@@ -3899,7 +3899,7 @@ class Acorn:
 
         try:
             timeout = httpx.Timeout(30.0, connect=5.0)
-            # await self.acquire_lock()
+            await self.acquire_lock()
             callback, safebox, nonce = lightning_address_pay(amount, lnaddress,comment=comment)         
             pr = callback['pr'] 
             self.logger.debug("op=pay_multi status=lookup lnaddress=%s safebox=%s", lnaddress, safebox)
@@ -3932,7 +3932,6 @@ class Acorn:
                 
 
                 await self.secure_transmittal(nrecipient=nrecipient,message=nembed_to_send,dm_relays=ecash_relays,kind=21401)
-                await self.release_lock()
                 # await self.add_tx_history(tx_type='D', amount=amount, comment=comment,
                 # tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
             else: #     return f"Payment in ecash of {amount} sats", 0
@@ -4224,7 +4223,6 @@ class Acorn:
                 msg_out = f"Payment of {amount} sats with fee {final_fees} sats to {lnaddress} successful!"
                 self.logger.info(msg_out)
                 await self.write_proofs()
-                await self.release_lock()
                 self.logger.debug("op=pay_multi status=complete amount=%s", amount)
                 self.logger.debug(
                     "op=pay_multi status=tx_history amount=%s comment=%s tendered_amount=%s tendered_currency=%s",
@@ -4235,7 +4233,6 @@ class Acorn:
                 )
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
         except (ValueError, RuntimeError, httpx.HTTPError) as e:
-            await self.release_lock()
             final_fees = 0
             msg_out = f"There is an error sending the payment. Did it go through?"
             self.logger.error("%s original_error=%s", msg_out, e)
@@ -4344,9 +4341,12 @@ class Acorn:
         try:
             await self.acquire_lock()
             timeout = httpx.Timeout(30.0, connect=5.0)
-            ln_amount = int(bolt11.decode(lninvoice).amount_msat//1e3)
-            payment_hash = bolt11.decode(lninvoice).payment_hash
-            description_hash = bolt11.decode(lninvoice).description_hash
+            decoded_invoice = bolt11.decode(lninvoice)
+            if decoded_invoice.amount_msat is None:
+                raise ValueError("Amountless invoices are not supported.")
+            ln_amount = int(decoded_invoice.amount_msat // 1e3)
+            payment_hash = decoded_invoice.payment_hash
+            description_hash = decoded_invoice.description_hash
 
             self.logger.debug("pay from multiple mints")
             available_amount = 0
@@ -4530,7 +4530,6 @@ class Acorn:
             msg_out = f"Paid {ln_amount} sats with fees {final_fees} sats successful!"
             self.logger.info(msg_out)
             await self.write_proofs()
-            await self.release_lock()
         except (ValueError, RuntimeError, httpx.HTTPError) as e:
             # await self.release_lock()
             self.logger.error("Error in pay_multi_invoice: %s", e)

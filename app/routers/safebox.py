@@ -699,7 +699,7 @@ async def ln_pay_address(   request: Request,
         logger.exception("Unexpected error in payaddress")
         return {"status": "ERROR", "detail": f"error {e}"}
 
-    msg_out = "Payment sent!!"
+    msg_out = "Payment request accepted. Waiting for confirmation."
 
     return {"status": "OK", "detail": msg_out}
 
@@ -734,6 +734,11 @@ async def ln_pay_invoice(   request: Request,
         invoice_amount_sat = 0
         if decoded_invoice.amount_msat:
             invoice_amount_sat = decoded_invoice.amount_msat // 1000
+        else:
+            return {
+                "status": "ERROR",
+                "detail": "Amountless invoices are not supported.",
+            }
 
         # Fast-fail when invoice amount is known and exceeds current balance.
         if invoice_amount_sat > 0 and invoice_amount_sat > acorn_obj.balance:

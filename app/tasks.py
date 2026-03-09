@@ -652,7 +652,7 @@ async def task_pay_multi(
             amount=amount,
             lnaddress=lnaddress,
             comment=comment,
-            tendered_amount=amount,
+            tendered_amount=tendered_amount,
             tendered_currency=tendered_currency,
         )
     except Exception as e:
@@ -667,7 +667,7 @@ async def task_pay_multi(
                     amount=amount,
                     lnaddress=lnaddress,
                     comment=comment,
-                    tendered_amount=amount,
+                    tendered_amount=tendered_amount,
                     tendered_currency=tendered_currency,
                 )
                 status = "SENT"
