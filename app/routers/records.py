@@ -819,19 +819,6 @@ async def transmit_records(        request: Request,
                     seen_origins.add(origin)
                     candidate_origins.append(origin)
 
-            # Same-instance fallback: try current request host first.
-            # This avoids relay-host-only lookups (for example relay.getsafebox.app)
-            # when sender and recipient are on the same Safebox service host.
-            request_host = request.url.hostname or ""
-            request_port = request.url.port
-            if request_host:
-                if request_port and request_port not in (80, 443):
-                    request_host = f"{request_host}:{request_port}"
-                request_origin = _origin_from_host(request_host)
-                if request_origin and request_origin not in seen_origins:
-                    seen_origins.add(request_origin)
-                    candidate_origins.append(request_origin)
-
             # Preferred: recipient service host embedded by request-offer scope.
             # Format: offer_request:<grant_kind>:<offer_kind>:<recipient_host>
             if isinstance(scope, str) and scope.startswith("offer_request:"):
@@ -841,6 +828,20 @@ async def transmit_records(        request: Request,
                     if scope_origin and scope_origin not in seen_origins:
                         seen_origins.add(scope_origin)
                         candidate_origins.append(scope_origin)
+
+            # Same-instance fallback: try current request host after recipient scope host.
+            # Recipient host must be preferred for cross-instance offer_request flows;
+            # otherwise we can encrypt to the sender instance key and the receiver
+            # cannot decrypt (resulting in placeholder payload text).
+            request_host = request.url.hostname or ""
+            request_port = request.url.port
+            if request_host:
+                if request_port and request_port not in (80, 443):
+                    request_host = f"{request_host}:{request_port}"
+                request_origin = _origin_from_host(request_host)
+                if request_origin and request_origin not in seen_origins:
+                    seen_origins.add(request_origin)
+                    candidate_origins.append(request_origin)
 
             for relay in (transmittal_relays or []):
                 add_origin_from_relay(relay)
@@ -854,6 +855,8 @@ async def transmit_records(        request: Request,
                     add_origin_from_relay(recipient_local.home_relay)
             except Exception as exc:
                 logger.debug("Local recipient lookup for KEM host failed: %s", exc)
+
+            logger.info("KEM host resolution order: %s", candidate_origins)
 
             resolved_kem_public_key, resolved_kemalg = await _resolve_kem_from_service_hosts(candidate_origins)
             if resolved_kem_public_key and resolved_kemalg:
