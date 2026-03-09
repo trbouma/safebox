@@ -349,9 +349,14 @@
     const POS_CURRENCY = "{{ pos_currency if pos_currency else 'SAT' }}";
     const POS_CURRENCY_SYMBOL = "{{ pos_currency_symbol if pos_currency_symbol else '₿' }}";
     const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${wsScheme}://${window.location.host}/pos/ws`);
-    const wsStatus = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/status`);
-    const wsNotify = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/notify`);
+    let ws = null;
+    let wsStatus = null;
+    let wsNotify = null;
+    const wsRetryState = {
+      pos: { attempts: 0, timer: null },
+      status: { attempts: 0, timer: null },
+      notify: { attempts: 0, timer: null },
+    };
 
     let rawInput = "";
     let total = 0;
@@ -428,11 +433,34 @@
     }
 
     function sendWs(payload) {
-      if (ws.readyState !== WebSocket.OPEN) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
         setStatus("WebSocket not connected.", "error");
         return;
       }
       ws.send(JSON.stringify(payload));
+    }
+
+    function scheduleWsReconnect(channelKey, connectFn, baseLabel) {
+      const state = wsRetryState[channelKey];
+      if (state.timer) return;
+      state.attempts += 1;
+      const delayMs = Math.min(10000, Math.floor(500 * Math.pow(1.7, state.attempts)));
+      state.timer = setTimeout(() => {
+        state.timer = null;
+        connectFn();
+      }, delayMs);
+      if (channelKey === "pos") {
+        setStatus(`${baseLabel} disconnected. Reconnecting in ${(delayMs / 1000).toFixed(1)}s...`, "info");
+      }
+    }
+
+    function clearWsReconnectState(channelKey) {
+      const state = wsRetryState[channelKey];
+      state.attempts = 0;
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+      }
     }
 
     function markInvoicePaid() {
@@ -613,6 +641,10 @@
         setStatus("Enter an amount before NFC payment.", "error");
         return;
       }
+      if (nfcPaymentPending) {
+        setStatus("NFC payment already in progress...", "info");
+        return;
+      }
       if (!("NDEFReader" in window)) {
         setStatus("Web NFC not supported on this device/browser.", "error");
         return;
@@ -625,8 +657,13 @@
         await ndef.scan();
         ndef.onreading = (event) => {
           const decoder = new TextDecoder();
+          if (nfcPaymentPending) return;
+          let sent = false;
           for (const record of event.message.records) {
-            const nfcToken = decoder.decode(record.data);
+            const nfcToken = decoder.decode(record.data).trim();
+            if (!nfcToken || !nfcToken.toLowerCase().startsWith("nembed")) {
+              continue;
+            }
             sendWs({
               action: "nfc_token",
               value: nfcToken,
@@ -638,7 +675,11 @@
             nfcPaymentPending = true;
             setStatus("Awaiting card wallet confirmation...", "info");
             pinInputEl.value = "";
+            sent = true;
             break;
+          }
+          if (!sent) {
+            setStatus("No valid NFC payment token found on card/tag.", "error");
           }
         };
       } catch (error) {
@@ -659,92 +700,137 @@
       }
     }
 
-    ws.onopen = () => {
-      setStatus("POS channel connected.", "ok");
-      sendWs({ action: "get_balance" });
-    };
+    function connectPosWs() {
+      const sock = new WebSocket(`${wsScheme}://${window.location.host}/pos/ws`);
+      ws = sock;
 
-    ws.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      const status = payload.status || "INFO";
-      const detail = String(payload.detail || "");
+      sock.onopen = () => {
+        clearWsReconnectState("pos");
+        setStatus("POS channel connected.", "ok");
+        sendWs({ action: "get_balance" });
+      };
 
-      if (payload.action === "get_balance" && status === "OK") {
-        const bal = Number(detail || 0);
-        if (Number.isFinite(bal)) walletBalanceSats = bal;
-        setStatus(`Balance: ${bal.toLocaleString("en-US")} sats`, "ok");
-        return;
-      }
-
-      if (payload.action === "nfc_token" && status === "OK") {
-        setStatus("Awaiting card wallet confirmation...", "info");
-        return;
-      }
-
-      if (payload.action === "nfc_token" && status === "PENDING") {
-        setStatus("Awaiting card wallet confirmation...", "info");
-        return;
-      }
-
-      if (payload.action === "nfc_token" && status === "ERROR") {
-        nfcPaymentPending = false;
-        setStatus(detail || "NFC payment failed.", "error");
-        return;
-      }
-
-      if (status === "ERROR") {
-        setStatus(detail || "Request failed.", "error");
-        return;
-      }
-
-      setStatus(detail || status, status === "OK" ? "ok" : "info");
-    };
-
-    wsStatus.onmessage = (event) => {
-      try {
+      sock.onmessage = (event) => {
         const payload = JSON.parse(event.data);
-        if (invoicePending && payload.status === "RECD") {
-          markInvoicePaid();
-          return;
-        }
-        // Fallback path: if notify channel is delayed/missed, settle NFC UI on balance delta.
-        if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
-          markNfcPaymentSuccess("NFC payment settled.");
-          return;
-        }
-      } catch {
-        // ignore non-json frames
-      }
-    };
-
-    wsNotify.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (!nfcPaymentPending || payload.action !== "nfc_token") return;
-        const status = String(payload.status || "");
+        const status = payload.status || "INFO";
         const detail = String(payload.detail || "");
 
-        if (status === "OK" || status === "ADVISORY") {
-          markNfcPaymentSuccess(detail || "NFC payment successful.");
+        if (payload.action === "get_balance" && status === "OK") {
+          const bal = Number(detail || 0);
+          if (Number.isFinite(bal)) walletBalanceSats = bal;
+          setStatus(`Balance: ${bal.toLocaleString("en-US")} sats`, "ok");
           return;
         }
-        if (status === "PENDING") {
-          setStatus("Processing payment...", "info");
+
+        if (payload.action === "nfc_token" && status === "OK") {
+          setStatus("Awaiting card wallet confirmation...", "info");
           return;
         }
-        if (status === "ERROR") {
+
+        if (payload.action === "nfc_token" && status === "PENDING") {
+          setStatus("Awaiting card wallet confirmation...", "info");
+          return;
+        }
+
+        if (payload.action === "nfc_token" && status === "ERROR") {
           nfcPaymentPending = false;
           setStatus(detail || "NFC payment failed.", "error");
+          return;
         }
-      } catch {
-        // ignore non-json frames
-      }
-    };
 
-    ws.onclose = () => setStatus("POS channel disconnected.", "error");
-    ws.onerror = () => setStatus("POS channel error.", "error");
-    wsStatus.onerror = () => setStatus("Status channel error; using poll fallback.", "info");
-    wsNotify.onerror = () => setStatus("Notify channel error; using poll fallback.", "info");
+        if (status === "ERROR") {
+          setStatus(detail || "Request failed.", "error");
+          return;
+        }
+
+        setStatus(detail || status, status === "OK" ? "ok" : "info");
+      };
+
+      sock.onerror = () => {
+        if (sock !== ws) return;
+        setStatus("POS channel error.", "error");
+      };
+
+      sock.onclose = () => {
+        if (sock !== ws) return;
+        scheduleWsReconnect("pos", connectPosWs, "POS channel");
+      };
+    }
+
+    function connectStatusWs() {
+      const sock = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/status`);
+      wsStatus = sock;
+
+      sock.onopen = () => clearWsReconnectState("status");
+
+      sock.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (invoicePending && payload.status === "RECD") {
+            markInvoicePaid();
+            return;
+          }
+          // Fallback path: if notify channel is delayed/missed, settle NFC UI on balance delta.
+          if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
+            markNfcPaymentSuccess("NFC payment settled.");
+            return;
+          }
+        } catch {
+          // ignore non-json frames
+        }
+      };
+
+      sock.onerror = () => {
+        if (sock !== wsStatus) return;
+        setStatus("Status channel error; using poll fallback.", "info");
+      };
+
+      sock.onclose = () => {
+        if (sock !== wsStatus) return;
+        scheduleWsReconnect("status", connectStatusWs, "Status channel");
+      };
+    }
+
+    function connectNotifyWs() {
+      const sock = new WebSocket(`${wsScheme}://${window.location.host}/safebox/ws/notify`);
+      wsNotify = sock;
+
+      sock.onopen = () => clearWsReconnectState("notify");
+
+      sock.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (!nfcPaymentPending || payload.action !== "nfc_token") return;
+          const status = String(payload.status || "");
+          const detail = String(payload.detail || "");
+
+          if (status === "OK" || status === "ADVISORY") {
+            markNfcPaymentSuccess(detail || "NFC payment successful.");
+            return;
+          }
+          if (status === "PENDING") {
+            setStatus("Processing payment...", "info");
+            return;
+          }
+          if (status === "ERROR") {
+            nfcPaymentPending = false;
+            setStatus(detail || "NFC payment failed.", "error");
+          }
+        } catch {
+          // ignore non-json frames
+        }
+      };
+
+      sock.onerror = () => {
+        if (sock !== wsNotify) return;
+        setStatus("Notify channel error; using poll fallback.", "info");
+      };
+
+      sock.onclose = () => {
+        if (sock !== wsNotify) return;
+        scheduleWsReconnect("notify", connectNotifyWs, "Notify channel");
+      };
+    }
 
     document.querySelectorAll("[data-key]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -802,6 +888,9 @@
     updateDisplay();
     updateTotal();
     hydrateBalanceBaseline();
+    connectPosWs();
+    connectStatusWs();
+    connectNotifyWs();
   </script>
 </body>
 </html>

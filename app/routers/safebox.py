@@ -154,6 +154,28 @@ def resolve_npub_from_card_secret(token_secret: str) -> str:
             return mapped.npub
     raise ValueError("Card secret is invalid or revoked")
 
+
+def _normalize_card_host_base_url(host_value: str) -> str:
+    """
+    Normalize card host metadata into an absolute base URL.
+    Accepts bare host[:port] or full http(s) URL and returns scheme+host.
+    """
+    raw = str(host_value or "").strip()
+    if not raw:
+        raise ValueError("Card host is missing")
+
+    if raw.startswith("http://") or raw.startswith("https://"):
+        parsed = urllib.parse.urlparse(raw)
+        if not parsed.netloc:
+            raise ValueError("Card host URL is invalid")
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    lowered = raw.lower()
+    scheme = "https"
+    if lowered.startswith("localhost") or lowered.startswith("127.0.0.1"):
+        scheme = "http"
+    return f"{scheme}://{raw}"
+
 def _welcome_retry_response(request: Request):
     csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
     csrf_token = csrf_cookie if csrf_cookie and len(csrf_cookie) >= 32 else secrets.token_urlsafe(32)
@@ -2243,8 +2265,14 @@ async def request_nfc_payment( request: Request,
     
     # token_split = token_to_use.split(':')
     parsed_nembed = parse_nembed_compressed(token_to_use)
-    host = parsed_nembed["h"]   
-    vault_token = parsed_nembed["k"]
+    host = str(parsed_nembed.get("h", "")).strip()
+    vault_token = str(parsed_nembed.get("k", "")).strip()
+    if not host or not vault_token:
+        return {"status": "ERROR", "detail": "Invalid NFC token payload."}
+    try:
+        host_base_url = _normalize_card_host_base_url(host)
+    except ValueError:
+        return {"status": "ERROR", "detail": "Invalid NFC token host."}
 
     print(f"payment token: {payment_token}")
 
@@ -2264,10 +2292,10 @@ async def request_nfc_payment( request: Request,
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
     headers = { "Content-Type": "application/json"}
-    vault_url = f"https://{host}/.well-known/nfcvaultrequestpayment"
+    vault_url = f"{host_base_url}/.well-known/nfcvaultrequestpayment"
     print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
 
-    status_url = f"https://{host}/.well-known/card-status"
+    status_url = f"{host_base_url}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
     watch_lightning_settlement = None
     ecash_notify_relays = None
@@ -2297,7 +2325,7 @@ async def request_nfc_payment( request: Request,
                                 "sig": sig, 
                                 "comment": payment_token.comment  
                                 }
-                settings_url = f"https://{host}/.well-known/settings"
+                settings_url = f"{host_base_url}/.well-known/settings"
                 response = await client.get(url=settings_url)
                 response.raise_for_status()
                 response_json = response.json()
@@ -2422,9 +2450,15 @@ async def pay_to_nfc_tag( request: Request,
     print(f"nembed: {nfc_pay_out_request.nembed}, amount: {nfc_pay_out_request.amount} comment: {nfc_pay_out_request.comment}")
 
     parsed_nembed = parse_nembed_compressed(nfc_pay_out_request.nembed)
-    host = parsed_nembed["h"]
-    vault_token = parsed_nembed["k"]
-    amount_tag = parsed_nembed["a"]
+    host = str(parsed_nembed.get("h", "")).strip()
+    vault_token = str(parsed_nembed.get("k", "")).strip()
+    if not host or not vault_token:
+        return {"status": "ERROR", "detail": "Invalid NFC token payload."}
+    try:
+        host_base_url = _normalize_card_host_base_url(host)
+    except ValueError:
+        return {"status": "ERROR", "detail": "Invalid NFC token host."}
+    amount_tag = int(parsed_nembed.get("a", 0) or 0)
 
     # Need to do currency conversion here
 
@@ -2449,13 +2483,13 @@ async def pay_to_nfc_tag( request: Request,
 
 
 
-    vault_url = f"https://{host}/.well-known/nfcpayout"
+    vault_url = f"{host_base_url}/.well-known/nfcpayout"
     headers = { "Content-Type": "application/json"}
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
     nfc_comment = nfc_pay_out_request.comment
 
-    status_url = f"https://{host}/.well-known/card-status"
+    status_url = f"{host_base_url}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
