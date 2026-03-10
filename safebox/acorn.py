@@ -2405,7 +2405,22 @@ class Acorn:
     async def acquire_lock(self, attempts=10):
         start_wait = monotonic()
         actor = self._lock_actor()
+        current_depth = getattr(self, "_lock_depth", 0)
         loop_count = 0
+
+        # Re-entrant acquire for the same in-process actor.
+        # This avoids false lock contention when a locked flow calls another
+        # method that also acquires the wallet lock.
+        if self._lock_owner == actor and current_depth > 0:
+            self._lock_depth = current_depth + 1
+            self.logger.debug(
+                "op=acquire_lock status=reentrant handle=%s actor=%s depth=%s",
+                self.handle,
+                actor,
+                self._lock_depth,
+            )
+            return
+
         self.logger.debug(
             "op=acquire_lock status=start handle=%s actor=%s attempts=%s",
             self.handle,
@@ -2463,6 +2478,7 @@ class Acorn:
                     await self.set_wallet_info(label="lock",label_info="TRUE")
                     self._lock_acquired_at = monotonic()
                     self._lock_owner = actor
+                    self._lock_depth = 1
                     wait_ms = int((self._lock_acquired_at - start_wait) * 1000)
                     level = self.logger.warning if wait_ms >= 1500 else self.logger.info
                     level(
@@ -2478,10 +2494,23 @@ class Acorn:
             await self.set_wallet_info(label="lock",label_info="TRUE")
             self._lock_acquired_at = monotonic()
             self._lock_owner = actor
+            self._lock_depth = 1
        
 
     async def release_lock(self):
         actor = self._lock_actor()
+        current_depth = getattr(self, "_lock_depth", 0)
+
+        if self._lock_owner == actor and current_depth > 1:
+            self._lock_depth = current_depth - 1
+            self.logger.debug(
+                "op=release_lock status=reentrant_decrement handle=%s actor=%s depth=%s",
+                self.handle,
+                actor,
+                self._lock_depth,
+            )
+            return
+
         held_ms = None
         if self._lock_acquired_at is not None:
             held_ms = int((monotonic() - self._lock_acquired_at) * 1000)
@@ -2504,6 +2533,7 @@ class Acorn:
         await self.set_wallet_info(label="lock",label_info="FALSE")
         self._lock_acquired_at = None
         self._lock_owner = None
+        self._lock_depth = 0
         
         pass  
 
