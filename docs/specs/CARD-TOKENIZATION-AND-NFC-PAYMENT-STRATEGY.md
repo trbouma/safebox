@@ -62,6 +62,48 @@ Practical equivalence:
 - both reduce blast radius of credential leakage
 - both separate edge credential from core account authorization
 
+## Comparison With Visa/Mastercard Tokenized Rails
+
+Safebox is intentionally analogous to card-network tokenization, but it is not a scheme-rail clone.
+
+### Structural Similarities
+
+1. Tokenized edge credential:
+   - Card rails: network/device token replaces PAN at edge.
+   - Safebox: encrypted NFC token (`nembed -> k`) replaces direct wallet material at edge.
+2. Server-side authorization gate:
+   - Card rails: issuer/network authorization decision.
+   - Safebox: vault validation + active secret mapping + policy checks.
+3. Freshness/replay controls:
+   - Card rails: EMV dynamic data/cryptogram semantics.
+   - Safebox: signed canonical request, timestamp bounds, persisted one-time requester nonce.
+4. Merchant/acquirer identity concept:
+   - Card rails: acquirer/merchant identification and controls.
+   - Safebox: acquiring service-instance identity (`requester_service_pubkey`) with optional allowlist.
+
+### Core Differences
+
+1. Trust and settlement layer:
+   - Card rails: issuer/scheme/processor authorization and settlement rails.
+   - Safebox: application-layer cryptographic controls + wallet/mint settlement paths.
+2. Standards/governance boundary:
+   - Card rails: globally standardized scheme rules, liability, chargebacks, and compliance regimes.
+   - Safebox: operator-configurable policy model and federated interoperability.
+3. Cryptographic primitive location:
+   - Card rails: EMV/scheme-defined cryptogram and terminal/card-domain constructs.
+   - Safebox: HTTP/API payload signatures, vault token validation, and relay/direct transport controls.
+
+### Safebox-Specific Advantage in Current Model
+
+Direct NFC vault endpoints now support:
+
+- wallet requester signature binding
+- service-instance signature binding
+- optional service allowlisting (`NFC_REQUESTER_SERVICE_ALLOWLIST`, preferred `npub`)
+- replay nonce persistence (`nfcrequesternonce`)
+
+This gives card-present style controls using commodity NFC cards and software policy, while preserving compatibility fallback behavior.
+
 ## Payment Flow Model
 
 ### A. Request Payment (payer card is read)
