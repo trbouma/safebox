@@ -150,8 +150,11 @@ Common pattern:
    - `requester_sig`
    - `requester_nonce`
    - `requester_ts`
-5. enforce replay protection using persisted nonce consumption (`nfcrequesternonce`)
-6. branch by endpoint/mode:
+5. validate acquiring service-instance binding:
+   - `requester_service_pubkey`
+   - `requester_service_sig`
+6. enforce replay protection using persisted nonce consumption (`nfcrequesternonce`)
+7. branch by endpoint/mode:
    - direct payment execution, or
    - build NWC instruction JSON (`method` + `params`) and publish (`kind: 23194`)
 
@@ -163,8 +166,16 @@ Fail-closed signature checks are explicit in endpoints such as:
 Direct payment-path checks additionally fail closed on:
 
 - missing/invalid acquiring-wallet signature material
+- missing/invalid acquiring-service signature material
 - expired requester timestamp
 - replayed requester nonce
+- non-allowlisted acquiring service pubkey (when allowlist policy is enabled)
+
+Service allowlist policy:
+
+- Config key: `NFC_REQUESTER_SERVICE_ALLOWLIST`
+- Preferred entry format: `npub` (human-readable, Bech32 error-detecting)
+- Hex pubkeys are accepted for compatibility
 
 ## Record Offer and Present via NFC
 

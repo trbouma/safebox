@@ -222,6 +222,8 @@ class nwcVault(BaseModel):
     requester_sig: str|None = None
     requester_nonce: str|None = None
     requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
 
 class cardStatusRequest(BaseModel):
     token: str
@@ -258,6 +260,8 @@ class nfcPayOutVault(BaseModel):
     requester_sig: str|None = None
     requester_nonce: str|None = None
     requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
 
 class attestationOwner(BaseModel):    
     owner_nsec: str

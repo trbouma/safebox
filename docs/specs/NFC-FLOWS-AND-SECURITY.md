@@ -422,7 +422,10 @@ Failure mode:
 
 ### Direct Endpoint Security Binding
 
-Direct vault endpoints require request binding from the acquiring wallet.
+Direct vault endpoints require request binding from both:
+
+- the acquiring wallet identity
+- the acquiring service-instance identity
 
 Required fields:
 
@@ -430,19 +433,26 @@ Required fields:
 - `requester_sig`
 - `requester_nonce`
 - `requester_ts`
+- `requester_service_pubkey`
+- `requester_service_sig`
 
 Validation requirements:
 
-1. Signature must verify over canonical request payload.
-2. Timestamp freshness window is bounded (config: `NFC_REQUESTER_NONCE_TTL_SECONDS`).
-3. Nonce is single-use per `(requester_pubkey, flow, nonce)` and persisted server-side.
-4. Replay nonce failures return conflict semantics and must not execute monetary mutation.
+1. Wallet signature must verify over canonical request payload.
+2. Service-instance signature must verify over the same canonical request payload.
+3. Timestamp freshness window is bounded (config: `NFC_REQUESTER_NONCE_TTL_SECONDS`).
+4. Nonce is single-use per `(requester_pubkey, flow, nonce)` and persisted server-side.
+5. Replay nonce failures return conflict semantics and must not execute monetary mutation.
+6. Optional service allowlist policy may reject non-authorized service pubkeys.
 
 Persistence model:
 
 - Nonce consumption is stored in `nfcrequesternonce`.
 - Retention cleanup window is bounded (config: `NFC_REQUESTER_NONCE_RETENTION_SECONDS`).
 - Schema is migration-managed (`alembic` revision `20260310_0002`).
+- Service allowlist can be configured via `NFC_REQUESTER_SERVICE_ALLOWLIST`.
+  - Recommended format: `npub` entries (human-readable, Bech32 error-detecting).
+  - Hex entries are tolerated for backward compatibility.
 
 ### Ecash Delivery Safety, Rollback, and Recovery
 

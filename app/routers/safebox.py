@@ -2424,6 +2424,8 @@ async def request_nfc_payment( request: Request,
             submit_data["requester_sig"] = sign_payload(requester_payload, acorn_obj.privkey_hex)
             submit_data["requester_nonce"] = requester_nonce
             submit_data["requester_ts"] = requester_ts
+            submit_data["requester_service_pubkey"] = pubkey
+            submit_data["requester_service_sig"] = sign_payload(requester_payload, k.private_key_hex())
 
             last_post_exc: httpx.HTTPStatusError | None = None
             response_json = None
@@ -2591,7 +2593,9 @@ async def pay_to_nfc_tag( request: Request,
                         "requester_pubkey": acorn_obj.pubkey_hex,
                         "requester_sig": requester_sig,
                         "requester_nonce": requester_nonce,
-                        "requester_ts": requester_ts }
+                        "requester_ts": requester_ts,
+                        "requester_service_pubkey": pubkey,
+                        "requester_service_sig": sign_payload(requester_payload, k.private_key_hex()) }
 
         # put this in a task
         asyncio.create_task(
@@ -2619,7 +2623,9 @@ async def pay_to_nfc_tag( request: Request,
                         "requester_pubkey": acorn_obj.pubkey_hex,
                         "requester_sig": requester_sig,
                         "requester_nonce": requester_nonce,
-                        "requester_ts": requester_ts }
+                        "requester_ts": requester_ts,
+                        "requester_service_pubkey": pubkey,
+                        "requester_service_sig": sign_payload(requester_payload, k.private_key_hex()) }
 
         # Put this into a task
         task1 = asyncio.create_task(task_pay_to_nfc_tag(

@@ -33,6 +33,7 @@ from app.utils import ( create_jwt_token,
                         get_acorn,
                         get_acorn_by_npub,
                         hex_to_npub,
+                        npub_to_hex,
                         create_nembed_compressed,
                         sign_payload,
                         verify_payload,
@@ -182,6 +183,54 @@ def _verify_requester_signature(vault_payload: nwcVault | nfcPayOutVault, *, flo
         requester_ts=int(requester_ts),
     )
     return requester_pubkey
+
+
+def _verify_requester_service_signature(vault_payload: nwcVault | nfcPayOutVault, *, flow: str, require: bool) -> str | None:
+    service_pubkey = str(getattr(vault_payload, "requester_service_pubkey", "") or "").strip().lower()
+    service_sig = str(getattr(vault_payload, "requester_service_sig", "") or "").strip().lower()
+    requester_nonce = str(getattr(vault_payload, "requester_nonce", "") or "").strip()
+    requester_ts = getattr(vault_payload, "requester_ts", None)
+
+    if not service_pubkey or not service_sig or not requester_nonce or requester_ts is None:
+        if require:
+            raise HTTPException(status_code=401, detail="Missing acquiring service signature")
+        return None
+
+    allowlist: list[str] = []
+    for each in (settings.NFC_REQUESTER_SERVICE_ALLOWLIST or []):
+        candidate = str(each or "").strip()
+        if not candidate:
+            continue
+        try:
+            if candidate.lower().startswith("npub"):
+                allowlist.append(npub_to_hex(candidate).lower())
+            else:
+                allowlist.append(candidate.lower())
+        except Exception:
+            logger.warning("Ignoring invalid NFC_REQUESTER_SERVICE_ALLOWLIST entry: %s", candidate)
+
+    if allowlist and service_pubkey not in allowlist:
+        raise HTTPException(status_code=403, detail="Acquiring service is not allowlisted")
+
+    bind_payload = create_nfc_request_bind_payload(
+        token=vault_payload.token,
+        amount=vault_payload.amount,
+        tendered_amount=vault_payload.tendered_amount,
+        tendered_currency=vault_payload.tendered_currency,
+        comment=vault_payload.comment,
+        ln_invoice=getattr(vault_payload, "ln_invoice", None),
+        recipient_pubkey=getattr(vault_payload, "recipient_pubkey", None),
+        requester_nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+        flow=flow,
+    )
+    try:
+        valid = verify_payload(bind_payload, service_sig, service_pubkey)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid acquiring service signature payload: {exc}")
+    if not valid:
+        raise HTTPException(status_code=401, detail="Acquiring service signature verification failed")
+    return service_pubkey
 
 
 async def _execute_payment_direct(npub: str, nwc_vault: nwcVault) -> None:
@@ -477,6 +526,11 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
         flow="nfc_request_payment",
         require=is_direct_path,
     )
+    _verify_requester_service_signature(
+        nwc_vault,
+        flow="nfc_request_payment",
+        require=is_direct_path,
+    )
     k = Keys(config.SERVICE_NSEC)
     my_enc_NIP4 = NIP4Encrypt(k)
     
@@ -715,6 +769,11 @@ async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
         nfc_pay_out.token, nfc_pay_out.sig, nfc_pay_out.pubkey
     )
     _verify_requester_signature(
+        nfc_pay_out,
+        flow="nfc_payout",
+        require=is_direct_path,
+    )
+    _verify_requester_service_signature(
         nfc_pay_out,
         flow="nfc_payout",
         require=is_direct_path,

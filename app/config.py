@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     NWC_SUBSCRIBE_WAIT_SECONDS: int = 5
     NFC_REQUESTER_NONCE_TTL_SECONDS: int = 300
     NFC_REQUESTER_NONCE_RETENTION_SECONDS: int = 86400
+    NFC_REQUESTER_SERVICE_ALLOWLIST: List[str] = []
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     DM_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600
