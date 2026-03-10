@@ -124,6 +124,47 @@ curl -sS \
   "${BASE_URL}/agent/balance"
 ```
 
+### `GET /agent/proof_safety_audit`
+
+Runs proof integrity preflight checks for destructive proof mutation safety.
+
+Query params:
+
+- `check_relay` (optional, default `false`): when `true`, includes a relay state check (slower)
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/proof_safety_audit?check_relay=true"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "audit": {
+    "safe_to_swap": true,
+    "reason": "ok",
+    "proof_count": 42,
+    "proof_amount": 12345,
+    "keyset_count": 2,
+    "unknown_keysets": [],
+    "invalid_proofs": 0,
+    "duplicate_proofs": 0,
+    "relay_check": {
+      "ok": true,
+      "proof_count": 42,
+      "proof_amount": 12345,
+      "error": null
+    }
+  },
+  "timestamp": 1770000000
+}
+```
+
 ### `POST /agent/set_custom_handle`
 
 Sets a wallet-specific `custom_handle` for agent operations.
@@ -1117,6 +1158,12 @@ Response (example):
 
 Responses include a `detail` field for actionable errors where available.
 
+Payment reliability note:
+
+- Payment endpoints are REQUIRED to follow the safeguards in:
+  - [Payment Error Handling and Resilience Requirements](./PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md)
+- This includes proof-safety preflight, non-destructive mutation guards, explicit uncertain-state handling, and bounded timeout/retry behavior.
+
 ## Rate Limiting
 
 Agent routes support built-in in-memory rate limiting controlled by `Settings`:
@@ -1157,3 +1204,4 @@ When limit is exceeded:
 - `app/main.py`
 - `app/appmodels.py`
 - `skills/agent-api/SKILL.md`
+- `docs/specs/PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md`

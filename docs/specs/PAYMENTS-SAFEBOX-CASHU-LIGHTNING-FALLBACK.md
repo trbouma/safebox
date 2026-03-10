@@ -126,6 +126,19 @@ No Safebox-specific secure ecash messaging is required.
 - Payloads are encoded in `nembed` for robust transport across QR/NFC/text channels.
 - Fallback keeps compatibility with the broader Lightning ecosystem when Safebox features are unavailable.
 
+## Error Handling and Resilience Requirements
+
+Payment flows described in this spec MUST conform to:
+
+- [Payment Error Handling and Resilience Requirements](./PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md)
+
+In particular:
+
+- proof mutation operations MUST be non-destructive under uncertain/empty output conditions,
+- ecash delivery failures MUST trigger rollback/recovery behavior,
+- timeout/retry behavior MUST be bounded and explicit,
+- and uncertain settlement MUST NOT be surfaced as successful completion.
+
 ## Relevant Implementation Files
 
 - `app/routers/safebox.py` (`/payaddress`)

@@ -62,6 +62,7 @@ Section convention used across current Safebox specs:
 - [NFC Flows and Security](./NFC-FLOWS-AND-SECURITY.md) - Card issuance, rotation, NFC payment/record flows, and security controls.
 - [Offers and Grants Flows](./OFFERS-AND-GRANTS-FLOWS.md) - End-to-end offer/grant lifecycle over QR and NFC, including legacy rendering fallback.
 - [Payments: Safebox/Cashu/Lightning Fallback](./PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md) - Payment routing between Safebox wallets and Lightning interoperability behavior.
+- [Payment Error Handling and Resilience Requirements](./PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md) - Normative reliability contract for payment methods, including proof-safety gates, rollback rules, uncertainty handling, and conformance checks.
 - [Card Tokenization and NFC Payment Strategy](./CARD-TOKENIZATION-AND-NFC-PAYMENT-STRATEGY.md) - Design strategy for NFC card virtualization and tokenized payment authorization model.
 - [nEmbed Coexistence with Tokenized Card Rails](./NEMBED-COEXISTENCE-WITH-TOKENIZED-CARD-RAILS.md) - Comparative model and phased coexistence strategy for running `nembed` alongside incumbent tokenized card payment rails.
 - [Cashu Storage and Multi-Mint](./CASHU-STORAGE-AND-MULTI-MINT.md) - Proof storage/retrieval model and multi-mint normalization behavior.

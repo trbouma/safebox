@@ -105,6 +105,7 @@ Non-interference rule:
 - `GET /agent/info`
 - `GET /agent/balance`
 - `GET /agent/tx_history`
+- `GET /agent/proof_safety_audit`
 - `GET /agent/supported_currencies`
 - `POST /agent/set_custom_handle`
 - `GET /agent/read_dms`
@@ -867,6 +868,26 @@ Retry guidance:
 - For invoice receive flows, prefer `GET /agent/invoice_status/{quote}` before concluding failure.
 - For recipient-first offer requests, regenerate a fresh QR if `expires_at` has passed.
 
+## Payment Reliability and Resilience (Required)
+
+All payment-capable flows in this skill MUST follow:
+
+- `docs/specs/PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md`
+
+Operational rules:
+
+1. Treat payment lifecycle as staged:
+   - `ACCEPTED -> PROCESSING -> SETTLED -> NOTIFIED`
+   - failures MUST end in `FAILED` or `UNCERTAIN` (not false success)
+2. Before destructive proof mutation workflows, run:
+   - `GET /agent/proof_safety_audit`
+   - optional deeper check: `GET /agent/proof_safety_audit?check_relay=true`
+3. On `audit.safe_to_swap=false`, stop and reconcile first. Do not continue swap/consolidate-like actions.
+4. Do not report payment success unless settlement is confirmed.
+5. For uncertain post-debit delivery outcomes (for example ecash delivery failure), classify as `UNCERTAIN` and preserve recovery artifacts for reconciliation.
+6. Keep retries bounded and explicit; do not blindly retry non-idempotent monetary operations.
+7. Use structured logs for payment status transitions and error class; never log secrets/token material.
+
 ## Guardrails
 
 - Never log `access_key`, `nsec`, `seed_phrase`, `ecash_token`, or full invoices in plaintext logs.
@@ -879,6 +900,7 @@ Retry guidance:
 - `docs/specs/AGENT-API.md`
 - `docs/specs/AGENT-FLOWS.md`
 - `docs/specs/AGENT-OFFER-RECIPIENT-FIRST-FLOW.md`
+- `docs/specs/PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md`
 - `app/routers/agent.py`
 - `safebox/cli_agent.py`
 - `safebox/cli_acorn.py`

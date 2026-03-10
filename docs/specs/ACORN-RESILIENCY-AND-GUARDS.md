@@ -69,6 +69,8 @@ Examples:
 - Required token/payload checks before settlement calls.
 - Explicit status branching (`OK`, `PENDING`, `ERROR`, timeout).
 - UI-side preflight checks before NFC actions proceed.
+- Proof-safety audit gates before destructive proof mutation (`swap`/`consolidate`) to fail closed on invalid or ambiguous proof state.
+- Non-destructive proof replacement requirement: existing proofs are not deleted/overwritten until replacement proofs are confirmed non-empty and persistence checks pass.
 
 ### 3. Transport/Session Guards
 
