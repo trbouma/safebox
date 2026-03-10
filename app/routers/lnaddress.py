@@ -7,11 +7,12 @@ from pydantic import BaseModel
 import random
 import string
 import asyncio
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta
 import qrcode, io, urllib, json
 import secrets
 
-from sqlmodel import Field, Session, SQLModel, select, update
+from sqlmodel import Session, select, delete
 from argon2 import PasswordHasher
 import requests
 
@@ -20,7 +21,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent, NWCSecret, cardStatusRequest
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent, NWCSecret, cardStatusRequest, NFCRequesterNonce
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
@@ -31,8 +32,11 @@ from app.utils import ( create_jwt_token,
                         generate_pnr,
                         get_acorn,
                         get_acorn_by_npub,
+                        hex_to_npub,
+                        create_nembed_compressed,
                         sign_payload,
-                        verify_payload)
+                        verify_payload,
+                        create_nfc_request_bind_payload)
 
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
@@ -101,6 +105,138 @@ def _parse_and_validate_card_token(token: str, sig: str, pubkey: str) -> tuple[s
 
     npub, mode = _resolve_card_target_npub(token_secret)
     return token_secret, token_pin, npub, mode
+
+
+def _consume_requester_nonce(requester_pubkey: str, flow: str, nonce: str, requester_ts: int) -> None:
+    retention_seconds = max(60, int(settings.NFC_REQUESTER_NONCE_RETENTION_SECONDS))
+    now_dt = datetime.utcnow()
+    cutoff_dt = now_dt - timedelta(seconds=retention_seconds)
+
+    with Session(engine) as session:
+        session.exec(delete(NFCRequesterNonce).where(NFCRequesterNonce.used_at < cutoff_dt))
+        existing = session.exec(
+            select(NFCRequesterNonce).where(
+                NFCRequesterNonce.requester_pubkey == requester_pubkey,
+                NFCRequesterNonce.flow == flow,
+                NFCRequesterNonce.nonce == nonce,
+            )
+        ).first()
+        if existing:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Replay nonce already used")
+
+        session.add(
+            NFCRequesterNonce(
+                requester_pubkey=requester_pubkey,
+                flow=flow,
+                nonce=nonce,
+                requester_ts=int(requester_ts),
+                used_at=now_dt,
+            )
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Replay nonce already used")
+
+
+def _verify_requester_signature(vault_payload: nwcVault | nfcPayOutVault, *, flow: str, require: bool) -> str | None:
+    requester_pubkey = str(getattr(vault_payload, "requester_pubkey", "") or "").strip().lower()
+    requester_sig = str(getattr(vault_payload, "requester_sig", "") or "").strip().lower()
+    requester_nonce = str(getattr(vault_payload, "requester_nonce", "") or "").strip()
+    requester_ts = getattr(vault_payload, "requester_ts", None)
+
+    if not requester_pubkey or not requester_sig or not requester_nonce or requester_ts is None:
+        if require:
+            raise HTTPException(status_code=401, detail="Missing acquiring wallet signature")
+        return None
+
+    now_ts = int(time.time())
+    ttl_seconds = max(30, int(settings.NFC_REQUESTER_NONCE_TTL_SECONDS))
+    if abs(now_ts - int(requester_ts)) > ttl_seconds:
+        raise HTTPException(status_code=401, detail="Acquiring wallet signature expired")
+
+    bind_payload = create_nfc_request_bind_payload(
+        token=vault_payload.token,
+        amount=vault_payload.amount,
+        tendered_amount=vault_payload.tendered_amount,
+        tendered_currency=vault_payload.tendered_currency,
+        comment=vault_payload.comment,
+        ln_invoice=getattr(vault_payload, "ln_invoice", None),
+        recipient_pubkey=getattr(vault_payload, "recipient_pubkey", None),
+        requester_nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+        flow=flow,
+    )
+    try:
+        valid = verify_payload(bind_payload, requester_sig, requester_pubkey)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid acquiring signature payload: {exc}")
+    if not valid:
+        raise HTTPException(status_code=401, detail="Acquiring wallet signature verification failed")
+    _consume_requester_nonce(
+        requester_pubkey=requester_pubkey,
+        flow=flow,
+        nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+    )
+    return requester_pubkey
+
+
+async def _execute_payment_direct(npub: str, nwc_vault: nwcVault) -> None:
+    acorn_obj = await get_acorn_by_npub(npub)
+    await acorn_obj.load_data()
+
+    if nwc_vault.nfc_ecash_clearing:
+        if not nwc_vault.recipient_pubkey:
+            raise HTTPException(status_code=400, detail="Missing recipient_pubkey for ecash clearing")
+        try:
+            cashu_token = await acorn_obj.issue_token(amount=nwc_vault.amount, comment=nwc_vault.comment)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Unable to issue ecash token: {exc}")
+
+        pay_obj = {
+            "token": cashu_token,
+            "amount": nwc_vault.amount,
+            "comment": nwc_vault.comment,
+            "tendered_amount": nwc_vault.tendered_amount,
+            "tendered_currency": nwc_vault.tendered_currency,
+        }
+        relays = nwc_vault.relays or settings.ECASH_RELAYS
+        nembed_to_send = create_nembed_compressed(pay_obj)
+
+        delivered = False
+        try:
+            await acorn_obj.secure_transmittal(
+                nrecipient=hex_to_npub(nwc_vault.recipient_pubkey),
+                message=nembed_to_send,
+                dm_relays=relays,
+                kind=21401,
+            )
+            delivered = True
+        except Exception as exc:
+            logger.warning("Direct ecash delivery failed, attempting rollback: %s", exc)
+
+        if not delivered:
+            try:
+                await acorn_obj.accept_token(
+                    cashu_token=cashu_token,
+                    comment=f"rollback undelivered nfc ecash: {nwc_vault.comment or ''}",
+                )
+            except Exception as rollback_exc:
+                raise HTTPException(status_code=500, detail=f"Ecash delivery failed and rollback failed: {rollback_exc}")
+            raise HTTPException(status_code=502, detail="Ecash delivery failed")
+        return
+
+    if not nwc_vault.ln_invoice:
+        raise HTTPException(status_code=400, detail="Missing ln_invoice for invoice payment")
+    await acorn_obj.pay_multi_invoice(
+        nwc_vault.ln_invoice,
+        comment=nwc_vault.comment or "NFC payment",
+        tendered_amount=nwc_vault.tendered_amount,
+        tendered_currency=nwc_vault.tendered_currency,
+    )
 
 
    
@@ -327,12 +463,19 @@ async def ln_pay( amount: float,
     
 
 @router.post("/.well-known/nfcvaultrequestpayment", tags=["public"])
+@router.post("/.well-known/nfcvaultrequestpayment/direct", tags=["public"])
 async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     status = "OK"
     detail = None
+    is_direct_path = request.url.path.endswith("/direct")
 
     token_secret, token_pin, npub, _ = _parse_and_validate_card_token(
         nwc_vault.token, nwc_vault.sig, nwc_vault.pubkey
+    )
+    _verify_requester_signature(
+        nwc_vault,
+        flow="nfc_request_payment",
+        require=is_direct_path,
     )
     k = Keys(config.SERVICE_NSEC)
     my_enc_NIP4 = NIP4Encrypt(k)
@@ -354,7 +497,11 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
         except Exception as exc:
             print(f"nfc_request_payment balance check failed: {exc}")
 
-    #FIXME determine right relays
+    if is_direct_path:
+        await _execute_payment_direct(npub=npub, nwc_vault=nwc_vault)
+        return {"status": status, "detail": detail}
+
+    # Legacy handoff via NWC relay bus.
     if nwc_vault.nfc_ecash_clearing:
         pay_instruction = {
         "method": "pay_ecash",
@@ -558,12 +705,19 @@ async def offer_vault(request: Request, offer_vault: offerVault):
     return {"status": status, "detail": detail}
 
 @router.post("/.well-known/nfcpayout", tags=["public"])
+@router.post("/.well-known/nfcpayout/direct", tags=["public"])
 async def nfc_pay_out(request: Request, nfc_pay_out: nfcPayOutVault):
     status = "OK"
     detail = "This from lnaddress nfcpayout"
+    is_direct_path = request.url.path.endswith("/direct")
 
     token_secret, token_pin, npub, _ = _parse_and_validate_card_token(
         nfc_pay_out.token, nfc_pay_out.sig, nfc_pay_out.pubkey
+    )
+    _verify_requester_signature(
+        nfc_pay_out,
+        flow="nfc_payout",
+        require=is_direct_path,
     )
     print(f"token secret {token_secret} token pin {token_pin}")
     k_payout = Keys(pub_k=npub)

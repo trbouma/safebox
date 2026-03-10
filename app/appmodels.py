@@ -6,6 +6,7 @@ from enum import Enum
 from datetime import datetime
 
 from sqlmodel import Field, SQLModel
+from sqlalchemy import UniqueConstraint
 
 
 
@@ -57,6 +58,19 @@ class NWCSecret(SQLModel, table=True):
     nwc_secret: str = Field(unique=True, nullable=False)
     npub: str = Field(unique=False, nullable=False)
     # Add more fields below as needed for your use case  
+
+
+class NFCRequesterNonce(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("requester_pubkey", "flow", "nonce", name="uq_nfc_requester_nonce"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    requester_pubkey: str = Field(index=True, nullable=False)
+    flow: str = Field(index=True, nullable=False)
+    nonce: str = Field(index=True, nullable=False)
+    requester_ts: int = Field(nullable=False)
+    used_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
 
 class lnPayAddress(BaseModel):
     address: str 
@@ -203,7 +217,11 @@ class nwcVault(BaseModel):
     nfc_ecash_clearing: bool = False
     recipient_pubkey:str|None=None
     relays: List[str]|None=None
-    sig: str|None = None  
+    sig: str|None = None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
 
 class cardStatusRequest(BaseModel):
     token: str
@@ -236,6 +254,10 @@ class nfcPayOutVault(BaseModel):
     nfc_ecash_clearing: bool = False
     pubkey: str|None = None
     sig: str|None=None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
 
 class attestationOwner(BaseModel):    
     owner_nsec: str

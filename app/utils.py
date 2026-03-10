@@ -1532,6 +1532,37 @@ def verify_payload(payload: str, signature_hex: str, public_key_hex: str) -> boo
     signature = bytes.fromhex(signature_hex)
     return pubkey.schnorr_verify(digest, signature, bip340tag='', raw=True)
 
+
+def create_nfc_request_bind_payload(
+    *,
+    token: str,
+    amount: int | None,
+    tendered_amount: float | int | None,
+    tendered_currency: str | None,
+    comment: str | None,
+    ln_invoice: str | None,
+    recipient_pubkey: str | None,
+    requester_nonce: str,
+    requester_ts: int,
+    flow: str,
+) -> str:
+    """
+    Canonical payload used to bind an acquiring wallet signature to an NFC request.
+    """
+    payload = {
+        "amount": int(amount) if amount is not None else None,
+        "comment": comment or "",
+        "flow": flow,
+        "ln_invoice": ln_invoice,
+        "recipient_pubkey": recipient_pubkey,
+        "requester_nonce": requester_nonce,
+        "requester_ts": int(requester_ts),
+        "tendered_amount": tendered_amount,
+        "tendered_currency": tendered_currency or "SAT",
+        "token": token,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
 def starts_with(test: str, target: str) -> bool:
     """
     Case-insensitive check: return True if 'target' starts with 'test'.

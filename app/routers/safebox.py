@@ -37,7 +37,7 @@ from safebox.models import cliQuote
 from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request, create_nfc_request_bind_payload
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret, creqPayRequest
 from app.config import Settings, ConfigWithFallback
@@ -2292,8 +2292,11 @@ async def request_nfc_payment( request: Request,
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
     headers = { "Content-Type": "application/json"}
-    vault_url = f"{host_base_url}/.well-known/nfcvaultrequestpayment"
-    print(f"accept token:  {vault_url} {vault_token} {final_amount} sats")
+    vault_urls = [
+        f"{host_base_url}/.well-known/nfcvaultrequestpayment/direct",
+        f"{host_base_url}/.well-known/nfcvaultrequestpayment",
+    ]
+    print(f"accept token via {vault_urls[0]} (fallback {vault_urls[1]}) token={vault_token} amount={final_amount} sats")
 
     status_url = f"{host_base_url}/.well-known/card-status"
     status_payload = {"token": vault_token, "pubkey": pubkey, "sig": sig}
@@ -2313,18 +2316,19 @@ async def request_nfc_payment( request: Request,
             if nfc_ecash_clearing:
                 print("do ecash clearing")
                 detail = "NFC ecash payment request accepted. Waiting for completion...";
-                submit_data = { "ln_invoice": None, 
-                                "token": vault_token, 
-                                "amount": final_amount,
-                                "tendered_amount": payment_token.amount,
-                                "tendered_currency": payment_token.currency,                    
-                                "pubkey": pubkey, 
-                                "nfc_ecash_clearing": nfc_ecash_clearing,
-                                "recipient_pubkey": acorn_obj.pubkey_hex,
-                                "relays": settings.RELAYS,
-                                "sig": sig, 
-                                "comment": payment_token.comment  
-                                }
+                submit_data = {
+                    "ln_invoice": None,
+                    "token": vault_token,
+                    "amount": final_amount,
+                    "tendered_amount": payment_token.amount,
+                    "tendered_currency": payment_token.currency,
+                    "pubkey": pubkey,
+                    "nfc_ecash_clearing": nfc_ecash_clearing,
+                    "recipient_pubkey": acorn_obj.pubkey_hex,
+                    "relays": settings.RELAYS,
+                    "sig": sig,
+                    "comment": payment_token.comment,
+                }
                 settings_url = f"{host_base_url}/.well-known/settings"
                 response = await client.get(url=settings_url)
                 response.raise_for_status()
@@ -2340,16 +2344,17 @@ async def request_nfc_payment( request: Request,
             
 
                 # need to send off to the vault for processing
-                submit_data = { "ln_invoice": cli_quote.invoice, 
-                                "token": vault_token, 
-                                "amount": final_amount,
-                                "tendered_amount": payment_token.amount,
-                                "tendered_currency": payment_token.currency,                    
-                                "pubkey": pubkey, 
-                                "nfc_ecash_clearing": nfc_ecash_clearing,
-                                "sig": sig, 
-                                "comment": payment_token.comment  
-                                }
+                submit_data = {
+                    "ln_invoice": cli_quote.invoice,
+                    "token": vault_token,
+                    "amount": final_amount,
+                    "tendered_amount": payment_token.amount,
+                    "tendered_currency": payment_token.currency,
+                    "pubkey": pubkey,
+                    "nfc_ecash_clearing": nfc_ecash_clearing,
+                    "sig": sig,
+                    "comment": payment_token.comment,
+                }
                 print(f"data: {submit_data}")
             
                 # add in the polling task here
@@ -2401,9 +2406,46 @@ async def request_nfc_payment( request: Request,
 
                 watch_lightning_settlement = _watch_lightning_settlement
 
-            response = await client.post(url=vault_url, json=submit_data, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
+            requester_nonce = generate_nonce()
+            requester_ts = int(time.time())
+            requester_payload = create_nfc_request_bind_payload(
+                token=vault_token,
+                amount=final_amount,
+                tendered_amount=payment_token.amount,
+                tendered_currency=payment_token.currency,
+                comment=payment_token.comment,
+                ln_invoice=submit_data.get("ln_invoice"),
+                recipient_pubkey=submit_data.get("recipient_pubkey"),
+                requester_nonce=requester_nonce,
+                requester_ts=requester_ts,
+                flow="nfc_request_payment",
+            )
+            submit_data["requester_pubkey"] = acorn_obj.pubkey_hex
+            submit_data["requester_sig"] = sign_payload(requester_payload, acorn_obj.privkey_hex)
+            submit_data["requester_nonce"] = requester_nonce
+            submit_data["requester_ts"] = requester_ts
+
+            last_post_exc: httpx.HTTPStatusError | None = None
+            response_json = None
+            for idx, vault_url in enumerate(vault_urls):
+                try:
+                    response = await client.post(url=vault_url, json=submit_data, headers=headers)
+                    response.raise_for_status()
+                    response_json = response.json()
+                    if idx == 1:
+                        logger.info("NFC vault payment request used legacy endpoint host=%s", host_base_url)
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if idx == 0 and exc.response.status_code in {404, 405, 501}:
+                        logger.info("NFC direct endpoint unavailable, falling back host=%s status=%s", host_base_url, exc.response.status_code)
+                        continue
+                    last_post_exc = exc
+                    break
+
+            if response_json is None:
+                if last_post_exc is not None:
+                    raise last_post_exc
+                raise ValueError("NFC vault returned invalid response.")
     except httpx.TimeoutException:
         return {"status": "ERROR", "detail": "NFC vault request timed out."}
     except httpx.HTTPStatusError as exc:
@@ -2516,17 +2558,37 @@ async def pay_to_nfc_tag( request: Request,
     except ValueError:
         return {"status": "ERROR", "detail": "Card status returned invalid response."}
 
+    requester_nonce = generate_nonce()
+    requester_ts = int(time.time())
+    requester_payload = create_nfc_request_bind_payload(
+        token=vault_token,
+        amount=final_amount,
+        tendered_amount=nfc_pay_out_request.amount,
+        tendered_currency=nfc_pay_out_request.currency,
+        comment=nfc_comment,
+        ln_invoice=None,
+        recipient_pubkey=None,
+        requester_nonce=requester_nonce,
+        requester_ts=requester_ts,
+        flow="nfc_payout",
+    )
+    requester_sig = sign_payload(requester_payload, acorn_obj.privkey_hex)
+
     if nfc_ecash_clearing:
         print("do nfc ecash clearing")
        
 
-        submit_data = { "token": vault_token, 
-                        "amount": final_amount,                        
+        submit_data = { "token": vault_token,
+                        "amount": final_amount,
                         "tendered_amount": nfc_pay_out_request.amount,
                         "tendered_currency": nfc_pay_out_request.currency,
-                        "comment": nfc_comment, 
+                        "comment": nfc_comment,
                         "nfc_ecash_clearing": nfc_ecash_clearing,
-                        "sig":sig, "pubkey":pubkey }
+                        "sig":sig, "pubkey":pubkey,
+                        "requester_pubkey": acorn_obj.pubkey_hex,
+                        "requester_sig": requester_sig,
+                        "requester_nonce": requester_nonce,
+                        "requester_ts": requester_ts }
 
         # put this in a task
         asyncio.create_task(
@@ -2543,13 +2605,17 @@ async def pay_to_nfc_tag( request: Request,
 
     else:    
 
-        submit_data = { "token": vault_token, 
-                        "amount": final_amount, 
+        submit_data = { "token": vault_token,
+                        "amount": final_amount,
                         "tendered_amount": nfc_pay_out_request.amount,
                         "tendered_currency": nfc_pay_out_request.currency,
-                        "comment": nfc_comment, 
+                        "comment": nfc_comment,
                         "nfc_ecash_clearing": nfc_ecash_clearing,
-                        "sig":sig, "pubkey":pubkey }
+                        "sig":sig, "pubkey":pubkey,
+                        "requester_pubkey": acorn_obj.pubkey_hex,
+                        "requester_sig": requester_sig,
+                        "requester_nonce": requester_nonce,
+                        "requester_ts": requester_ts }
 
         print(f"vault: {vault_url} submit data: {submit_data}" )
 
