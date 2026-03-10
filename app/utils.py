@@ -24,7 +24,7 @@ import re, idna
 from bech32 import bech32_decode, convertbits, bech32_encode
 import struct
 from monstr.event.event import Event
-from monstr.encrypt import Keys, NIP44Encrypt
+from monstr.encrypt import Keys, NIP44Encrypt, DecryptionException
 from monstr.client.client import Client, ClientPool
 
 from mnemonic import Mnemonic
@@ -168,6 +168,8 @@ async def fetch_safebox(access_token) -> RegisteredSafebox:
 
         if not access_key:
             raise HTTPException(status_code=401, detail="Invalid token")
+    except DecryptionException:
+        raise HTTPException(status_code=401, detail="Invalid token")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:

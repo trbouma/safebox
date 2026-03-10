@@ -242,6 +242,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def clear_invalid_auth_cookie(request: Request, call_next):
+    response = await call_next(request)
+    if request.cookies.get("access_token") and response.status_code == 401:
+        response.delete_cookie(key="access_token", path="/")
+        response.delete_cookie(key=SETTINGS.CSRF_COOKIE_NAME, path="/")
+    return response
+
+
 app.include_router(lnaddress.router) 
 app.include_router(safebox.router, prefix="/safebox") 
 app.include_router(scanner.router, prefix="/scanner") 
