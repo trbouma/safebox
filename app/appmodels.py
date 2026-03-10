@@ -182,12 +182,24 @@ class proofByToken(BaseModel):
     label: str|None=None
     kind: int|None=None
     pin: str|None=None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
 
 class OfferToken(BaseModel):
     offer_token: str|None = None
     nauth: str
     kem_public_key: str|None = None
     kemalg: str|None = None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
     
 
 class nfcCard(BaseModel):
@@ -237,7 +249,13 @@ class proofVault(BaseModel):
     kind: int|None = None
     pin: str|None = None
     pubkey:str|None= None
-    sig: str|None = None  
+    sig: str|None = None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
 class offerVault(BaseModel):    
     token: str 
     nauth: str    
@@ -245,6 +263,12 @@ class offerVault(BaseModel):
     sig: str|None = None  
     kem_public_key:str|None = None
     kemalg:str|None=None
+    requester_pubkey: str|None = None
+    requester_sig: str|None = None
+    requester_nonce: str|None = None
+    requester_ts: int|None = None
+    requester_service_pubkey: str|None = None
+    requester_service_sig: str|None = None
 
 class nfcPayOutVault(BaseModel):
     token: str

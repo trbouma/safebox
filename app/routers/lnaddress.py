@@ -37,7 +37,8 @@ from app.utils import ( create_jwt_token,
                         create_nembed_compressed,
                         sign_payload,
                         verify_payload,
-                        create_nfc_request_bind_payload)
+                        create_nfc_request_bind_payload,
+                        create_record_request_bind_payload)
 
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
@@ -230,6 +231,106 @@ def _verify_requester_service_signature(vault_payload: nwcVault | nfcPayOutVault
         raise HTTPException(status_code=400, detail=f"Invalid acquiring service signature payload: {exc}")
     if not valid:
         raise HTTPException(status_code=401, detail="Acquiring service signature verification failed")
+    return service_pubkey
+
+
+def _verify_record_requester_signature(vault_payload: proofVault | offerVault, *, flow: str, require: bool) -> str | None:
+    requester_pubkey = str(getattr(vault_payload, "requester_pubkey", "") or "").strip().lower()
+    requester_sig = str(getattr(vault_payload, "requester_sig", "") or "").strip().lower()
+    requester_nonce = str(getattr(vault_payload, "requester_nonce", "") or "").strip()
+    requester_ts = getattr(vault_payload, "requester_ts", None)
+
+    if not requester_pubkey or not requester_sig or not requester_nonce or requester_ts is None:
+        if require:
+            raise HTTPException(status_code=401, detail="Missing record requester signature")
+        return None
+
+    now_ts = int(time.time())
+    ttl_seconds = max(30, int(settings.NFC_REQUESTER_NONCE_TTL_SECONDS))
+    if abs(now_ts - int(requester_ts)) > ttl_seconds:
+        raise HTTPException(status_code=401, detail="Record requester signature expired")
+
+    bind_payload = create_record_request_bind_payload(
+        token=vault_payload.token,
+        nauth=vault_payload.nauth,
+        label=getattr(vault_payload, "label", None),
+        kind=getattr(vault_payload, "kind", None),
+        pin=getattr(vault_payload, "pin", None),
+        kem_public_key=getattr(vault_payload, "kem_public_key", None),
+        kemalg=getattr(vault_payload, "kemalg", None),
+        requester_nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+        flow=flow,
+    )
+    try:
+        valid = verify_payload(bind_payload, requester_sig, requester_pubkey)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid record requester signature payload: {exc}")
+    if not valid:
+        raise HTTPException(status_code=401, detail="Record requester signature verification failed")
+    _consume_requester_nonce(
+        requester_pubkey=requester_pubkey,
+        flow=flow,
+        nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+    )
+    return requester_pubkey
+
+
+def _verify_record_service_signature(vault_payload: proofVault | offerVault, *, flow: str, require: bool) -> str | None:
+    service_pubkey = str(getattr(vault_payload, "requester_service_pubkey", "") or "").strip().lower()
+    service_sig = str(getattr(vault_payload, "requester_service_sig", "") or "").strip().lower()
+    requester_nonce = str(getattr(vault_payload, "requester_nonce", "") or "").strip()
+    requester_ts = getattr(vault_payload, "requester_ts", None)
+
+    if not service_pubkey or not service_sig or not requester_nonce or requester_ts is None:
+        if require:
+            raise HTTPException(status_code=401, detail="Missing record service signature")
+        return None
+
+    allowlist: list[str] = []
+    configured_allowlist = settings.RECORD_REQUESTER_SERVICE_ALLOWLIST or settings.NFC_REQUESTER_SERVICE_ALLOWLIST or []
+    for each in configured_allowlist:
+        candidate = str(each or "").strip()
+        if not candidate:
+            continue
+        try:
+            if candidate.lower().startswith("npub"):
+                allowlist.append(npub_to_hex(candidate).lower())
+            else:
+                allowlist.append(candidate.lower())
+        except Exception:
+            logger.warning("Ignoring invalid RECORD_REQUESTER_SERVICE_ALLOWLIST entry: %s", candidate)
+
+    if allowlist and service_pubkey not in allowlist:
+        raise HTTPException(status_code=403, detail="Record acquiring service is not allowlisted")
+
+    bind_payload = create_record_request_bind_payload(
+        token=vault_payload.token,
+        nauth=vault_payload.nauth,
+        label=getattr(vault_payload, "label", None),
+        kind=getattr(vault_payload, "kind", None),
+        pin=getattr(vault_payload, "pin", None),
+        kem_public_key=getattr(vault_payload, "kem_public_key", None),
+        kemalg=getattr(vault_payload, "kemalg", None),
+        requester_nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+        flow=flow,
+    )
+    try:
+        valid = verify_payload(bind_payload, service_sig, service_pubkey)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid record service signature payload: {exc}")
+    if not valid:
+        raise HTTPException(status_code=401, detail="Record service signature verification failed")
+
+    # If requester signature was absent, service signature still gets replay protection.
+    _consume_requester_nonce(
+        requester_pubkey=service_pubkey,
+        flow=f"{flow}:service",
+        nonce=requester_nonce,
+        requester_ts=int(requester_ts),
+    )
     return service_pubkey
 
 
@@ -660,6 +761,17 @@ async def proof_vault(request: Request, proof_vault: proofVault):
     status = "OK"
     detail = "No error"
 
+    _verify_record_requester_signature(
+        proof_vault,
+        flow="record_proof",
+        require=bool(settings.RECORD_REQUESTER_SIGNATURE_REQUIRED),
+    )
+    _verify_record_service_signature(
+        proof_vault,
+        flow="record_proof",
+        require=bool(settings.RECORD_REQUESTER_SIGNATURE_REQUIRED or settings.RECORD_REQUESTER_SERVICE_ALLOWLIST),
+    )
+
     token_key, token_pin, _, _ = _parse_and_validate_card_token(
         proof_vault.token, proof_vault.sig, proof_vault.pubkey
     )
@@ -713,6 +825,17 @@ async def proof_vault(request: Request, proof_vault: proofVault):
 async def offer_vault(request: Request, offer_vault: offerVault):
     status = "OK"
     detail = "Waiting to send record..."
+
+    _verify_record_requester_signature(
+        offer_vault,
+        flow="record_offer",
+        require=bool(settings.RECORD_REQUESTER_SIGNATURE_REQUIRED),
+    )
+    _verify_record_service_signature(
+        offer_vault,
+        flow="record_offer",
+        require=bool(settings.RECORD_REQUESTER_SIGNATURE_REQUIRED or settings.RECORD_REQUESTER_SERVICE_ALLOWLIST),
+    )
 
     token_secret, secure_pin, _, _ = _parse_and_validate_card_token(
         offer_vault.token, offer_vault.sig, offer_vault.pubkey

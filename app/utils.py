@@ -1563,6 +1563,37 @@ def create_nfc_request_bind_payload(
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
+
+def create_record_request_bind_payload(
+    *,
+    token: str,
+    nauth: str,
+    requester_nonce: str,
+    requester_ts: int,
+    flow: str,
+    label: str | None = None,
+    kind: int | None = None,
+    pin: str | None = None,
+    kem_public_key: str | None = None,
+    kemalg: str | None = None,
+) -> str:
+    """
+    Canonical payload used to bind a signer to record offer/proof vault requests.
+    """
+    payload = {
+        "flow": flow,
+        "kem_public_key": kem_public_key,
+        "kemalg": kemalg,
+        "kind": int(kind) if kind is not None else None,
+        "label": label or None,
+        "nauth": nauth,
+        "pin": pin or None,
+        "requester_nonce": requester_nonce,
+        "requester_ts": int(requester_ts),
+        "token": token,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
 def starts_with(test: str, target: str) -> bool:
     """
     Case-insensitive check: return True if 'target' starts with 'test'.

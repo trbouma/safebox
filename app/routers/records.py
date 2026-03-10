@@ -26,7 +26,7 @@ from monstr.encrypt import NIP44Encrypt
 import oqs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub, create_record_request_bind_payload
 
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
@@ -285,6 +285,74 @@ def _normalize_relay_list(relays, fallback: list[str] | None = None) -> list[str
         if each not in normalized:
             normalized.append(each)
     return normalized
+
+
+def _build_record_request_auth(
+    *,
+    service_keys: Keys,
+    flow: str,
+    token: str,
+    nauth: str,
+    label: str | None = None,
+    kind: int | None = None,
+    pin: str | None = None,
+    kem_public_key: str | None = None,
+    kemalg: str | None = None,
+    requester_pubkey: str | None = None,
+    requester_sig: str | None = None,
+    requester_nonce: str | None = None,
+    requester_ts: int | None = None,
+) -> dict:
+    caller_has_any_requester_fields = any(
+        [
+            requester_pubkey,
+            requester_sig,
+            requester_nonce,
+            requester_ts is not None,
+        ]
+    )
+    caller_has_all_requester_fields = all(
+        [
+            bool(str(requester_pubkey or "").strip()),
+            bool(str(requester_sig or "").strip()),
+            bool(str(requester_nonce or "").strip()),
+            requester_ts is not None,
+        ]
+    )
+
+    if caller_has_any_requester_fields and not caller_has_all_requester_fields:
+        raise HTTPException(
+            status_code=400,
+            detail="Requester signature fields must include pubkey, sig, nonce, and ts together.",
+        )
+
+    nonce_to_use = str(requester_nonce or generate_nonce())
+    ts_to_use = int(requester_ts) if requester_ts is not None else int(datetime.now(timezone.utc).timestamp())
+
+    bind_payload = create_record_request_bind_payload(
+        token=token,
+        nauth=nauth,
+        label=label,
+        kind=kind,
+        pin=pin,
+        kem_public_key=kem_public_key,
+        kemalg=kemalg,
+        requester_nonce=nonce_to_use,
+        requester_ts=ts_to_use,
+        flow=flow,
+    )
+
+    service_pubkey = service_keys.public_key_hex()
+    service_sig = sign_payload(bind_payload, service_keys.private_key_hex())
+
+    return {
+        "requester_pubkey": requester_pubkey if caller_has_all_requester_fields else None,
+        "requester_sig": requester_sig if caller_has_all_requester_fields else None,
+        "requester_nonce": nonce_to_use,
+        "requester_ts": ts_to_use,
+        "requester_service_pubkey": service_pubkey,
+        "requester_service_sig": service_sig,
+    }
 
 
 def _extract_kem_from_nembed(payload: str | None) -> tuple[str | None, str | None]:
@@ -3180,15 +3248,29 @@ async def accept_proof_token( request: Request,
         logger.warning("Proof preflight advisory host=%s detail=%s", host, card_detail)
 
     # need to send off to the vault for processing
-    submit_data = { "nauth": proof_token.nauth, 
-                    "token": proof_token_to_use,
-                    "label": label_to_use,
-                    "kind": record_kind_to_use,
-                    "pin": proof_token.pin,
-                    "pubkey": pubkey,
-                    "sig": sig
-
-                    }
+    request_auth = _build_record_request_auth(
+        service_keys=k,
+        flow="record_proof",
+        token=proof_token_to_use,
+        nauth=proof_token.nauth,
+        label=label_to_use,
+        kind=record_kind_to_use,
+        pin=proof_token.pin,
+        requester_pubkey=proof_token.requester_pubkey,
+        requester_sig=proof_token.requester_sig,
+        requester_nonce=proof_token.requester_nonce,
+        requester_ts=proof_token.requester_ts,
+    )
+    submit_data = {
+        "nauth": proof_token.nauth,
+        "token": proof_token_to_use,
+        "label": label_to_use,
+        "kind": record_kind_to_use,
+        "pin": proof_token.pin,
+        "pubkey": pubkey,
+        "sig": sig,
+        **request_auth,
+    }
     
     headers = { "Content-Type": "application/json"}
     print(f"vault url: {vault_url} submit data: {submit_data}")
@@ -3309,14 +3391,27 @@ async def accept_offer_token( request: Request,
         logger.warning("acceptoffertoken missing KEM material after host lookup; rejecting request")
         return {"status": "ERROR", "detail": "Recipient channel is not quantum-safe yet. Please re-authenticate and retry."}
 
-    submit_data = { "nauth": offer_token.nauth, 
-                    "token": offer_token_to_use,                    
-                    "pubkey": pubkey,
-                    "sig": sig,
-                    "kem_public_key": kem_public_key,
-                    "kemalg": kemalg
-
-                    }
+    request_auth = _build_record_request_auth(
+        service_keys=k,
+        flow="record_offer",
+        token=offer_token_to_use,
+        nauth=offer_token.nauth,
+        kem_public_key=kem_public_key,
+        kemalg=kemalg,
+        requester_pubkey=offer_token.requester_pubkey,
+        requester_sig=offer_token.requester_sig,
+        requester_nonce=offer_token.requester_nonce,
+        requester_ts=offer_token.requester_ts,
+    )
+    submit_data = {
+        "nauth": offer_token.nauth,
+        "token": offer_token_to_use,
+        "pubkey": pubkey,
+        "sig": sig,
+        "kem_public_key": kem_public_key,
+        "kemalg": kemalg,
+        **request_auth,
+    }
     print(f"data: {submit_data}")
     headers = { "Content-Type": "application/json"}
     print(f"offer url: {offer_url} submit data: {submit_data}")
