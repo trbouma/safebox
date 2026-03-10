@@ -470,6 +470,27 @@ def balance(ctx: click.Context) -> None:
     _print_json(data)
 
 
+@cli.command("proof-safety-audit")
+@click.option(
+    "--check-relay/--no-check-relay",
+    default=False,
+    show_default=True,
+    help="Also query relay proof state during audit (slower).",
+)
+@click.pass_context
+def proof_safety_audit(ctx: click.Context, check_relay: bool) -> None:
+    key = _require_access_key(ctx)
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/proof_safety_audit",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params={"check_relay": str(check_relay).lower()},
+    )
+    _print_json(data)
+
+
 @cli.command("tx-history")
 @click.option("--limit", default=50, type=int, show_default=True)
 @click.pass_context

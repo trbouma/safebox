@@ -1013,6 +1013,24 @@ async def agent_tx_history(
     }
 
 
+@router.get("/proof_safety_audit", tags=["agent"])
+async def agent_proof_safety_audit(
+    check_relay: bool = False,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        audit_report = await acorn_obj.proof_safety_audit(check_relay=check_relay)
+    except Exception as exc:
+        logger.exception("Agent proof_safety_audit failed")
+        raise HTTPException(status_code=500, detail=f"Unable to run proof safety audit: {exc}")
+
+    return {
+        "status": "OK",
+        "audit": audit_report,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
 @router.get("/supported_currencies", tags=["agent"])
 async def agent_supported_currencies(acorn_obj: Acorn = Depends(_agent_get_acorn)):
     try:

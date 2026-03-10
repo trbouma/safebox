@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     AGENT_ONBOARD_RPM: int = 10
     AGENT_ONBOARD_BURST: int = 5
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
+    NWC_FILTER_REFRESH_SECONDS: int = 15
+    NWC_SUBSCRIBE_WAIT_SECONDS: int = 5
     TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     DM_RELAYS: List = ['wss://relay.getsafebox.app']
     REFRESH_CURRENCY_INTERVAL: int = 3600

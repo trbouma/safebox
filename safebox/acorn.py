@@ -303,8 +303,12 @@ class Acorn:
         
         if len(self.proofs) > PROOF_LIMIT:
             self.logger.info("op=load_data status=reduce_proofs proofs=%s", len(self.proofs))
-            await self.swap_multi_each()
-            await self.swap_multi_consolidate()
+            try:
+                await self.swap_multi_each()
+                await self.swap_multi_consolidate()
+            except Exception as exc:
+                # Do not fail wallet load if optional proof reduction fails.
+                self.logger.warning("op=load_data status=reduce_proofs_failed error=%s", exc)
         return
     
     async def set_owner_data(self, npub:str = None, local_currency=None):
@@ -3910,6 +3914,99 @@ class Acorn:
         # print(keyset_amounts)
         return all_proofs, keyset_amounts
 
+    async def proof_safety_audit(self, check_relay: bool = False) -> dict:
+        """
+        Preflight integrity checks before destructive proof operations.
+        Returns a structured report and never mutates wallet state permanently.
+        """
+        report: dict = {
+            "safe_to_swap": True,
+            "reason": "ok",
+            "proof_count": 0,
+            "proof_amount": 0,
+            "keyset_count": 0,
+            "unknown_keysets": [],
+            "invalid_proofs": 0,
+            "duplicate_proofs": 0,
+            "relay_check": None,
+        }
+
+        invalid = 0
+        unknown_keysets: set[str] = set()
+        seen: set[tuple[str, str]] = set()
+        duplicate_count = 0
+        amount_sum = 0
+
+        for each in self.proofs:
+            try:
+                pid = str(each.id)
+                psecret = str(each.secret)
+                pamount = int(each.amount)
+                if pamount <= 0:
+                    invalid += 1
+                    continue
+                amount_sum += pamount
+                if pid not in self.known_mints:
+                    unknown_keysets.add(pid)
+                key = (pid, psecret)
+                if key in seen:
+                    duplicate_count += 1
+                else:
+                    seen.add(key)
+            except Exception:
+                invalid += 1
+
+        keyset_proofs, _ = self._proofs_by_keyset() if self.proofs else ({}, {})
+        report["proof_count"] = len(self.proofs)
+        report["proof_amount"] = amount_sum
+        report["keyset_count"] = len(keyset_proofs)
+        report["unknown_keysets"] = sorted(unknown_keysets)
+        report["invalid_proofs"] = invalid
+        report["duplicate_proofs"] = duplicate_count
+
+        if invalid > 0:
+            report["safe_to_swap"] = False
+            report["reason"] = "invalid_proofs"
+        elif amount_sum <= 0 and len(self.proofs) > 0:
+            report["safe_to_swap"] = False
+            report["reason"] = "non_positive_total"
+        elif unknown_keysets:
+            report["safe_to_swap"] = False
+            report["reason"] = "unknown_keyset_mapping"
+        elif len(self.proofs) == 0:
+            report["safe_to_swap"] = False
+            report["reason"] = "no_proofs"
+
+        if check_relay:
+            snapshot_proofs = list(self.proofs)
+            snapshot_balance = self.balance
+            snapshot_events = self.events
+            snapshot_event_ids = list(self.proof_event_ids)
+            snapshot_known_mints = dict(self.known_mints)
+            relay_result = {
+                "ok": True,
+                "proof_count": None,
+                "proof_amount": None,
+                "error": None,
+            }
+            try:
+                await self._load_proofs()
+                relay_result["proof_count"] = len(self.proofs)
+                relay_result["proof_amount"] = sum(each.amount for each in self.proofs)
+            except Exception as exc:
+                relay_result["ok"] = False
+                relay_result["error"] = str(exc)
+            finally:
+                self.proofs = snapshot_proofs
+                self.balance = snapshot_balance
+                self.events = snapshot_events
+                self.proof_event_ids = snapshot_event_ids
+                self.known_mints = snapshot_known_mints
+
+            report["relay_check"] = relay_result
+
+        return report
+
 
 
     async def pay_multi(  self, 
@@ -4823,8 +4920,10 @@ class Acorn:
         headers = { "Content-Type": "application/json"}
         timeout = httpx.Timeout(30.0, connect=5.0)
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+        lock_acquired = False
         if not keyset_proofs:
-            raise RuntimeError("No proofs available to swap.")
+            self.logger.info("op=swap_multi_consolidate status=skip reason=no_proofs")
+            return "multi swap skipped (no proofs)"
         combined_proofs = []
         combined_proof_objs =[]
         proof_objs = []
@@ -4832,6 +4931,12 @@ class Acorn:
         # Let's check all the proofs before we do anything
         try:
             await self.acquire_lock()
+            lock_acquired = True
+            audit_report = await self.proof_safety_audit(check_relay=False)
+            if not audit_report.get("safe_to_swap", False):
+                raise RuntimeError(
+                    f"Proof safety audit failed before consolidate: {audit_report.get('reason')}"
+                )
 
             for each_keyset in keyset_proofs:
                 check = []
@@ -4956,9 +5061,11 @@ class Acorn:
             for each in self.proofs:
                 swap_balance += each.amount
             # print(len(self.proofs))
+            if not combined_proof_objs:
+                raise RuntimeError("Consolidation produced zero proofs; refusing to overwrite existing proofs")
+
             self.proofs = combined_proof_objs
             await self.write_proofs()
-            await self.release_lock()
 
             # self.add_proofs_obj(combined_proof_objs)
             # self._load_proofs()
@@ -4966,7 +5073,8 @@ class Acorn:
             raise RuntimeError(f"Error in swap multi {e}")
         
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
     
         
         return f"multi swap ok  {len(self.proofs)} proofs in {self.events} proof events"
@@ -4978,10 +5086,20 @@ class Acorn:
         keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
+        lock_acquired = False
         
         # Let's check all the proofs before we do anything
         try:
             await self.acquire_lock()
+            lock_acquired = True
+            if not keyset_proofs:
+                self.logger.info("op=swap_multi_each status=skip reason=no_proofs")
+                return "multi swap skipped (no proofs)"
+            audit_report = await self.proof_safety_audit(check_relay=False)
+            if not audit_report.get("safe_to_swap", False):
+                raise RuntimeError(
+                    f"Proof safety audit failed before swap_each: {audit_report.get('reason')}"
+                )
             for each_keyset in keyset_proofs:
                 check = []
                 mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
@@ -5088,19 +5206,21 @@ class Acorn:
                     combined_proofs = combined_proofs + proofs
                     combined_proof_objs = combined_proof_objs + proof_objs
 
+            if not combined_proof_objs:
+                raise RuntimeError("Swap produced zero proofs; refusing destructive proof replacement")
+
             await self.delete_proof_events()
             self.logger.debug("XXXXX swap multi each")
             await self.add_proofs_obj(combined_proof_objs)
             
             await self._load_proofs()
-            await self.release_lock()
 
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as e:
-            await self.release_lock()
             raise RuntimeError(f"Error in swap {e}")
         
         finally:
-            await self.release_lock()
+            if lock_acquired:
+                await self.release_lock()
                    
         
         return "multi swap ok"

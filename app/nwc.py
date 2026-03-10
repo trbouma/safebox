@@ -142,6 +142,24 @@ def nwc_lookup_secret_by_pubkey(secret_pubkey_hex: str) -> Optional[NWCSecret]:
     return None
 
 
+def nwc_subscription_target_pubkeys() -> list[str]:
+    """
+    Build the set of NWC pubkeys that should be used in relay #p filters.
+    These are derived from stored NWC secrets.
+    """
+    with Session(engine) as session:
+        secrets = session.exec(select(NWCSecret)).all()
+
+    pubkeys: set[str] = set()
+    for each in secrets:
+        try:
+            k = Keys(priv_k=each.nwc_secret)
+            pubkeys.add(k.public_key_hex())
+        except Exception:
+            continue
+    return sorted(pubkeys)
+
+
 async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_obj, evt: Event):
     print(f"nwc {safebox_found} pay instruction: {instruction_obj['method']}")
     k = Keys(priv_k=safebox_found.nsec)
@@ -929,13 +947,18 @@ async def listen_notes(url):
 
     print(f"listening for nwc at: {url}")
 
-    c.subscribe(
-        handlers=my_handler,
-        filters={
-            'limit': 1024,
-            'kinds': [23194]
-        }
-    )
+    target_pubkeys = nwc_subscription_target_pubkeys()
+    if target_pubkeys:
+        c.subscribe(
+            handlers=my_handler,
+            filters={
+                'limit': 1024,
+                'kinds': [23194],
+                '#p': target_pubkeys,
+            }
+        )
+    else:
+        logger.warning("[%s] No NWC secrets found; listener not subscribing until secrets exist", url)
 
     try:
         # keep alive until cancelled
@@ -953,6 +976,8 @@ async def listen_notes(url):
 async def listen_notes_connected(url):
     logger = logging.getLogger(__name__)
     attempt = 0
+    refresh_interval_seconds = max(5, int(settings.NWC_FILTER_REFRESH_SECONDS))
+    subscribe_wait_seconds = max(1, int(settings.NWC_SUBSCRIBE_WAIT_SECONDS))
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
@@ -962,16 +987,45 @@ async def listen_notes_connected(url):
             attempt = 0
             logger.info("[%s] Connected and listening...", url)
 
-            c.subscribe(
-                handlers=my_handler,
-                filters={
-                    'limit': 4096,
-                    'kinds': [23194]
-                }
-            )
+            subscribed = False
+            while not subscribed:
+                target_pubkeys = nwc_subscription_target_pubkeys()
+                if not target_pubkeys:
+                    logger.info("[%s] No NWC secrets available yet; waiting to subscribe", url)
+                    await asyncio.sleep(subscribe_wait_seconds)
+                    if run_task.done():
+                        await run_task
+                    continue
 
-            # Wait for run() to complete
-            await run_task
+                c.subscribe(
+                    handlers=my_handler,
+                    filters={
+                        'limit': 4096,
+                        'kinds': [23194],
+                        '#p': target_pubkeys,
+                    }
+                )
+                logger.info("[%s] NWC subscription active for %s target pubkeys", url, len(target_pubkeys))
+                subscribed_pubkeys = target_pubkeys
+                subscribed = True
+
+            # Keep running until socket drops OR configured pubkeys change.
+            while True:
+                done, _ = await asyncio.wait({run_task}, timeout=refresh_interval_seconds)
+                if done:
+                    # Propagate underlying listener completion/exception path.
+                    await run_task
+                    break
+
+                latest_pubkeys = nwc_subscription_target_pubkeys()
+                if latest_pubkeys != subscribed_pubkeys:
+                    logger.info(
+                        "[%s] NWC subscription target set changed (%s -> %s); reconnecting to refresh filter",
+                        url,
+                        len(subscribed_pubkeys),
+                        len(latest_pubkeys),
+                    )
+                    break
 
         except asyncio.CancelledError:
             logger.info("[%s] listen_notes_connected cancelled", url)
@@ -1021,4 +1075,3 @@ async def listen_notes_connected(url):
                 delay = base + jitter
                 with suppress(asyncio.CancelledError):
                     await asyncio.sleep(delay)
-
