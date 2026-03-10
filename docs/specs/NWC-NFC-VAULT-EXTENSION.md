@@ -63,7 +63,10 @@ Card issuance paths (`/safebox/issuecard`, related flows):
 - encrypt token payload with service key (NIP-44)
 - place encrypted token into `nembed`
 
-At runtime, vault endpoints decrypt token material, recover the target wallet key, and issue an NWC instruction to that wallet.
+At runtime, vault endpoints decrypt token material, recover the target wallet key, and execute:
+
+- direct vault-handled payment on `/direct` endpoints (primary), or
+- NWC instruction dispatch (compatibility fallback).
 
 ## Per-Card NWC Secret Rotation
 
@@ -130,9 +133,11 @@ Safebox uses public `.well-known` vault endpoints to validate and transform inbo
 
 Primary vault endpoints in `app/routers/lnaddress.py`:
 
+- `/.well-known/nfcvaultrequestpayment/direct`
 - `/.well-known/nfcvaultrequestpayment`
 - `/.well-known/proof`
 - `/.well-known/offer`
+- `/.well-known/nfcpayout/direct`
 - `/.well-known/nfcpayout`
 
 Common pattern:
@@ -140,14 +145,26 @@ Common pattern:
 1. verify signed request (`verify_payload(...)`)
 2. decrypt token (`NIP44Encrypt` with service key)
 3. recover target wallet key + pin material
-4. build NWC instruction JSON (`method` + `params`)
-5. encrypt instruction (NIP-4) to wallet pubkey
-6. publish to NWC relay (`kind: 23194`)
+4. for direct payment endpoints, validate acquiring-wallet request binding:
+   - `requester_pubkey`
+   - `requester_sig`
+   - `requester_nonce`
+   - `requester_ts`
+5. enforce replay protection using persisted nonce consumption (`nfcrequesternonce`)
+6. branch by endpoint/mode:
+   - direct payment execution, or
+   - build NWC instruction JSON (`method` + `params`) and publish (`kind: 23194`)
 
 Fail-closed signature checks are explicit in endpoints such as:
 
 - `nfcvaultrequestpayment` (400/401 on invalid signature payload/signature)
 - `proof` (400/401 on invalid signature payload/signature)
+
+Direct payment-path checks additionally fail closed on:
+
+- missing/invalid acquiring-wallet signature material
+- expired requester timestamp
+- replayed requester nonce
 
 ## Record Offer and Present via NFC
 

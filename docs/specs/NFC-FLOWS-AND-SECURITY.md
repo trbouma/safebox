@@ -51,6 +51,7 @@ NFC payment execution in Safebox is intentionally designed as a loosely-coupled,
 - Browser/NFC runtime
 - Safebox web/API service
 - Vault endpoints (`/.well-known/*`)
+- Direct vault HTTP handoff (`/direct`) with signed requester binding
 - NWC relay messaging
 - Wallet settlement logic (Cashu/Lightning)
 - Optional blob/record relay paths for related flows
@@ -338,7 +339,8 @@ Client/API endpoint:
 
 Remote vault endpoint:
 
-- `POST /.well-known/nfcvaultrequestpayment`
+- `POST /.well-known/nfcvaultrequestpayment/direct` (primary)
+- `POST /.well-known/nfcvaultrequestpayment` (compatibility fallback)
 
 Flow:
 
@@ -346,14 +348,22 @@ Flow:
 2. Receiver submits token + amount/currency/comment.
 3. Server parses token host and signs token payload.
 4. Server forwards to payer vault endpoint.
-5. Vault validates token/signature, decrypts card payload, resolves active secret.
-6. Vault emits NWC instruction to payer wallet.
-7. Payer wallet executes payment path (ecash or lightning workflow).
-8. Receiver gets completion updates (notify/status channel) and balance refresh.
+5. Server includes acquiring-wallet request binding:
+   - `requester_pubkey`
+   - `requester_sig`
+   - `requester_nonce`
+   - `requester_ts`
+6. Vault validates token/signature, decrypts card payload, resolves active secret.
+7. Primary path executes payment directly at vault (`/direct` endpoint).
+8. Compatibility fallback path can emit NWC instruction when `/direct` is unavailable.
+9. Payer wallet executes payment path (ecash or lightning workflow).
+10. Receiver gets completion updates (notify/status channel) and balance refresh.
 
 Failure mode:
 
 - If card secret is stale/rotated, vault rejects early and request fails immediately.
+- If requester signature is missing/invalid/expired on direct path, vault rejects.
+- If requester nonce was already consumed, vault rejects with replay protection.
 
 ### Payment Transaction Lifecycle and Status Semantics
 
@@ -390,7 +400,8 @@ Client/API endpoint:
 
 Remote vault endpoint:
 
-- `POST /.well-known/nfcpayout`
+- `POST /.well-known/nfcpayout/direct` (primary)
+- `POST /.well-known/nfcpayout` (compatibility path)
 
 Flow:
 
@@ -398,13 +409,40 @@ Flow:
 2. Sender submits token + amount/currency/comment.
 3. Server parses token and computes SAT amount.
 4. Server signs token and posts to recipient vault.
-5. Vault validates/decrypts token, resolves active recipient secret.
-6. Vault starts recipient-side invoice/ecash handling.
-7. Sender completes payment and both wallets update.
+5. Server includes acquiring-wallet request binding fields (`requester_pubkey`, `requester_sig`, `requester_nonce`, `requester_ts`).
+6. Vault validates/decrypts token, resolves active recipient secret.
+7. Vault validates direct-path requester signature and nonce freshness.
+8. Vault starts recipient-side invoice/ecash handling.
+9. Sender completes payment and both wallets update.
 
 Failure mode:
 
 - Stale/rotated card secret fails before payout processing.
+- Direct-path requester signature or replay check failure fails before payout processing.
+
+### Direct Endpoint Security Binding
+
+Direct vault endpoints require request binding from the acquiring wallet.
+
+Required fields:
+
+- `requester_pubkey`
+- `requester_sig`
+- `requester_nonce`
+- `requester_ts`
+
+Validation requirements:
+
+1. Signature must verify over canonical request payload.
+2. Timestamp freshness window is bounded (config: `NFC_REQUESTER_NONCE_TTL_SECONDS`).
+3. Nonce is single-use per `(requester_pubkey, flow, nonce)` and persisted server-side.
+4. Replay nonce failures return conflict semantics and must not execute monetary mutation.
+
+Persistence model:
+
+- Nonce consumption is stored in `nfcrequesternonce`.
+- Retention cleanup window is bounded (config: `NFC_REQUESTER_NONCE_RETENTION_SECONDS`).
+- Schema is migration-managed (`alembic` revision `20260310_0002`).
 
 ### Ecash Delivery Safety, Rollback, and Recovery
 
@@ -854,7 +892,9 @@ Holder/client:
 Vault/public:
 
 - `/.well-known/card-status`
+- `/.well-known/nfcvaultrequestpayment/direct`
 - `/.well-known/nfcvaultrequestpayment`
+- `/.well-known/nfcpayout/direct`
 - `/.well-known/nfcpayout`
 - `/.well-known/offer`
 - `/.well-known/proof`

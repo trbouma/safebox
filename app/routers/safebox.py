@@ -2525,7 +2525,10 @@ async def pay_to_nfc_tag( request: Request,
 
 
 
-    vault_url = f"{host_base_url}/.well-known/nfcpayout"
+    vault_urls = [
+        f"{host_base_url}/.well-known/nfcpayout/direct",
+        f"{host_base_url}/.well-known/nfcpayout",
+    ]
     headers = { "Content-Type": "application/json"}
     sig = sign_payload(vault_token, k.private_key_hex())
     pubkey = k.public_key_hex()
@@ -2594,9 +2597,10 @@ async def pay_to_nfc_tag( request: Request,
         asyncio.create_task(
             task_to_send_along_ecash(
                 acorn_obj=acorn_obj,
-                vault_url=vault_url,
+                vault_url=vault_urls[0],
                 submit_data=submit_data,
                 headers=headers,
+                vault_urls=vault_urls,
                 notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
             )
         )
@@ -2617,16 +2621,15 @@ async def pay_to_nfc_tag( request: Request,
                         "requester_nonce": requester_nonce,
                         "requester_ts": requester_ts }
 
-        print(f"vault: {vault_url} submit data: {submit_data}" )
-
         # Put this into a task
         task1 = asyncio.create_task(task_pay_to_nfc_tag(
             acorn_obj=acorn_obj,
-            vault_url=vault_url,
+            vault_url=vault_urls[0],
             submit_data=submit_data,
             headers=headers,
             nfc_pay_out_request=nfc_pay_out_request,
             final_amount=final_amount,
+            vault_urls=vault_urls,
             notify_callback=lambda payload: notify_user(acorn_obj.pubkey_bech32, payload),
         ))
 

@@ -487,14 +487,46 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
                                 headers: object,
                                 nfc_pay_out_request: nfcPayOutRequest,
                                 final_amount: int,
+                                vault_urls: list[str] | None = None,
                                 notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
                                 ):
     print("pay to nfc tag")
     try:
+        target_urls = [vault_url] + [u for u in (vault_urls or []) if u and u != vault_url]
+        response_json = None
+        last_exc: Exception | None = None
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url=vault_url, json=submit_data, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
+            for idx, target_url in enumerate(target_urls):
+                try:
+                    response = await client.post(url=target_url, json=submit_data, headers=headers)
+                    if response.status_code in {404, 405, 501} and idx == 0 and len(target_urls) > 1:
+                        logger.info(
+                            "task_pay_to_nfc_tag direct endpoint unavailable; falling back url=%s status=%s",
+                            target_url,
+                            response.status_code,
+                        )
+                        continue
+                    response.raise_for_status()
+                    response_json = response.json()
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if idx == 0 and exc.response.status_code in {404, 405, 501} and len(target_urls) > 1:
+                        logger.info(
+                            "task_pay_to_nfc_tag direct endpoint unavailable; falling back url=%s status=%s",
+                            target_url,
+                            exc.response.status_code,
+                        )
+                        continue
+                    last_exc = exc
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    break
+
+        if response_json is None:
+            if last_exc:
+                raise last_exc
+            raise RuntimeError("NFC payout vault returned no response")
         print(f"safebox: {response_json}")
         invoice = response_json["invoice"]
         await acorn_obj.pay_multi_invoice(
@@ -528,6 +560,7 @@ async def task_to_send_along_ecash(
     vault_url: str,
     submit_data: object,
     headers: object,
+    vault_urls: list[str] | None = None,
     notify_callback: Callable[[Dict[str, Any]], Awaitable[None]] | None = None,
 ):
     amount = int(submit_data["amount"])
@@ -539,10 +572,40 @@ async def task_to_send_along_ecash(
 
     delivery_confirmed = False
     try:
+        target_urls = [vault_url] + [u for u in (vault_urls or []) if u and u != vault_url]
+        response_json = None
+        last_exc: Exception | None = None
         async with httpx.AsyncClient(timeout=12.0) as client:
-            response = await client.post(url=vault_url, json=submit_data, headers=headers)
-            response.raise_for_status()
-            response_json = response.json()
+            for idx, target_url in enumerate(target_urls):
+                try:
+                    response = await client.post(url=target_url, json=submit_data, headers=headers)
+                    if response.status_code in {404, 405, 501} and idx == 0 and len(target_urls) > 1:
+                        logger.info(
+                            "task_to_send_along_ecash direct endpoint unavailable; falling back url=%s status=%s",
+                            target_url,
+                            response.status_code,
+                        )
+                        continue
+                    response.raise_for_status()
+                    response_json = response.json()
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if idx == 0 and exc.response.status_code in {404, 405, 501} and len(target_urls) > 1:
+                        logger.info(
+                            "task_to_send_along_ecash direct endpoint unavailable; falling back url=%s status=%s",
+                            target_url,
+                            exc.response.status_code,
+                        )
+                        continue
+                    last_exc = exc
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    break
+        if response_json is None:
+            if last_exc:
+                raise last_exc
+            raise RuntimeError("NFC ecash vault returned no response")
         logger.info("task_to_send_along_ecash delivered status=%s", response_json.get("status"))
         delivery_confirmed = True
     except Exception as exc:
