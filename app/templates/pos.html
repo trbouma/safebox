@@ -673,7 +673,7 @@
               comment: buildTenderedComment(total)
             });
             nfcPaymentPending = true;
-            setStatus("Awaiting card wallet confirmation...", "info");
+            setStatus("Card read. Sending request to wallet vault...", "info");
             pinInputEl.value = "";
             sent = true;
             break;
@@ -723,12 +723,12 @@
         }
 
         if (payload.action === "nfc_token" && status === "OK") {
-          setStatus("Awaiting card wallet confirmation...", "info");
+          setStatus(detail || "Wallet accepted request. Waiting for settlement...", "info");
           return;
         }
 
         if (payload.action === "nfc_token" && status === "PENDING") {
-          setStatus("Awaiting card wallet confirmation...", "info");
+          setStatus(detail || "Vault accepted request. Waiting for settlement...", "info");
           return;
         }
 
@@ -809,7 +809,7 @@
             return;
           }
           if (status === "PENDING") {
-            setStatus("Processing payment...", "info");
+            setStatus(detail || "Processing payment...", "info");
             return;
           }
           if (status === "ERROR") {
