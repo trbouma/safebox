@@ -866,7 +866,10 @@ async def pay_creq_request(
 
     try:
         cashu_token = await acorn_obj.issue_token(amount=sat_amount, comment=memo or "NUT-18 payment request")
-        token_obj = TokenV3.deserialize(cashu_token)
+        if cashu_token.startswith("cashuB"):
+            token_obj = TokenV4.deserialize(cashu_token).to_tokenv3()
+        else:
+            token_obj = TokenV3.deserialize(cashu_token)
     except Exception as exc:
         logger.warning("paycreq issue_token failed: %s", exc)
         return {"status": "ERROR", "detail": f"Unable to prepare token: {exc}"}

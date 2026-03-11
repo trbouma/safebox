@@ -127,6 +127,10 @@ class Acorn:
     def _default_blossom_xfer_server(self) -> str:
         return self.blossom_xfer_server
 
+    @staticmethod
+    def _is_cashu_token(token: str) -> bool:
+        return isinstance(token, str) and (token.startswith("cashuA") or token.startswith("cashuB"))
+
     
 
 
@@ -1283,7 +1287,7 @@ class Acorn:
                     self.logger.debug("op=query_ecash_dm status=token_lines count=%s", len(array_token))
                     
                     for each in array_token:
-                        if each.startswith("cashuA"):
+                        if self._is_cashu_token(each):
                             self.logger.debug("op=query_ecash_dm status=token_found")
                             token = each
                             tokens.append(token)
@@ -6103,8 +6107,9 @@ class Acorn:
             tokens = TokenV3Token(mint=mint_for_keyset,
                                             proofs=spend_proofs)
             
-            v3_token = TokenV3(token=[tokens],memo="hello", unit="sat")
-            token_serialized = v3_token.serialize()
+            v3_token = TokenV3(token=[tokens], memo=comment, unit="sat")
+            v4_token = TokenV4.from_tokenv3(v3_token)
+            token_serialized = v4_token.serialize()
             # print("proofs remaining:", proofs_remaining)
         except (ValueError, TypeError, RuntimeError, httpx.HTTPError) as e:
             self.logger.error("op=issue_token status=failed amount=%s error=%s", amount, e)
@@ -6573,7 +6578,7 @@ class Acorn:
                     
                         
                         for each in array_token:
-                            if each.startswith("cashuA"):
+                            if self._is_cashu_token(each):
                                 
                                 
                                 # print(f"found token! {each}")
@@ -6721,7 +6726,7 @@ class Acorn:
                         array_token = content.splitlines()                        
                             
                         for each in array_token:
-                            if each.startswith("cashuA"):                                   
+                            if self._is_cashu_token(each):                                   
                                     
                                 # print(f"found token! {each}")
                                 msg_out = await self.nip17_accept(each)

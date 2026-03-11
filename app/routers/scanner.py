@@ -112,7 +112,7 @@ async def get_scan_result(  request: Request,
             invoice_comment=action_comment,
         )
 
-    if qr_code[:6] == "cashuA":
+    if qr_code[:6] in {"cashuA", "cashuB"}:
         return _redirect_access(ecash=qr_code)
 
     if qr_code[:5].lower() == "creqa":

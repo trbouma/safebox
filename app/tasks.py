@@ -240,7 +240,7 @@ async def listen_nip17(self, url):
                         array_token = content.splitlines()                        
                             
                         for each in array_token:
-                            if each.startswith("cashuA"):                                   
+                            if each.startswith("cashuA") or each.startswith("cashuB"):                                   
                                     
                                 # print(f"found token! {each}")
                                 msg_out = await self.nip17_accept(each)
