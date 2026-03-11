@@ -389,6 +389,19 @@ async def _execute_payment_direct(npub: str, nwc_vault: nwcVault) -> None:
     )
 
 
+def _get_cached_balance_by_npub(npub: str) -> int | None:
+    with Session(engine) as session:
+        safebox = session.exec(
+            select(RegisteredSafebox).where(RegisteredSafebox.npub == npub)
+        ).first()
+    if not safebox:
+        return None
+    try:
+        return int(safebox.balance or 0)
+    except Exception:
+        return 0
+
+
    
 @router.get("/info", tags=["lnaddress"])
 def get_info(request: Request):
@@ -643,8 +656,8 @@ async def nfc_request_payment(request: Request, nwc_vault: nwcVault):
     # Fast-fail for insufficient payer balance so requestor gets clear feedback.
     if nwc_vault.amount is not None:
         try:
-            payer_acorn = await get_acorn_by_npub(npub)
-            if int(nwc_vault.amount) > int(payer_acorn.balance):
+            cached_balance = _get_cached_balance_by_npub(npub)
+            if cached_balance is not None and int(nwc_vault.amount) > int(cached_balance):
                 detail = "Insufficient balance for this payment request."
                 return {"status": "ERROR", "detail": detail}
         except HTTPException:
@@ -746,13 +759,13 @@ async def card_balance(request: Request, card_status_request: cardStatusRequest)
         card_status_request.sig,
         card_status_request.pubkey,
     )
-    acorn_obj = await get_acorn_by_npub(npub)
-    if not acorn_obj:
+    cached_balance = _get_cached_balance_by_npub(npub)
+    if cached_balance is None:
         raise HTTPException(status_code=404, detail="Safebox not found for card")
 
     return {
         "status": "OK",
-        "balance_sats": int(acorn_obj.balance),
+        "balance_sats": int(cached_balance),
     }
 
 
