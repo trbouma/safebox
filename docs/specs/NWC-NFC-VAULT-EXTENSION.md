@@ -20,6 +20,65 @@ This specification covers:
 
 This specification does not define secure element hardware requirements or EMV-specific behavior.
 
+## Hybrid Architecture Model (Control Plane + Data Plane)
+
+Safebox uses a hybrid architecture for NFC/QR wallet interactions:
+
+- HTTP endpoints act as the **control plane**
+- Nostr relay transmittal acts as the **data plane**
+
+### Control Plane (HTTP)
+
+HTTP endpoints are used for:
+
+- request authentication and authorization
+- policy checks (allowlists, replay protection, signature validation)
+- endpoint capability negotiation (direct vs fallback)
+- deterministic error responses and operator observability
+
+Control-plane calls SHOULD remain lightweight and SHOULD NOT be treated as
+evidence that value transfer is complete.
+
+### Data Plane (Relays)
+
+Relay transmittal is used for:
+
+- ecash token delivery (`kind: 21401`)
+- record offer/present payload delivery
+- asynchronous wallet-to-wallet message exchange
+
+Payload delivery remains relay-native even when initiation is HTTP-triggered.
+
+### Design Rationale
+
+This split is intentional:
+
+1. Keep business policy and safety checks in explicit HTTP handlers.
+2. Preserve encrypted async wallet transmittal on relays.
+3. Reduce coupling between UI/session transport and value payload transport.
+4. Support compatibility fallback when direct methods are unavailable.
+
+### Tradeoffs
+
+Benefits:
+
+- clear policy enforcement boundary
+- better latency for initiation and error feedback
+- robust async delivery model across instances
+
+Costs:
+
+- dual-plane observability and debugging complexity
+- operators must monitor both HTTP and relay health
+
+### Conformance Implications
+
+Implementations following this model MUST:
+
+- distinguish request acceptance from settlement completion
+- avoid marking payment/record exchange complete on control-plane acceptance alone
+- emit terminal status based on data-plane completion outcomes
+
 ## NWC Extension Model
 
 Safebox consumes NWC request events (`kind: 23194`) from configured NWC relays and replies with NWC-style response events (`kind: 23195`; notifications `23196`).
@@ -158,6 +217,14 @@ Common pattern:
    - direct payment execution, or
    - build NWC instruction JSON (`method` + `params`) and publish (`kind: 23194`)
 
+Record vault parity:
+
+- `/.well-known/offer` and `/.well-known/proof` support the same request-binding model
+  (requester + service signatures + nonce/timestamp) for optional policy enforcement.
+- Upstream submitters (`/records/acceptoffertoken`, `/records/acceptprooftoken`) include
+  service-signature metadata by default so receiving vaults can enforce stricter policy
+  without protocol changes.
+
 Fail-closed signature checks are explicit in endpoints such as:
 
 - `nfcvaultrequestpayment` (400/401 on invalid signature payload/signature)
@@ -176,6 +243,33 @@ Service allowlist policy:
 - Config key: `NFC_REQUESTER_SERVICE_ALLOWLIST`
 - Preferred entry format: `npub` (human-readable, Bech32 error-detecting)
 - Hex pubkeys are accepted for compatibility
+
+Record-flow allowlist policy:
+
+- `RECORD_REQUESTER_SIGNATURE_REQUIRED` enables strict requester-signature requirement for
+  offer/proof vault calls.
+- `RECORD_REQUESTER_SERVICE_ALLOWLIST` enables service-instance allowlisting for
+  offer/proof vault calls.
+- If `RECORD_REQUESTER_SERVICE_ALLOWLIST` is unset, deployments MAY fall back to
+  `NFC_REQUESTER_SERVICE_ALLOWLIST` for unified policy.
+
+Default compatibility mode:
+
+- Record-flow signature/allowlist controls are opt-in by default so existing QR/NFC clients
+  continue to function until operators enable strict policy.
+
+## Cached Balance Read for Card Status Adjacent Flows
+
+To avoid unnecessary lock-heavy wallet loads in read-only card journeys, card-adjacent
+prechecks use cached balance where appropriate.
+
+Applied behavior:
+
+- `/.well-known/card-balance` returns cached registration balance.
+- NFC request-payment precheck uses cached balance for fast insufficient-funds rejection.
+
+This optimization reduces lock contention while preserving authoritative settlement checks
+in mutation paths.
 
 ## Record Offer and Present via NFC
 

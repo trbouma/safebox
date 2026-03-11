@@ -234,6 +234,13 @@ This preserves functional access on older browsers/devices (for example older Ch
 - Active secret mapping controls card revocation/rotation behavior.
 - Signature verification and token decryption are required before vault actions.
 - QR flows are independent from NFC card rotation state.
+- Optional record-flow request-binding enforcement can be enabled for both QR and NFC
+  submitters using:
+  - `RECORD_REQUESTER_SIGNATURE_REQUIRED`
+  - `RECORD_REQUESTER_SERVICE_ALLOWLIST`
+- When enabled, vault endpoints (`/.well-known/offer`, `/.well-known/proof`) require
+  valid requester/service signatures and nonce freshness; replayed requests are rejected.
+- In default compatibility mode (policy disabled), legacy clients remain supported.
 
 ## Recent Hardening Notes
 

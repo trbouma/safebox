@@ -44,6 +44,32 @@ This document defines how Safebox NFC works today for:
 
 It also describes the active-secret security model and failure behavior.
 
+## Hybrid Architecture Model
+
+Safebox NFC/QR flows use a hybrid architecture:
+
+- HTTP endpoints as the **control plane**
+- Relay transmittal as the **data plane**
+
+Control plane responsibilities:
+
+- authenticate and authorize requests
+- enforce policy (signatures, allowlists, replay checks)
+- choose direct/fallback execution path
+- return deterministic initiation/error responses
+
+Data plane responsibilities:
+
+- transmit ecash token payloads (for example `kind: 21401`)
+- transmit record offer/present payloads
+- carry async wallet-to-wallet delivery
+
+Normative interpretation:
+
+- HTTP acceptance means request initiation/authorization only.
+- Settlement/completion MUST be derived from downstream data-plane outcome.
+- Clients MUST NOT treat initial control-plane acceptance as final payment or record completion.
+
 ## Resiliency Overview for NFC Payments
 
 NFC payment execution in Safebox is intentionally designed as a loosely-coupled, asynchronous workflow across multiple independently failing components:
@@ -454,6 +480,40 @@ Persistence model:
   - Recommended format: `npub` entries (human-readable, Bech32 error-detecting).
   - Hex entries are tolerated for backward compatibility.
 
+### Optional QR/Record Lockdown Parity
+
+Safebox supports applying the same service-instance trust model used by NFC
+direct payment endpoints to record offer/proof vault endpoints used by QR/NFC
+record flows.
+
+Applicable endpoints:
+
+- `POST /.well-known/offer`
+- `POST /.well-known/proof`
+- upstream callers: `POST /records/acceptoffertoken`, `POST /records/acceptprooftoken`
+
+Record-flow request binding fields (optional by policy, supported by protocol):
+
+- `requester_pubkey`
+- `requester_sig`
+- `requester_nonce`
+- `requester_ts`
+- `requester_service_pubkey`
+- `requester_service_sig`
+
+Policy controls:
+
+- `RECORD_REQUESTER_SIGNATURE_REQUIRED`
+- `RECORD_REQUESTER_SERVICE_ALLOWLIST`
+
+Behavior:
+
+1. When policy is disabled, legacy callers remain compatible.
+2. When signature policy is enabled, missing/invalid requester signatures are rejected.
+3. When service allowlist policy is enabled, non-allowlisted service pubkeys are rejected.
+4. Replay protection is enforced with nonce consumption and timestamp freshness checks.
+5. Service allowlist entries SHOULD be configured in `npub` format (hex accepted for compatibility).
+
 ### Ecash Delivery Safety, Rollback, and Recovery
 
 To reduce proof-loss risk during network interruption or UI refresh, Safebox applies delivery safeguards in ecash send paths.
@@ -544,6 +604,24 @@ Flow:
 6. Vault validates token, checks PIN, and emits NWC `present_record`.
 7. Presenter wallet returns records over transmittal channels.
 8. Requester receives, verifies, and renders records (including original blob flow when present).
+
+### Card Balance and Precheck Contention Mitigation
+
+To reduce lock contention during high-frequency card operations (for example
+`card-balance` immediately followed by payment request), Safebox uses a
+lightweight cached balance path for prechecks.
+
+Current behavior:
+
+- `POST /.well-known/card-balance` reads cached wallet balance from registration state.
+- NFC payment "insufficient funds" prechecks use cached balance when available.
+- Full wallet mutation paths still perform authoritative settlement checks.
+
+Rationale:
+
+- Avoids unnecessary `load_data()` proof maintenance during read-only prechecks.
+- Reduces intermittent lock seizing warnings during rapid balance-then-pay sequences.
+- Preserves fail-closed settlement behavior in mutation paths.
 
 ## PIN Behavior
 

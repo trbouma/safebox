@@ -83,6 +83,20 @@ For any operation that mutates proofs or balance:
 - Lock acquire/release MUST be wrapped by `try/finally` semantics.
 - Locking SHOULD support re-entrant acquisition for the same in-process actor/task to avoid self-contention.
 - Excessive lock seizing events MUST be treated as an operational incident candidate and investigated.
+- Read-only prechecks SHOULD avoid lock-heavy wallet load paths when a safe cached source exists
+  (for example card-balance and payment preflight checks).
+
+### Read-Only Precheck Rule
+
+For operations that do not mutate monetary state:
+
+1. Implementations SHOULD use cached balance/state sources when available.
+2. Implementations MUST NOT treat cached reads as settlement confirmation.
+3. Final mutation paths MUST continue to perform authoritative checks under lock.
+4. If cached state is unavailable, implementation MAY fall back to full wallet load.
+
+This reduces lock contention and lowers risk of forced-lock recovery behavior during
+high-frequency POS/NFC interactions.
 
 ## Proof Mutation Safety Requirements
 
