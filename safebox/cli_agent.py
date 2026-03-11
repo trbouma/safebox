@@ -868,6 +868,174 @@ def reply(
     _print_json(data)
 
 
+@cli.command("react")
+@click.option("--event-id", default=None, help="Target Nostr event id for kind-7 reaction.")
+@click.option("--content", default="+", show_default=True, help="Reaction content: +, -, emoji, or :shortcode:.")
+@click.option("--reacted-pubkey", default=None, help="Optional target event author pubkey/npub.")
+@click.option("--reacted-kind", default=None, type=int, help="Optional target event kind.")
+@click.option("--relay-hint", default=None, help="Optional relay hint for target event.")
+@click.option("--a-tag", default=None, help="Optional addressable event coordinate (<kind>:<pubkey>:<d>).")
+@click.option(
+    "--external-tag",
+    "external_tags",
+    multiple=True,
+    help="External reaction tag in comma form, e.g. 'k,web' or 'i,https://example.com'. Repeat as needed for kind-17.",
+)
+@click.option(
+    "--extra-tag",
+    "extra_tags",
+    multiple=True,
+    help="Additional tag in comma form. Repeat to include multiple tags.",
+)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def react(
+    ctx: click.Context,
+    event_id: Optional[str],
+    content: str,
+    reacted_pubkey: Optional[str],
+    reacted_kind: Optional[int],
+    relay_hint: Optional[str],
+    a_tag: Optional[str],
+    external_tags: tuple[str, ...],
+    extra_tags: tuple[str, ...],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"content": content}
+    if event_id:
+        payload["event_id"] = event_id
+    if reacted_pubkey:
+        payload["reacted_pubkey"] = reacted_pubkey
+    if reacted_kind is not None:
+        payload["reacted_kind"] = reacted_kind
+    if relay_hint:
+        payload["relay_hint"] = relay_hint
+    if a_tag:
+        payload["a_tag"] = a_tag
+    if external_tags:
+        payload["external_tags"] = [[part.strip() for part in raw.split(",") if part.strip()] for raw in external_tags]
+    if extra_tags:
+        payload["extra_tags"] = [[part.strip() for part in raw.split(",") if part.strip()] for raw in extra_tags]
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/react", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("follow")
+@click.argument("identifier")
+@click.option("--relay-hint", default=None, help="Optional relay hint to store in the kind-3 contact list.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def follow(ctx: click.Context, identifier: str, relay_hint: Optional[str], relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"identifier": identifier}
+    if relay_hint:
+        payload["relay_hint"] = relay_hint
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/follow", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("unfollow")
+@click.argument("identifier")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def unfollow(ctx: click.Context, identifier: str, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"identifier": identifier}
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/unfollow", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
+@cli.command("followers")
+@click.option("--identifier", default=None, help="Optional nip05/npub/pubhex target. Defaults to active wallet.")
+@click.option("--limit", default=100, type=int, show_default=True)
+@click.option("--strict/--no-strict", default=True, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def followers(
+    ctx: click.Context,
+    identifier: Optional[str],
+    limit: int,
+    strict: bool,
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {"limit": limit, "strict": str(strict).lower()}
+    if identifier:
+        params["identifier"] = identifier
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/nostr/followers", "GET", key, ctx.obj["timeout_seconds"], params=params
+    )
+    _print_json(data)
+
+
+@cli.command("delete-request")
+@click.option(
+    "--event-id",
+    "event_ids",
+    multiple=True,
+    help="Target event id (`note1...` or 64-char hex). Repeat for multiple references.",
+)
+@click.option(
+    "--a-tag",
+    "a_tags",
+    multiple=True,
+    help="Addressable target coordinate (<kind>:<pubkey>:<d>). Repeat for multiple references.",
+)
+@click.option(
+    "--kind",
+    "kinds",
+    multiple=True,
+    type=int,
+    help="Optional kind tag to include. Repeat when referencing multiple kinds.",
+)
+@click.option("--reason", default=None, help="Optional deletion reason text.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def delete_request(
+    ctx: click.Context,
+    event_ids: tuple[str, ...],
+    a_tags: tuple[str, ...],
+    kinds: tuple[int, ...],
+    reason: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {}
+    if event_ids:
+        payload["event_ids"] = list(event_ids)
+    if a_tags:
+        payload["a_tags"] = list(a_tags)
+    if kinds:
+        payload["kinds"] = list(kinds)
+    if reason:
+        payload["reason"] = reason
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"], "/agent/delete_request", "POST", key, ctx.obj["timeout_seconds"], payload=payload
+    )
+    _print_json(data)
+
+
 @cli.command("my-posts")
 @click.option("--limit", default=10, type=int, show_default=True)
 @click.option("--relays", default=None, help="Comma-separated relay override.")

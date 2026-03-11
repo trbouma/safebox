@@ -16,6 +16,7 @@ Current scope (initial release):
 - Balance lookup
 - Supported-currency lookup
 - Private-message read
+- Nostr social actions and lookup
 - Invite-based wallet onboarding
 - Invoice creation
 - Invoice payment
@@ -389,6 +390,78 @@ Response (example):
   "timestamp": 1770000000
 }
 ```
+
+### `GET /agent/nostr/followers`
+
+Returns followers for a target identity by inspecting kind-3 contact lists.
+
+Query params:
+
+- `identifier` (optional): `nip05`, `npub`, or `pubhex`; defaults to the authenticated wallet
+- `limit` (optional, default `100`, max `500`)
+- `strict` (optional, default `true`): verify against each follower candidate's latest known kind-3 event
+- `relays` (optional): comma-separated relay override
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/nostr/followers?limit=50&strict=true"
+```
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "target_identifier": "npub1...",
+  "target_pubkey": "bbdfe7ea6a7becbfe6e26c0dccdfd5d01f97972c8600b35acbef9b28aaf63b2a",
+  "strict": true,
+  "count": 1,
+  "followers": [
+    {
+      "follower_pubkey": "9170548b2908025e07b33e73dc5f419f2a3d3e83d939a4d312c790b0ff283a7f",
+      "follower_npub": "npub1...",
+      "event_id": "abcd1234...",
+      "created_at": 1770000000,
+      "relay_hint": "wss://relay.getsafebox.app",
+      "verified_latest_contacts": true
+    }
+  ],
+  "timestamp": 1770000000
+}
+```
+
+### `GET /agent/nostr/replies`
+
+Returns kind-1 replies referencing a target event.
+
+Query params:
+
+- `event_id` (required)
+- `limit` (optional, default `100`, max `200`)
+- `relays` (optional): comma-separated relay override
+
+### `GET /agent/nostr/zap_receipts`
+
+Returns zap receipts for a target event.
+
+Query params:
+
+- `event_id` (required)
+- `limit` (optional, default `100`, max `200`)
+- `strict` (optional, default `false`)
+- `relays` (optional): comma-separated relay override
+
+### `GET /agent/nostr/following/latest_kind1`
+
+Returns recent kind-1 posts from authors in the wallet's latest kind-3 follow list.
+
+Query params:
+
+- `limit` (optional, default `20`, max `200`)
+- `relays` (optional): comma-separated relay override
 
 ### `WS /agent/ws/nostr/latest_kind1`
 
@@ -842,6 +915,85 @@ Request:
   "relays": ["wss://relay.damus.io", "wss://relay.primal.net"]
 }
 ```
+
+### `POST /agent/react`
+
+Publishes a reaction event.
+
+Mode A: Nostr event reaction (`kind 7`)
+
+```json
+{
+  "event_id": "49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4",
+  "content": "+",
+  "reacted_pubkey": "bbdfe7ea6a7becbfe6e26c0dccdfd5d01f97972c8600b35acbef9b28aaf63b2a",
+  "reacted_kind": 1,
+  "relay_hint": "wss://relay.getsafebox.app"
+}
+```
+
+Mode B: external content reaction (`kind 17`)
+
+```json
+{
+  "content": "⭐",
+  "external_tags": [
+    ["k", "web"],
+    ["i", "https://example.com"]
+  ]
+}
+```
+
+Notes:
+
+- If `event_id` is provided, API publishes `kind 7`.
+- If `event_id` is omitted and `external_tags` are provided, API publishes `kind 17`.
+- `extra_tags` MAY be included in either mode.
+
+### `POST /agent/reply`
+
+Publishes a kind-1 reply to a target event with NIP-10-compatible `e`/`p`/`k` tags.
+
+### `POST /agent/follow`
+
+Updates the wallet's kind-3 contact list to follow a target identity.
+
+Request fields:
+
+- `identifier` (required): `nip05`, `npub`, or `pubhex`
+- `relay_hint` (optional)
+- `relays` (optional)
+
+### `POST /agent/unfollow`
+
+Updates the wallet's kind-3 contact list to remove a followed identity.
+
+Request fields:
+
+- `identifier` (required): `nip05`, `npub`, or `pubhex`
+- `relays` (optional)
+
+### `POST /agent/delete_request`
+
+Publishes a NIP-09 deletion request (`kind 5`).
+
+Request:
+
+```json
+{
+  "event_ids": ["49cc097a631832b812cbbda627d9d96823efbdf85a4dfa49b4c6c3a5671d73f4"],
+  "kinds": [1],
+  "reason": "published by accident"
+}
+```
+
+Request fields:
+
+- `event_ids` (optional): list of `note1...` or 64-char hex ids
+- `a_tags` (optional): list of `<kind>:<pubkey>:<d-identifier>`
+- `kinds` (optional): list of integer kind tags
+- `reason` (optional): deletion reason placed in `content`
+- `relays` (optional): relay override list
 
 ### `POST /agent/market/order`
 

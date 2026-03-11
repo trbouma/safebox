@@ -2012,6 +2012,16 @@ class Acorn:
                     self.logger.debug("op=publish_reaction status=lookup_failed error=%s", exc)
 
         tags: List[List[str]] = []
+        prefix_tags: List[List[str]] = []
+        if extra_tags:
+            for each in extra_tags:
+                if each and isinstance(each, list):
+                    prefix_tags.append([str(x) for x in each])
+        # Preserve NIP-25 recommendation that target e/p tags are last when
+        # additional e/p tags exist.
+        if prefix_tags:
+            tags.extend(prefix_tags)
+
         e_tag: List[str] = ["e", target_id]
         if relay_hint:
             e_tag.append(relay_hint)
@@ -2032,11 +2042,6 @@ class Acorn:
 
         if a_tag:
             tags.append(["a", a_tag])
-
-        if extra_tags:
-            for each in extra_tags:
-                if each and isinstance(each, list):
-                    tags.append([str(x) for x in each])
 
         publish_relays = self._build_kind1_publish_relays(relays=relays)
         if not publish_relays:
@@ -2060,6 +2065,154 @@ class Acorn:
             "target_event_id": target_id,
             "content": reaction_content,
             "tags": tags,
+            "relays": publish_relays,
+        }
+
+    async def publish_external_reaction(
+        self,
+        content: str,
+        external_tags: List[List[str]],
+        extra_tags: List[List[str]] | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Publish external-content reaction event (NIP-25 kind 17).
+
+        Requires external content tags (`k` + `i` pairs per NIP-73 pattern).
+        """
+        reaction_content = "" if content is None else str(content)
+
+        tags: List[List[str]] = []
+        has_k = False
+        has_i = False
+        for each in external_tags or []:
+            if not each or not isinstance(each, list):
+                continue
+            normalized = [str(x) for x in each if x is not None]
+            if not normalized:
+                continue
+            if normalized[0] == "k":
+                has_k = True
+            if normalized[0] == "i":
+                has_i = True
+            tags.append(normalized)
+
+        if not has_k or not has_i:
+            raise ValueError("external_tags must include at least one 'k' and one 'i' tag")
+
+        if extra_tags:
+            for each in extra_tags:
+                if each and isinstance(each, list):
+                    tags.append([str(x) for x in each if x is not None])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for external reaction publish")
+
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=17,
+                content=reaction_content,
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=publish_external_reaction status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "kind": 17,
+            "content": reaction_content,
+            "tags": tags,
+            "relays": publish_relays,
+        }
+
+    async def publish_deletion_request(
+        self,
+        event_ids: List[str] | None = None,
+        a_tags: List[str] | None = None,
+        kinds: List[int | str] | None = None,
+        reason: str | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Publish a NIP-09 deletion request (kind 5).
+
+        Notes:
+        - Clients/relays ultimately decide deletion visibility semantics.
+        - Callers SHOULD include `k` tags for referenced event kinds when known.
+        """
+        normalized_event_ids: List[str] = []
+        for each_id in event_ids or []:
+            value = str(each_id or "").strip()
+            if not value:
+                continue
+            if value.startswith("note"):
+                value = bech32_to_hex(value)
+            if len(value) != 64 or not all(ch in string.hexdigits for ch in value):
+                raise ValueError("event_ids must be note1... or 64-char hex ids")
+            normalized = value.lower()
+            if normalized not in normalized_event_ids:
+                normalized_event_ids.append(normalized)
+
+        normalized_a_tags: List[str] = []
+        for each_a in a_tags or []:
+            value = str(each_a or "").strip()
+            if not value:
+                continue
+            # NIP-09 `a` tag is <kind>:<pubkey>:<d-identifier>.
+            if value.count(":") < 2:
+                raise ValueError("a_tags must be NIP-01 coordinates: <kind>:<pubkey>:<d-identifier>")
+            if value not in normalized_a_tags:
+                normalized_a_tags.append(value)
+
+        if not normalized_event_ids and not normalized_a_tags:
+            raise ValueError("at least one event id or a-tag is required")
+
+        tags: List[List[str]] = []
+        for each_id in normalized_event_ids:
+            tags.append(["e", each_id])
+        for each_a in normalized_a_tags:
+            tags.append(["a", each_a])
+
+        normalized_kinds: List[str] = []
+        for each_kind in kinds or []:
+            try:
+                kind_value = str(int(each_kind))
+            except Exception as exc:
+                raise ValueError("kinds must be integers") from exc
+            if kind_value not in normalized_kinds:
+                normalized_kinds.append(kind_value)
+        for each_kind in normalized_kinds:
+            tags.append(["k", each_kind])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for delete request publish")
+
+        delete_reason = str(reason or "").strip()
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=Event.KIND_DELETE,
+                content=delete_reason,
+                tags=tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug("op=publish_delete_request status=published event_id=%s relays=%s", n_msg.id, publish_relays)
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "kind": Event.KIND_DELETE,
+            "content": delete_reason,
+            "tags": tags,
+            "event_ids": normalized_event_ids,
+            "a_tags": normalized_a_tags,
+            "kinds": [int(each) for each in normalized_kinds],
             "relays": publish_relays,
         }
 
@@ -7279,6 +7432,128 @@ class Acorn:
             identifier=identifier,
             relays=relays,
         )
+
+    async def get_followers_for_identifier(
+        self,
+        identifier: str | None = None,
+        limit: int = 100,
+        relays: List[str] | None = None,
+        strict: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return followers for a target identifier by inspecting kind-3 contact lists.
+
+        - If identifier is None/blank, target defaults to this wallet pubkey.
+        - In strict mode, each candidate author is validated against their latest
+          known kind-3 event to reduce stale follower false positives.
+        """
+
+        target_identifier = (identifier or "").strip()
+        target_pubhex = (
+            self._resolve_pubkey_identifier(target_identifier)
+            if target_identifier
+            else str(self.pubkey_hex).lower()
+        )
+        safe_limit = max(1, min(int(limit), 500))
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        # First pass: candidate contacts events that mention target in `p` tags.
+        candidate_fetch_limit = max(safe_limit * 5, 200)
+        candidate_filter = [{
+            "limit": candidate_fetch_limit,
+            "kinds": [3],
+            "#p": [target_pubhex],
+        }]
+        async with ClientPool(relay_pool) as c:
+            candidate_events: List[Event] = await c.query(candidate_filter)
+
+        if not candidate_events:
+            return []
+
+        candidates_by_author: Dict[str, Event] = {}
+        for each_event in sorted(
+            candidate_events,
+            key=lambda each: int(each.created_at.timestamp()),
+            reverse=True,
+        ):
+            author = str(each_event.pub_key or "").lower()
+            if len(author) != 64 or not all(ch in string.hexdigits for ch in author):
+                continue
+            if author not in candidates_by_author:
+                candidates_by_author[author] = each_event
+            if len(candidates_by_author) >= candidate_fetch_limit:
+                break
+
+        if not strict:
+            out: List[Dict[str, Any]] = []
+            for author, event in list(candidates_by_author.items())[:safe_limit]:
+                relay_hint = None
+                for each_tag in list(event.tags or []):
+                    if each_tag and each_tag[0] == "p" and len(each_tag) >= 2 and str(each_tag[1]).lower() == target_pubhex:
+                        relay_hint = each_tag[2] if len(each_tag) >= 3 else None
+                        break
+                out.append({
+                    "follower_pubkey": author,
+                    "follower_npub": hex_to_bech32(author),
+                    "event_id": str(event.id),
+                    "created_at": int(event.created_at.timestamp()),
+                    "relay_hint": relay_hint,
+                    "verified_latest_contacts": False,
+                })
+            return out
+
+        # Second pass: fetch latest kind-3 events for candidate authors and verify
+        # that target still exists in each author's current contact list.
+        candidate_authors = list(candidates_by_author.keys())
+        latest_filter = [{
+            "limit": max(len(candidate_authors) * 3, 200),
+            "kinds": [3],
+            "authors": candidate_authors,
+        }]
+        async with ClientPool(relay_pool) as c:
+            latest_events: List[Event] = await c.query(latest_filter)
+
+        latest_by_author: Dict[str, Event] = {}
+        for each_event in sorted(
+            latest_events,
+            key=lambda each: int(each.created_at.timestamp()),
+            reverse=True,
+        ):
+            author = str(each_event.pub_key or "").lower()
+            if not author or author in latest_by_author:
+                continue
+            latest_by_author[author] = each_event
+
+        out: List[Dict[str, Any]] = []
+        for author in candidate_authors:
+            latest_event = latest_by_author.get(author)
+            if not latest_event:
+                continue
+            relay_hint = None
+            still_follows = False
+            for each_tag in list(latest_event.tags or []):
+                if not each_tag or each_tag[0] != "p" or len(each_tag) < 2:
+                    continue
+                if str(each_tag[1]).lower() == target_pubhex:
+                    still_follows = True
+                    relay_hint = each_tag[2] if len(each_tag) >= 3 else None
+                    break
+            if not still_follows:
+                continue
+            out.append({
+                "follower_pubkey": author,
+                "follower_npub": hex_to_bech32(author),
+                "event_id": str(latest_event.id),
+                "created_at": int(latest_event.created_at.timestamp()),
+                "relay_hint": relay_hint,
+                "verified_latest_contacts": True,
+            })
+            if len(out) >= safe_limit:
+                break
+
+        return out
 
     async def get_latest_kind1_posts_from_follow_list(
         self,

@@ -99,6 +99,14 @@ class AgentPublishKind1Request(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentDeleteRequest(BaseModel):
+    event_ids: list[str] | None = None
+    a_tags: list[str] | None = None
+    kinds: list[int] | None = None
+    reason: str | None = None
+    relays: list[str] | None = None
+
+
 class AgentMarketOrderRequest(BaseModel):
     side: str
     asset: str
@@ -159,12 +167,13 @@ class AgentSecureDmRequest(BaseModel):
 
 
 class AgentReactRequest(BaseModel):
-    event_id: str
+    event_id: str | None = None
     content: str = "❤️"
     reacted_pubkey: str | None = None
     reacted_kind: int | None = None
     relay_hint: str | None = None
     a_tag: str | None = None
+    external_tags: list[list[str]] | None = None
     extra_tags: list[list[str]] | None = None
     relays: list[str] | None = None
 
@@ -1308,6 +1317,46 @@ async def agent_latest_kind1_from_following(
         "status": "OK",
         "count": len(events),
         "events": events,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/nostr/followers", tags=["agent"])
+async def agent_followers(
+    identifier: str | None = None,
+    limit: int = 100,
+    strict: bool = True,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list = _parse_relays_csv(relays)
+    safe_limit = max(1, min(int(limit), 500))
+    target_identifier = (identifier or "").strip()
+
+    try:
+        followers = await acorn_obj.get_followers_for_identifier(
+            identifier=target_identifier or None,
+            limit=safe_limit,
+            relays=relay_list,
+            strict=bool(strict),
+        )
+    except Exception as exc:
+        logger.exception("Agent followers query failed")
+        raise HTTPException(status_code=400, detail=f"Followers query failed: {exc}")
+
+    target_pubkey = (
+        acorn_obj._resolve_pubkey_identifier(target_identifier)
+        if target_identifier
+        else acorn_obj.pubkey_hex
+    )
+
+    return {
+        "status": "OK",
+        "target_identifier": target_identifier or hex_to_npub(acorn_obj.pubkey_hex),
+        "target_pubkey": target_pubkey,
+        "strict": bool(strict),
+        "count": len(followers),
+        "followers": followers,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
@@ -2648,6 +2697,38 @@ async def agent_publish_kind1(
     }
 
 
+@router.post("/delete_request", tags=["agent"])
+async def agent_delete_request(
+    payload: AgentDeleteRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_deletion_request(
+            event_ids=payload.event_ids,
+            a_tags=payload.a_tags,
+            kinds=payload.kinds,
+            reason=payload.reason,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent delete_request failed")
+        raise HTTPException(status_code=400, detail=f"Delete request publish failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
 @router.post("/market/order", tags=["agent"])
 async def agent_create_market_order(
     payload: AgentMarketOrderRequest,
@@ -2829,8 +2910,6 @@ async def agent_react(
     acorn_obj: Acorn = Depends(_agent_get_acorn),
 ):
     target_event_id = (payload.event_id or "").strip()
-    if not target_event_id:
-        raise HTTPException(status_code=400, detail="Missing event_id")
 
     relay_list: list[str] | None = None
     if payload.relays:
@@ -2844,16 +2923,29 @@ async def agent_react(
             relay_list = None
 
     try:
-        result = await acorn_obj.publish_reaction(
-            target_event_id=target_event_id,
-            content=payload.content,
-            reacted_pubkey=payload.reacted_pubkey,
-            reacted_kind=payload.reacted_kind,
-            relay_hint=payload.relay_hint,
-            a_tag=payload.a_tag,
-            extra_tags=payload.extra_tags,
-            relays=relay_list,
-        )
+        if target_event_id:
+            result = await acorn_obj.publish_reaction(
+                target_event_id=target_event_id,
+                content=payload.content,
+                reacted_pubkey=payload.reacted_pubkey,
+                reacted_kind=payload.reacted_kind,
+                relay_hint=payload.relay_hint,
+                a_tag=payload.a_tag,
+                extra_tags=payload.extra_tags,
+                relays=relay_list,
+            )
+        else:
+            if not payload.external_tags:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Provide event_id for kind-7 reaction, or external_tags for kind-17 external reaction",
+                )
+            result = await acorn_obj.publish_external_reaction(
+                content=payload.content,
+                external_tags=payload.external_tags,
+                extra_tags=payload.extra_tags,
+                relays=relay_list,
+            )
     except Exception as exc:
         logger.exception("Agent react failed")
         raise HTTPException(status_code=400, detail=f"Reaction publish failed: {exc}")
@@ -2861,6 +2953,7 @@ async def agent_react(
     return {
         "status": "OK",
         "event_id": result.get("event_id"),
+        "kind": result.get("kind", 7),
         "target_event_id": result.get("target_event_id"),
         "content": result.get("content"),
         "tags": result.get("tags"),
