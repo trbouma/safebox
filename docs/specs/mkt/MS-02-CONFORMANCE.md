@@ -1,7 +1,7 @@
 # MS-02 Conformance Checklist
 **Spec**: `MS-02`  
-**Version**: `1.1`  
-**Date**: `2026-03-05`  
+**Version**: `2.1`  
+**Date**: `2026-03-12`  
 **Primary Spec**: `docs/specs/mkt/MS-02-entitlement-market.md`
 
 ---
@@ -11,7 +11,7 @@
 Provide an executable checklist for validating implementation conformance against MS-02 using Safebox Agent API endpoints and provider-side redemption verification.
 
 This checklist maps directly to:
-- `TC-MS02-001` ... `TC-MS02-008`
+- `TC-MS02-001` ... `TC-MS02-009`
 
 ---
 
@@ -65,9 +65,10 @@ Fill once per run:
 | Base URL | |
 | Provider URL | |
 | Relay set | |
-| Spec version under test | 1.1 |
-| Capability scheme under test | |
+| Spec version under test | 2.1 |
+| Entitlement scheme under test | |
 | Settlement method under test | |
+| Buyer identity extraction rule | |
 | Notes | |
 
 ---
@@ -86,23 +87,24 @@ Use `PASS`, `FAIL`, or `N/A`.
 | `TC-MS02-006` | Buyer | Protocol | | | |
 | `TC-MS02-007` | Provider | Protocol | | | |
 | `TC-MS02-008` | Provider | Protocol | | | |
+| `TC-MS02-009` | Seller | Protocol | | | |
 
 ---
 
 ## 6. Execution Steps by Test Case
 
-## 6.1 `TC-MS02-001` Fresh Capability Material
+## 6.1 `TC-MS02-001` Fresh Entitlement Material
 
 Requirement:
-- Each entitlement uses unique capability material, producing unique `capability_ref`.
+- Each entitlement uses unique entitlement material, producing unique `entitlement_ref`.
 
 Steps:
-1. Prepare two capabilities for two entitlements under the same `capability_scheme`.
+1. Prepare two entitlement instances under the same `entitlement_scheme`.
 2. Publish two asks from seller.
-3. Extract `capability_ref` values from ask payloads/tags/content.
+3. Extract `entitlement_ref` values from ask payloads/tags/content.
 
 Pass:
-- `capability_ref` values are distinct.
+- `entitlement_ref` values are distinct.
 
 ## 6.2 `TC-MS02-002` Commitment Publication
 
@@ -133,20 +135,21 @@ Steps:
 Pass:
 - Exact match.
 
-## 6.4 `TC-MS02-004` Winner Selection
+## 6.4 `TC-MS02-004` Clearing Policy
 
 Requirement:
-- First sender reaching required amount wins settlement.
+- Clearing deterministically selects one buyer once settlement evidence reaches the threshold.
 
 Steps:
 1. Buyer A sends partial settlement receipts.
 2. Buyer B sends receipts and reaches total first (or vice versa).
-3. Seller finalizes settlement for first fully funded sender.
+3. Seller applies the documented canonical buyer identity extraction rule.
+4. Seller finalizes clearing for the first fully funded buyer under the documented tie-break policy.
 4. If tie occurs in same processing window, evaluate documented tie-break policy.
 
 Pass:
-- Winner is first sender at `sum(sender_settlements) >= price_sats`.
-- Capability secret delivered only to winner.
+- Winner is the first eligible buyer at `sum(buyer_settlements) >= price_sats`.
+- Entitlement secret delivered only to winner.
 - Tie-break behavior matches documented deterministic rule.
 
 ## 6.5 `TC-MS02-005` Expiry Enforcement
@@ -160,12 +163,12 @@ Steps:
 3. Attempt additional settlement and settlement completion.
 
 Pass:
-- Ask is treated closed; no new winner; no capability delivery post-expiry.
+- Ask is treated closed; no new winner; no entitlement secret delivery post-expiry.
 
-## 6.6 `TC-MS02-006` Capability Verification
+## 6.6 `TC-MS02-006` Entitlement Secret Verification
 
 Requirement:
-- Delivered `capability_secret` verifies against published commitment and ask binding.
+- Delivered `entitlement_secret` verifies against published commitment and ask binding.
 
 Steps:
 1. Winning buyer receives secret via DM/secure channel.
@@ -183,10 +186,10 @@ Note:
 ## 6.7 `TC-MS02-007` Challenge Verification
 
 Requirement:
-- Provider challenge is verified using capability control proof.
+- Provider challenge is verified using entitlement control proof.
 
 Steps:
-1. Buyer submits `capability_ref` to provider.
+1. Buyer submits `entitlement_ref` to provider.
 2. Provider sends challenge nonce.
 3. Buyer proves control with scheme-specific method.
 4. Provider verifies proof.
@@ -201,12 +204,28 @@ Requirement:
 - Second redemption attempt fails after first success.
 
 Steps:
-1. Complete one successful redemption for capability `capability_ref`.
-2. Repeat redemption attempt with same capability.
+1. Complete one successful redemption for entitlement `entitlement_ref`.
+2. Repeat redemption attempt with same entitlement.
 
 Pass:
 - First attempt succeeds.
 - Second attempt fails with spent/used response.
+
+## 6.9 `TC-MS02-009` Buyer Identity Determinism
+
+Requirement:
+- The same settlement evidence set yields the same canonical buyer identity and winner result on repeated evaluation.
+
+Steps:
+1. Capture the complete settlement evidence set used for one cleared order.
+2. Apply the implementation's documented buyer identity extraction rule to each receipt/event.
+3. Re-run aggregation and winner selection at least twice using the same evidence set.
+4. Compare derived buyer identities and clearing result.
+
+Pass:
+- Buyer identity extraction is stable across runs.
+- Aggregation result is stable across runs.
+- Winner selection is identical across runs.
 
 ---
 
@@ -214,7 +233,7 @@ Pass:
 
 | Class | Mandatory Tests | Result |
 |-------|------------------|--------|
-| `MS02-Seller` | `001,002,003,004,005` | |
+| `MS02-Seller` | `001,002,003,004,005,009` | |
 | `MS02-Buyer` | `006` | |
 | `MS02-Provider` | `007,008` | |
 | `MS02-Observer` | Audit evidence traceability across all tests | |
@@ -227,10 +246,11 @@ Record at minimum:
 - Ask event id
 - Published `ask_id`
 - Published `commitment_hash`
-- Published `capability_scheme`
-- Published `capability_ref`
+- Published `entitlement_scheme`
+- Published `entitlement_ref`
 - Settlement receipt ids used for winner decision
-- Capability delivery evidence id (DM event id or secure channel log id)
+- Canonical buyer identity used for winner decision
+- Entitlement secret delivery evidence id (DM event id or secure channel log id)
 - Redemption transaction id / provider request id
 - Spent-marker evidence for single-use enforcement
 
@@ -266,3 +286,4 @@ curl -sS \
 |---------|------|-------|
 | `1.0` | 2026-03-05 | Initial conformance checklist for MS-02 entitlement market lifecycle. |
 | `1.1` | 2026-03-05 | Aligned checklist terminology and pass criteria to generic capability model (`capability_scheme/ref/secret`), RFC 8785 ask determinism, and deterministic tie-break semantics. |
+| `2.1` | 2026-03-12 | Aligned checklist to the generic entitlement market base, explicit clearing primitive, and canonical buyer identity determinism. |

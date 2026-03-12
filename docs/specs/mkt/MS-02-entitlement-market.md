@@ -1,37 +1,29 @@
 # MS-02: Hash-Committed Entitlement Market
-**Version**: `2.0`
+**Version**: `2.1`
 **Status**: Draft  
 **Tag**: `#MS02`  
 **Market Namespace**: `mkt=MS-02`  
-**Date**: 2026-03-07
+**Date**: 2026-03-12
 
 ---
 
 ## 1. Purpose
 
-Define a generic market protocol for trading single-use, hash-committed service entitlements over Nostr with deterministic settlement and verifiable redemption.
+Define a generic market protocol for trading single-use, hash-committed service entitlements with deterministic settlement and verifiable redemption.
 
-This specification uses four market primitives:
+MS-02 is the generic entitlement market base.
+
+Nostr is the first transport and settlement profile for this market family, not the market model itself.
+
+This specification uses five market primitives:
 
 1. `Entitlement`
 2. `Order`
-3. `Trade`
-4. `Redemption`
+3. `Clearing`
+4. `Trade`
+5. `Redemption`
 
 These primitives define the full lifecycle from issuance through final service delivery.
-
-### 1.3 Historical Parallel (Non-Normative)
-
-MS-02 follows the same economic pattern as historical redeemable-claim instruments, including:
-
-- bills of exchange
-- warehouse receipts
-- bearer bonds
-
-In each case, the traded object is the redeemable claim, not the underlying asset/service itself.
-MS-02 applies this model using cryptographic commitments and digital settlement rails rather than paper instruments.
-
----
 
 ## 1.1 Scope
 
@@ -39,7 +31,8 @@ MS-02 defines:
 
 - entitlement creation and commitment binding
 - order publication and deterministic ask identity
-- trade settlement and winner selection
+- clearing and winner selection
+- trade formation and secret delivery
 - secret delivery and buyer verification
 - redemption proof-of-control and single-use enforcement
 
@@ -58,11 +51,24 @@ The key words `MUST`, `MUST NOT`, `SHOULD`, `SHOULD NOT`, and `MAY` are to be in
 
 ---
 
+## 1.3 Historical Parallel (Non-Normative)
+
+MS-02 follows the same economic pattern as historical redeemable-claim instruments, including:
+
+- bills of exchange
+- warehouse receipts
+- bearer bonds
+
+In each case, the traded object is the redeemable claim, not the underlying asset/service itself.
+MS-02 applies this model using cryptographic commitments and digital settlement rails rather than paper instruments.
+
+---
+
 ## 2. Roles
 
 | Role | Responsibility |
 |------|----------------|
-| **Seller** | Issues entitlements, publishes orders, detects settlement, selects winner, delivers entitlement secret |
+| **Seller** | Issues entitlements, publishes orders, observes settlement evidence, applies clearing policy, selects winner, delivers entitlement secret |
 | **Buyer** | Settles an order, verifies delivered entitlement against commitment, redeems service |
 | **Redemption Provider** | Verifies redemption proof, releases service/resource, enforces one-time redemption |
 
@@ -84,7 +90,17 @@ Examples include:
 - storage capacity
 - other digital services
 
-Each entitlement is implemented as a hash-committed redemption key.
+An entitlement is a claim, not a specific credential format.
+
+Implementations MUST define how the claim is bound to a redemption control mechanism.
+
+In the generic model, an entitlement has:
+
+- an entitlement reference usable during redemption
+- a redemption control secret or equivalent proof material
+- a commitment hash over canonical secret-derived commitment bytes
+
+The compatibility profile `nostr_keypair_v1` realizes this model using a Nostr keypair as the redemption credential.
 
 Where:
 
@@ -109,25 +125,48 @@ Order parameters include:
 - optional redemption provider metadata/commitment
 - commitment hash and deterministic ask identifier
 
-### 3.3 Trade
+### 3.3 Clearing
 
-A `Trade` is the settlement outcome for an order.
+A `Clearing` step determines whether settlement evidence is sufficient to form a binding trade obligation for a specific buyer.
 
-A trade occurs when payment satisfies the order price.
+Clearing is the transition from:
+
+- public order intent
+- observed settlement evidence
+
+to:
+
+- one winning buyer identity
+- one seller delivery obligation
+- closure of competing claims for the same entitlement unit
 
 For `nip57_zap_v1` settlement:
 
 - buyers send zaps referencing the order event
-- seller aggregates settled zap receipts per sender
-- the first sender to reach `price_sats` becomes the buyer
+- seller aggregates settled zap receipts by canonical buyer identity
+- a buyer becomes eligible when aggregate settled receipts satisfy `price_sats`
+- the first eligible buyer under the published tie-break rule clears the order
 
-Partial payments from non-winning participants do not, by themselves, constitute a trade.
+At or after `expiry`, the order MUST be treated as closed for new clearing decisions.
 
-Zap receipts are treated as settlement evidence because they are emitted only after payment clears.
+Partial payments from non-winning participants MAY remain non-refundable if that is the published order policy, but they MUST NOT create a trade claim by themselves.
+
+### 3.4 Trade
+
+A `Trade` is the settlement outcome for an order.
+
+A trade exists only after clearing identifies a winning buyer and binds the seller to delivery of the entitlement secret.
+
+For `nip57_zap_v1` settlement:
+
+- clearing uses settled zap receipts as evidence
+- the cleared buyer is the canonical buyer identity selected by the seller's published winner policy
+
+Zap receipts are treated as settlement evidence because they are emitted only after payment clears on the payment rail.
 
 After settlement, the seller transfers control of the entitlement by revealing `sk_i` (the `entitlement_secret`) to the winning buyer.
 
-### 3.4 Redemption
+### 3.5 Redemption
 
 A `Redemption` is the provider-side challenge/response process that converts a valid entitlement into delivered service.
 
@@ -153,6 +192,7 @@ A successful redemption MUST consume entitlement spend state.
 | **Commitment Hash** | Hash over canonical secret-derived commitment bytes |
 | **Order Details** | Canonical JSON object describing traded unit and settlement policy |
 | **Ask ID** | Deterministic identifier over issuer + canonical order details + commitment hash |
+| **Clearing** | Determination that specific settlement evidence forms a binding trade with one buyer |
 | **Trade Winner** | Buyer identity selected after settlement policy evaluation |
 | **Spent State** | Provider state that prevents entitlement reuse |
 
@@ -180,6 +220,19 @@ Nostr profile in this specification:
 
 Future profiles MAY use other settlement units (for example tokens, credits, or fiat rails) without changing the core entitlement market mechanics.
 
+### 4.2 Alignment with MS-00
+
+MS-02 is a tokenized market in the `MS-00` sense, but its canonical execution unit is one entitlement.
+
+For cross-market comparability:
+
+- `quote_unit` SHOULD be `SAT_PER_TOKEN`
+- `effective_price_sats_per_token` SHOULD equal `price_sats` when `quantity = 1`
+- `token_definition` SHOULD describe what one entitlement redeems
+- `token_basis` SHOULD be `REDEMPTION_UNIT`
+
+MS-02 keeps `price_sats` as the core market field because the entitlement unit is fixed at one in v2.0.
+
 ---
 
 ## 5. Data Model
@@ -198,11 +251,15 @@ Future profiles MAY use other settlement units (for example tokens, credits, or 
 | `hash_alg` | string | Yes | `sha256` for v2.0 |
 | `commitment_hash` | string | Yes | full hex digest |
 | `settlement_method` | string | Yes | default `nip57_zap_v1` |
+| `partial_payment_policy` | string | No | for example `non_refundable`, `seller_discretion`, `refundable` |
+| `tie_break_policy` | string | No | deterministic winner policy description |
 | `ask_id` | string | Yes | deterministic identifier |
 
 ### 5.1 Compatibility Profile: `nostr_keypair_v1`
 
-For compatibility with existing deployments:
+`nostr_keypair_v1` is the first compatibility profile for MS-02.
+
+For this profile:
 
 - `entitlement_ref` is `npub1...`
 - `entitlement_secret` is `nsec1...`
@@ -228,7 +285,9 @@ Canonical `order_details` object:
   "price_sats": 21,
   "expiry": "2026-03-31T23:59:59Z",
   "redemption_provider": "npub1...",
-  "settlement_method": "nip57_zap_v1"
+  "settlement_method": "nip57_zap_v1",
+  "partial_payment_policy": "non_refundable",
+  "tie_break_policy": "first_cleared_by_seller_observation"
 }
 ```
 
@@ -243,6 +302,8 @@ Requirements:
 - order validation MUST fail if recomputed `ask_id` does not match published `ask_id`.
 - `redemption_provider` MAY be omitted from public order content.
 - if provider immutability is required while hidden, `provider_commitment` SHOULD be present.
+- if `partial_payment_policy` is omitted, implementations MUST define and document the default policy.
+- if `tie_break_policy` is omitted, implementations MUST define and document the default deterministic policy.
 
 ---
 
@@ -266,27 +327,32 @@ Seller constructs `order_details`, computes `ask_id`, and publishes order event 
 - `order_details`
 - `hash_alg`
 - `commitment_hash`
+- settlement policy metadata needed for deterministic clearing
 
 `entitlement_secret` MUST NOT be published in public events.
 
-### 7.3 Trade Settlement
+### 7.3 Clearing and Trade Formation
 
 Buyer settles according to `settlement_method`.
 
 For `nip57_zap_v1`:
 
 - buyers zap the ask event id
-- seller aggregates receipts by sender identity
+- seller aggregates receipts by canonical buyer identity
 
 Winner policy:
 
 - `required_amount = price_sats`
-- sender is eligible if `sum(sender_settlements) >= required_amount`
-- first eligible sender wins
+- buyer is eligible if `sum(buyer_settlements) >= required_amount`
+- first eligible buyer under `tie_break_policy` wins
 - tie-break in same processing window MUST be deterministic and documented
 - at or after `expiry`, order is closed
 - partial payments from non-winning participants do not create a trade
 - zap receipts SHOULD be retained as settlement evidence
+
+Canonical buyer identity for `nip57_zap_v1` MUST be derived from the zap payer pubkey carried by the settlement evidence used by the implementation. Implementations MUST document the exact extraction rule and use it consistently for aggregation, winner selection, and audit.
+
+Once a winner is selected, a trade is formed and the seller is obligated to deliver the correct entitlement secret for that order.
 
 ### 7.4 Secret Delivery and Verification
 
@@ -335,6 +401,7 @@ Redemption provider is accountable for:
 ## 9. Security and Guardrails
 
 - Seller MUST use fresh entitlement material per traded unit.
+- Seller MUST define and consistently apply canonical buyer identity extraction for settlement evidence.
 - Commitment hash MUST be computed from secret-derived bytes only.
 - Full `commitment_hash` is authoritative; shortened display values are non-authoritative.
 - Seller MUST NOT leak `entitlement_secret` in public channels.
@@ -351,11 +418,12 @@ Redemption provider is accountable for:
 | `TC-MS02-001` | Seller | Fresh entitlement material | unique `entitlement_ref` per unit |
 | `TC-MS02-002` | Seller | Commitment publication | order includes full `commitment_hash` |
 | `TC-MS02-003` | Seller | Ask determinism | recomputed `ask_id` equals published |
-| `TC-MS02-004` | Seller | Winner policy | deterministic winner at threshold |
+| `TC-MS02-004` | Seller | Clearing policy | deterministic winner at threshold |
 | `TC-MS02-005` | Seller | Expiry enforcement | no new winner after `expiry` |
 | `TC-MS02-006` | Buyer | Secret verification | delivered secret matches commitment |
 | `TC-MS02-007` | Provider | Challenge verification | invalid proofs rejected |
 | `TC-MS02-008` | Provider | Single-use enforcement | second redemption attempt fails |
+| `TC-MS02-009` | Seller | Buyer identity rule | same settlement evidence yields same buyer identity |
 
 ---
 
@@ -373,6 +441,7 @@ hash_alg=sha256
 commitment_hash=7f3a9c2d41b8d4479c31c6f3a4b7a1e1d0f9d8c7b6a5e4d3c2b1a09182736455
 ask_id=5f13...
 partial_payment_policy=non_refundable
+tie_break_policy=first_cleared_by_seller_observation
 #MS02 #entitlement
 ```
 
@@ -385,3 +454,4 @@ partial_payment_policy=non_refundable
 | `1.0` | 2026-03-05 | Initial hash-committed capability market draft. |
 | `1.1` | 2026-03-05 | Genericized scheme/profile model and deterministic ask binding clarifications. |
 | `2.0` | 2026-03-07 | Reframed market using four core primitives (`Entitlement`, `Order`, `Trade`, `Redemption`) and replaced capability terminology with entitlement terminology. |
+| `2.1` | 2026-03-12 | Reframed MS-02 as the generic entitlement market base, added explicit `Clearing` primitive, clarified profile separation, and aligned quote semantics with `MS-00`. |
