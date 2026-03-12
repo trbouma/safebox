@@ -8,14 +8,15 @@ When starting a new session, fetch these files before executing any workflows:
 |------|-----|
 | This skill | `skills/agent-api/SKILL.md` |
 | MS-02 Market Spec | `docs/specs/mkt/MS-02-entitlement-market.md` |
+| MS-02 Scenario | `docs/specs/mkt/MS-02-END-TO-END-SCENARIO.md` |
 | MS-02 Conformance | `docs/specs/mkt/MS-02-CONFORMANCE.md` |
-| MS-01 Market Spec | `docs/specs/mkt/MS-01-coupon-market.md` |
-| MS-01 Conformance | `docs/specs/mkt/MS-01-CONFORMANCE.md` |
 | WS Conformance | `docs/specs/WS-CONFORMANCE.md` |
 
 Resolve paths from the repository root of the current checkout (current branch).
 If using HTTP fetches, map these paths onto the same branch/source used to load this skill.
 Do not rely on cached or summarized versions.
+
+Do not load `MS-01` by default. It is deprecated and retained only as a legacy reference.
 
 ## Purpose
 
@@ -137,6 +138,8 @@ Non-interference rule:
 - `POST /agent/market/order`
 - `POST /agent/market/ms02/derive_capability`
 - `POST /agent/market/ms02/construct_ask`
+- `POST /agent/market/secret_hash/derive`
+- `POST /agent/market/secret_hash/verify`
 - `POST /agent/secure_dm`
 - `POST /agent/react`
 - `POST /agent/reply`
@@ -227,11 +230,11 @@ Operational guardrail:
    - terminal state is `quote_status: PAID`
 4. Optionally confirm final wallet state with `GET /agent/balance` or `GET /agent/tx_history`.
 
-### 3a) MS-02 Ask Construction (Generic Capability Profile)
+### 3a) MS-02 Ask Construction (Generic Entitlement Profile)
 
 Use the dedicated constructor before publishing an MS-02 ask:
 
-1. Prepare capability artifacts:
+1. Prepare entitlement profile artifacts:
    - `capability_ref`
    - `commitment_hash`
 2. Call `POST /agent/market/ms02/construct_ask` with:
@@ -264,13 +267,18 @@ curl -sS -X POST \
   "${BASE_URL}/agent/market/ms02/construct_ask"
 ```
 
-### 3b) MS-02 `nostr_keypair_v1` Capability Helper
+### 3b) MS-02 `nostr_keypair_v1` Entitlement Helper
 
 Agent API helper endpoint:
 
 - `POST /agent/market/ms02/derive_capability`
 - Body: optional `{ "nsec": "nsec1..." }`
 - If `nsec` is omitted, a fresh capability `nsec` is generated and returned.
+
+Legacy naming note:
+
+- the endpoint name uses `derive_capability` for backward compatibility
+- in `MS-02`, this helper should be understood as deriving the first entitlement-profile credential for `nostr_keypair_v1`
 
 Local helper method (equivalent behavior):
 
@@ -289,6 +297,26 @@ Security guidance:
 - For stronger key hygiene, derive capability artifacts outside shared/server runtime.
 - Prefer sending only `capability_ref` and `commitment_hash` to remote systems.
 - If using `/agent/market/ms02/derive_capability`, treat returned `nsec` as highly sensitive and avoid logging it.
+
+### 3c) Market Secret Hash Helpers
+
+Use these helpers when an agent needs deterministic secret-hash derivation or verification without reimplementing the market hashing convention incorrectly.
+
+Endpoints:
+
+- `POST /agent/market/secret_hash/derive`
+- `POST /agent/market/secret_hash/verify`
+
+Purpose:
+
+- derive a canonical market `secret_hash` from stable inputs
+- verify that a provided preimage/input set matches a published `secret_hash`
+
+Usage rule:
+
+- prefer these helpers when constructing or validating market commitments that must match Safebox market conventions exactly
+- treat the full returned `secret_hash` as authoritative
+- never use shortened display hashes for matching, clearing, or redemption decisions
 
 ### Currency Preflight (Before Address Payments)
 

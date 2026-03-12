@@ -1005,7 +1005,7 @@ Request:
 {
   "side": "buy",
   "asset": "riddle.answer",
-  "market": "MS-01",
+  "market": "MS-02",
   "price_sats": 21,
   "quantity": "1",
   "flow": "bid-first"
@@ -1033,7 +1033,7 @@ curl -sS -X POST \
   -d '{
     "side": "buy",
     "asset": "riddle.answer",
-    "market": "MS-01",
+    "market": "MS-02",
     "price_sats": 21,
     "quantity": "1",
     "flow": "bid-first"
@@ -1048,7 +1048,7 @@ Response (example):
   "status": "OK",
   "event_id": "f4b27...",
   "kind": 1,
-  "market": "MS-01",
+  "market": "MS-02",
   "side": "bid",
   "asset": "riddle.answer",
   "price_sats": 21,
@@ -1056,7 +1056,7 @@ Response (example):
   "order_id": "a1b2c3d4e5f6a7b8",
   "content": "BUY 1 riddle.answer @ 21 sats",
   "tags": [
-    ["mkt","safebox-v1"],
+    ["mkt","MS-02"],
     ["side","bid"],
     ["asset","riddle.answer"],
     ["qty","1"],
@@ -1068,6 +1068,81 @@ Response (example):
   "timestamp": 1770000000
 }
 ```
+
+### `POST /agent/market/ms02/construct_ask`
+
+Constructs a deterministic MS-02 ask payload for the generic entitlement market using the current implementation profile.
+
+Request fields:
+
+- `capability_ref` (required): current implementation field name for the profile reference
+- `price_sats` (required)
+- `expiry` (required)
+- `commitment_hash` (required)
+- `capability_scheme` (optional, default `nostr_keypair_v1`)
+- `content_format` (optional, default `yaml`)
+
+Note:
+
+- The current endpoint retains `capability_*` field names for compatibility.
+- In `MS-02`, this helper should be interpreted as constructing an ask for the first entitlement profile, not as defining the market model itself.
+
+### `POST /agent/market/ms02/derive_capability`
+
+Derives the `nostr_keypair_v1` profile artifacts used by the current MS-02 implementation.
+
+Request:
+
+```json
+{
+  "nsec": "nsec1..."
+}
+```
+
+If `nsec` is omitted, the server generates a fresh one.
+
+Response includes:
+
+- `nsec`
+- `capability_scheme`
+- `capability_ref`
+- `commitment_hash`
+- `hash_alg`
+
+Legacy naming note:
+
+- The route name uses `derive_capability` for backward compatibility.
+- Conceptually, this is the first entitlement-profile helper for `MS-02`.
+
+### `POST /agent/market/secret_hash/derive`
+
+Derives a canonical market secret hash from stable input fields using the server's current market-hash implementation.
+
+Use this when agents need deterministic secret-hash generation without reimplementing the hashing convention locally.
+
+Response includes:
+
+- `status`
+- `secret_hash`
+- `hash_alg`
+- `timestamp`
+
+### `POST /agent/market/secret_hash/verify`
+
+Verifies that a provided input set recomputes to a given canonical `secret_hash`.
+
+Use this to confirm that market commitment material still matches the published hash before settlement, clearing, or redemption actions.
+
+Response includes:
+
+- `status`
+- `valid`
+- `hash_alg`
+- `timestamp`
+
+### `POST /agent/secure_dm`
+
+Sends a secure direct message from the authenticated Safebox wallet to a recipient.
 
 Request fields:
 
