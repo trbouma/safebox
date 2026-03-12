@@ -2,13 +2,18 @@
 **Spec**: `MS-01`  
 **Version**: `1.1`  
 **Date**: `2026-03-04`  
-**Primary Spec**: `docs/specs/mkt/MS-01-coupon-market.md`
+**Primary Spec**: `MS-01-coupon-market.md`
+**Status**: `Deprecated Draft`
 
 ---
 
 ## 1. Purpose
 
 Provide an executable checklist for validating implementation conformance against MS-01 using Safebox Agent API endpoints.
+
+This checklist is deprecated together with `MS-01`.
+
+It remains only for legacy implementations that still claim `MS-01` behavior. New conformance work SHOULD target the newer market-base documents built around `MS-02`.
 
 This checklist maps directly to normative test cases:
 - `TC-MS01-001` ... `TC-MS01-022`
@@ -446,6 +451,9 @@ Final declaration:
 
 Policy note:
 - A class may pass with policy-enforced checks (for example `TC-MS01-009`) only if those checks are explicitly marked `Policy` in the run ledger and notes.
+
+Legacy note:
+- This checklist is retained only for legacy `MS-01` implementations. `MS-01` is deprecated in favor of the newer `MS-02` market-base model.
 
 ---
 

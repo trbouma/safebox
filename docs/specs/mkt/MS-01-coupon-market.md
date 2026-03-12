@@ -1,6 +1,6 @@
 # MS-01: Safebox Coupon Market Specification
 **Version**: 1.1  
-**Status**: Draft  
+**Status**: Deprecated Draft  
 **Tag**: `#MS-01`  
 **Market Namespace**: `mkt=MS-01`  
 **Date**: 2026-03-04
@@ -10,6 +10,20 @@
 ## 1. Purpose
 
 Define a permissionless, Lightning-settled coupon issuance, trading, and redemption market over Nostr + Safebox Agent API.
+
+## Deprecation Notice
+
+`MS-01` is deprecated.
+
+It predates the newer generic entitlement-market model introduced in `MS-02` and remains in the repository only as a legacy reference specification.
+
+Current intent:
+
+- retain `MS-01` temporarily for historical and implementation reference,
+- avoid using it as the base model for new market designs,
+- either rewrite it against the newer market primitives or remove it entirely in a future revision.
+
+Where new work overlaps with coupon-like redeemable claims, `MS-02` SHOULD be treated as the primary conceptual base.
 
 Coupons carry a face value redeemable in sats. Secondary sales are explicitly permitted at a discount, with mandatory risk disclosure. Trust is enforced by Nostr's public record and Lightning payment finality without a central authority.
 
@@ -569,3 +583,4 @@ ISSUER                    BUYER/HOLDER              MARKET
 |---------|------|-------|
 | 1.0 | 2026-03-02 | Initial draft |
 | 1.1 | 2026-03-04 | Added hash-lock clearing primitives, commitment fields, `LOCKED` state, and conformance tests `TC-MS01-018..022`. |
+| 1.1-deprecated | 2026-03-12 | Marked `MS-01` as deprecated because it predates the newer `MS-02` generic entitlement-market base. Retained only as a legacy reference pending rewrite or removal. |
