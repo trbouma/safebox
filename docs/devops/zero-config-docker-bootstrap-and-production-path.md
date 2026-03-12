@@ -22,6 +22,55 @@ This mode is optimized for:
 - regression checks,
 - functional demos.
 
+## Example Docker Compose Bootstrap
+
+The following `docker-compose.yaml` is the reference example for zero-config bootstrap testing. It is intentionally minimal and suitable for local evaluation or small test deployments.
+
+```yaml
+services:
+  safebox-app:
+    image: safebox/safebox:release-candidate
+    build:
+      context: "https://github.com/trbouma/safebox.git#release-candidate"
+      dockerfile: Dockerfile
+    restart: always
+    container_name: safebox-bootstrap
+    ports:
+      - "7375:7375"
+    environment:
+      - TZ=America/New_York
+      # - DATABASE=postgresql+psycopg2://postgres:yourpassword@yourdbserver:5432/safebox
+    volumes:
+      - ./data:/app/data
+      - ./branding:/app/branding
+    command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
+```
+
+Bootstrap characteristics of this example:
+
+- uses the `release-candidate` image/tag by default,
+- persists local runtime data under `./data`,
+- mounts `./branding` for local host-specific branding overrides,
+- requires no database configuration unless the operator chooses to provide PostgreSQL.
+
+To start:
+
+```bash
+docker compose up -d --build
+```
+
+To follow logs:
+
+```bash
+docker compose logs -f safebox-app
+```
+
+To stop:
+
+```bash
+docker compose down
+```
+
 ## Why Zero-Config Matters
 
 - Lowers setup friction and accelerates feedback loops.

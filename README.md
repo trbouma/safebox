@@ -140,6 +140,10 @@ Persisted data volume in compose:
 
 - `./data:/app/data`
 
+For the reference zero-config bootstrap `docker-compose.yaml` using the `release-candidate` image/build and the recommended production transition path, see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/zero-config-docker-bootstrap-and-production-path.md`
+
 ## CLI
 
 Poetry exposes these scripts:
