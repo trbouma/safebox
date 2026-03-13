@@ -1461,6 +1461,59 @@ class Acorn:
             "relays": self._build_kind1_publish_relays(relays=relays),
         }
 
+    async def publish_event(
+        self,
+        content: str,
+        tags: List[List[str]] | None = None,
+        kind: int = Event.KIND_TEXT_NOTE,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        body = str(content or "").strip()
+        if not body:
+            raise ValueError("content is required")
+
+        try:
+            event_kind = int(kind)
+        except Exception as exc:
+            raise ValueError("kind must be integer") from exc
+        if event_kind < 0:
+            raise ValueError("kind must be >= 0")
+
+        normalized_tags: List[List[str]] = []
+        for each in tags or []:
+            if not each or not isinstance(each, list):
+                continue
+            normalized_tags.append([str(x) for x in each if x is not None])
+
+        publish_relays = self._build_kind1_publish_relays(relays=relays)
+        if not publish_relays:
+            raise RuntimeError("No relays configured for event publish")
+
+        async with ClientPool(publish_relays) as c:
+            n_msg = Event(
+                kind=event_kind,
+                content=body,
+                tags=normalized_tags,
+                pub_key=self.pubkey_hex,
+            )
+            n_msg.sign(self.privkey_hex)
+            c.publish(n_msg)
+            self.logger.debug(
+                "op=publish_event status=published event_id=%s kind=%s relays=%s",
+                n_msg.id,
+                event_kind,
+                publish_relays,
+            )
+
+        return {
+            "status": "OK",
+            "event_id": str(n_msg.id),
+            "kind": event_kind,
+            "content": body,
+            "tags": normalized_tags,
+            "relays": publish_relays,
+        }
+
     @staticmethod
     def _normalize_issuer_pubkey(issuer_identifier: str) -> str:
         """Normalize issuer identifier to 64-char lowercase pubkey hex."""
@@ -1534,14 +1587,14 @@ class Acorn:
         return secrets.compare_digest(derived, expected)
 
     @staticmethod
-    def derive_ms02_nostr_capability_from_nsec(nsec: str | None = None) -> Dict[str, Any]:
+    def derive_ms02_nostr_wrapper_from_nsec(nsec: str | None = None) -> Dict[str, Any]:
         """
-        Derive `nostr_keypair_v1` capability fields for MS-02 from an nsec.
+        Derive `nostr_keypair_v1` trading wrapper artifacts for MS-02 from an nsec.
 
         Security note:
         For stronger key hygiene, callers SHOULD perform this derivation outside
         shared/server runtime and only submit derived public artifacts
-        (`capability_ref`, `commitment_hash`) to remote services.
+        (`wrapper_ref`, `wrapper_commitment_hint`) to remote services.
         """
         nsec_value = str(nsec or "").strip()
         if not nsec_value:
@@ -1559,14 +1612,85 @@ class Acorn:
         if not npub.startswith("npub"):
             raise ValueError("could not derive npub from nsec")
 
-        commitment_hash = hashlib.sha256(bytes.fromhex(priv_hex)).hexdigest()
+        wrapper_commitment_hint = hashlib.sha256(bytes.fromhex(priv_hex)).hexdigest()
         return {
             "status": "OK",
-            "nsec": nsec_value,
-            "capability_scheme": "nostr_keypair_v1",
-            "capability_ref": npub,
-            "commitment_hash": commitment_hash,
+            "wrapper_secret_nsec": nsec_value,
+            "wrapper_scheme": "nostr_keypair_v1",
+            "wrapper_ref": npub,
+            "wrapper_commitment_hint": wrapper_commitment_hint,
             "hash_alg": "sha256",
+        }
+
+    @staticmethod
+    def generate_ms02_nostr_wrapper(nsec: str | None = None) -> Dict[str, Any]:
+        """
+        Generate or normalize the first MS-02 trading wrapper profile.
+
+        The authoritative wrapper secret material is the raw private key bytes `sk_i`.
+        The returned `nsec` is the delivery encoding of that secret material.
+        """
+        derived = Acorn.derive_ms02_nostr_wrapper_from_nsec(nsec=nsec)
+        return {
+            "status": "OK",
+            "wrapper_scheme": derived["wrapper_scheme"],
+            "wrapper_ref": derived["wrapper_ref"],
+            "wrapper_secret_nsec": derived["wrapper_secret_nsec"],
+            "wrapper_commitment_hint": derived["wrapper_commitment_hint"],
+            "hash_alg": derived["hash_alg"],
+        }
+
+    @staticmethod
+    def derive_ms02_wrapper_commitment(
+        wrapper_scheme: str | None,
+        nsec: str,
+        entitlement_code: str,
+        entitlement_secret: str,
+        hash_alg: str = "sha256",
+    ) -> Dict[str, Any]:
+        scheme = str(wrapper_scheme or "nostr_keypair_v1").strip()
+        if scheme != "nostr_keypair_v1":
+            raise ValueError("unsupported wrapper_scheme")
+
+        normalized_hash_alg = str(hash_alg or "").strip().lower()
+        if normalized_hash_alg != "sha256":
+            raise ValueError("hash_alg must be sha256")
+
+        entitlement_code_value = str(entitlement_code or "").strip()
+        entitlement_secret_value = str(entitlement_secret or "").strip()
+        if not entitlement_code_value:
+            raise ValueError("entitlement_code is required")
+        if not entitlement_secret_value:
+            raise ValueError("entitlement_secret is required")
+
+        try:
+            wrapper_key = Keys(priv_k=str(nsec or "").strip())
+            priv_hex = str(wrapper_key.private_key_hex() or "").strip().lower()
+            npub = str(wrapper_key.public_key_bech32() or "").strip()
+        except Exception as exc:
+            raise ValueError("invalid nsec") from exc
+
+        if len(priv_hex) != 64 or not all(ch in string.hexdigits for ch in priv_hex):
+            raise ValueError("invalid nsec private key material")
+        if not npub.startswith("npub"):
+            raise ValueError("could not derive npub from nsec")
+
+        commitment_payload = {
+            "wrapper_scheme": scheme,
+            "wrapper_secret_hex": priv_hex,
+            "entitlement_code": entitlement_code_value,
+            "entitlement_secret": entitlement_secret_value,
+        }
+        canonical_preimage = Acorn._canonical_json_ms02(commitment_payload)
+        wrapper_commitment = hashlib.sha256(canonical_preimage.encode("utf-8")).hexdigest()
+
+        return {
+            "status": "OK",
+            "wrapper_scheme": scheme,
+            "wrapper_ref": npub,
+            "hash_alg": normalized_hash_alg,
+            "wrapper_commitment": wrapper_commitment,
+            "commitment_payload_jcs": canonical_preimage,
         }
 
     @staticmethod
@@ -1610,11 +1734,14 @@ class Acorn:
 
     def construct_ms02_ask(
         self,
-        capability_scheme: str | None,
-        capability_ref: str,
+        wrapper_scheme: str | None,
+        wrapper_ref: str,
         price_sats: int,
         expiry: str,
-        commitment_hash: str,
+        wrapper_commitment: str,
+        fulfillment_mode: str = "provider_resolved_v1",
+        sealed_delivery_alg: str | None = None,
+        encrypted_entitlement: str | None = None,
         instrument: str = "service_entitlement",
         quantity: int = 1,
         redemption_provider: str | None = None,
@@ -1624,13 +1751,13 @@ class Acorn:
         hash_alg: str = "sha256",
         content_format: str = "yaml",
     ) -> Dict[str, Any]:
-        scheme = str(capability_scheme or "nostr_keypair_v1").strip()
+        scheme = str(wrapper_scheme or "nostr_keypair_v1").strip()
         if not scheme:
-            raise ValueError("capability_scheme is required")
+            raise ValueError("wrapper_scheme is required")
 
-        cap_ref = str(capability_ref or "").strip()
-        if not cap_ref:
-            raise ValueError("capability_ref is required")
+        wrap_ref = str(wrapper_ref or "").strip()
+        if not wrap_ref:
+            raise ValueError("wrapper_ref is required")
 
         inst = str(instrument or "").strip()
         if not inst:
@@ -1660,9 +1787,24 @@ class Acorn:
         if normalized_hash_alg != "sha256":
             raise ValueError("hash_alg must be sha256")
 
-        commitment = str(commitment_hash or "").strip().lower()
+        commitment = str(wrapper_commitment or "").strip().lower()
         if len(commitment) != 64 or not all(ch in string.hexdigits for ch in commitment):
-            raise ValueError("commitment_hash must be 64-char hex")
+            raise ValueError("wrapper_commitment must be 64-char hex")
+
+        fulfillment = str(fulfillment_mode or "").strip()
+        if fulfillment not in {"provider_resolved_v1", "buyer_decryptable_v1"}:
+            raise ValueError("fulfillment_mode must be provider_resolved_v1 or buyer_decryptable_v1")
+
+        sealed_alg = str(sealed_delivery_alg or "").strip()
+        encrypted_entitlement_value = str(encrypted_entitlement or "").strip()
+        if fulfillment == "buyer_decryptable_v1":
+            if not sealed_alg:
+                raise ValueError("sealed_delivery_alg is required for buyer_decryptable_v1")
+            if not encrypted_entitlement_value:
+                raise ValueError("encrypted_entitlement is required for buyer_decryptable_v1")
+        else:
+            sealed_alg = sealed_alg or ""
+            encrypted_entitlement_value = encrypted_entitlement_value or ""
 
         if provider_commitment:
             provider_commitment = str(provider_commitment).strip().lower()
@@ -1675,13 +1817,16 @@ class Acorn:
 
         order_details: Dict[str, Any] = {
             "instrument": inst,
-            "capability_scheme": scheme,
-            "capability_ref": cap_ref,
+            "wrapper_scheme": scheme,
+            "fulfillment_mode": fulfillment,
+            "wrapper_ref": wrap_ref,
             "quantity": qty,
             "price_sats": px,
             "expiry": expiry_utc,
             "settlement_method": settlement,
         }
+        if sealed_alg:
+            order_details["sealed_delivery_alg"] = sealed_alg
         if redemption_provider:
             order_details["redemption_provider"] = str(redemption_provider).strip()
 
@@ -1701,42 +1846,52 @@ class Acorn:
             ["px", str(px)],
             ["ord", ask_id[:16]],
             ["ms", "MS-02"],
-            ["cap_scheme", scheme],
-            ["cap_ref", cap_ref],
+            ["wrapper_scheme", scheme],
+            ["fulfillment_mode", fulfillment],
+            ["wrapper_ref", wrap_ref],
             ["hash_alg", normalized_hash_alg],
-            ["commitment_hash", commitment],
+            ["wrapper_commitment", commitment],
             ["ask_id", ask_id],
             ["expiry", expiry_utc],
             ["settlement_method", settlement],
             # Canonical JSON order_details string for deterministic machine parsing.
             ["order_details_jcs", canonical_order],
         ]
+        if sealed_alg:
+            tags.append(["sealed_delivery_alg", sealed_alg])
         if redemption_provider:
             tags.append(["redemption_provider", str(redemption_provider).strip()])
         if provider_commitment:
             tags.append(["provider_commitment", provider_commitment])
+        if encrypted_entitlement_value:
+            tags.append(["encrypted_entitlement", encrypted_entitlement_value])
 
         content_lines = [
             "ASK #MS02",
             "WARNING: Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification.",
             f"instrument={inst}",
-            f"capability_scheme={scheme}",
-            f"capability_ref={cap_ref}",
+            f"wrapper_scheme={scheme}",
+            f"fulfillment_mode={fulfillment}",
+            f"wrapper_ref={wrap_ref}",
             f"quantity={qty}",
             f"price_sats={px}",
             f"expiry={expiry_utc}",
             f"settlement_method={settlement}",
             f"hash_alg={normalized_hash_alg}",
-            f"commitment_hash={commitment}",
+            f"wrapper_commitment={commitment}",
             f"ask_id={ask_id}",
         ]
+        if sealed_alg:
+            content_lines.append(f"sealed_delivery_alg={sealed_alg}")
         if redemption_provider:
             content_lines.append(f"redemption_provider={str(redemption_provider).strip()}")
         if provider_commitment:
             content_lines.append(f"provider_commitment={provider_commitment}")
-        content_lines.append("#MS02 #capability")
+        if encrypted_entitlement_value:
+            content_lines.append(f"encrypted_entitlement={encrypted_entitlement_value}")
+        content_lines.append("#MS02 #wrapper")
         plain_content = "\\n".join(content_lines)
-        display_cap_ref = self._human_display_id(cap_ref, head=14, tail=8)
+        display_wrap_ref = self._human_display_id(wrap_ref, head=14, tail=8)
         display_commitment = self._human_display_id(commitment, head=12, tail=8)
         display_ask_id = self._human_display_id(ask_id, head=12, tail=8)
 
@@ -1749,23 +1904,33 @@ class Acorn:
                 'warning: "Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification."',
                 self._render_ms02_order_details_yaml(order_details),
                 f'hash_alg: "{normalized_hash_alg}"',
-                f'capability_ref_display: "{display_cap_ref}"',
-                f'commitment_hash_display: "{display_commitment}"',
+                f'wrapper_ref_display: "{display_wrap_ref}"',
+                f'wrapper_commitment_display: "{display_commitment}"',
                 f'ask_id_display: "{display_ask_id}"',
-                '#tags: ["MS02", "capability"]',
+                '#tags: ["MS02", "wrapper"]',
             ]
         )
+        if sealed_alg:
+            yaml_content += f'\\nsealed_delivery_alg: "{sealed_alg}"'
         if redemption_provider:
             yaml_content += f'\\nredemption_provider: "{str(redemption_provider).strip()}"'
         if provider_commitment:
             yaml_content += f'\\nprovider_commitment: "{provider_commitment}"'
+        if encrypted_entitlement_value:
+            safe_cipher = encrypted_entitlement_value.replace("\\", "\\\\").replace('"', '\\"')
+            yaml_content += f'\\nencrypted_entitlement: "{safe_cipher}"'
 
         return {
             "status": "OK",
             "market": str(market or "MS-02").strip(),
             "issuer_pubkey": issuer_pubkey,
             "hash_alg": normalized_hash_alg,
-            "commitment_hash": commitment,
+            "wrapper_scheme": scheme,
+            "wrapper_ref": wrap_ref,
+            "fulfillment_mode": fulfillment,
+            "sealed_delivery_alg": sealed_alg or None,
+            "encrypted_entitlement": encrypted_entitlement_value or None,
+            "wrapper_commitment": commitment,
             "ask_id": ask_id,
             "order_details": order_details,
             "tags": tags,

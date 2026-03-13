@@ -17,6 +17,7 @@ Numbering convention:
 | `MS-02` | Hash-Committed Entitlement Market | `2.5` | Draft | [MS-02-entitlement-market.md](./MS-02-entitlement-market.md) |
 | `MS-02` | End-to-End Scenario | `1.4` | Draft | [MS-02-END-TO-END-SCENARIO.md](./MS-02-END-TO-END-SCENARIO.md) |
 | `MS-02` | Conformance Checklist | `2.5` | Draft | [MS-02-CONFORMANCE.md](./MS-02-CONFORMANCE.md) |
+| `MS-02` | Agent Implementation Checklist | `1.0` | Draft | [MS-02-AGENT-IMPLEMENTATION-CHECKLIST.md](./MS-02-AGENT-IMPLEMENTATION-CHECKLIST.md) |
 
 ## Notes
 

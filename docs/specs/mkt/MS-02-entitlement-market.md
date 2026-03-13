@@ -314,11 +314,6 @@ wrapper_commitment = sha256(
 
 - the underlying entitlement remains provider-defined and is bound behind the wrapper
 
-Legacy mapping:
-
-- previous `capability_ref` maps directly to `wrapper_ref`
-- previous `capability_secret` maps directly to `wrapper_secret`
-
 ### 5.2 Fulfillment Profile: `buyer_decryptable_v1`
 
 `buyer_decryptable_v1` is an optional fulfillment profile for direct sealed delivery.

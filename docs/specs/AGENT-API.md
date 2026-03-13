@@ -1075,21 +1075,50 @@ Constructs a deterministic MS-02 ask payload for the generic entitlement market 
 
 Request fields:
 
-- `capability_ref` (required): current implementation field name for the profile reference
+- preferred:
+  - `wrapper_ref` (required)
+  - `wrapper_scheme` (optional, default `nostr_keypair_v1`)
+  - `wrapper_commitment` (required)
+  - `fulfillment_mode` (optional, default `provider_resolved_v1`)
+  - `sealed_delivery_alg` (required when `fulfillment_mode=buyer_decryptable_v1`)
+  - `encrypted_entitlement` (required when `fulfillment_mode=buyer_decryptable_v1`)
 - `price_sats` (required)
 - `expiry` (required)
-- `commitment_hash` (required)
-- `capability_scheme` (optional, default `nostr_keypair_v1`)
 - `content_format` (optional, default `yaml`)
-
 Note:
 
-- The current endpoint retains `capability_*` field names for compatibility.
 - In `MS-02`, this helper should be interpreted as constructing an ask for the first entitlement profile, not as defining the market model itself.
 
-### `POST /agent/market/ms02/derive_capability`
+### `POST /agent/market/ms02/publish_ask`
 
-Derives the `nostr_keypair_v1` profile artifacts used by the current MS-02 implementation.
+Publishes a previously constructed MS-02 ask to Nostr.
+
+Request fields:
+
+- `content` (required): the `content`, `content_yaml`, or `content_plain` returned by `construct_ask`
+- `tags` (required): the exact `tags` array returned by `construct_ask`
+- `kind` (optional, default `1`)
+- `relays` (optional)
+
+Behavior:
+
+- publishes the ask as a Nostr event using the supplied content and tags without recomputing order data
+- defaults to kind `1` publication
+- allows a different kind to be specified explicitly
+
+Response includes:
+
+- `event_id`
+- `kind`
+- `content`
+- `tags`
+- `relays`
+- `ask_id` (extracted from the published tags when present)
+- `timestamp`
+
+### `POST /agent/market/ms02/generate_wrapper`
+
+Generates or normalizes the Nostr-native MS-02 trading wrapper profile.
 
 Request:
 
@@ -1099,20 +1128,81 @@ Request:
 }
 ```
 
-If `nsec` is omitted, the server generates a fresh one.
+Behavior:
+
+- if `nsec` is omitted, the server generates a fresh wrapper
+- if `nsec` is provided, the server returns the normalized wrapper artifacts for that key
 
 Response includes:
 
-- `nsec`
-- `capability_scheme`
-- `capability_ref`
-- `commitment_hash`
+- `wrapper_scheme`
+- `wrapper_ref`
+- `wrapper_secret_nsec`
+- `wrapper_commitment_hint`
 - `hash_alg`
+- `timestamp`
 
-Legacy naming note:
+Note:
 
-- The route name uses `derive_capability` for backward compatibility.
-- Conceptually, this is the first entitlement-profile helper for `MS-02`.
+- `wrapper_secret_nsec` is the delivery encoding of the underlying wrapper secret material
+- the returned `wrapper_commitment_hint` is the raw-secret-only hint derived from the wrapper key, not the full MS-02 wrapper commitment over entitlement material
+
+### `POST /agent/market/ms02/derive_wrapper_commitment`
+
+Derives the full MS-02 `wrapper_commitment` from:
+
+- the wrapper secret
+- `entitlement_code`
+- `entitlement_secret`
+
+Request:
+
+```json
+{
+  "wrapper_scheme": "nostr_keypair_v1",
+  "nsec": "nsec1...",
+  "entitlement_code": "PROMO-2026-ALPHA",
+  "entitlement_secret": "x9K...high-entropy-secret...",
+  "hash_alg": "sha256"
+}
+```
+
+Response includes:
+
+- `wrapper_scheme`
+- `wrapper_ref`
+- `wrapper_commitment`
+- `commitment_payload_jcs`
+- `hash_alg`
+- `timestamp`
+
+### `POST /agent/market/ms02/generate_entitlement`
+
+Generates or normalizes the provider-native entitlement material used as input to the MS-02 trading wrapper flow.
+
+Request:
+
+```json
+{
+  "entitlement_code": "OPTIONAL-CODE",
+  "entitlement_secret": "OPTIONAL-SECRET"
+}
+```
+
+Behavior:
+
+- if both values are omitted, the server returns a generated test entitlement
+- if one value is omitted, only the missing value is generated
+- if values are provided, the server returns the normalized values unchanged
+
+Response includes:
+
+- `entitlement_code`
+- `entitlement_secret`
+- `generated_test_entitlement`
+- `generated_code`
+- `generated_secret`
+- `timestamp`
 
 ### `POST /agent/market/secret_hash/derive`
 

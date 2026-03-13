@@ -120,11 +120,14 @@ class AgentMarketOrderRequest(BaseModel):
 
 
 class AgentMS02ConstructAskRequest(BaseModel):
-    capability_scheme: str = "nostr_keypair_v1"
-    capability_ref: str
+    wrapper_scheme: str = "nostr_keypair_v1"
+    wrapper_ref: str
     price_sats: int
     expiry: str
-    commitment_hash: str
+    wrapper_commitment: str
+    fulfillment_mode: str = "provider_resolved_v1"
+    sealed_delivery_alg: str | None = None
+    encrypted_entitlement: str | None = None
     instrument: str = "service_entitlement"
     quantity: int = 1
     redemption_provider: str | None = None
@@ -135,8 +138,28 @@ class AgentMS02ConstructAskRequest(BaseModel):
     content_format: str = "yaml"
 
 
-class AgentMS02DeriveCapabilityRequest(BaseModel):
+class AgentMS02PublishAskRequest(BaseModel):
+    content: str
+    tags: list[list[str]] = []
+    kind: int = 1
+    relays: list[str] | None = None
+
+
+class AgentMS02GenerateEntitlementRequest(BaseModel):
+    entitlement_code: str | None = None
+    entitlement_secret: str | None = None
+
+
+class AgentMS02GenerateWrapperRequest(BaseModel):
     nsec: str | None = None
+
+
+class AgentMS02DeriveWrapperCommitmentRequest(BaseModel):
+    wrapper_scheme: str = "nostr_keypair_v1"
+    nsec: str
+    entitlement_code: str
+    entitlement_secret: str
+    hash_alg: str = "sha256"
 
 
 class AgentDeriveTokenSecretHashRequest(BaseModel):
@@ -2772,11 +2795,14 @@ async def agent_construct_ms02_ask(
 ):
     try:
         result = acorn_obj.construct_ms02_ask(
-            capability_scheme=payload.capability_scheme,
-            capability_ref=payload.capability_ref,
+            wrapper_scheme=payload.wrapper_scheme,
+            wrapper_ref=payload.wrapper_ref,
             price_sats=payload.price_sats,
             expiry=payload.expiry,
-            commitment_hash=payload.commitment_hash,
+            wrapper_commitment=payload.wrapper_commitment,
+            fulfillment_mode=payload.fulfillment_mode,
+            sealed_delivery_alg=payload.sealed_delivery_alg,
+            encrypted_entitlement=payload.encrypted_entitlement,
             instrument=payload.instrument,
             quantity=payload.quantity,
             redemption_provider=payload.redemption_provider,
@@ -2794,21 +2820,113 @@ async def agent_construct_ms02_ask(
     return result
 
 
-@router.post("/market/ms02/derive_capability", tags=["agent"])
-async def agent_derive_ms02_capability(
-    payload: AgentMS02DeriveCapabilityRequest,
+@router.post("/market/ms02/publish_ask", tags=["agent"])
+async def agent_publish_ms02_ask(
+    payload: AgentMS02PublishAskRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    content = str(payload.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Missing content")
+
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.publish_event(
+            content=content,
+            tags=payload.tags or [],
+            kind=payload.kind,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 ask publish failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 ask publish failed: {exc}")
+
+    ask_id = None
+    for each in result.get("tags") or []:
+        if isinstance(each, list) and len(each) >= 2 and str(each[0]) == "ask_id":
+            ask_id = str(each[1])
+            break
+    result["ask_id"] = ask_id
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/generate_entitlement", tags=["agent"])
+async def agent_generate_ms02_entitlement(
+    payload: AgentMS02GenerateEntitlementRequest,
+    _acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    entitlement_code = str(payload.entitlement_code or "").strip()
+    entitlement_secret = str(payload.entitlement_secret or "").strip()
+
+    generated_code = False
+    generated_secret = False
+
+    if not entitlement_code:
+        entitlement_code = f"TEST-{datetime.utcnow().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+        generated_code = True
+
+    if not entitlement_secret:
+        entitlement_secret = secrets.token_urlsafe(24)
+        generated_secret = True
+
+    return {
+        "status": "OK",
+        "entitlement_code": entitlement_code,
+        "entitlement_secret": entitlement_secret,
+        "generated_test_entitlement": bool(generated_code or generated_secret),
+        "generated_code": generated_code,
+        "generated_secret": generated_secret,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.post("/market/ms02/generate_wrapper", tags=["agent"])
+async def agent_generate_ms02_wrapper(
+    payload: AgentMS02GenerateWrapperRequest,
     _acorn_obj: Acorn = Depends(_agent_get_acorn),
 ):
     try:
-        result = Acorn.derive_ms02_nostr_capability_from_nsec(payload.nsec)
+        result = Acorn.generate_ms02_nostr_wrapper(nsec=payload.nsec)
     except Exception as exc:
-        logger.exception("Agent MS-02 capability derivation failed")
-        raise HTTPException(status_code=400, detail=f"MS-02 capability derivation failed: {exc}")
+        logger.exception("Agent MS-02 wrapper generation failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 wrapper generation failed: {exc}")
 
     result["warning"] = (
-        "Sensitive: nsec is returned. For stronger key hygiene, "
-        "derive capability artifacts outside shared/server runtime when possible."
+        "Sensitive: wrapper_secret_nsec is returned. Treat it as the delivery encoding of wrapper_secret "
+        "and avoid logging it."
     )
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/derive_wrapper_commitment", tags=["agent"])
+async def agent_derive_ms02_wrapper_commitment(
+    payload: AgentMS02DeriveWrapperCommitmentRequest,
+    _acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        result = Acorn.derive_ms02_wrapper_commitment(
+            wrapper_scheme=payload.wrapper_scheme,
+            nsec=payload.nsec,
+            entitlement_code=payload.entitlement_code,
+            entitlement_secret=payload.entitlement_secret,
+            hash_alg=payload.hash_alg,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 wrapper commitment derivation failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 wrapper commitment derivation failed: {exc}")
+
     result["timestamp"] = int(datetime.utcnow().timestamp())
     return result
 

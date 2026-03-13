@@ -136,8 +136,11 @@ Non-interference rule:
 - `POST /agent/publish_kind1`
 - `POST /agent/delete_request`
 - `POST /agent/market/order`
-- `POST /agent/market/ms02/derive_capability`
+- `POST /agent/market/ms02/generate_entitlement`
+- `POST /agent/market/ms02/generate_wrapper`
+- `POST /agent/market/ms02/derive_wrapper_commitment`
 - `POST /agent/market/ms02/construct_ask`
+- `POST /agent/market/ms02/publish_ask`
 - `POST /agent/market/secret_hash/derive`
 - `POST /agent/market/secret_hash/verify`
 - `POST /agent/secure_dm`
@@ -235,16 +238,18 @@ Operational guardrail:
 Use the dedicated constructor before publishing an MS-02 ask:
 
 1. Prepare entitlement profile artifacts:
-   - `capability_ref`
-   - `commitment_hash`
+   - `wrapper_ref`
+   - `wrapper_commitment`
 2. Call `POST /agent/market/ms02/construct_ask` with:
-   - required: `capability_ref`, `price_sats`, `expiry`, `commitment_hash`
-   - optional: `capability_scheme` (defaults to `nostr_keypair_v1`)
+   - required: `wrapper_ref`, `price_sats`, `expiry`, `wrapper_commitment`
+   - optional: `wrapper_scheme` (defaults to `nostr_keypair_v1`)
+   - optional: `fulfillment_mode` (defaults to `provider_resolved_v1`)
+   - required for decryptable delivery: `sealed_delivery_alg`, `encrypted_entitlement`
    - optional: `content_format` (`yaml` default, `plain` supported)
 3. Use returned:
    - `content` (human-readable ask preview)
    - `tags`, `order_details_jcs`, and `ask_id` (authoritative machine data)
-4. Publish ask with `POST /agent/market/order` using `market=MS-02` and returned `content`.
+4. Publish the constructed ask with `POST /agent/market/ms02/publish_ask` using the returned `content` and exact `tags`.
 
 Human-readability vs authority:
 
@@ -259,46 +264,99 @@ curl -sS -X POST \
   -H "X-Access-Key: ${SELLER_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
-    "capability_ref":"npub1...",
+    "wrapper_ref":"npub1...",
     "price_sats":21,
     "expiry":"2026-03-31T23:59:59Z",
-    "commitment_hash":"7f3a9c2d41b8d4479c31c6f3a4b7a1e1d0f9d8c7b6a5e4d3c2b1a09182736455"
+    "wrapper_commitment":"7f3a9c2d41b8d4479c31c6f3a4b7a1e1d0f9d8c7b6a5e4d3c2b1a09182736455"
   }' \
   "${BASE_URL}/agent/market/ms02/construct_ask"
 ```
 
-### 3b) MS-02 `nostr_keypair_v1` Entitlement Helper
+Publish example:
+
+```bash
+curl -sS -X POST \
+  -H "X-Access-Key: ${SELLER_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content":"ASK #MS02 ...",
+    "tags":[["mkt","MS-02"],["side","ask"]],
+    "kind":1
+  }' \
+  "${BASE_URL}/agent/market/ms02/publish_ask"
+```
+
+### 3b) MS-02 Entitlement Generator
 
 Agent API helper endpoint:
 
-- `POST /agent/market/ms02/derive_capability`
-- Body: optional `{ "nsec": "nsec1..." }`
-- If `nsec` is omitted, a fresh capability `nsec` is generated and returned.
+- `POST /agent/market/ms02/generate_entitlement`
 
-Legacy naming note:
+Purpose:
 
-- the endpoint name uses `derive_capability` for backward compatibility
-- in `MS-02`, this helper should be understood as deriving the first entitlement-profile credential for `nostr_keypair_v1`
+- generate provider-native entitlement inputs for the MS-02 wrapper flow
+- normalize explicitly provided entitlement inputs without changing them
 
-Local helper method (equivalent behavior):
+Behavior:
 
-- `Acorn.derive_ms02_nostr_capability_from_nsec(nsec=None)`
+- if no values are passed, returns a generated test entitlement
+- if one value is missing, generates only the missing value
+- if both values are passed, returns the normalized values
 
 Returns:
 
-- `nsec` (the supplied or newly generated capability secret)
-- `capability_scheme=nostr_keypair_v1`
-- `capability_ref=<derived npub>`
-- `commitment_hash=<sha256(raw_private_key_bytes)>`
-- `hash_alg=sha256`
+- `entitlement_code`
+- `entitlement_secret`
+- generation flags indicating whether test/default values were created
 
-Security guidance:
+### 3c) MS-02 Wrapper Generator
 
-- For stronger key hygiene, derive capability artifacts outside shared/server runtime.
-- Prefer sending only `capability_ref` and `commitment_hash` to remote systems.
-- If using `/agent/market/ms02/derive_capability`, treat returned `nsec` as highly sensitive and avoid logging it.
+Agent API helper endpoint:
 
-### 3c) Market Secret Hash Helpers
+- `POST /agent/market/ms02/generate_wrapper`
+
+Purpose:
+
+- generate a fresh Nostr-native trading wrapper for MS-02
+- or normalize an explicitly supplied `nsec`
+
+Returns:
+
+- `wrapper_scheme=nostr_keypair_v1`
+- `wrapper_ref`
+- `wrapper_secret_nsec`
+- `wrapper_commitment_hint`
+
+Usage note:
+
+- `wrapper_secret_nsec` is sensitive and should not be logged
+- `wrapper_commitment_hint` is not the full MS-02 wrapper commitment over entitlement data; it is only a wrapper-key-derived hint
+
+### 3d) MS-02 Wrapper Commitment Derivation
+
+Agent API helper endpoint:
+
+- `POST /agent/market/ms02/derive_wrapper_commitment`
+
+Purpose:
+
+- derive the full MS-02 `wrapper_commitment` from:
+  - wrapper secret
+  - `entitlement_code`
+  - `entitlement_secret`
+
+Returns:
+
+- `wrapper_ref`
+- `wrapper_commitment`
+- canonical commitment payload JSON (`commitment_payload_jcs`)
+
+Implementation rule:
+
+- this is the authoritative helper for the current MS-02 wrapper-commitment convention
+- it binds raw wrapper secret material, not just the delivered `nsec` string
+
+### 3f) Market Secret Hash Helpers
 
 Use these helpers when an agent needs deterministic secret-hash derivation or verification without reimplementing the market hashing convention incorrectly.
 

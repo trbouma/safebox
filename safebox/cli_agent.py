@@ -747,6 +747,199 @@ def market_secret_hash_derive(
     _print_json(data)
 
 
+@cli.command("market-ms02-generate-entitlement")
+@click.option("--entitlement-code", default=None, help="Optional entitlement code override.")
+@click.option("--entitlement-secret", default=None, help="Optional entitlement secret override.")
+@click.pass_context
+def market_ms02_generate_entitlement(
+    ctx: click.Context,
+    entitlement_code: Optional[str],
+    entitlement_secret: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {}
+    if entitlement_code is not None:
+        payload["entitlement_code"] = entitlement_code
+    if entitlement_secret is not None:
+        payload["entitlement_secret"] = entitlement_secret
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/generate_entitlement",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-generate-wrapper")
+@click.option("--nsec", default=None, help="Optional existing nsec; if omitted, a fresh wrapper is generated.")
+@click.pass_context
+def market_ms02_generate_wrapper(ctx: click.Context, nsec: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {}
+    if nsec is not None:
+        payload["nsec"] = nsec
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/generate_wrapper",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-derive-wrapper-commitment")
+@click.option("--nsec", required=True, help="Wrapper secret delivery encoding.")
+@click.option("--entitlement-code", required=True, help="Provider-native entitlement code.")
+@click.option("--entitlement-secret", required=True, help="Provider-native entitlement secret.")
+@click.option("--wrapper-scheme", default="nostr_keypair_v1", show_default=True)
+@click.option("--hash-alg", default="sha256", show_default=True)
+@click.pass_context
+def market_ms02_derive_wrapper_commitment(
+    ctx: click.Context,
+    nsec: str,
+    entitlement_code: str,
+    entitlement_secret: str,
+    wrapper_scheme: str,
+    hash_alg: str,
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "nsec": nsec,
+        "entitlement_code": entitlement_code,
+        "entitlement_secret": entitlement_secret,
+        "wrapper_scheme": wrapper_scheme,
+        "hash_alg": hash_alg,
+    }
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/derive_wrapper_commitment",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-construct-ask")
+@click.option("--wrapper-ref", default=None, help="Preferred MS-02 wrapper reference.")
+@click.option("--wrapper-scheme", default="nostr_keypair_v1", show_default=True)
+@click.option("--wrapper-commitment", default=None, help="Preferred MS-02 wrapper commitment.")
+@click.option("--fulfillment-mode", default="provider_resolved_v1", show_default=True)
+@click.option("--sealed-delivery-alg", default=None)
+@click.option("--encrypted-entitlement", default=None)
+@click.option("--price-sats", required=True, type=int)
+@click.option("--expiry", required=True, help="ISO-8601 UTC timestamp.")
+@click.option("--instrument", default="service_entitlement", show_default=True)
+@click.option("--quantity", default=1, type=int, show_default=True)
+@click.option("--redemption-provider", default=None)
+@click.option("--provider-commitment", default=None)
+@click.option("--settlement-method", default="nip57_zap_v1", show_default=True)
+@click.option("--market", default="MS-02", show_default=True)
+@click.option("--hash-alg", default="sha256", show_default=True)
+@click.option("--content-format", default="yaml", show_default=True)
+@click.pass_context
+def market_ms02_construct_ask(
+    ctx: click.Context,
+    wrapper_ref: Optional[str],
+    wrapper_scheme: str,
+    wrapper_commitment: Optional[str],
+    fulfillment_mode: str,
+    sealed_delivery_alg: Optional[str],
+    encrypted_entitlement: Optional[str],
+    price_sats: int,
+    expiry: str,
+    instrument: str,
+    quantity: int,
+    redemption_provider: Optional[str],
+    provider_commitment: Optional[str],
+    settlement_method: str,
+    market: str,
+    hash_alg: str,
+    content_format: str,
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "wrapper_scheme": wrapper_scheme,
+        "price_sats": price_sats,
+        "expiry": expiry,
+        "fulfillment_mode": fulfillment_mode,
+        "instrument": instrument,
+        "quantity": quantity,
+        "settlement_method": settlement_method,
+        "market": market,
+        "hash_alg": hash_alg,
+        "content_format": content_format,
+    }
+    if wrapper_ref is not None:
+        payload["wrapper_ref"] = wrapper_ref
+    if wrapper_commitment is not None:
+        payload["wrapper_commitment"] = wrapper_commitment
+    if sealed_delivery_alg is not None:
+        payload["sealed_delivery_alg"] = sealed_delivery_alg
+    if encrypted_entitlement is not None:
+        payload["encrypted_entitlement"] = encrypted_entitlement
+    if redemption_provider is not None:
+        payload["redemption_provider"] = redemption_provider
+    if provider_commitment is not None:
+        payload["provider_commitment"] = provider_commitment
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/construct_ask",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-publish-ask")
+@click.option("--content", required=True, help="Constructed ask content to publish.")
+@click.option("--tags-json", required=True, help="JSON array of tag arrays from construct_ask output.")
+@click.option("--kind", default=1, type=int, show_default=True, help="Nostr event kind for the ask publish.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_publish_ask(
+    ctx: click.Context,
+    content: str,
+    tags_json: str,
+    kind: int,
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    try:
+        parsed_tags = json.loads(tags_json)
+    except Exception as exc:
+        raise click.ClickException(f"--tags-json must be valid JSON: {exc}") from exc
+    if not isinstance(parsed_tags, list):
+        raise click.ClickException("--tags-json must be a JSON array of tag arrays")
+
+    payload: Dict[str, Any] = {
+        "content": content,
+        "tags": parsed_tags,
+        "kind": kind,
+    }
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/publish_ask",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
 @cli.command("market-secret-hash-verify")
 @click.option("--expected-hash", required=True, help="Expected full hash (hex).")
 @click.option("--spec-id", default="MS01", show_default=True)
