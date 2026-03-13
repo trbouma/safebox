@@ -963,6 +963,12 @@ class Acorn:
                     parsed_record['sender'] = each.pub_key
                     parsed_record['timestamp'] = int(each.created_at.timestamp())
 
+            # Normalize structured direct messages that are valid JSON but are not
+            # wrapped in the older {"payload": ...} record envelope.
+            if isinstance(parsed_record, dict) and "payload" not in parsed_record:
+                payload_copy = dict(parsed_record)
+                parsed_record["payload"] = payload_copy
+
             # Convert payload to json
             # See if payload is in stringifed json and convert
                     
@@ -987,14 +993,17 @@ class Acorn:
             else:
                 
                 #Inspect Payload and decide what to show
-                # print(f"get parsed record payload: {type(parsed_record['payload'])} {parsed_record['payload']}")
-                if isinstance(parsed_record["payload"], dict):
-                    # private event so just show context
-                    parsed_record["content"] = parsed_record["payload"]["content"]
-                    
+                payload_value = parsed_record.get("payload")
+                if isinstance(payload_value, dict):
+                    if "content" in payload_value:
+                        parsed_record["content"] = payload_value["content"]
+                    elif "type" in payload_value:
+                        parsed_record["content"] = str(payload_value.get("type") or "structured_dm")
+                    else:
+                        parsed_record["content"] = self._canonical_json_ms02(payload_value)
                 else:
                     # string so just show string
-                    parsed_record["content"] = parsed_record["payload"]
+                    parsed_record["content"] = payload_value
                     
 
                 
@@ -1699,6 +1708,197 @@ class Acorn:
         # and compact separators provide deterministic cross-runtime output.
         return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
+    def encrypt_ms02_entitlement_nip44(
+        self,
+        wrapper_ref: str,
+        entitlement_code: str,
+        entitlement_secret: str,
+    ) -> Dict[str, Any]:
+        wrap_ref = str(wrapper_ref or "").strip()
+        if not wrap_ref:
+            raise ValueError("wrapper_ref is required")
+
+        entitlement_code_value = str(entitlement_code or "").strip()
+        entitlement_secret_value = str(entitlement_secret or "").strip()
+        if not entitlement_code_value:
+            raise ValueError("entitlement_code is required")
+        if not entitlement_secret_value:
+            raise ValueError("entitlement_secret is required")
+
+        try:
+            if wrap_ref.startswith("npub"):
+                receiver_pubhex = Keys(pub_k=wrap_ref).public_key_hex()
+            else:
+                receiver_pubhex = wrap_ref
+        except Exception as exc:
+            raise ValueError("invalid wrapper_ref") from exc
+
+        receiver_pubhex = str(receiver_pubhex or "").strip().lower()
+        if len(receiver_pubhex) != 64 or not all(ch in string.hexdigits for ch in receiver_pubhex):
+            raise ValueError("wrapper_ref must be npub or 64-char hex pubkey")
+
+        plaintext_payload = {
+            "entitlement_code": entitlement_code_value,
+            "entitlement_secret": entitlement_secret_value,
+        }
+        plaintext_jcs = self._canonical_json_ms02(plaintext_payload)
+
+        my_enc = NIP44Encrypt(self.k)
+        encrypted_entitlement = my_enc.encrypt(plaintext_jcs, to_pub_k=receiver_pubhex)
+
+        return {
+            "status": "OK",
+            "wrapper_ref": wrap_ref,
+            "sealed_delivery_alg": "nip44_v2",
+            "encrypted_entitlement": encrypted_entitlement,
+            "plaintext_payload_jcs": plaintext_jcs,
+            "sender_pubkey": str(self.pubkey_hex or "").strip().lower(),
+        }
+
+    async def decrypt_ms02_entitlement_nip44(
+        self,
+        wrapper_secret_nsec: str,
+        encrypted_entitlement: str | None = None,
+        ask_event_id: str | None = None,
+        event: Dict[str, Any] | None = None,
+        sender_pubkey: str | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        wrapper_secret_value = str(wrapper_secret_nsec or "").strip()
+        if not wrapper_secret_value:
+            raise ValueError("wrapper_secret_nsec is required")
+
+        # Accept either the raw nsec or the structured delivery payload JSON that
+        # contains wrapper_secret_nsec.
+        if not wrapper_secret_value.startswith("nsec"):
+            try:
+                maybe_delivery = json.loads(wrapper_secret_value)
+            except Exception:
+                maybe_delivery = None
+            if isinstance(maybe_delivery, dict):
+                extracted_nsec = str(maybe_delivery.get("wrapper_secret_nsec") or "").strip()
+                if extracted_nsec:
+                    wrapper_secret_value = extracted_nsec
+
+        parsed_ask: Dict[str, Any] | None = None
+        encrypted_value = str(encrypted_entitlement or "").strip()
+        if event is not None:
+            parsed_ask = self.parse_ms02_ask_event_dict(event)
+        elif ask_event_id:
+            fetched = await self.get_event_by_id(event_id=ask_event_id, relays=relays)
+            if not fetched:
+                raise ValueError("ask event not found")
+            parsed_ask = self.parse_ms02_ask_event_dict(fetched)
+
+        if parsed_ask is not None:
+            encrypted_from_ask = str(parsed_ask.get("encrypted_entitlement") or "").strip()
+            if not encrypted_value:
+                encrypted_value = encrypted_from_ask
+            fulfillment_mode = str(parsed_ask.get("fulfillment_mode") or "").strip()
+            if fulfillment_mode and fulfillment_mode != "buyer_decryptable_v1":
+                raise ValueError("ask fulfillment_mode is not buyer_decryptable_v1")
+            sealed_alg = str(parsed_ask.get("sealed_delivery_alg") or "").strip()
+            if sealed_alg and sealed_alg != "nip44_v2":
+                raise ValueError("ask sealed_delivery_alg is not nip44_v2")
+
+        if not encrypted_value:
+            raise ValueError("encrypted_entitlement is required")
+
+        derived_wrapper = self.derive_ms02_nostr_wrapper_from_nsec(wrapper_secret_value)
+
+        sender_pubhex = str(sender_pubkey or "").strip().lower()
+        if parsed_ask is not None and not sender_pubhex:
+            sender_pubhex = str(parsed_ask.get("pubkey") or "").strip().lower()
+        if sender_pubhex.startswith("npub"):
+            sender_pubhex = bech32_to_hex(sender_pubhex).lower()
+        if len(sender_pubhex) != 64 or not all(ch in string.hexdigits for ch in sender_pubhex):
+            raise ValueError("sender_pubkey is required to decrypt NIP-44 payload")
+
+        wrapper_key = Keys(priv_k=wrapper_secret_value)
+        decryptor = NIP44Encrypt(wrapper_key)
+        plaintext_jcs = decryptor.decrypt(encrypted_value, for_pub_k=sender_pubhex)
+
+        try:
+            decrypted_entitlement = json.loads(plaintext_jcs)
+        except Exception as exc:
+            raise ValueError("decrypted entitlement payload is not valid JSON") from exc
+        if not isinstance(decrypted_entitlement, dict):
+            raise ValueError("decrypted entitlement payload must decode to an object")
+
+        return {
+            "status": "OK",
+            "wrapper_ref": derived_wrapper["wrapper_ref"],
+            "sender_pubkey": sender_pubhex,
+            "sealed_delivery_alg": "nip44_v2",
+            "plaintext_payload_jcs": plaintext_jcs,
+            "decrypted_entitlement": decrypted_entitlement,
+            "ask_event_id": str(parsed_ask.get("event_id") or ask_event_id or "").strip() or None,
+            "ask_id": str(parsed_ask.get("ask_id") or "").strip() or None,
+        }
+
+    async def validate_ms02_buyer_delivery(
+        self,
+        wrapper_secret_nsec: str,
+        ask_event_id: str | None = None,
+        event: Dict[str, Any] | None = None,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        if event is None and not str(ask_event_id or "").strip():
+            raise ValueError("ask_event_id or event is required")
+
+        parsed_ask = self.parse_ms02_ask_event_dict(event) if event is not None else None
+        if parsed_ask is None:
+            fetched = await self.get_event_by_id(event_id=str(ask_event_id), relays=relays)
+            if not fetched:
+                raise ValueError("ask event not found")
+            parsed_ask = self.parse_ms02_ask_event_dict(fetched)
+
+        decrypt_result = await self.decrypt_ms02_entitlement_nip44(
+            wrapper_secret_nsec=wrapper_secret_nsec,
+            encrypted_entitlement=str(parsed_ask.get("encrypted_entitlement") or "").strip() or None,
+            event=parsed_ask,
+            relays=relays,
+        )
+
+        decrypted_entitlement = decrypt_result.get("decrypted_entitlement") or {}
+        entitlement_code = str(decrypted_entitlement.get("entitlement_code") or "").strip()
+        entitlement_secret = str(decrypted_entitlement.get("entitlement_secret") or "").strip()
+        if not entitlement_code or not entitlement_secret:
+            raise ValueError("decrypted entitlement is missing entitlement_code or entitlement_secret")
+
+        derived_commitment = self.derive_ms02_wrapper_commitment(
+            wrapper_scheme=str(parsed_ask.get("wrapper_scheme") or "nostr_keypair_v1"),
+            nsec=wrapper_secret_nsec,
+            entitlement_code=entitlement_code,
+            entitlement_secret=entitlement_secret,
+            hash_alg="sha256",
+        )
+        expected_wrapper_ref = str(parsed_ask.get("wrapper_ref") or "").strip()
+        derived_wrapper_ref = str(derived_commitment.get("wrapper_ref") or "").strip()
+        expected_commitment = str(parsed_ask.get("wrapper_commitment") or "").strip().lower()
+        derived_wrapper_commitment = str(derived_commitment.get("wrapper_commitment") or "").strip().lower()
+
+        wrapper_ref_matches = bool(expected_wrapper_ref and derived_wrapper_ref == expected_wrapper_ref)
+        wrapper_commitment_matches = bool(
+            expected_commitment and derived_wrapper_commitment == expected_commitment
+        )
+
+        return {
+            "status": "OK",
+            "ask_event_id": parsed_ask.get("event_id"),
+            "ask_id": parsed_ask.get("ask_id"),
+            "wrapper_ref": expected_wrapper_ref,
+            "derived_wrapper_ref": derived_wrapper_ref,
+            "wrapper_ref_matches": wrapper_ref_matches,
+            "expected_wrapper_commitment": expected_commitment,
+            "derived_wrapper_commitment": derived_wrapper_commitment,
+            "wrapper_commitment_matches": wrapper_commitment_matches,
+            "sealed_delivery_alg": parsed_ask.get("sealed_delivery_alg"),
+            "fulfillment_mode": parsed_ask.get("fulfillment_mode"),
+            "decrypted_entitlement": decrypted_entitlement,
+            "validated": bool(wrapper_ref_matches and wrapper_commitment_matches),
+        }
+
     @staticmethod
     def _parse_iso8601_utc(expiry: str) -> datetime:
         expiry_value = str(expiry or "").strip()
@@ -1715,15 +1915,33 @@ class Acorn:
         return parsed.astimezone(timezone.utc)
 
     @staticmethod
+    def _render_yaml_display_scalar(value: Any) -> str:
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (int, float)):
+            return str(value)
+
+        text = str(value or "")
+        if not text:
+            return '""'
+
+        safe_plain = all(
+            ch.isalnum() or ch in "-._:/#@+ "
+            for ch in text
+        )
+        reserved = text.strip() != text or ": " in text or text.startswith(("-", "?", "@", "!", "&", "*", "#", "{", "}", "[", "]", ",", "|", ">", "%", "`", '"', "'"))
+        if safe_plain and not reserved:
+            return text
+
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+
+    @staticmethod
     def _render_ms02_order_details_yaml(order_details: Dict[str, Any]) -> str:
         lines = ["order_details:"]
         for key, value in order_details.items():
-            if isinstance(value, str):
-                safe_value = value.replace("\\", "\\\\").replace('"', '\\"')
-                lines.append(f'  {key}: "{safe_value}"')
-            else:
-                lines.append(f"  {key}: {value}")
-        return "\\n".join(lines)
+            lines.append(f"  {key}: {Acorn._render_yaml_display_scalar(value)}")
+        return "\n".join(lines)
 
     @staticmethod
     def _human_display_id(value: str, head: int = 12, tail: int = 8) -> str:
@@ -1866,59 +2084,72 @@ class Acorn:
         if encrypted_entitlement_value:
             tags.append(["encrypted_entitlement", encrypted_entitlement_value])
 
-        content_lines = [
-            "ASK #MS02",
-            "WARNING: Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification.",
-            f"instrument={inst}",
-            f"wrapper_scheme={scheme}",
-            f"fulfillment_mode={fulfillment}",
-            f"wrapper_ref={wrap_ref}",
-            f"quantity={qty}",
-            f"price_sats={px}",
-            f"expiry={expiry_utc}",
-            f"settlement_method={settlement}",
-            f"hash_alg={normalized_hash_alg}",
-            f"wrapper_commitment={commitment}",
-            f"ask_id={ask_id}",
-        ]
-        if sealed_alg:
-            content_lines.append(f"sealed_delivery_alg={sealed_alg}")
-        if redemption_provider:
-            content_lines.append(f"redemption_provider={str(redemption_provider).strip()}")
-        if provider_commitment:
-            content_lines.append(f"provider_commitment={provider_commitment}")
-        if encrypted_entitlement_value:
-            content_lines.append(f"encrypted_entitlement={encrypted_entitlement_value}")
-        content_lines.append("#MS02 #wrapper")
-        plain_content = "\\n".join(content_lines)
         display_wrap_ref = self._human_display_id(wrap_ref, head=14, tail=8)
         display_commitment = self._human_display_id(commitment, head=12, tail=8)
         display_ask_id = self._human_display_id(ask_id, head=12, tail=8)
 
+        content_lines = [
+            "MS-02 Ask",
+            "",
+            f"Offering: {inst}",
+            f"Price: {px} sats",
+            f"Quantity: {qty}",
+            f"Fulfillment: {fulfillment}",
+            f"Settlement: {settlement}",
+            f"Expires: {expiry_utc}",
+            "",
+            f"Wrapper: {display_wrap_ref}",
+            f"Commitment: {display_commitment}",
+            f"Ask ID: {display_ask_id}",
+        ]
+        if sealed_alg:
+            content_lines.append(f"Sealed delivery: {sealed_alg}")
+        if redemption_provider:
+            content_lines.append(f"Redemption provider: {str(redemption_provider).strip()}")
+        if provider_commitment:
+            content_lines.append(f"Provider commitment: {self._human_display_id(provider_commitment, head=12, tail=8)}")
+        if encrypted_entitlement_value:
+            content_lines.append("Encrypted entitlement: included")
+        content_lines.extend([
+            "",
+            "Machine verification:",
+            "Use tags and order_details_jcs for authoritative parsing.",
+            "#MS02 #wrapper",
+        ])
+        plain_content = "\n".join(content_lines)
+
         content_mode = str(content_format or "yaml").strip().lower()
         if content_mode not in {"yaml", "plain"}:
             raise ValueError("content_format must be yaml or plain")
-        yaml_content = "\\n".join(
+        yaml_content = "\n".join(
             [
-                "ASK #MS02",
-                'warning: "Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification."',
-                self._render_ms02_order_details_yaml(order_details),
-                f'hash_alg: "{normalized_hash_alg}"',
-                f'wrapper_ref_display: "{display_wrap_ref}"',
-                f'wrapper_commitment_display: "{display_commitment}"',
-                f'ask_id_display: "{display_ask_id}"',
-                '#tags: ["MS02", "wrapper"]',
+                "MS-02 Ask",
+                "warning: Human-readable preview only. Use tags/order_details_jcs for authoritative machine parsing and verification.",
+                'summary:',
+                f"  offering: {self._render_yaml_display_scalar(inst)}",
+                f'  price_sats: {px}',
+                f'  quantity: {qty}',
+                f"  fulfillment: {self._render_yaml_display_scalar(fulfillment)}",
+                f"  settlement: {self._render_yaml_display_scalar(settlement)}",
+                f"  expiry: {self._render_yaml_display_scalar(expiry_utc)}",
+                'identifiers:',
+                f"  wrapper: {self._render_yaml_display_scalar(display_wrap_ref)}",
+                f"  commitment: {self._render_yaml_display_scalar(display_commitment)}",
+                f"  ask_id: {self._render_yaml_display_scalar(display_ask_id)}",
+                'verification:',
+                f"  hash_alg: {self._render_yaml_display_scalar(normalized_hash_alg)}",
+                "  note: Use tags and order_details_jcs for authoritative parsing.",
+                "#tags: MS02, wrapper",
             ]
         )
         if sealed_alg:
-            yaml_content += f'\\nsealed_delivery_alg: "{sealed_alg}"'
+            yaml_content += f"\nsealed_delivery_alg: {self._render_yaml_display_scalar(sealed_alg)}"
         if redemption_provider:
-            yaml_content += f'\\nredemption_provider: "{str(redemption_provider).strip()}"'
+            yaml_content += f"\nredemption_provider: {self._render_yaml_display_scalar(str(redemption_provider).strip())}"
         if provider_commitment:
-            yaml_content += f'\\nprovider_commitment: "{provider_commitment}"'
+            yaml_content += f"\nprovider_commitment_display: {self._render_yaml_display_scalar(self._human_display_id(provider_commitment, head=12, tail=8))}"
         if encrypted_entitlement_value:
-            safe_cipher = encrypted_entitlement_value.replace("\\", "\\\\").replace('"', '\\"')
-            yaml_content += f'\\nencrypted_entitlement: "{safe_cipher}"'
+            yaml_content += "\nencrypted_entitlement: included"
 
         return {
             "status": "OK",
@@ -7898,6 +8129,347 @@ class Acorn:
             )
 
         return out
+
+    @staticmethod
+    def parse_ms02_ask_event_dict(event_data: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(event_data, dict):
+            raise ValueError("event must be an object")
+
+        event_id = str(event_data.get("id") or event_data.get("event_id") or "").strip().lower() or None
+        pubkey = str(event_data.get("pubkey") or event_data.get("pub_key") or "").strip().lower() or None
+        content = str(event_data.get("content") or "")
+        kind = int(event_data.get("kind") or 1)
+        created_at_raw = event_data.get("created_at")
+        if isinstance(created_at_raw, dict) and "secs" in created_at_raw:
+            created_at_raw = created_at_raw.get("secs")
+        created_at = int(created_at_raw) if created_at_raw is not None else None
+
+        raw_tags = event_data.get("tags") or []
+        if not isinstance(raw_tags, list):
+            raise ValueError("event.tags must be an array")
+        tags: List[List[str]] = []
+        for each in raw_tags:
+            if isinstance(each, list):
+                tags.append([str(x) for x in each if x is not None])
+
+        def _first_tag_value(key: str) -> str | None:
+            for each in tags:
+                if each and each[0] == key and len(each) > 1:
+                    return str(each[1])
+            return None
+
+        order_details_jcs = _first_tag_value("order_details_jcs")
+        order_details: Dict[str, Any] | None = None
+        if order_details_jcs:
+            try:
+                parsed = json.loads(order_details_jcs)
+            except Exception as exc:
+                raise ValueError("invalid order_details_jcs") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError("order_details_jcs must decode to an object")
+            order_details = parsed
+
+        market = _first_tag_value("mkt")
+        side = _first_tag_value("side")
+        wrapper_scheme = _first_tag_value("wrapper_scheme")
+        wrapper_ref = _first_tag_value("wrapper_ref")
+        fulfillment_mode = _first_tag_value("fulfillment_mode")
+        wrapper_commitment = _first_tag_value("wrapper_commitment")
+        ask_id = _first_tag_value("ask_id")
+        expiry = _first_tag_value("expiry")
+        settlement_method = _first_tag_value("settlement_method")
+        sealed_delivery_alg = _first_tag_value("sealed_delivery_alg")
+        redemption_provider = _first_tag_value("redemption_provider")
+        encrypted_entitlement = _first_tag_value("encrypted_entitlement")
+
+        if market != "MS-02":
+            raise ValueError("event is not an MS-02 market event")
+        if side != "ask":
+            raise ValueError("event is not an MS-02 ask")
+        if not wrapper_ref or not wrapper_commitment or not ask_id:
+            raise ValueError("event is missing required MS-02 ask tags")
+
+        if order_details:
+            if str(order_details.get("wrapper_ref") or "") != wrapper_ref:
+                raise ValueError("wrapper_ref mismatch between tags and order_details_jcs")
+            if wrapper_scheme and str(order_details.get("wrapper_scheme") or "") and str(order_details.get("wrapper_scheme")) != wrapper_scheme:
+                raise ValueError("wrapper_scheme mismatch between tags and order_details_jcs")
+            if fulfillment_mode and str(order_details.get("fulfillment_mode") or "") and str(order_details.get("fulfillment_mode")) != fulfillment_mode:
+                raise ValueError("fulfillment_mode mismatch between tags and order_details_jcs")
+            if expiry and str(order_details.get("expiry") or "") and str(order_details.get("expiry")) != expiry:
+                raise ValueError("expiry mismatch between tags and order_details_jcs")
+            if settlement_method and str(order_details.get("settlement_method") or "") and str(order_details.get("settlement_method")) != settlement_method:
+                raise ValueError("settlement_method mismatch between tags and order_details_jcs")
+
+        return {
+            "status": "OK",
+            "event_id": event_id,
+            "pubkey": pubkey,
+            "created_at": created_at,
+            "kind": kind,
+            "market": market,
+            "side": side,
+            "content": content,
+            "tags": tags,
+            "order_details_jcs": order_details_jcs,
+            "order_details": order_details,
+            "wrapper_scheme": wrapper_scheme,
+            "wrapper_ref": wrapper_ref,
+            "fulfillment_mode": fulfillment_mode,
+            "wrapper_commitment": wrapper_commitment,
+            "ask_id": ask_id,
+            "expiry": expiry,
+            "settlement_method": settlement_method,
+            "sealed_delivery_alg": sealed_delivery_alg,
+            "redemption_provider": redemption_provider,
+            "encrypted_entitlement": encrypted_entitlement,
+        }
+
+    async def get_ms02_asks(
+        self,
+        limit: int = 50,
+        kind: int = 1,
+        relays: List[str] | None = None,
+        author_pubkey: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        limit_value = max(1, min(int(limit), 200))
+        kind_value = int(kind)
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        query_limit = min(max(limit_value * 5, 100), 500)
+        query_filter: Dict[str, Any] = {
+            "limit": query_limit,
+            "kinds": [kind_value],
+        }
+
+        author_value = str(author_pubkey or "").strip()
+        if author_value:
+            if author_value.startswith("npub"):
+                author_value = Keys(pub_k=author_value).public_key_hex()
+            author_value = author_value.lower()
+            if len(author_value) != 64 or not all(ch in string.hexdigits for ch in author_value):
+                raise ValueError("author_pubkey must be npub or 64-char hex")
+            query_filter["authors"] = [author_value]
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query([query_filter])
+
+        parsed: List[Dict[str, Any]] = []
+        for each_event in events or []:
+            event_dict = {
+                "id": str(each_event.id),
+                "pubkey": str(each_event.pub_key),
+                "created_at": int(each_event.created_at.timestamp()),
+                "kind": int(each_event.kind),
+                "content": str(each_event.content),
+                "tags": list(each_event.tags or []),
+            }
+            try:
+                parsed_event = self.parse_ms02_ask_event_dict(event_dict)
+                parsed.append(parsed_event)
+            except Exception:
+                continue
+
+        return sorted(
+            parsed,
+            key=lambda each: int(each.get("created_at") or 0),
+            reverse=True,
+        )[:limit_value]
+
+    async def get_event_by_id(
+        self,
+        event_id: str,
+        relays: List[str] | None = None,
+    ) -> Dict[str, Any] | None:
+        target_event_id = str(event_id or "").strip()
+        if not target_event_id:
+            raise ValueError("event_id is required")
+        if target_event_id.startswith("note"):
+            target_event_id = bech32_to_hex(target_event_id)
+        target_event_id = target_event_id.lower()
+        if len(target_event_id) != 64 or not all(ch in string.hexdigits for ch in target_event_id):
+            raise ValueError("Invalid event_id")
+
+        relay_pool = relays if relays else self._build_discovery_relays()
+        if not relay_pool:
+            raise ValueError("No relays available for query")
+
+        async with ClientPool(relay_pool) as c:
+            events: List[Event] = await c.query([{"limit": 1, "ids": [target_event_id]}])
+
+        if not events:
+            return None
+
+        event = events[0]
+        return {
+            "id": str(event.id),
+            "event_id": str(event.id),
+            "pubkey": str(event.pub_key),
+            "created_at": int(event.created_at.timestamp()),
+            "kind": int(event.kind),
+            "content": str(event.content),
+            "tags": list(event.tags or []),
+        }
+
+    async def clear_ms02_order(
+        self,
+        ask_event_id: str,
+        relays: List[str] | None = None,
+        strict: bool = True,
+    ) -> Dict[str, Any]:
+        ask_event = await self.get_event_by_id(event_id=ask_event_id, relays=relays)
+        if not ask_event:
+            raise ValueError("ask event not found")
+
+        parsed_ask = self.parse_ms02_ask_event_dict(ask_event)
+        order_details = parsed_ask.get("order_details") or {}
+        price_sats = int(order_details.get("price_sats") or 0)
+        expiry = str(parsed_ask.get("expiry") or "")
+        if price_sats <= 0:
+            raise ValueError("invalid ask price_sats")
+
+        now_utc = datetime.now(timezone.utc)
+        expiry_dt = self._parse_iso8601_utc(expiry)
+        receipts = await self.get_zap_receipts_for_event(
+            event_id=ask_event_id,
+            limit=200,
+            relays=relays,
+            strict=bool(strict),
+        )
+
+        buyer_totals: Dict[str, Dict[str, Any]] = {}
+        threshold_hits: List[Dict[str, Any]] = []
+
+        for receipt in sorted(receipts, key=lambda each: int(each.get("created_at") or 0)):
+            buyer_pubkey = str(receipt.get("zapper_pubkey") or "").strip().lower()
+            amount_msat = receipt.get("zap_amount_msat")
+            created_at = int(receipt.get("created_at") or 0)
+
+            if not buyer_pubkey or len(buyer_pubkey) != 64 or not all(ch in string.hexdigits for ch in buyer_pubkey):
+                continue
+            try:
+                amount_msat_int = int(amount_msat)
+            except Exception:
+                continue
+            if amount_msat_int <= 0:
+                continue
+
+            buyer_entry = buyer_totals.setdefault(
+                buyer_pubkey,
+                {
+                    "buyer_pubkey": buyer_pubkey,
+                    "buyer_npub": hex_to_bech32(buyer_pubkey),
+                    "total_msat": 0,
+                    "total_sats_floor": 0,
+                    "receipt_ids": [],
+                    "receipts": [],
+                    "first_seen_at": created_at,
+                    "threshold_reached_at": None,
+                },
+            )
+            buyer_entry["total_msat"] += amount_msat_int
+            buyer_entry["total_sats_floor"] = buyer_entry["total_msat"] // 1000
+            buyer_entry["receipt_ids"].append(receipt.get("receipt_id"))
+            buyer_entry["receipts"].append(receipt)
+
+            if buyer_entry["threshold_reached_at"] is None and buyer_entry["total_sats_floor"] >= price_sats:
+                buyer_entry["threshold_reached_at"] = created_at
+                threshold_hits.append(
+                    {
+                        "buyer_pubkey": buyer_pubkey,
+                        "buyer_npub": buyer_entry["buyer_npub"],
+                        "threshold_reached_at": created_at,
+                        "total_sats_floor": buyer_entry["total_sats_floor"],
+                    }
+                )
+
+        clearing_state = "OPEN"
+        if now_utc > expiry_dt:
+            clearing_state = "EXPIRED"
+
+        winning_buyer: Dict[str, Any] | None = None
+        if threshold_hits:
+            winning_hit = sorted(
+                threshold_hits,
+                key=lambda each: (
+                    int(each["threshold_reached_at"]),
+                    str(each["buyer_pubkey"]),
+                ),
+            )[0]
+            winning_buyer = buyer_totals[winning_hit["buyer_pubkey"]]
+            clearing_state = "CLEARED"
+
+        return {
+            "status": "OK",
+            "ask_event_id": str(ask_event.get("event_id") or ask_event_id),
+            "ask_id": parsed_ask.get("ask_id"),
+            "clearing_state": clearing_state,
+            "strict": bool(strict),
+            "price_sats": price_sats,
+            "expiry": expiry,
+            "expired": bool(now_utc > expiry_dt),
+            "receipt_count": len(receipts),
+            "receipt_totals_by_buyer": sorted(
+                buyer_totals.values(),
+                key=lambda each: (-int(each["total_msat"]), str(each["buyer_pubkey"])),
+            ),
+            "winning_buyer": winning_buyer,
+            "receipts": receipts,
+        }
+
+    async def deliver_ms02_wrapper_secret(
+        self,
+        ask_event_id: str,
+        wrapper_secret_nsec: str,
+        relays: List[str] | None = None,
+        strict: bool = True,
+        message: str | None = None,
+    ) -> Dict[str, Any]:
+        wrapper_secret_value = str(wrapper_secret_nsec or "").strip()
+        if not wrapper_secret_value:
+            raise ValueError("wrapper_secret_nsec is required")
+
+        clearing = await self.clear_ms02_order(
+            ask_event_id=ask_event_id,
+            relays=relays,
+            strict=bool(strict),
+        )
+        if clearing.get("clearing_state") != "CLEARED":
+            raise ValueError(f"order is not cleared (state={clearing.get('clearing_state')})")
+
+        winning_buyer = clearing.get("winning_buyer") or {}
+        buyer_npub = str(winning_buyer.get("buyer_npub") or "").strip()
+        if not buyer_npub:
+            raise ValueError("winning buyer could not be resolved")
+
+        dm_relays = relays if relays else self._build_kind1_publish_relays()
+        if not dm_relays:
+            raise ValueError("No relays configured for wrapper delivery")
+
+        delivery_message = str(message or "").strip()
+        if not delivery_message:
+            delivery_payload = {
+                "spec": "MS-02",
+                "type": "wrapper_secret_delivery",
+                "ask_event_id": clearing.get("ask_event_id"),
+                "ask_id": clearing.get("ask_id"),
+                "wrapper_secret_nsec": wrapper_secret_value,
+            }
+            delivery_message = self._canonical_json_ms02(delivery_payload)
+
+        await self.secure_dm(nrecipient=buyer_npub, message=delivery_message, dm_relays=dm_relays)
+        return {
+            "status": "OK",
+            "ask_event_id": clearing.get("ask_event_id"),
+            "ask_id": clearing.get("ask_id"),
+            "buyer_pubkey": winning_buyer.get("buyer_pubkey"),
+            "buyer_npub": buyer_npub,
+            "delivery_method": "secure_dm",
+            "relays": dm_relays,
+            "message_type": "wrapper_secret_delivery",
+        }
     
     async def get_kind0_profile_by_identifier(
         self,

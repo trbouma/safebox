@@ -102,6 +102,51 @@ curl -sS \
   "${BASE_URL}/agent/info"
 ```
 
+### `GET /agent/whoami`
+
+Returns the authenticated wallet identity plus the latest available kind-0 social profile.
+
+Query parameters:
+
+- `relays` (optional CSV): override relays for kind-0 lookup
+
+Response (example):
+
+```json
+{
+  "status": "OK",
+  "identity": {
+    "handle": "example-handle",
+    "lightning_address": "example-handle@skills.example.com",
+    "pubkey": "<pubhex>",
+    "npub": "npub1...",
+    "balance": 12345,
+    "home_relay": "wss://relay.example"
+  },
+  "profile": {
+    "name": "example-handle",
+    "display_name": "Example Handle",
+    "nip05": "example-handle@skills.example.com",
+    "lud16": "example-handle@skills.example.com"
+  },
+  "profile_event": {
+    "id": "<event_id>",
+    "pubkey": "<pubhex>",
+    "content_json": {}
+  },
+  "profile_lookup_error": null,
+  "timestamp": 1770000000
+}
+```
+
+Curl:
+
+```bash
+curl -sS \
+  -H "X-Access-Key: ${API_KEY}" \
+  "${BASE_URL}/agent/whoami"
+```
+
 ### `GET /agent/balance`
 
 Returns current wallet balance in sats.
@@ -1116,6 +1161,150 @@ Response includes:
 - `ask_id` (extracted from the published tags when present)
 - `timestamp`
 
+### `POST /agent/market/ms02/parse_ask_event`
+
+Parses and validates a published MS-02 ask event.
+
+Request fields:
+
+- either:
+  - `event` (full event object)
+  - or `event_id` (hex or `note1...`)
+- `relays` (optional, used when `event_id` is provided)
+
+Behavior:
+
+- if `event` is provided, parses the supplied object directly
+- if `event_id` is provided, fetches the event from relays first
+- validates that the event is an MS-02 ask
+- validates consistency between ask tags and `order_details_jcs`
+
+Response includes:
+
+- `event_id`
+- `kind`
+- `market`
+- `side`
+- `wrapper_scheme`
+- `wrapper_ref`
+- `fulfillment_mode`
+- `wrapper_commitment`
+- `ask_id`
+- `expiry`
+- `settlement_method`
+- `order_details`
+- `order_details_jcs`
+- `tags`
+- `timestamp`
+
+### `GET /agent/market/ms02/asks`
+
+Lists published MS-02 ask events from relays.
+
+Query parameters:
+
+- `limit` (optional, default `50`)
+- `kind` (optional, default `1`)
+- `author_pubkey` (optional, `npub` or 64-char hex)
+- `relays` (optional, comma-separated relay override)
+
+Behavior:
+
+- queries relays for candidate events of the selected kind
+- defaults to kind `1`
+- allows an alternate kind to be specified explicitly
+- locally filters and parses only valid MS-02 ask events
+
+Response includes:
+
+- `count`
+- `kind`
+- `author_pubkey`
+- `asks`
+- `timestamp`
+
+### `GET /agent/market/ms02/settlement_receipts`
+
+Returns zap settlement receipts for a published MS-02 ask event.
+
+Query parameters:
+
+- `ask_event_id` (required)
+- `limit` (optional, default `100`)
+- `strict` (optional, default `false`)
+- `relays` (optional, comma-separated relay override)
+
+Response includes:
+
+- `ask_event_id`
+- `strict`
+- `count`
+- `receipts`
+- `timestamp`
+
+### `GET /agent/market/ms02/clear_order`
+
+Evaluates settlement receipts for a published MS-02 ask and produces a deterministic clearing result.
+
+Query parameters:
+
+- `ask_event_id` (required)
+- `strict` (optional, default `true`)
+- `relays` (optional, comma-separated relay override)
+
+Behavior:
+
+- loads and parses the ask event
+- retrieves zap receipts for the ask event id
+- groups receipts by canonical buyer identity
+- totals settled amounts per buyer
+- determines whether the ask is still `OPEN`, has `CLEARED`, or is `EXPIRED`
+- selects the winner deterministically by earliest threshold reach time, then buyer pubkey lexical order
+
+Response includes:
+
+- `ask_event_id`
+- `ask_id`
+- `clearing_state`
+- `price_sats`
+- `expiry`
+- `expired`
+- `receipt_count`
+- `receipt_totals_by_buyer`
+- `winning_buyer`
+- `receipts`
+- `timestamp`
+
+### `POST /agent/market/ms02/deliver_wrapper_secret`
+
+Delivers the wrapper secret to the cleared winning buyer via secure DM.
+
+Request fields:
+
+- `ask_event_id` (required)
+- `wrapper_secret_nsec` (required)
+- `strict` (optional, default `true`)
+- `message` (optional explicit DM payload override)
+- `relays` (optional)
+
+Behavior:
+
+- re-runs `clear_order`
+- requires `clearing_state = CLEARED`
+- resolves the winning buyer from the clearing result
+- sends the wrapper secret to the winning buyer via secure DM
+
+Response includes:
+
+- `ask_event_id`
+- `ask_id`
+- `buyer_pubkey`
+- `buyer_npub`
+- `delivery_method`
+- `relays`
+- `message_type`
+- `timestamp`
+
 ### `POST /agent/market/ms02/generate_wrapper`
 
 Generates or normalizes the Nostr-native MS-02 trading wrapper profile.
@@ -1202,6 +1391,112 @@ Response includes:
 - `generated_test_entitlement`
 - `generated_code`
 - `generated_secret`
+- `timestamp`
+
+### `POST /agent/market/ms02/encrypt_entitlement_nip44`
+
+Encrypts the underlying entitlement material for `buyer_decryptable_v1` using NIP-44 to the wrapper public key.
+
+Request:
+
+```json
+{
+  "wrapper_ref": "npub1...",
+  "entitlement_code": "PROMO-2026-ALPHA",
+  "entitlement_secret": "x9K...high-entropy-secret..."
+}
+```
+
+Behavior:
+
+- resolves `wrapper_ref` to the wrapper public key
+- creates canonical plaintext JSON containing:
+  - `entitlement_code`
+  - `entitlement_secret`
+- encrypts that payload with `sealed_delivery_alg = nip44_v2`
+
+Response includes:
+
+- `wrapper_ref`
+- `sealed_delivery_alg`
+- `encrypted_entitlement`
+- `plaintext_payload_jcs`
+- `sender_pubkey`
+- `timestamp`
+
+### `POST /agent/market/ms02/decrypt_entitlement_nip44`
+
+Decrypts `encrypted_entitlement` for `buyer_decryptable_v1` using the delivered wrapper secret.
+
+Request:
+
+```json
+{
+  "wrapper_secret_nsec": "nsec1...",
+  "ask_event_id": "<optional ask event id>",
+  "encrypted_entitlement": "<optional ciphertext>",
+  "event": {},
+  "sender_pubkey": "<optional seller pubkey or npub>"
+}
+```
+
+Behavior:
+
+- accepts either the raw `wrapper_secret_nsec` or the structured delivery payload JSON containing `wrapper_secret_nsec`
+- loads `encrypted_entitlement` directly, from the supplied ask `event`, or by resolving `ask_event_id`
+- uses the ask author pubkey, or explicit `sender_pubkey`, as the NIP-44 counterparty key
+- decrypts the NIP-44 payload using the wrapper key
+- returns the decrypted entitlement material
+
+Response includes:
+
+- `wrapper_ref`
+- `sealed_delivery_alg`
+- `plaintext_payload_jcs`
+- `decrypted_entitlement`
+- `ask_event_id`
+- `ask_id`
+- `timestamp`
+
+### `POST /agent/market/ms02/validate_buyer_delivery`
+
+Validates a delivered wrapper secret against a published `buyer_decryptable_v1` ask.
+
+Request:
+
+```json
+{
+  "wrapper_secret_nsec": "nsec1...",
+  "ask_event_id": "<optional ask event id>",
+  "event": {}
+}
+```
+
+Behavior:
+
+- parses the ask
+- confirms buyer-decryptable fulfillment metadata is present
+- derives the wrapper from `wrapper_secret_nsec`
+- decrypts the sealed entitlement
+- recomputes the full `wrapper_commitment`
+- verifies that:
+  - derived `wrapper_ref` matches the ask
+  - derived `wrapper_commitment` matches the ask
+
+Response includes:
+
+- `ask_event_id`
+- `ask_id`
+- `wrapper_ref`
+- `derived_wrapper_ref`
+- `wrapper_ref_matches`
+- `expected_wrapper_commitment`
+- `derived_wrapper_commitment`
+- `wrapper_commitment_matches`
+- `sealed_delivery_alg`
+- `fulfillment_mode`
+- `decrypted_entitlement`
+- `validated`
 - `timestamp`
 
 ### `POST /agent/market/secret_hash/derive`

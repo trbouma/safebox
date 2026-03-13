@@ -1,6 +1,6 @@
 # MS-02 Agent Implementation Checklist
 **Spec Family**: `MS-02`  
-**Version**: `1.0`  
+**Version**: `1.1`  
 **Status**: Draft  
 **Date**: `2026-03-13`  
 **Primary Spec**: `MS-02-entitlement-market.md`
@@ -40,7 +40,57 @@ This ordering gets a tradable market loop working before the stronger redemption
 
 ---
 
-## 3. Core Data Model
+## 3. Current Implementation Status
+
+### 3.1 Implemented And Proven
+
+The following capabilities are implemented and have been exercised successfully in a full end-to-end `buyer_decryptable_v1` flow:
+
+1. wrapper generation
+2. entitlement input generation
+3. wrapper commitment derivation
+4. ask construction
+5. ask id derivation
+6. ask publication
+7. ask discovery/listing
+8. ask parsing
+9. NIP-57 settlement receipt retrieval
+10. clearing
+11. wrapper secret delivery by secure DM
+12. buyer-side delivery validation
+13. NIP-44 entitlement decryption
+14. buyer-side confirmation that decrypted entitlement matches the seller-generated source entitlement
+
+This has been proven in a single-operator, two-profile test using separate seller and buyer Safebox identities.
+
+### 3.2 Implemented But Still Operationally Manual
+
+The following parts work but still require explicit orchestration:
+
+1. polling `clear_order`
+2. explicit call to `deliver_wrapper_secret`
+3. explicit buyer-side DM retrieval
+4. explicit buyer-side validation and decrypt calls
+
+### 3.3 Not Yet Implemented
+
+The following planned capabilities remain open:
+
+1. `provider_resolved_v1` redemption helper flow
+2. automated watch/clear/deliver loop
+3. fulfillment idempotency / delivery state tracking
+4. buyer convenience helper that combines:
+   - DM extraction
+   - validation
+   - decrypt
+5. seller convenience helper that combines:
+   - poll
+   - clear
+   - deliver
+
+---
+
+## 4. Core Data Model
 
 The implementation needs to support two layers:
 
@@ -80,9 +130,9 @@ For `provider_resolved_v1`:
 
 ---
 
-## 4. Checklist
+## 5. Checklist
 
-### 4.1 Wrapper Generation
+### 5.1 Wrapper Generation
 
 Implement:
 
@@ -99,7 +149,7 @@ Acceptance:
 - `npub_i` is reproducible from `sk_i`
 - `nsec_i` round-trips back to `sk_i`
 
-### 4.2 Entitlement Input Model
+### 5.2 Entitlement Input Model
 
 Implement canonical handling for:
 
@@ -111,7 +161,7 @@ Acceptance:
 - provider-native entitlement data is represented in a stable internal structure
 - inputs can be serialized consistently before commitment generation
 
-### 4.3 Wrapper Commitment Derivation
+### 5.3 Wrapper Commitment Derivation
 
 Implement:
 
@@ -138,7 +188,7 @@ Acceptance:
   - `entitlement_secret`
   changes the commitment
 
-### 4.4 Ask Construction
+### 5.4 Ask Construction
 
 Implement deterministic order builder for:
 
@@ -160,7 +210,7 @@ Acceptance:
 - order object is deterministic
 - no mutable hidden values are needed after publication
 
-### 4.5 Ask ID Derivation
+### 5.5 Ask ID Derivation
 
 Implement:
 
@@ -173,7 +223,7 @@ Acceptance:
 - recomputation matches published `ask_id`
 - any order-term mutation changes `ask_id`
 
-### 4.6 Ask Publication
+### 5.6 Ask Publication
 
 Implement Nostr ask publication containing:
 
@@ -186,7 +236,7 @@ Acceptance:
 - published event contains enough data for independent verification
 - `wrapper_secret` is never published
 
-### 4.7 Zap Receipt Retrieval
+### 5.7 Zap Receipt Retrieval
 
 Implement:
 
@@ -199,7 +249,7 @@ Acceptance:
 - same receipt set yields same buyer identities
 - receipts can be grouped by canonical buyer identity
 
-### 4.8 Clearing Engine
+### 5.8 Clearing Engine
 
 Implement:
 
@@ -214,7 +264,7 @@ Acceptance:
 - same evidence set yields same result
 - no new winner after expiry
 
-### 4.9 Wrapper Secret Delivery
+### 5.9 Wrapper Secret Delivery
 
 Implement private delivery channel for winning buyer:
 
@@ -226,7 +276,7 @@ Acceptance:
 - winner can decode `nsec_i -> sk_i`
 - non-winners never receive the wrapper secret
 
-### 4.10 Buyer Verification
+### 5.10 Buyer Verification
 
 Implement buyer-side verification:
 
@@ -238,7 +288,7 @@ Acceptance:
 - buyer can reject mismatched secret delivery
 - delivery integrity is independently checkable
 
-### 4.11 Buyer-Decryptable Fulfillment
+### 5.11 Buyer-Decryptable Fulfillment
 
 Implement:
 
@@ -253,7 +303,7 @@ Acceptance:
   - `entitlement_code`
   - `entitlement_secret`
 
-### 4.12 NIP-44 Sealed Delivery
+### 5.12 NIP-44 Sealed Delivery
 
 Implement Nostr-native sealed delivery to the wrapper public key.
 
@@ -294,7 +344,7 @@ Acceptance:
 - recovered plaintext matches the expected entitlement material
 - recomputed `wrapper_commitment` still matches the published value
 
-### 4.13 Provider-Resolved Fulfillment
+### 5.13 Provider-Resolved Fulfillment
 
 Implement:
 
@@ -310,7 +360,7 @@ Acceptance:
 
 ---
 
-## 5. Suggested Agent Method Surface
+## 6. Suggested Agent Method Surface
 
 Recommended first method set:
 
@@ -325,6 +375,7 @@ Recommended first method set:
 - `verify_ms02_delivery()`
 - `encrypt_entitlement_nip44()`
 - `decrypt_entitlement_nip44()`
+- `validate_buyer_delivery()`
 
 Optional later methods:
 
@@ -334,7 +385,7 @@ Optional later methods:
 
 ---
 
-## 6. Milestones
+## 7. Milestones
 
 ### 6.1 Milestone 1: Tradable Wrapper Loop
 
@@ -359,10 +410,12 @@ Build:
 
 1. `buyer_decryptable_v1`
 2. NIP-44 entitlement encryption/decryption
+3. buyer-side validation
 
 Outcome:
 
 - direct agent-to-agent market flow works without a redemption provider
+- complete seller-to-buyer sealed-delivery flow is operational
 
 ### 6.3 Milestone 3: Controlled Redemption
 
@@ -378,7 +431,26 @@ Outcome:
 
 ---
 
-## 7. Implementation Risks To Watch
+## 8. Immediate Next Steps
+
+The next recommended engineering steps are:
+
+1. add automated clear-and-deliver watcher logic
+2. add fulfillment idempotency / delivered-state tracking
+3. add buyer convenience helper for:
+   - reading wrapper-secret delivery from DM
+   - validating the delivery
+   - decrypting the entitlement
+4. add `provider_resolved_v1` redemption helper flow
+5. add seller convenience helper that performs:
+   - polling
+   - clear
+   - deliver
+   as one controlled workflow
+
+---
+
+## 9. Implementation Risks To Watch
 
 ### 7.1 Commitment Drift
 

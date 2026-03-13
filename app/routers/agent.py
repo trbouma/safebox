@@ -145,9 +145,45 @@ class AgentMS02PublishAskRequest(BaseModel):
     relays: list[str] | None = None
 
 
+class AgentMS02ParseAskEventRequest(BaseModel):
+    event: dict | None = None
+    event_id: str | None = None
+    relays: list[str] | None = None
+
+
 class AgentMS02GenerateEntitlementRequest(BaseModel):
     entitlement_code: str | None = None
     entitlement_secret: str | None = None
+
+
+class AgentMS02EncryptEntitlementNIP44Request(BaseModel):
+    wrapper_ref: str
+    entitlement_code: str
+    entitlement_secret: str
+
+
+class AgentMS02DecryptEntitlementNIP44Request(BaseModel):
+    wrapper_secret_nsec: str
+    encrypted_entitlement: str | None = None
+    ask_event_id: str | None = None
+    event: dict | None = None
+    sender_pubkey: str | None = None
+    relays: list[str] | None = None
+
+
+class AgentMS02ValidateBuyerDeliveryRequest(BaseModel):
+    wrapper_secret_nsec: str
+    ask_event_id: str | None = None
+    event: dict | None = None
+    relays: list[str] | None = None
+
+
+class AgentMS02DeliverWrapperSecretRequest(BaseModel):
+    ask_event_id: str
+    wrapper_secret_nsec: str
+    strict: bool = True
+    relays: list[str] | None = None
+    message: str | None = None
 
 
 class AgentMS02GenerateWrapperRequest(BaseModel):
@@ -957,6 +993,66 @@ async def agent_info(
         "npub": acorn_obj.pubkey_bech32,
         "balance": acorn_obj.balance,
         "home_relay": acorn_obj.home_relay,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/whoami", tags=["agent"])
+async def agent_whoami(
+    request: Request,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+    x_access_key: str | None = Header(default=None),
+):
+    lightning_local = acorn_obj.handle
+    try:
+        wallet = _resolve_wallet_by_access_key(x_access_key)
+        if wallet.custom_handle:
+            lightning_local = wallet.custom_handle
+    except HTTPException:
+        pass
+
+    host = request.url.hostname or ""
+    lightning_address = f"{lightning_local}@{host}" if host else lightning_local
+
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    profile_event: dict | None = None
+    profile: dict[str, object] = {}
+    profile_lookup_error: str | None = None
+    try:
+        profile_event = await acorn_obj.get_kind0_profile_by_identifier(
+            identifier=acorn_obj.pubkey_bech32,
+            relays=relay_list,
+        )
+        content_json = profile_event.get("content_json")
+        if isinstance(content_json, dict):
+            profile = content_json
+    except Exception as exc:
+        profile_lookup_error = str(exc)
+
+    return {
+        "status": "OK",
+        "identity": {
+            "handle": acorn_obj.handle,
+            "lightning_address": lightning_address,
+            "pubkey": acorn_obj.pubkey_hex,
+            "npub": acorn_obj.pubkey_bech32,
+            "balance": acorn_obj.balance,
+            "home_relay": acorn_obj.home_relay,
+        },
+        "profile": profile,
+        "profile_event": profile_event,
+        "profile_lookup_error": profile_lookup_error,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
 
@@ -2861,6 +2957,45 @@ async def agent_publish_ms02_ask(
     return result
 
 
+@router.post("/market/ms02/parse_ask_event", tags=["agent"])
+async def agent_parse_ms02_ask_event(
+    payload: AgentMS02ParseAskEventRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    event_data = payload.event
+    if event_data is None:
+        event_id = str(payload.event_id or "").strip()
+        if not event_id:
+            raise HTTPException(status_code=400, detail="Either event or event_id is required")
+        try:
+            event_data = await acorn_obj.get_event_by_id(event_id=event_id, relays=relay_list)
+        except Exception as exc:
+            logger.exception("Agent MS-02 ask event fetch failed")
+            raise HTTPException(status_code=400, detail=f"MS-02 ask event fetch failed: {exc}")
+        if not event_data:
+            raise HTTPException(status_code=404, detail="MS-02 ask event not found")
+
+    try:
+        result = Acorn.parse_ms02_ask_event_dict(event_data)
+    except Exception as exc:
+        logger.exception("Agent MS-02 ask parse failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 ask parse failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
 @router.post("/market/ms02/generate_entitlement", tags=["agent"])
 async def agent_generate_ms02_entitlement(
     payload: AgentMS02GenerateEntitlementRequest,
@@ -2889,6 +3024,101 @@ async def agent_generate_ms02_entitlement(
         "generated_secret": generated_secret,
         "timestamp": int(datetime.utcnow().timestamp()),
     }
+
+
+@router.post("/market/ms02/encrypt_entitlement_nip44", tags=["agent"])
+async def agent_encrypt_ms02_entitlement_nip44(
+    payload: AgentMS02EncryptEntitlementNIP44Request,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    try:
+        result = acorn_obj.encrypt_ms02_entitlement_nip44(
+            wrapper_ref=payload.wrapper_ref,
+            entitlement_code=payload.entitlement_code,
+            entitlement_secret=payload.entitlement_secret,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 NIP-44 entitlement encryption failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 NIP-44 entitlement encryption failed: {exc}")
+
+    result["warning"] = (
+        "Sensitive: plaintext_payload_jcs and encrypted_entitlement are fulfillment material. "
+        "Avoid logging or exposing them beyond the intended trade flow."
+    )
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/decrypt_entitlement_nip44", tags=["agent"])
+async def agent_decrypt_ms02_entitlement_nip44(
+    payload: AgentMS02DecryptEntitlementNIP44Request,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.decrypt_ms02_entitlement_nip44(
+            wrapper_secret_nsec=payload.wrapper_secret_nsec,
+            encrypted_entitlement=payload.encrypted_entitlement,
+            ask_event_id=payload.ask_event_id,
+            event=payload.event,
+            sender_pubkey=payload.sender_pubkey,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 NIP-44 entitlement decrypt failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 NIP-44 entitlement decrypt failed: {exc}")
+
+    result["warning"] = (
+        "Sensitive: decrypted_entitlement contains the underlying entitlement material. "
+        "Avoid logging or exposing it beyond the intended buyer workflow."
+    )
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/validate_buyer_delivery", tags=["agent"])
+async def agent_validate_ms02_buyer_delivery(
+    payload: AgentMS02ValidateBuyerDeliveryRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.validate_ms02_buyer_delivery(
+            wrapper_secret_nsec=payload.wrapper_secret_nsec,
+            ask_event_id=payload.ask_event_id,
+            event=payload.event,
+            relays=relay_list,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 buyer delivery validation failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 buyer delivery validation failed: {exc}")
+
+    result["warning"] = (
+        "Sensitive: validation may include decrypted entitlement material for integrity verification. "
+        "Avoid logging it outside buyer-side fulfillment."
+    )
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
 
 
 @router.post("/market/ms02/generate_wrapper", tags=["agent"])
@@ -2926,6 +3156,152 @@ async def agent_derive_ms02_wrapper_commitment(
     except Exception as exc:
         logger.exception("Agent MS-02 wrapper commitment derivation failed")
         raise HTTPException(status_code=400, detail=f"MS-02 wrapper commitment derivation failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.get("/market/ms02/asks", tags=["agent"])
+async def agent_list_ms02_asks(
+    limit: int = 50,
+    kind: int = 1,
+    author_pubkey: str | None = None,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        asks = await acorn_obj.get_ms02_asks(
+            limit=safe_limit,
+            kind=int(kind),
+            relays=relay_list,
+            author_pubkey=author_pubkey,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 ask list failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 ask list failed: {exc}")
+
+    return {
+        "status": "OK",
+        "count": len(asks),
+        "kind": int(kind),
+        "author_pubkey": author_pubkey,
+        "asks": asks,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/market/ms02/settlement_receipts", tags=["agent"])
+async def agent_ms02_settlement_receipts(
+    ask_event_id: str,
+    limit: int = 100,
+    strict: bool = False,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    safe_limit = max(1, min(int(limit), 200))
+    try:
+        receipts = await acorn_obj.get_zap_receipts_for_event(
+            event_id=ask_event_id,
+            limit=safe_limit,
+            relays=relay_list,
+            strict=bool(strict),
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 settlement receipts query failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 settlement receipts query failed: {exc}")
+
+    return {
+        "status": "OK",
+        "ask_event_id": ask_event_id,
+        "strict": bool(strict),
+        "count": len(receipts),
+        "receipts": receipts,
+        "timestamp": int(datetime.utcnow().timestamp()),
+    }
+
+
+@router.get("/market/ms02/clear_order", tags=["agent"])
+async def agent_clear_ms02_order(
+    ask_event_id: str,
+    strict: bool = True,
+    relays: str | None = None,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if relays:
+        relay_list = []
+        for each in relays.split(","):
+            each = each.strip()
+            if not each:
+                continue
+            relay_list.append(each if each.startswith("wss://") else f"wss://{each}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.clear_ms02_order(
+            ask_event_id=ask_event_id,
+            relays=relay_list,
+            strict=bool(strict),
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 clear order failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 clear order failed: {exc}")
+
+    result["timestamp"] = int(datetime.utcnow().timestamp())
+    return result
+
+
+@router.post("/market/ms02/deliver_wrapper_secret", tags=["agent"])
+async def agent_deliver_ms02_wrapper_secret(
+    payload: AgentMS02DeliverWrapperSecretRequest,
+    acorn_obj: Acorn = Depends(_agent_get_acorn),
+):
+    relay_list: list[str] | None = None
+    if payload.relays:
+        relay_list = []
+        for each in payload.relays:
+            value = str(each or "").strip()
+            if not value:
+                continue
+            relay_list.append(value if value.startswith("wss://") else f"wss://{value}")
+        if not relay_list:
+            relay_list = None
+
+    try:
+        result = await acorn_obj.deliver_ms02_wrapper_secret(
+            ask_event_id=payload.ask_event_id,
+            wrapper_secret_nsec=payload.wrapper_secret_nsec,
+            relays=relay_list,
+            strict=bool(payload.strict),
+            message=payload.message,
+        )
+    except Exception as exc:
+        logger.exception("Agent MS-02 wrapper secret delivery failed")
+        raise HTTPException(status_code=400, detail=f"MS-02 wrapper secret delivery failed: {exc}")
 
     result["timestamp"] = int(datetime.utcnow().timestamp())
     return result

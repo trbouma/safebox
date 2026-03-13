@@ -462,6 +462,25 @@ def info(ctx: click.Context) -> None:
     _print_json(data)
 
 
+@cli.command("whoami")
+@click.option("--relays", default=None, help="Comma-separated relay override for kind-0 lookup.")
+@click.pass_context
+def whoami(ctx: click.Context, relays: Optional[str]) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {}
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/whoami",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params=params or None,
+    )
+    _print_json(data)
+
+
 @cli.command("balance")
 @click.pass_context
 def balance(ctx: click.Context) -> None:
@@ -773,6 +792,120 @@ def market_ms02_generate_entitlement(
     _print_json(data)
 
 
+@cli.command("market-ms02-encrypt-entitlement-nip44")
+@click.option("--wrapper-ref", required=True, help="Wrapper public reference (npub or hex pubkey).")
+@click.option("--entitlement-code", required=True, help="Provider-native entitlement code.")
+@click.option("--entitlement-secret", required=True, help="Provider-native entitlement secret.")
+@click.pass_context
+def market_ms02_encrypt_entitlement_nip44(
+    ctx: click.Context,
+    wrapper_ref: str,
+    entitlement_code: str,
+    entitlement_secret: str,
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "wrapper_ref": wrapper_ref,
+        "entitlement_code": entitlement_code,
+        "entitlement_secret": entitlement_secret,
+    }
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/encrypt_entitlement_nip44",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-decrypt-entitlement-nip44")
+@click.option("--wrapper-secret-nsec", required=True, help="Sensitive wrapper secret delivery encoding.")
+@click.option("--encrypted-entitlement", default=None, help="Ciphertext to decrypt directly.")
+@click.option("--ask-event-id", default=None, help="Optional published ask event id to resolve ciphertext from.")
+@click.option("--event-json", default=None, help="Optional raw ask event JSON object.")
+@click.option("--sender-pubkey", default=None, help="Optional seller pubkey/npub when decrypting without ask lookup.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_decrypt_entitlement_nip44(
+    ctx: click.Context,
+    wrapper_secret_nsec: str,
+    encrypted_entitlement: Optional[str],
+    ask_event_id: Optional[str],
+    event_json: Optional[str],
+    sender_pubkey: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"wrapper_secret_nsec": wrapper_secret_nsec}
+    if encrypted_entitlement is not None:
+        payload["encrypted_entitlement"] = encrypted_entitlement
+    if ask_event_id is not None:
+        payload["ask_event_id"] = ask_event_id
+    if sender_pubkey is not None:
+        payload["sender_pubkey"] = sender_pubkey
+    if event_json is not None:
+        try:
+            parsed_event = json.loads(event_json)
+        except Exception as exc:
+            raise click.ClickException(f"--event-json must be valid JSON: {exc}") from exc
+        if not isinstance(parsed_event, dict):
+            raise click.ClickException("--event-json must decode to an object")
+        payload["event"] = parsed_event
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/decrypt_entitlement_nip44",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-validate-buyer-delivery")
+@click.option("--wrapper-secret-nsec", required=True, help="Sensitive wrapper secret delivery encoding.")
+@click.option("--ask-event-id", default=None, help="Published ask event id (hex or note1...).")
+@click.option("--event-json", default=None, help="Optional raw ask event JSON object.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_validate_buyer_delivery(
+    ctx: click.Context,
+    wrapper_secret_nsec: str,
+    ask_event_id: Optional[str],
+    event_json: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {"wrapper_secret_nsec": wrapper_secret_nsec}
+    if ask_event_id is not None:
+        payload["ask_event_id"] = ask_event_id
+    if event_json is not None:
+        try:
+            parsed_event = json.loads(event_json)
+        except Exception as exc:
+            raise click.ClickException(f"--event-json must be valid JSON: {exc}") from exc
+        if not isinstance(parsed_event, dict):
+            raise click.ClickException("--event-json must decode to an object")
+        payload["event"] = parsed_event
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/validate_buyer_delivery",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
 @cli.command("market-ms02-generate-wrapper")
 @click.option("--nsec", default=None, help="Optional existing nsec; if omitted, a fresh wrapper is generated.")
 @click.pass_context
@@ -932,6 +1065,174 @@ def market_ms02_publish_ask(
     data = _request_json(
         ctx.obj["base_url"],
         "/agent/market/ms02/publish_ask",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-parse-ask-event")
+@click.option("--event-id", default=None, help="Published ask event id (hex or note1...).")
+@click.option("--event-json", default=None, help="Raw event JSON object to parse directly.")
+@click.option("--relays", default=None, help="Comma-separated relay override for event lookup.")
+@click.pass_context
+def market_ms02_parse_ask_event(
+    ctx: click.Context,
+    event_id: Optional[str],
+    event_json: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {}
+    if event_id:
+        payload["event_id"] = event_id
+    if event_json:
+        try:
+            parsed_event = json.loads(event_json)
+        except Exception as exc:
+            raise click.ClickException(f"--event-json must be valid JSON: {exc}") from exc
+        if not isinstance(parsed_event, dict):
+            raise click.ClickException("--event-json must decode to an object")
+        payload["event"] = parsed_event
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/parse_ask_event",
+        "POST",
+        key,
+        ctx.obj["timeout_seconds"],
+        payload=payload,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-list-asks")
+@click.option("--limit", default=50, type=int, show_default=True)
+@click.option("--kind", default=1, type=int, show_default=True, help="Event kind to query for asks.")
+@click.option("--author-pubkey", default=None, help="Optional npub or hex pubkey filter.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_list_asks(
+    ctx: click.Context,
+    limit: int,
+    kind: int,
+    author_pubkey: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {
+        "limit": limit,
+        "kind": kind,
+    }
+    if author_pubkey:
+        params["author_pubkey"] = author_pubkey
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/asks",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params=params,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-settlement-receipts")
+@click.option("--ask-event-id", required=True, help="Published ask event id (hex or note1...).")
+@click.option("--limit", default=100, type=int, show_default=True)
+@click.option("--strict/--no-strict", default=False, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_settlement_receipts(
+    ctx: click.Context,
+    ask_event_id: str,
+    limit: int,
+    strict: bool,
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {
+        "ask_event_id": ask_event_id,
+        "limit": limit,
+        "strict": str(strict).lower(),
+    }
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/settlement_receipts",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params=params,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-clear-order")
+@click.option("--ask-event-id", required=True, help="Published ask event id (hex or note1...).")
+@click.option("--strict/--no-strict", default=True, show_default=True)
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_clear_order(
+    ctx: click.Context,
+    ask_event_id: str,
+    strict: bool,
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    params: Dict[str, Any] = {
+        "ask_event_id": ask_event_id,
+        "strict": str(strict).lower(),
+    }
+    if relays:
+        params["relays"] = relays
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/clear_order",
+        "GET",
+        key,
+        ctx.obj["timeout_seconds"],
+        params=params,
+    )
+    _print_json(data)
+
+
+@cli.command("market-ms02-deliver-wrapper-secret")
+@click.option("--ask-event-id", required=True, help="Published ask event id (hex or note1...).")
+@click.option("--wrapper-secret-nsec", required=True, help="Sensitive wrapper secret delivery encoding.")
+@click.option("--strict/--no-strict", default=True, show_default=True)
+@click.option("--message", default=None, help="Optional explicit DM payload override.")
+@click.option("--relays", default=None, help="Comma-separated relay override.")
+@click.pass_context
+def market_ms02_deliver_wrapper_secret(
+    ctx: click.Context,
+    ask_event_id: str,
+    wrapper_secret_nsec: str,
+    strict: bool,
+    message: Optional[str],
+    relays: Optional[str],
+) -> None:
+    key = _require_access_key(ctx)
+    payload: Dict[str, Any] = {
+        "ask_event_id": ask_event_id,
+        "wrapper_secret_nsec": wrapper_secret_nsec,
+        "strict": strict,
+    }
+    if message is not None:
+        payload["message"] = message
+    relay_list = _parse_csv(relays)
+    if relay_list:
+        payload["relays"] = relay_list
+    data = _request_json(
+        ctx.obj["base_url"],
+        "/agent/market/ms02/deliver_wrapper_secret",
         "POST",
         key,
         ctx.obj["timeout_seconds"],

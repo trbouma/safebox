@@ -104,6 +104,7 @@ Non-interference rule:
 
 - `POST /agent/onboard`
 - `GET /agent/info`
+- `GET /agent/whoami`
 - `GET /agent/balance`
 - `GET /agent/tx_history`
 - `GET /agent/proof_safety_audit`
@@ -137,10 +138,18 @@ Non-interference rule:
 - `POST /agent/delete_request`
 - `POST /agent/market/order`
 - `POST /agent/market/ms02/generate_entitlement`
+- `POST /agent/market/ms02/encrypt_entitlement_nip44`
+- `POST /agent/market/ms02/decrypt_entitlement_nip44`
+- `POST /agent/market/ms02/validate_buyer_delivery`
 - `POST /agent/market/ms02/generate_wrapper`
 - `POST /agent/market/ms02/derive_wrapper_commitment`
 - `POST /agent/market/ms02/construct_ask`
 - `POST /agent/market/ms02/publish_ask`
+- `POST /agent/market/ms02/parse_ask_event`
+- `GET /agent/market/ms02/asks`
+- `GET /agent/market/ms02/settlement_receipts`
+- `GET /agent/market/ms02/clear_order`
+- `POST /agent/market/ms02/deliver_wrapper_secret`
 - `POST /agent/market/secret_hash/derive`
 - `POST /agent/market/secret_hash/verify`
 - `POST /agent/secure_dm`
@@ -212,8 +221,10 @@ Operational guardrail:
 
 1. Call `GET /agent/info` with `X-Access-Key`.
    - Includes `lightning_address` derived from request host.
-2. Call `GET /agent/balance` for lightweight polling or confirmation.
-3. Call `GET /agent/tx_history` for recent transaction audit context.
+2. Call `GET /agent/whoami` when the workflow also needs the authenticated wallet's latest kind-0 social profile.
+   - Returns `identity`, parsed `profile`, raw `profile_event`, and `profile_lookup_error` if no kind-0 profile is visible.
+3. Call `GET /agent/balance` for lightweight polling or confirmation.
+4. Call `GET /agent/tx_history` for recent transaction audit context.
 
 ### 2a) Set Wallet Custom Handle
 
@@ -286,6 +297,27 @@ curl -sS -X POST \
   "${BASE_URL}/agent/market/ms02/publish_ask"
 ```
 
+Consumer-side helpers:
+
+- `GET /agent/market/ms02/asks`
+  - list published MS-02 asks from relays
+  - defaults to `kind=1`
+  - accepts an alternate `kind` when needed
+- `POST /agent/market/ms02/parse_ask_event`
+  - parse and validate a full ask event or fetch by `event_id`
+- `GET /agent/market/ms02/settlement_receipts`
+  - fetch zap receipts for a published ask event id
+- `GET /agent/market/ms02/clear_order`
+  - evaluate receipts and determine whether the ask is `OPEN`, `CLEARED`, or `EXPIRED`
+  - when cleared, identify the winning buyer deterministically
+- `POST /agent/market/ms02/deliver_wrapper_secret`
+  - deliver the wrapper secret to the cleared winner via secure DM
+
+Consumer rule:
+
+- agents MUST treat `tags` and `order_details_jcs` as authoritative
+- agents MUST NOT treat the human-readable `content` preview as the source of truth
+
 ### 3b) MS-02 Entitlement Generator
 
 Agent API helper endpoint:
@@ -309,7 +341,69 @@ Returns:
 - `entitlement_secret`
 - generation flags indicating whether test/default values were created
 
-### 3c) MS-02 Wrapper Generator
+### 3c) MS-02 NIP-44 Entitlement Encryption
+
+Agent API helper endpoint:
+
+- `POST /agent/market/ms02/encrypt_entitlement_nip44`
+
+Purpose:
+
+- produce `encrypted_entitlement` for `buyer_decryptable_v1`
+- encrypt the provider-native entitlement material to the wrapper public key
+
+Inputs:
+
+- `wrapper_ref`
+- `entitlement_code`
+- `entitlement_secret`
+
+Returns:
+
+- `sealed_delivery_alg=nip44_v2`
+- `encrypted_entitlement`
+- `plaintext_payload_jcs`
+
+Usage rule:
+
+- use the returned `sealed_delivery_alg` and `encrypted_entitlement` in `POST /agent/market/ms02/construct_ask` when `fulfillment_mode=buyer_decryptable_v1`
+
+### 3d) MS-02 Buyer Decrypt + Validation
+
+Agent API helper endpoints:
+
+- `POST /agent/market/ms02/decrypt_entitlement_nip44`
+- `POST /agent/market/ms02/validate_buyer_delivery`
+
+Purpose:
+
+- let the buyer recover `entitlement_code` and `entitlement_secret` from `encrypted_entitlement`
+- let the buyer verify that the delivered wrapper secret actually matches the published ask
+
+`decrypt_entitlement_nip44`:
+
+- input:
+  - `wrapper_secret_nsec`
+  - either `encrypted_entitlement`, `ask_event_id`, or a full ask `event`
+  - optional `sender_pubkey` when decrypting without ask lookup
+- returns:
+  - `decrypted_entitlement`
+  - `plaintext_payload_jcs`
+  - resolved `wrapper_ref`
+
+`validate_buyer_delivery`:
+
+- input:
+  - `wrapper_secret_nsec`
+  - `ask_event_id` or full ask `event`
+- verifies:
+  - derived `wrapper_ref` matches the ask
+  - recomputed `wrapper_commitment` matches the ask
+  - decrypted entitlement contains:
+    - `entitlement_code`
+    - `entitlement_secret`
+
+### 3e) MS-02 Wrapper Generator
 
 Agent API helper endpoint:
 
@@ -332,7 +426,7 @@ Usage note:
 - `wrapper_secret_nsec` is sensitive and should not be logged
 - `wrapper_commitment_hint` is not the full MS-02 wrapper commitment over entitlement data; it is only a wrapper-key-derived hint
 
-### 3d) MS-02 Wrapper Commitment Derivation
+### 3e) MS-02 Wrapper Commitment Derivation
 
 Agent API helper endpoint:
 
