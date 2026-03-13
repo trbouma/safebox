@@ -239,9 +239,9 @@ Requirement:
 
 Steps:
 1. Publish an ask using `fulfillment_mode = buyer_decryptable_v1`.
-2. Capture published `encrypted_entitlement` and `wrapper_commitment`.
+2. Capture published `sealed_delivery_alg`, `encrypted_entitlement`, and `wrapper_commitment`.
 3. Complete clearing and deliver `wrapper_secret` to the winning market buyer.
-4. Derive the documented decryption key from `wrapper_secret`.
+4. Apply the documented `sealed_delivery_alg` using `wrapper_secret`.
 5. Decrypt `encrypted_entitlement`.
 6. Confirm recovered plaintext contains the expected `entitlement_code` and `entitlement_secret`.
 7. Recompute `wrapper_commitment` from:

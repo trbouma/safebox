@@ -98,6 +98,14 @@ This scenario document covers two fulfillment paths:
 1. `provider_resolved_v1`
 2. `buyer_decryptable_v1`
 
+In both paths, the concrete trading wrapper profile used in this scenario is Nostr-native:
+
+- `wrapper_scheme = nostr_keypair_v1`
+
+For the buyer-decryptable branch, the concrete sealed-delivery profile used in this scenario is also Nostr-native:
+
+- `sealed_delivery_alg = nip44_v2`
+
 Example underlying asset:
 
 - one entitlement redeemable for `10,000 inference tokens`
@@ -250,6 +258,8 @@ Example:
 ```json
 {
   "wrapper_scheme": "nostr_keypair_v1",
+  "fulfillment_mode": "provider_resolved_v1",
+  "sealed_delivery_alg": null,
   "wrapper_ref": "npub1...",
   "quantity": 1,
   "price_sats": 21,
@@ -493,21 +503,29 @@ If valid and unspent:
 
 If the order uses `buyer_decryptable_v1`, the public order also includes:
 
+- `sealed_delivery_alg`
 - `encrypted_entitlement`
+
+In this scenario, the concrete Nostr-native sealed-delivery choice is:
+
+- `sealed_delivery_alg = nip44_v2`
 
 The market buyer then:
 
-1. derives a decryption key from `wrapper_secret`
+1. uses `sealed_delivery_alg` together with `wrapper_secret`
 2. decrypts `encrypted_entitlement`
 3. recovers:
    - `entitlement_code`
    - `entitlement_secret`
 
-Example derivation:
+Example Nostr-native derivation:
 
 ```text
-K = HKDF(sk_i, "MS02|buyer_decryptable_v1|entitlement")
-plaintext = AEAD_Decrypt(K, encrypted_entitlement)
+sealed_delivery_alg = nip44_v2
+plaintext = nip44_decrypt(
+  receiver_sk = sk_i,
+  ciphertext = encrypted_entitlement
+)
 ```
 
 At that point, the market buyer holds the underlying entitlement material directly and no redemption provider lookup is required.

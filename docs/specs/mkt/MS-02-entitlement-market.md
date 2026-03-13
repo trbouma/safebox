@@ -271,6 +271,7 @@ MS-02 keeps `price_sats` as the core market field because the entitlement unit i
 | `issuer_pubkey` | string | Yes | market seller pubkey hex |
 | `wrapper_scheme` | string | Yes | wrapper profile id (for example `nostr_keypair_v1`) |
 | `fulfillment_mode` | string | Yes | `provider_resolved_v1` or `buyer_decryptable_v1` |
+| `sealed_delivery_alg` | string | No | required for `buyer_decryptable_v1`; for example `nip44_v2` |
 | `wrapper_ref` | string | Yes | scheme-specific public wrapper reference |
 | `quantity` | integer | Yes | MUST be `1` in v2.0 |
 | `price_sats` | integer | Yes | required settlement total in sats (Nostr profile of generic settlement-unit price) |
@@ -325,23 +326,32 @@ Legacy mapping:
 Requirements:
 
 - `encrypted_entitlement` MUST contain the sealed underlying entitlement material
-- the decryption key MUST be derivable only from the delivered `wrapper_secret` and profile-defined context
+- `sealed_delivery_alg` MUST identify how the ciphertext was produced and how the market buyer decrypts it
+- the ciphertext MUST be decryptable only by a holder of the delivered `wrapper_secret` under the documented profile rules
 - the published `wrapper_commitment` MUST still bind:
   - `wrapper_secret`
   - `entitlement_code`
   - `entitlement_secret`
 - implementations SHOULD use authenticated encryption over canonical entitlement bytes
 
-Recommended derivation:
+Preferred Nostr-native profile:
+
+- `sealed_delivery_alg = nip44_v2`
+- `encrypted_entitlement` is a NIP-44 ciphertext encrypted to `pk_i`, the public key corresponding to `wrapper_secret = sk_i`
+- the market buyer decrypts using the delivered `wrapper_secret`
+
+Recommended Nostr-native derivation:
 
 ```text
-K = HKDF(sk_i, "MS02|buyer_decryptable_v1|entitlement")
-encrypted_entitlement = AEAD_Encrypt(
-  K,
-  canonical_json({
-    "entitlement_code": entitlement_code,
-    "entitlement_secret": entitlement_secret
-  })
+plaintext = canonical_json({
+  "entitlement_code": entitlement_code,
+  "entitlement_secret": entitlement_secret
+})
+
+encrypted_entitlement = nip44_encrypt(
+  sender_sk = seller_sk,
+  receiver_pk = pk_i,
+  plaintext = plaintext
 )
 ```
 
@@ -357,6 +367,7 @@ Canonical `order_details` object:
 {
   "wrapper_scheme": "nostr_keypair_v1",
   "fulfillment_mode": "provider_resolved_v1",
+  "sealed_delivery_alg": null,
   "wrapper_ref": "<npub_i>",
   "quantity": 1,
   "price_sats": 21,
@@ -378,6 +389,7 @@ Requirements:
 - `wrapper_commitment` MUST be full digest (64 hex chars for sha256).
 - order validation MUST fail if recomputed `ask_id` does not match published `ask_id`.
 - `encrypted_entitlement` MUST be present when `fulfillment_mode = buyer_decryptable_v1`.
+- `sealed_delivery_alg` MUST be present when `fulfillment_mode = buyer_decryptable_v1`.
 - `redemption_provider` MAY be omitted from public order content.
 - `redemption_provider` SHOULD be present when `fulfillment_mode = provider_resolved_v1`.
 - if provider immutability is required while hidden, `provider_commitment` SHOULD be present.
@@ -414,6 +426,7 @@ Market seller constructs `order_details`, computes `ask_id`, and publishes order
 - `hash_alg`
 - `wrapper_commitment`
 - `fulfillment_mode`
+- `sealed_delivery_alg` when required by the fulfillment profile
 - `encrypted_entitlement` when required by the fulfillment profile
 - settlement policy metadata needed for deterministic clearing
 
@@ -473,7 +486,7 @@ Further redemption attempts for same entitlement MUST fail.
 
 For `buyer_decryptable_v1`:
 
-Market buyer derives the decryption key from `wrapper_secret`, decrypts `encrypted_entitlement`, and locally recovers:
+Market buyer uses `sealed_delivery_alg` together with `wrapper_secret`, decrypts `encrypted_entitlement`, and locally recovers:
 
 - `entitlement_code`
 - `entitlement_secret`
