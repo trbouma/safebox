@@ -37,7 +37,12 @@ from app.routers import     (   lnaddress,
 from app.tasks import periodic_task
 from app.utils import fetch_safebox, ensure_csrf_cookie
 from app.appmodels import RegisteredSafebox
-from app.rates import refresh_currency_rates, init_currency_rates, get_online_currency_rates
+from app.rates import (
+    refresh_currency_rates,
+    init_currency_rates,
+    get_online_currency_rates,
+    verify_currency_rates_initialized,
+)
 
 from app.relay import run_relay
 from app.nwc import listen_notes_connected
@@ -141,8 +146,15 @@ async def lifespan(app: FastAPI):
         logger.exception("Database integrity check failed during startup")
         raise
     
-    #TODO add in current rates    
-    await init_currency_rates();
+    # Currency lookup data is a required dependency; fail startup if seed loading or
+    # verification does not succeed.
+    await init_currency_rates()
+    currency_init_status = await verify_currency_rates_initialized()
+    logger.info(
+        "Currency initialization verified required_count=%s present_count=%s",
+        currency_init_status["required_count"],
+        currency_init_status["present_count"],
+    )
    
 
     is_production = SETTINGS.APP_ENV.lower() in {"prod", "production"}

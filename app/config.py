@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     RECORD_TRANSMITTAL_KIND: int = 21062
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
-    CURRENCY_CSV: str = 'setup/currency.csv'
+    CURRENCY_CSV: str = '/app/setup/currency.csv'
     WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
     LISTEN_TIMEOUT: int = 120
     ECASH_LISTEN_TIMEOUT: int = 120

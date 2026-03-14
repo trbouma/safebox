@@ -7,7 +7,7 @@ import csv
 from zoneinfo import ZoneInfo
 import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from bech32 import bech32_decode, convertbits
 import struct, json
@@ -129,17 +129,42 @@ async def init_currency_rates():
     print("init currency rates")
     await load_currency_rates_from_csv()
 
+
+async def verify_currency_rates_initialized(required_currencies: List[str] | None = None) -> Dict[str, Any]:
+    required = [str(code or "").strip().upper() for code in (required_currencies or settings.SUPPORTED_CURRENCIES)]
+    required = [code for code in required if code]
+    if not required:
+        raise RuntimeError("No required currencies configured for initialization verification")
+
+    with Session(engine) as session:
+        statement = select(CurrencyRate).where(CurrencyRate.currency_code.in_(required))
+        results = session.exec(statement).all()
+
+    found = {str(row.currency_code or "").upper() for row in results}
+    missing = sorted(code for code in required if code not in found)
+    if missing:
+        raise RuntimeError(
+            f"Currency table initialization incomplete. Missing currency rows: {', '.join(missing)}"
+        )
+
+    return {
+        "required_count": len(required),
+        "present_count": len(found),
+        "missing": [],
+    }
+
 # Routine to load CSV into the CurrencyRate table
 async def load_currency_rates_from_csv():
+    csv_path = settings.CURRENCY_CSV
+    logger.info("Initializing currency rates from CSV path=%s exists=%s", csv_path, os.path.exists(csv_path))
+
+    inserted = 0
     try:
         with Session(engine) as session:
-            csv_path = settings.CURRENCY_CSV
-            logger.info("Initializing currency rates from CSV path=%s", csv_path)
-            inserted = 0
             with open(csv_path, newline='', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    currency_code = row['currency_code']                    
+                    currency_code = row['currency_code']
                     data = {
                         "currency_code": currency_code,
                         "currency_rate": float(row['currency_rate']) if row['currency_rate'] else None,
@@ -178,9 +203,12 @@ async def load_currency_rates_from_csv():
                     if result.rowcount and result.rowcount > 0:
                         inserted += result.rowcount
                 session.commit()
-            logger.info("Currency CSV initialization completed inserted=%s", inserted)
     except (OSError, ValueError, KeyError) as exc:
-        logger.error("Failed to initialize currency rates from CSV: %s", exc)
+        logger.exception("Failed to initialize currency rates from CSV path=%s", csv_path)
+        raise RuntimeError(f"Currency CSV initialization failed for path={csv_path}: {exc}") from exc
+
+    logger.info("Currency CSV initialization completed inserted=%s path=%s", inserted, csv_path)
+    return {"inserted": inserted, "csv_path": csv_path}
         
 
 
