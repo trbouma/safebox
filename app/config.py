@@ -15,6 +15,17 @@ import oqs
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
+def _default_currency_csv() -> str:
+    project_csv = ROOT / "setup" / "currency.csv"
+    container_csv = Path("/app/setup/currency.csv")
+
+    if project_csv.exists():
+        return str(project_csv)
+    if container_csv.exists():
+        return str(container_csv)
+    return str(project_csv)
+
+
 
 
 
@@ -77,7 +88,7 @@ class Settings(BaseSettings):
     CREDENTIAL_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
     RECORD_TRANSMITTAL_KIND: int = 21062
     RECORD_TRANSMITTAL_RELAYS: List = ['wss://relay.getsafebox.app']
-    CURRENCY_CSV: str = '/app/setup/currency.csv'
+    CURRENCY_CSV: str = _default_currency_csv()
     WOT_RELAYS: List = ['wss://wotr.relatr.xyz','wss://nip85.brainstorm.world']
     LISTEN_TIMEOUT: int = 120
     ECASH_LISTEN_TIMEOUT: int = 120
