@@ -4,6 +4,10 @@
 
 This document enumerates runtime configuration parameters and defaults, and identifies where cryptographic key material is generated and stored.
 
+For the hardened deployment target and phased migration away from persisting secrets into `data/default.conf`, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/secret-management-without-persistent-default-conf.md`
+
 Primary sources:
 
 - `app/config.py`
@@ -211,3 +215,17 @@ Persistence behavior:
   operational procedures.
 - Avoid mixing long-lived production keys with ad-hoc local fallback generation.
 - After key or relay config changes, restart all web/worker processes.
+
+## Hardening Note
+
+The current `ConfigWithFallback` behavior is suitable for bootstrap and local evaluation, but it is not the recommended end state for hardened Docker or Kubernetes deployments.
+
+The target design is:
+
+- secrets come from environment variables, mounted secret files, or an external secret manager,
+- secrets are not written back into persistent application data volumes,
+- startup fails if required secrets are absent.
+
+The proposed migration plan for that transition is documented in:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/secret-management-without-persistent-default-conf.md`
