@@ -4,6 +4,7 @@ import jwt, re, bech32
 from time import sleep
 import asyncio
 import csv
+import os
 from zoneinfo import ZoneInfo
 import logging
 import time
