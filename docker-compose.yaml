@@ -2,7 +2,7 @@ services:
   lnapp:
     restart: always
     build:
-      context: .
+      context: https://github.com/trbouma/safebox.git#release-candidate
       dockerfile: Dockerfile
     container_name: safebox
     ports:
