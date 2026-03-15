@@ -56,6 +56,12 @@ setup/
 assets/
 
 # ---------------------------
+# Override: include currency seed data
+# ---------------------------
+!setup/
+!setup/currency.csv
+
+# ---------------------------
 # Local runtime state / dumps
 # (mounted at runtime when needed)
 # ---------------------------
