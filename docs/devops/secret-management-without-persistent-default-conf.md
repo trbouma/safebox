@@ -10,6 +10,10 @@ For the concrete Kubernetes bootstrap manifest pattern and the Compose-to-Kubern
 
 - `/Users/trbouma/projects/safebox-2/docs/devops/kubernetes-secret-bootstrap-and-promotion.md`
 
+For the recommended OpenBao-backed steady-state integration model, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/openbao-integration-procedure.md`
+
 ---
 
 ## Current Behavior

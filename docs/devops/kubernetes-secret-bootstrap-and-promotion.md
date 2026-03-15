@@ -10,6 +10,10 @@ The target is to keep the application-facing secret contract the same as Docker 
 - bootstrap mode may create or migrate those files once
 - steady-state runtime reads them without generation
 
+For the OpenBao-backed steady-state procedure that preserves the same `/run/secrets` contract, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/openbao-integration-procedure.md`
+
 ---
 
 ## Secret File Contract
