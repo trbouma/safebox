@@ -6,6 +6,10 @@ Safebox aims to be instantly usable in a Docker-enabled environment with near-ze
 
 This document defines that bootstrap goal, why it is valuable, and the expected transition path to production-grade operation.
 
+For the concrete Kubernetes bootstrap manifest pattern and the Compose-to-Kubernetes promotion workflow, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/kubernetes-secret-bootstrap-and-promotion.md`
+
 ## Zero-Config Bootstrap Goal
 
 In bootstrap mode, Safebox should:

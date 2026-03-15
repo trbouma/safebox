@@ -6,6 +6,10 @@ This note explains why persisting secrets into `data/default.conf` is not a good
 
 This is a design and implementation review note. It is intentionally not a code-change document.
 
+For the concrete Kubernetes bootstrap manifest pattern and the Compose-to-Kubernetes promotion workflow, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/kubernetes-secret-bootstrap-and-promotion.md`
+
 ---
 
 ## Current Behavior
