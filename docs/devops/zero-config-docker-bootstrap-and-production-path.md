@@ -50,8 +50,19 @@ Bootstrap characteristics of this example:
 
 - uses the `release-candidate` image/tag by default,
 - persists local runtime data under `./data`,
+- persists bootstrap-generated secret material under `./secrets`,
 - mounts `./branding` for local host-specific branding overrides,
 - requires no database configuration unless the operator chooses to provide PostgreSQL.
+
+Important:
+
+- this Compose shape should be treated as a bootstrap/test configuration, not the final hardened deployment shape,
+- it is acceptable to run single-worker during bootstrap so secret/key initialization happens deterministically,
+- after bootstrap succeeds, the operator should harden the deployment by:
+  - switching to pre-provisioned secrets,
+  - setting `SECRET_BOOTSTRAP_MODE=false`,
+  - restoring the intended worker count,
+  - validating that the app starts cleanly from the mounted secret files alone.
 
 To start:
 
@@ -146,6 +157,7 @@ Why:
 
 - Zero-config Docker bootstrap is acceptable and preferred for speed.
 - Auto-generated keys and default external services are acceptable for non-critical environments.
+- The reference `docker-compose.yaml` may intentionally be configured for bootstrap behavior first and then changed afterward for steady-state operation.
 
 ### Staging / Production
 

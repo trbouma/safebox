@@ -3,7 +3,7 @@ import pathlib
 from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import BaseSettings
 
-from typing import List, Optional, Union, Dict, Tuple
+from typing import ClassVar, List, Optional, Union, Dict, Tuple
 
 import os
 from pathlib import Path
@@ -24,6 +24,19 @@ def _default_currency_csv() -> str:
     if container_csv.exists():
         return str(container_csv)
     return str(project_csv)
+
+
+def _default_secret_dir() -> Path:
+    container_secret_dir = Path("/run/secrets")
+    project_secret_dir = ROOT / "data" / "secrets"
+
+    if container_secret_dir.exists() and os.access(container_secret_dir, os.W_OK):
+        return container_secret_dir
+    return project_secret_dir
+
+
+def _default_secret_file(name: str) -> str:
+    return str(_default_secret_dir() / name)
 
 
 
@@ -239,9 +252,29 @@ class ConfigWithFallback(BaseSettings):
     PQC_SIG_PUBLIC_KEY: str = "notset"
     PQC_KEM_PUBLIC_KEY: str = "notset"
     PQC_KEM_SECRET_KEY: str = "notset"
+    SERVICE_NSEC_FILE: str = _default_secret_file("service_nsec")
+    SERVICE_NPUB_FILE: str = _default_secret_file("service_npub")
+    NWC_NSEC_FILE: str = _default_secret_file("nwc_nsec")
+    PQC_SIG_SECRET_KEY_FILE: str = _default_secret_file("pqc_sig_secret_key")
+    PQC_SIG_PUBLIC_KEY_FILE: str = _default_secret_file("pqc_sig_public_key")
+    PQC_KEM_SECRET_KEY_FILE: str = _default_secret_file("pqc_kem_secret_key")
+    PQC_KEM_PUBLIC_KEY_FILE: str = _default_secret_file("pqc_kem_public_key")
+    SECRET_BOOTSTRAP_MODE: bool = False
 
     class Config:
         case_sensitive = False
+
+    PRIVATE_SECRET_FILE_ATTRS: ClassVar[Dict[str, str]] = {
+        "SERVICE_NSEC": "SERVICE_NSEC_FILE",
+        "NWC_NSEC": "NWC_NSEC_FILE",
+        "PQC_SIG_SECRET_KEY": "PQC_SIG_SECRET_KEY_FILE",
+        "PQC_KEM_SECRET_KEY": "PQC_KEM_SECRET_KEY_FILE",
+    }
+    COMPANION_FILE_ATTRS: ClassVar[Dict[str, str]] = {
+        "SERVICE_NPUB": "SERVICE_NPUB_FILE",
+        "PQC_SIG_PUBLIC_KEY": "PQC_SIG_PUBLIC_KEY_FILE",
+        "PQC_KEM_PUBLIC_KEY": "PQC_KEM_PUBLIC_KEY_FILE",
+    }
 
     # ---- key generation helpers ----
 
@@ -310,6 +343,143 @@ class ConfigWithFallback(BaseSettings):
     # ---- .conf file helpers ----
 
     @staticmethod
+    def _read_text_secret(path: str | Path) -> str | None:
+        secret_path = Path(path)
+        if not secret_path.exists() or not secret_path.is_file():
+            return None
+
+        value = secret_path.read_text(encoding="utf-8").strip()
+        return value or None
+
+    @staticmethod
+    def _write_text_secret(path: str | Path, value: str) -> None:
+        secret_path = Path(path)
+        secret_path.parent.mkdir(parents=True, exist_ok=True)
+        secret_path.write_text(f"{value}\n", encoding="utf-8")
+        try:
+            secret_path.chmod(0o600)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _secret_file_exists(path: str | Path) -> bool:
+        return ConfigWithFallback._read_text_secret(path) not in (None, "", "notset")
+
+    @classmethod
+    def _get_effective_field_value(cls, field_name: str, kwargs: Dict[str, object] | None = None) -> object:
+        if kwargs and field_name in kwargs:
+            return kwargs[field_name]
+        if field_name in os.environ:
+            raw_value = os.environ[field_name]
+            field_info = cls.model_fields[field_name]
+            if field_info.annotation is bool:
+                return str(raw_value).strip().lower() in {"1", "true", "yes", "on"}
+            return raw_value
+        return cls.model_fields[field_name].default
+
+    @classmethod
+    def _get_private_secret_file_map(cls, kwargs: Dict[str, object] | None = None) -> Dict[str, str]:
+        return {
+            secret_name: str(cls._get_effective_field_value(file_attr, kwargs))
+            for secret_name, file_attr in cls.PRIVATE_SECRET_FILE_ATTRS.items()
+        }
+
+    @classmethod
+    def _get_present_secret_files(cls, kwargs: Dict[str, object] | None = None) -> Dict[str, bool]:
+        return {
+            secret_name: cls._secret_file_exists(secret_path)
+            for secret_name, secret_path in cls._get_private_secret_file_map(kwargs).items()
+        }
+
+    @classmethod
+    def _load_private_values_from_secret_files(cls, kwargs: Dict[str, object] | None = None) -> Dict[str, str]:
+        values: Dict[str, str] = {}
+        for secret_name, secret_path in cls._get_private_secret_file_map(kwargs).items():
+            secret_value = cls._read_text_secret(secret_path)
+            if secret_value not in (None, "", "notset"):
+                values[secret_name] = secret_value
+        return values
+
+    @classmethod
+    def _get_companion_file_map(cls, kwargs: Dict[str, object] | None = None) -> Dict[str, str]:
+        return {
+            value_name: str(cls._get_effective_field_value(file_attr, kwargs))
+            for value_name, file_attr in cls.COMPANION_FILE_ATTRS.items()
+        }
+
+    @classmethod
+    def _load_companion_values_from_files(cls, kwargs: Dict[str, object] | None = None) -> Dict[str, str]:
+        values: Dict[str, str] = {}
+        for value_name, value_path in cls._get_companion_file_map(kwargs).items():
+            value = cls._read_text_secret(value_path)
+            if value not in (None, "", "notset"):
+                values[value_name] = value
+        return values
+
+    @staticmethod
+    def _derive_service_npub(service_nsec: str) -> str:
+        return Keys(priv_k=service_nsec).public_key_bech32()
+
+    @classmethod
+    def _persist_generated_values_to_files(cls, values: Dict[str, str], kwargs: Dict[str, object] | None = None) -> None:
+        for secret_name, secret_path in cls._get_private_secret_file_map(kwargs).items():
+            if secret_name in values and values[secret_name] not in (None, "", "notset"):
+                cls._write_text_secret(secret_path, values[secret_name])
+
+        for value_name, value_path in cls._get_companion_file_map(kwargs).items():
+            if value_name in values and values[value_name] not in (None, "", "notset"):
+                cls._write_text_secret(value_path, values[value_name])
+
+    @classmethod
+    def _migrate_default_conf_to_secret_files(cls, default_conf_path: Path, kwargs: Dict[str, object] | None = None) -> bool:
+        present_secret_files = cls._get_present_secret_files(kwargs)
+        present_count = sum(1 for is_present in present_secret_files.values() if is_present)
+        total_count = len(present_secret_files)
+
+        if present_count == total_count:
+            return False
+        if 0 < present_count < total_count:
+            missing = sorted(
+                secret_name
+                for secret_name, is_present in present_secret_files.items()
+                if not is_present
+            )
+            raise RuntimeError(
+                "Refusing legacy secret migration with partially populated secret files. "
+                f"Missing secret files for: {', '.join(missing)}"
+            )
+        if not default_conf_path.exists():
+            return False
+
+        legacy_values = cls._read_conf(default_conf_path)
+        migratable_secret_names = cls.PRIVATE_SECRET_FILE_ATTRS.keys()
+        missing_legacy = sorted(
+            secret_name
+            for secret_name in migratable_secret_names
+            if legacy_values.get(secret_name) in (None, "", "notset")
+        )
+        if missing_legacy:
+            raise RuntimeError(
+                "Legacy default.conf exists but is missing required private secrets for migration: "
+                f"{', '.join(missing_legacy)}"
+            )
+
+        secret_file_map = cls._get_private_secret_file_map(kwargs)
+        for secret_name, secret_path in secret_file_map.items():
+            cls._write_text_secret(secret_path, legacy_values[secret_name])
+
+        companion_file_map = cls._get_companion_file_map(kwargs)
+        for value_name, value_path in companion_file_map.items():
+            if legacy_values.get(value_name) not in (None, "", "notset"):
+                cls._write_text_secret(value_path, legacy_values[value_name])
+
+        renamed_path = default_conf_path.with_name(default_conf_path.name + ".deleteme")
+        if renamed_path.exists():
+            renamed_path.unlink()
+        default_conf_path.rename(renamed_path)
+        return True
+
+    @staticmethod
     def _read_conf(path: Path) -> Dict[str, str]:
         values: Dict[str, str] = {}
         if not path.exists():
@@ -341,9 +511,24 @@ class ConfigWithFallback(BaseSettings):
     def __init__(self, **kwargs):
         default_conf_path = Path("data/default.conf")
         default_conf_path.parent.mkdir(parents=True, exist_ok=True)
+        bootstrap_mode = bool(self._get_effective_field_value("SECRET_BOOTSTRAP_MODE", kwargs))
+        if bootstrap_mode:
+            self._migrate_default_conf_to_secret_files(default_conf_path, kwargs)
+        legacy_migrated_conf_path = default_conf_path.with_name(default_conf_path.name + ".deleteme")
 
         # Load existing file values (or empty if none)
         file_values = self._read_conf(default_conf_path)
+        file_values.update(self._load_private_values_from_secret_files(kwargs))
+        file_values.update(self._load_companion_values_from_files(kwargs))
+
+        if "SERVICE_NSEC" in file_values and file_values.get("SERVICE_NPUB") in (None, "", "notset"):
+            file_values["SERVICE_NPUB"] = self._derive_service_npub(file_values["SERVICE_NSEC"])
+
+        if legacy_migrated_conf_path.exists():
+            legacy_values = self._read_conf(legacy_migrated_conf_path)
+            for public_key_name in ("PQC_SIG_PUBLIC_KEY", "PQC_KEM_PUBLIC_KEY"):
+                if file_values.get(public_key_name) in (None, "", "notset") and legacy_values.get(public_key_name) not in (None, "", "notset"):
+                    file_values[public_key_name] = legacy_values[public_key_name]
 
         required_keys = {
             "SERVICE_NSEC",
@@ -364,10 +549,30 @@ class ConfigWithFallback(BaseSettings):
 
         # If anything is missing, generate *only* the missing ones and persist
         if missing:
+            if not bootstrap_mode:
+                raise RuntimeError(
+                    "Missing required secret material and SECRET_BOOTSTRAP_MODE is disabled. "
+                    f"Missing values: {', '.join(sorted(missing))}"
+                )
+
             generated = self._gen_missing_values(missing)
             if generated:
                 file_values.update(generated)
-                self._write_conf(default_conf_path, file_values)
+                self._persist_generated_values_to_files(generated, kwargs)
+
+        if bootstrap_mode and default_conf_path.exists():
+            legacy_snapshot = self._read_conf(default_conf_path)
+            non_secret_values = {
+                key: legacy_snapshot[key]
+                for key in self.COMPANION_FILE_ATTRS
+                if legacy_snapshot.get(key) not in (None, "", "notset")
+            }
+            if non_secret_values:
+                self._persist_generated_values_to_files(non_secret_values, kwargs)
+            renamed_path = default_conf_path.with_name(default_conf_path.name + ".deleteme")
+            if renamed_path.exists():
+                renamed_path.unlink()
+            default_conf_path.rename(renamed_path)
 
         # Build fallback values: only those not already in environment
         fallback_values = {k: v for k, v in file_values.items() if k not in os.environ}

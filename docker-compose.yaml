@@ -9,10 +9,20 @@ services:
       - "7375:7375"
     environment:
       - TZ=America/New_York
+      - CURRENCY_CSV=/app/setup/currency.csv
+      - SECRET_BOOTSTRAP_MODE=true
+      - SERVICE_NSEC_FILE=/run/secrets/service_nsec
+      - SERVICE_NPUB_FILE=/run/secrets/service_npub
+      - NWC_NSEC_FILE=/run/secrets/nwc_nsec
+      - PQC_SIG_SECRET_KEY_FILE=/run/secrets/pqc_sig_secret_key
+      - PQC_SIG_PUBLIC_KEY_FILE=/run/secrets/pqc_sig_public_key
+      - PQC_KEM_SECRET_KEY_FILE=/run/secrets/pqc_kem_secret_key
+      - PQC_KEM_PUBLIC_KEY_FILE=/run/secrets/pqc_kem_public_key
     
     volumes:        
       - ./data:/app/data
+      - ./secrets:/run/secrets
       - ./branding:/app/branding
-    command: ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
+    command: ["gunicorn", "app.main:app", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:7375", "--timeout", "120"]
    
     

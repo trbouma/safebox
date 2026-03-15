@@ -265,6 +265,13 @@ However, this should be treated as:
 - non-production,
 - explicitly convenience-oriented.
 
+For Docker Compose specifically, it is acceptable to use a bootstrap-first configuration that:
+
+- mounts a writable host secret directory into the container secret path,
+- enables bootstrap mode temporarily,
+- initializes or migrates the secret files on first start,
+- and is then changed afterward to disable bootstrap mode and rely on the mounted secret files as the source of truth.
+
 ### Staging / Production
 
 For staging or production:
