@@ -685,7 +685,11 @@ function getCreateInvoiceStatus(ln_invoice_status) {
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
-    logElement.innerHTML  += data + '\n' ;
+    if (!logElement) {
+      return;
+    }
+    logElement.innerHTML += data + '<br>';
+    logElement.scrollTop = logElement.scrollHeight;
   };
 
   async function userMessage(data, status="INFO"){
@@ -694,14 +698,34 @@ function consoleLog(data) {
    
   };
 
+  const NFC_DEBUG = false;
+
+  function debugNfcFlow(label, payload = null) {
+    if (!NFC_DEBUG) return;
+    if (payload === null) {
+      const line = `[access:nfc] ${label}`;
+      console.log(line);
+      consoleLog(line);
+      return;
+    }
+    const detail = typeof payload === "string" ? payload : JSON.stringify(payload);
+    const line = `[access:nfc] ${label} ${detail}`;
+    console.log(line, payload);
+    consoleLog(line);
+  }
+
   function showNfcAlert(message) {
     if (!message) return;
     alert(message);
   }
 
   let nfcSuccessCelebrating = false;
+  let paymentSuccessCelebrating = false;
+  let nfcPaymentPending = false;
   let nfcSettlementWatchTimer = null;
   let nfcSettlementWatchDeadline = 0;
+  let paymentSettlementWatchTimer = null;
+  let paymentSettlementWatchDeadline = 0;
 
   function stopNfcSettlementWatch() {
     if (nfcSettlementWatchTimer) {
@@ -711,10 +735,19 @@ function consoleLog(data) {
     nfcSettlementWatchDeadline = 0;
   }
 
+  function stopPaymentSettlementWatch() {
+    if (paymentSettlementWatchTimer) {
+      clearInterval(paymentSettlementWatchTimer);
+      paymentSettlementWatchTimer = null;
+    }
+    paymentSettlementWatchDeadline = 0;
+  }
+
   function startNfcSettlementWatch(baselineBalance) {
     stopNfcSettlementWatch();
     const baseline = Number(baselineBalance);
     if (!Number.isFinite(baseline)) return;
+    debugNfcFlow("startNfcSettlementWatch", { baseline, starting_balance });
 
     nfcSettlementWatchDeadline = Date.now() + 30000;
     nfcSettlementWatchTimer = setInterval(async () => {
@@ -722,14 +755,17 @@ function consoleLog(data) {
         const resp = await fetch("/safebox/poll");
         const data = await resp.json();
         const polledBalance = Number(data?.balance);
+        debugNfcFlow("poll tick", { baseline, polledBalance, pending: nfcPaymentPending, ux_mode });
         if (!Number.isFinite(polledBalance)) {
           if (Date.now() > nfcSettlementWatchDeadline) {
+            debugNfcFlow("poll tick invalid balance deadline reached");
             stopNfcSettlementWatch();
           }
           return;
         }
 
         if (polledBalance < baseline) {
+          debugNfcFlow("poll detected NFC settlement", { baseline, polledBalance });
           stopNfcSettlementWatch();
           checkBalance(polledBalance);
           celebrateNfcPayment("NFC payment confirmed.");
@@ -738,12 +774,52 @@ function consoleLog(data) {
         }
 
         if (Date.now() > nfcSettlementWatchDeadline) {
+          debugNfcFlow("poll timeout", { baseline, polledBalance });
           stopNfcSettlementWatch();
           userMessage("Payment submitted. Confirmation is still pending.", "INFO");
         }
       } catch (err) {
+        debugNfcFlow("poll error", String(err));
         if (Date.now() > nfcSettlementWatchDeadline) {
           stopNfcSettlementWatch();
+        }
+      }
+    }, 2000);
+  }
+
+  function startPaymentSettlementWatch(baselineBalance) {
+    stopPaymentSettlementWatch();
+    const baseline = Number(baselineBalance);
+    if (!Number.isFinite(baseline)) return;
+
+    paymentSettlementWatchDeadline = Date.now() + 30000;
+    paymentSettlementWatchTimer = setInterval(async () => {
+      try {
+        const resp = await fetch("/safebox/poll");
+        const data = await resp.json();
+        const polledBalance = Number(data?.balance);
+        if (!Number.isFinite(polledBalance)) {
+          if (Date.now() > paymentSettlementWatchDeadline) {
+            stopPaymentSettlementWatch();
+          }
+          return;
+        }
+
+        if (polledBalance < baseline) {
+          stopPaymentSettlementWatch();
+          checkBalance(polledBalance);
+          celebratePayment("Payment confirmed.");
+          scheduleAccessReload(1200);
+          return;
+        }
+
+        if (Date.now() > paymentSettlementWatchDeadline) {
+          stopPaymentSettlementWatch();
+          userMessage("Payment submitted. Confirmation is still pending.", "INFO");
+        }
+      } catch (err) {
+        if (Date.now() > paymentSettlementWatchDeadline) {
+          stopPaymentSettlementWatch();
         }
       }
     }, 2000);
@@ -815,6 +891,12 @@ function consoleLog(data) {
 
   function celebrateNfcPayment(detailMessage) {
     if (nfcSuccessCelebrating) return;
+    debugNfcFlow("celebrateNfcPayment", {
+      detailMessage,
+      starting_balance,
+      pending: nfcPaymentPending
+    });
+    nfcPaymentPending = false;
     nfcSuccessCelebrating = true;
     userMessage(detailMessage || "NFC payment complete.", "OK");
     document.getElementById("img_qr_display").src = "/img/green-check.png";
@@ -822,6 +904,18 @@ function consoleLog(data) {
     setTimeout(() => {
       document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
       nfcSuccessCelebrating = false;
+    }, 2500);
+  }
+
+  function celebratePayment(detailMessage) {
+    if (paymentSuccessCelebrating) return;
+    paymentSuccessCelebrating = true;
+    userMessage(detailMessage || "Payment complete.", "SENT");
+    document.getElementById("img_qr_display").src = "/img/green-check.png";
+    celebrateSuccess();
+    setTimeout(() => {
+      document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
+      paymentSuccessCelebrating = false;
     }, 2500);
   }
 
@@ -931,6 +1025,13 @@ const submit_data =   { "nembed": nfc_token,
                         "comment": nfc_comment};
 
 const nfcBaselineBalance = Number(starting_balance);
+nfcPaymentPending = true;
+debugNfcFlow("submitNFCPayment start", {
+  amount: nfc_amount,
+  currency: nfc_currency,
+  baseline: nfcBaselineBalance,
+  token_preview: (nfc_token || "").slice(0, 24)
+});
 
 await fetch('/safebox/paytonfctag', {
 method: "POST",
@@ -941,16 +1042,19 @@ body: JSON.stringify(submit_data)
 .then((data) => {
   const status = data.status || "INFO";
   const detail = data.detail || "NFC payment request completed.";
+  debugNfcFlow("submitNFCPayment response", { status, detail, pending: nfcPaymentPending });
   paytoMessage(detail);
   userMessage(detail, status);
   consoleLog(detail);
   if (status === "OK") {
+    nfcPaymentPending = false;
     stopNfcSettlementWatch();
     celebrateNfcPayment(detail);
   } else if (status === "PENDING") {
     document.getElementById("img_qr_display").src = "/img/circle-256.gif";
     startNfcSettlementWatch(nfcBaselineBalance);
   } else {
+    nfcPaymentPending = false;
     stopNfcSettlementWatch();
     showNfcAlert(detail);
     document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
@@ -959,6 +1063,8 @@ body: JSON.stringify(submit_data)
   // window.location.href="/safebox/access?action_comment=Complete" ;
 })
 .catch((error) => {
+  debugNfcFlow("submitNFCPayment fetch error", String(error));
+  nfcPaymentPending = false;
   stopNfcSettlementWatch();
   consoleLog(`NFC payment error: ${error}`);
   userMessage("NFC payment failed. Please try again.", "ERROR");
@@ -1205,7 +1311,10 @@ function getlnPayStatus(ln_pay_status) {
     const detail = parsedObject.detail || "Payment request completed.";
     userMessage(detail, status);
     if (status === "OK") {
+      startPaymentSettlementWatch(starting_balance);
       userMessage("Payment accepted. Waiting for confirmation...", "INFO");
+    } else if (status === "ERROR") {
+      stopPaymentSettlementWatch();
     }
 
     // location.reload();
@@ -1414,21 +1523,25 @@ function getInvoiceStatus(ln_invoice_status) {
     console.log("Notification received:", event.data);
     const payload = JSON.parse(event.data);
     if (payload.action === "nfc_token") {
+      debugNfcFlow("ws_notify nfc_token", payload);
       const status = payload.status || "INFO";
       const detail = payload.detail || "NFC payment update";
       userMessage(detail, status);
       if (status === "ERROR") {
+        nfcPaymentPending = false;
         stopNfcSettlementWatch();
         showNfcAlert(detail);
       }
       if (typeof payload.balance !== "undefined") {
         checkBalance(Number(payload.balance));
       }
-      if (status === "OK") {
+      if (nfcPaymentPending && (status === "OK" || status === "ADVISORY")) {
         stopNfcSettlementWatch();
         clearRequestPaymentFields();
         celebrateNfcPayment(detail);
         scheduleAccessReload(900);
+      } else if (status === "PENDING") {
+        nfcPaymentPending = true;
       }
     }
     if (payload.action === "payment") {
@@ -1443,11 +1556,14 @@ function getInvoiceStatus(ln_invoice_status) {
       }
       markBalanceUpdated();
       if (status === "SENT") {
+        stopPaymentSettlementWatch();
         stopNfcSettlementWatch();
-        document.getElementById("img_qr_display").src = "/img/green-check.png";
+        celebratePayment(detail);
         if (!reset_to_home_scheduled) {
           scheduleAccessReload(1200);
         }
+      } else if (status === "ERROR") {
+        stopPaymentSettlementWatch();
       }
     }
   };
@@ -1465,13 +1581,18 @@ function getInvoiceStatus(ln_invoice_status) {
   ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);
+      debugNfcFlow("ws_status message", response);
       const balance = response.balance;
       const fiat_balance = response.fiat_balance;
       const message = response.message;
       const status = response.status
       userMessage(message, status)
 
-      if (status == "RECD") {
+      if (nfcPaymentPending && (status == "RECD" || status == "SENT")) {
+        stopNfcSettlementWatch();
+        celebrateNfcPayment("NFC payment settled.");
+        scheduleAccessReload(900);
+      } else if (status == "RECD") {
         
         document.getElementById("heading_balance").innerText = `(\u20BF${Number(balance).toLocaleString("en-US")})`;
         document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
@@ -1481,16 +1602,7 @@ function getInvoiceStatus(ln_invoice_status) {
           clearRequestPaymentFields();
           ux_mode = "init";
         }
-        document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-        // document.getElementById("img_qr_display").removeEventListener("click", copyInvoicetoClipoboard);
-        // document.getElementById("img_qr_display").addEventListener("click", copyAddress);
-        // document.getElementById("ln_create_invoice_button").textContent = "Request Payment";
-        document.getElementById("img_qr_display").src = "/img/green-check.png";
-        setTimeout(() => {
-                          // code to run after 5 seconds
-                          console.log("5 seconds passed");
-                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-                        }, 5000);
+        celebratePayment(message);
         scheduleAccessReload(900);
       
       } else if (status == "SENT" || status == "PENDING") {
@@ -1499,18 +1611,14 @@ function getInvoiceStatus(ln_invoice_status) {
       document.getElementById("fiat_balance").innerText = `${fiat_balance}`;
       document.getElementById("payment_notification").innerText = `${message}`;
       markBalanceUpdated();
-      document.getElementById("img_qr_display").src = "/img/green-check.png";
-
-             
-      setTimeout(() => {
-                          // code to run after 5 seconds
-                          console.log("5 seconds passed");
-                          document.getElementById("img_qr_display").src = "/safebox/qr/{{lnurl}}";
-                        }, 5000);
 
       if (status == "SENT" && !reset_to_home_scheduled) {
+        stopPaymentSettlementWatch();
         stopNfcSettlementWatch();
+        celebratePayment(message);
         scheduleAccessReload(1200);
+      } else if (status == "PENDING") {
+        startPaymentSettlementWatch(starting_balance);
       }
 
       }

@@ -75,6 +75,18 @@ def _is_proof_rejection_or_swap_recommended(exc: Exception) -> bool:
     ]
     return any(marker in msg for marker in markers)
 
+
+async def _persist_registered_safebox_balance(acorn_obj: Acorn) -> None:
+    await acorn_obj.load_data()
+    with Session(engine) as session:
+        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
+        safeboxes = session.exec(statement)
+        safebox_update = safeboxes.first()
+        if safebox_update:
+            safebox_update.balance = acorn_obj.balance
+            session.add(safebox_update)
+            session.commit()
+
 async def periodic_task():
     while True:
         # poll_for_payment()
@@ -535,6 +547,7 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
             tendered_amount=nfc_pay_out_request.amount,
             tendered_currency=nfc_pay_out_request.currency,
         )
+        await _persist_registered_safebox_balance(acorn_obj)
         if notify_callback:
             fiat_currency = await get_currency_rate(acorn_obj.local_currency)
             fiat_balance = f"{fiat_currency.currency_symbol}{'{:.2f}'.format(fiat_currency.currency_rate * acorn_obj.balance / 1e8)} {fiat_currency.currency_code}"
@@ -547,6 +560,7 @@ async def task_pay_to_nfc_tag(  acorn_obj: Acorn,
             })
     except Exception as exc:
         logger.exception("task_pay_to_nfc_tag failed: %s", exc)
+        await _persist_registered_safebox_balance(acorn_obj)
         if notify_callback:
             await notify_callback({
                 "status": "ERROR",
@@ -645,13 +659,7 @@ async def task_to_send_along_ecash(
             except Exception as record_exc:
                 logger.critical("task_to_send_along_ecash recovery_record_failed: %s", record_exc)
 
-    with Session(engine) as session:
-        statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
-        safeboxes = session.exec(statement)
-        safebox_update = safeboxes.first()
-        safebox_update.balance = acorn_obj.get_balance()
-        session.add(safebox_update)
-        session.commit()
+    await _persist_registered_safebox_balance(acorn_obj)
 
     if notify_callback:
         status = "OK" if delivery_confirmed else "ERROR"
@@ -751,6 +759,7 @@ async def task_pay_multi(
                 _exception_chain_text(e),
             )
     finally:
+        await _persist_registered_safebox_balance(acorn_obj)
         fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:
             #FIXME - may not need this refernce
@@ -832,6 +841,7 @@ async def task_pay_multi_invoice(
                 _exception_chain_text(e),
             )
     finally:
+        await _persist_registered_safebox_balance(acorn_obj)
         fiat_balance = f"{currency_symbol}{'{:.2f}'.format(currency_rate * acorn_obj.balance / 1e8)} {currency_code}"
         if websocket:
             #FIXME - may not need this refernce

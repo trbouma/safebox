@@ -670,6 +670,10 @@ class Acorn:
             balance_tally += each.amount
             self.balance = balance_tally
         return self.balance
+
+    async def get_current_balance(self) -> int:
+        await self.load_data()
+        return self.get_balance()
     
 
     async def listen_for_record(self, record_kind:int=37375, since:int = None, reverse: bool=False, relays:List=None):

@@ -610,10 +610,11 @@ async def protected_route(    request: Request,
 
 
     host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/safebox/ws/status"
-    ws_url_notify = f"{scheme}://{host}{port}/safebox/ws/notify"
+    request_scheme = (request.url.scheme or "").lower()
+    ws_scheme = "wss" if request_scheme == "https" else "ws"
+    port = f":{request.url.port}" if request.url.port not in (None, 80, 443) else ""
+    ws_url = f"{ws_scheme}://{host}{port}/safebox/ws/status"
+    ws_url_notify = f"{ws_scheme}://{host}{port}/safebox/ws/notify"
     
     print(f"ws url {ws_url}")
 
@@ -1025,24 +1026,31 @@ async def ln_invoice_payment(   request: Request,
 
 
 @router.get("/poll", tags=["protected"])
-async def poll_for_balance(request: Request, access_token: str = Cookie(None)):
+async def poll_for_balance(request: Request, acorn_obj: Acorn = Depends(get_acorn)):
+    safebox_handle = None
     try:
-        safebox_found = await fetch_safebox(access_token=access_token)
-        
+        current_balance = await acorn_obj.get_current_balance()
+        with Session(engine) as session:
+            statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
+            safeboxes = session.exec(statement)
+            safebox_found = safeboxes.first()
+            if safebox_found:
+                safebox_handle = safebox_found.handle
+                safebox_found.balance = current_balance
+                session.add(safebox_found)
+                session.commit()
+            else:
+                raise HTTPException(status_code=404, detail="Safebox not found")
     except HTTPException as exc:
         logger.warning("Poll auth failure: %s", exc.detail)
-        return {"detail": "error",
-                "balance": 0}
+        return {"detail": "error", "balance": 0}
     except Exception:
         logger.exception("Unexpected error in poll_for_balance")
-        return {"detail": "error",
-                "balance": 0}
+        return {"detail": "error", "balance": 0}
 
-    print(f"safebox poll {safebox_found.handle} {safebox_found.balance}")
+    print(f"safebox poll {safebox_handle} {current_balance}")
 
-
-    return {"detail": "polling",
-            "balance": safebox_found.balance}
+    return {"detail": "polling", "balance": current_balance}
 
 @router.get("/privatedata", tags=["safebox", "protected"])
 async def my_private_data(      request: Request,
