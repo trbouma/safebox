@@ -5751,13 +5751,9 @@ class Acorn:
                             proof_objs.append(proof_obj)
                             i+=1
                     except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
-                        # Don't error the whole swap routine
-                        # Just igore the duplicate proofs
-                        proofs = []    
-                        
-                        
-
-                    
+                        raise RuntimeError(
+                            f"Swap-each failed for keyset {each_keyset} at mint {self.known_mints.get(each_keyset)}: {exc}"
+                        ) from exc
 
                     combined_proofs = combined_proofs + proofs
                     combined_proof_objs = combined_proof_objs + proof_objs
@@ -5899,6 +5895,9 @@ class Acorn:
                     combined_proofs = combined_proofs + proofs
                     combined_proof_objs = combined_proof_objs + proof_objs
 
+        if not combined_proof_objs:
+            raise RuntimeError("Async swap produced zero proofs; refusing destructive proof replacement")
+
         self.logger.debug("op=async_swap status=write_proofs proofs=%s", len(combined_proof_objs))
         self.proofs = combined_proof_objs
         await self.write_proofs()
@@ -6017,7 +6016,7 @@ class Acorn:
                 # print(proofs)
                 i+=1
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
-            ValueError('test')
+            raise RuntimeError(f"swap_for_payment failed: {exc}") from exc
         
         for each in proofs:
             self.logger.debug("op=swap_for_payment status=proof amount=%s", each.amount)
