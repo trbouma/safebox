@@ -5558,59 +5558,58 @@ class Acorn:
                 }
             
                 # print(data_to_send)
-            try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(url=swap_url, json=data_to_send, headers=headers)
-                    response.raise_for_status()
-                    promises = response.json()['signatures']
+                try:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(url=swap_url, json=data_to_send, headers=headers)
+                        response.raise_for_status()
+                        promises = response.json()['signatures']
 
-                    mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
-                    response = await client.get(mint_key_url, headers=headers)
-                    response.raise_for_status()
-                    keys = response.json()["keysets"][0]["keys"]
-                # print(keys)
-                proofs = []
-                proof_objs = []
-                i = 0
-            
-                for each in promises:
-                    pub_key_c = PublicKey()
-                    # print("each:", each['C_'])
-                    pub_key_c.deserialize(unhexlify(each['C_']))
-                    promise_amount = each['amount']
-                    A = keys[str(int(promise_amount))]
-                    # A = keys[str(j)]
-                    pub_key_a = PublicKey()
-                    pub_key_a.deserialize(unhexlify(A))
-                    r = blinded_values[i][1]
-                    Y = blinded_values[i][3]
-                    # print(pub_key_c, promise_amount,A, r)
-                    C = step3_alice(pub_key_c,r,pub_key_a)
-                    proof = {   "amount": promise_amount,
-                            "id": each_keyset,
-                            "secret": blinded_values[i][2],
-                            "C":    C.serialize().hex(),
-                            "Y":    Y.serialize().hex()
-                            }
-                    proofs.append(proof)
-                    proof_obj = Proof(amount=promise_amount,
-                                        id=each_keyset,
-                                        secret=blinded_values[i][2],
-                                        C=C.serialize().hex(),
-                                        Y = Y.serialize().hex()
-                                        )
-                    proof_objs.append(proof_obj)
+                        mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
+                        response = await client.get(mint_key_url, headers=headers)
+                        response.raise_for_status()
+                        keys = response.json()["keysets"][0]["keys"]
+                    # print(keys)
+                    proofs = []
+                    proof_objs = []
+                    i = 0
+                
+                    for each in promises:
+                        pub_key_c = PublicKey()
+                        # print("each:", each['C_'])
+                        pub_key_c.deserialize(unhexlify(each['C_']))
+                        promise_amount = each['amount']
+                        A = keys[str(int(promise_amount))]
+                        # A = keys[str(j)]
+                        pub_key_a = PublicKey()
+                        pub_key_a.deserialize(unhexlify(A))
+                        r = blinded_values[i][1]
+                        Y = blinded_values[i][3]
+                        # print(pub_key_c, promise_amount,A, r)
+                        C = step3_alice(pub_key_c,r,pub_key_a)
+                        proof = {   "amount": promise_amount,
+                                "id": each_keyset,
+                                "secret": blinded_values[i][2],
+                                "C":    C.serialize().hex(),
+                                "Y":    Y.serialize().hex()
+                                }
+                        proofs.append(proof)
+                        proof_obj = Proof(amount=promise_amount,
+                                            id=each_keyset,
+                                            secret=blinded_values[i][2],
+                                            C=C.serialize().hex(),
+                                            Y = Y.serialize().hex()
+                                            )
+                        proof_objs.append(proof_obj)
 
-                    # print(proofs)
-                    i+=1
-            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
-                    # don't error the whole swap routine here
-                    # duplicate proofs just ignore
-                    proofs = []   
+                        # print(proofs)
+                        i+=1
+                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                    raise RuntimeError(
+                        f"Consolidation failed for keyset {each_keyset} at mint {self.known_mints.get(each_keyset)}: {exc}"
+                    ) from exc
 
-            
-            combined_proofs = combined_proofs + proofs
-            combined_proof_objs = combined_proof_objs + proof_objs
+                combined_proofs = combined_proofs + proofs
+                combined_proof_objs = combined_proof_objs + proof_objs
             # print(request_body) 
             # refresh balance
             
