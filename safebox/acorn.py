@@ -4817,7 +4817,7 @@ class Acorn:
                     # This is the part that needs to be added in multi
                     proofs_to_use = []
                     proof_amount = 0
-                    proofs_from_keyset = keyset_proofs[chosen_keyset]
+                    proofs_from_keyset = list(keyset_proofs[chosen_keyset])
                     while proof_amount < amount_needed:
                         pay_proof = proofs_from_keyset.pop()
                         proofs_to_use.append(pay_proof)
@@ -4887,11 +4887,10 @@ class Acorn:
                         #    proofs_from_keyset.append(each)
                     
 
-                    for each in keep_proofs:
-                        proofs_from_keyset.append(each)
+                    post_swap_keyset_proofs = proofs_from_keyset + keep_proofs
                     # print("self proofs", self.proofs)
-                    # need to reassign back into 
-                    keyset_proofs[chosen_keyset]= proofs_from_keyset
+                    # need to reassign back into
+                    keyset_proofs[chosen_keyset] = post_swap_keyset_proofs
                     # OK - now need to put proofs back into a flat lish
                     post_payment_proofs = []
                     for key in keyset_proofs:
@@ -5135,7 +5134,7 @@ class Acorn:
             self.logger.debug(f"{melt_quote_url}, {melt_url}, {post_melt_response}")
             proofs_to_use = []
             proof_amount = 0
-            proofs_from_keyset = keyset_proofs[chosen_keyset]
+            proofs_from_keyset = list(keyset_proofs[chosen_keyset])
             while proof_amount < amount_needed:
                 pay_proof = proofs_from_keyset.pop()
                 proofs_to_use.append(pay_proof)
@@ -5185,21 +5184,12 @@ class Acorn:
                     self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
             else:
                 self.logger.info(f"lighting payment did no go through")
-                for each in keep_proofs:
-                    proofs_from_keyset.append(each)
-                keyset_proofs[chosen_keyset] = proofs_from_keyset
-                post_payment_proofs = []
-                for key in keyset_proofs:
-                    post_payment_proofs.extend(keyset_proofs[key])
-                self.proofs = post_payment_proofs
-
                 raise RuntimeError(f"Lightning payment not go through! Please try again.")
             # add keep proofs back into selected keyset proofs
-            for each in keep_proofs:
-                proofs_from_keyset.append(each)
+            post_swap_keyset_proofs = proofs_from_keyset + keep_proofs
             # print("self proofs", self.proofs)
             # need to reassign back into 
-            keyset_proofs[chosen_keyset]= proofs_from_keyset
+            keyset_proofs[chosen_keyset]= post_swap_keyset_proofs
             # OK - now need to put proofs back into a flat lish
             post_payment_proofs = []
             for key in keyset_proofs:
