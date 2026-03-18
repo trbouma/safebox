@@ -19,7 +19,6 @@ from monstr.event.event import Event
 import ipinfo
 import requests
 import httpx
-from safebox.func_utils import get_profile_for_pub_hex, get_attestation
 from safebox.monstrmore import ExtendedNIP44Encrypt
 from safebox.models import SafeboxRecord, OriginalRecordTransfer
 from monstr.encrypt import NIP44Encrypt
@@ -35,6 +34,11 @@ from app.db import engine
 from app.branding import build_templates
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment
 from app.rates import refresh_currency_rates, get_currency_rates
+from app.records_verification import (
+    build_record_trust_context,
+    parse_event_payload,
+    resolve_record_verification_facts,
+)
 
 import logging, jwt
 import mimetypes
@@ -94,30 +98,6 @@ def _nonce_matches(expected_nonce: str | None, candidate_nauth: str | None) -> b
     return candidate_nonce == expected
 
 
-def _parse_event_payload(payload) -> Optional[Event]:
-    candidate = None
-    if isinstance(payload, dict):
-        candidate = json.dumps(payload)
-    elif isinstance(payload, str):
-        stripped = payload.strip()
-        if not stripped.startswith("{"):
-            return None
-        candidate = payload
-    else:
-        return None
-
-    try:
-        event_to_validate: Event = Event().load(candidate)
-    except Exception:
-        return None
-
-    if (
-        event_to_validate.kind is None
-        or event_to_validate.pub_key is None
-        or event_to_validate.sig is None
-    ):
-        return None
-    return event_to_validate
 
 
 def _extract_payload_content(payload):
@@ -1115,29 +1095,28 @@ async def my_present_records(       request: Request,
     # Need to determine what to present
     out_records = []
     is_valid = "Cannot Validate"
+    trust_context = await build_record_trust_context(
+        acorn_obj=acorn_obj,
+        include_trusted_entities=False,
+    )
     for each in user_records:        
 
-        event_to_validate = _parse_event_payload(each.get("payload"))
+        event_to_validate = parse_event_payload(each.get("payload"))
         if event_to_validate:
-
-            
-                        
-            print(f"event to validate tags: {event_to_validate.tags}")
-            tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
-            tag_safebox = get_tag_value(event_to_validate.tags, "safebox_issuer")
-            type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
-            # owner_name = tag_owner
-            owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
-            print(f"safebox owner: {tag_owner} {owner_info}")
-            # Need to check signature too
-            print("let's check signature")  
-            print(f"event to validate: {event_to_validate.data()}")
-    
-            if event_to_validate.is_valid():
-                is_valid = "True"
-
+            facts = await resolve_record_verification_facts(
+                event_to_validate=event_to_validate,
+                acorn_obj=acorn_obj,
+                include_trust_details=False,
+                trust_context=trust_context,
+            )
+            is_valid = facts["is_valid"]
+            tag_owner = facts["tag_owner_display"] or facts["tag_owner"] or ""
+            tag_safebox = facts["tag_issuer"]
+            type_name = facts["type_name"]
+            owner_info = facts["owner_info"]
+            picture = facts["picture"]
+            content = facts["content"]
             is_trusted = "TBD"
-            content = f"{event_to_validate.content}"
             each["content"] = content
             print(f"line 418 {content}")
             each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
@@ -1282,7 +1261,7 @@ async def my_retrieve_records(       request: Request,
             
             content = record["payload"]
             private_record = record["payload"]
-            event_to_validate = _parse_event_payload(private_record)
+            event_to_validate = parse_event_payload(private_record)
             if not event_to_validate:
                 raise ValueError("payload is not a signed event")
             
@@ -1784,6 +1763,26 @@ async def accept_incoming_record(       request: Request,
                 # record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
                 record_name = f"{each_record['tag'][0][0]}" 
                 record_value = each_record['payload']
+                record_ciphertext = each_record.get("ciphertext", None)
+                record_kemalg = each_record.get("kemalg", None)
+                payload_to_decrypt = each_record.get("pqc_encrypted_payload", None)
+                if record_ciphertext and record_kemalg and payload_to_decrypt:
+                    try:
+                        pqc = oqs.KeyEncapsulation(record_kemalg, bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                        shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                        k_pqc = Keys(priv_k=shared_secret.hex())
+                        my_enc = ExtendedNIP44Encrypt(k_pqc)
+                        record_value = my_enc.decrypt(
+                            payload=payload_to_decrypt,
+                            for_pub_k=k_pqc.public_key_hex(),
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "acceptincomingrecord payload decrypt skipped tag=%s kind=%s: %s",
+                            each_record.get("tag"),
+                            transmittal_kind,
+                            exc,
+                        )
                 grant_record = GrantRecord(tag=[record_name], type="generic",payload=record_value)
                 print(f"grant record: {grant_record}")
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=grant_kind)
@@ -1901,7 +1900,7 @@ async def display_grant(     request: Request,
             # content = record["payload"]
             # content=grant_record.payload
             private_record = record["payload"]
-            event_to_validate = _parse_event_payload(private_record)
+            event_to_validate = parse_event_payload(private_record)
             if not event_to_validate:
                 raise ValueError("payload is not a signed event")
             
@@ -2805,6 +2804,10 @@ async def ws_request_record( websocket: WebSocket,
                 records_missing_original_blob: List[str] = []
                 is_valid = "Cannot Validate"
                 is_presenter = False
+                trust_context = await build_record_trust_context(
+                    acorn_obj=acorn_obj,
+                    include_trusted_entities=True,
+                )
                 #TODO This needs to be refactored into a verification function
                 for each in record_json:
                     decrypted_original = None
@@ -2868,50 +2871,25 @@ async def ws_request_record( websocket: WebSocket,
 
                     print(f"each ciphertext {each.get('ciphertext','None')}")
                     is_valid = "Cannot Validate"
-                    event_to_validate = _parse_event_payload(payload_to_use)
+                    event_to_validate = parse_event_payload(payload_to_use)
                     if event_to_validate:
-                        print(f"event to validate tags: {event_to_validate.tags}")
-                        tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
-                        tag_issuer = get_tag_value(event_to_validate.tags, "safebox_issuer")
-                        tag_holder = get_tag_value(event_to_validate.tags, "safebox_holder")
-                        
-                        type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
-                        # owner_name = tag_owner
-                        owner_info, picture = await get_profile_for_pub_hex(tag_owner,settings.RELAYS)
-                        print(f"safebox issuer: {tag_owner} {owner_info}")
-                        # Need to check signature too
-                        print("let's check signature")  
-                        print(f"event to validate: {event_to_validate.data()}")
-                
-                        if event_to_validate.is_valid():
-                            is_valid = "True"
-
-                        
-                        is_attested = await get_attestation(owner_npub=tag_owner,safebox_npub=acorn_obj.pubkey_bech32, relays=settings.RELAYS)
-                        
-                        # authorities = await acorn_obj.get_authorities(kind=event_to_validate.kind)
-                        # trust_list = "npub1vqddl2xav68jyyg669r8eqnv5akx6n5fgky698tfr3d4vy30enpse34f7m # npub1q6mcr8tlr3l4gus3sfnw6772s7zae6hqncmw5wj27ejud5wcxf7q0nx7d5"
-                        # await acorn_obj.set_trusted_entities(pub_list_str=trust_list)
-                        trusted_entities = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
-                        # trusted_entities = ['06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c', '601adfa8dd668f22111ad1467c826ca76c6d4e894589a29d691c5b56122fccc3']
-
-                        print(f"trusted_entities: {trusted_entities} tag owner {tag_owner}")
-                        if tag_owner in trusted_entities:
-                            is_trusted = True
-                        else:
-                            is_trusted = False
-
-                        print(f"test for presenter: {presenter} tag holder: {tag_holder}")
-                        if presenter == tag_holder:
-                            is_presenter = True
-
-                        print(f"is attested: {is_attested}")
-                        rating = "TBD"
-                        wot_scores = await acorn_obj.get_wot_scores(pub_key_to_score=tag_owner, relays=settings.WOT_RELAYS)
-                        # print(f"rating of owner is: {rating}")
+                        facts = await resolve_record_verification_facts(
+                            event_to_validate=event_to_validate,
+                            acorn_obj=acorn_obj,
+                            presenter=presenter,
+                            include_trust_details=True,
+                            trust_context=trust_context,
+                        )
+                        is_valid = facts["is_valid"]
+                        tag_owner = facts["tag_owner_display"] or facts["tag_owner"] or ""
+                        owner_info = facts["owner_info"]
+                        picture = facts["picture"]
+                        is_attested = facts["is_attested"]
+                        is_trusted = facts["is_trusted"]
+                        is_presenter = facts["is_presenter"]
+                        wot_scores = facts["wot_scores"]
                         wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
-                        # wot_scores_to_show = "⭐️"
-                        content = f"{event_to_validate.content}"
+                        content = facts["content"]
                         each["content"] = content
                         each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_presenter else '❌'} Self-Presented|\n{'✅' if is_attested else '❌'} Attested By Issuer|{'✅' if is_trusted else '❌'} Recognized|\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
                         each["picture"] = picture
@@ -2940,6 +2918,10 @@ async def ws_request_record( websocket: WebSocket,
 
                             record_kind = int(each.get("type") or each.get("kind") or transmittal_kind)
                             record_value = each.get("payload")
+                            # PQC offer delivery uses a transport wrapper payload. Persist the
+                            # resolved record content instead of the wrapper marker text.
+                            if record_value == "This record is quantum-safe":
+                                record_value = each.get("content") or record_value
                             if not isinstance(record_value, str):
                                 record_value = json.dumps(record_value)
 

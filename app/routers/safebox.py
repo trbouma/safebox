@@ -34,6 +34,7 @@ from typing import List
 from monstr.encrypt import NIP4Encrypt, Keys, NIP44Encrypt, DecryptionException
 from monstr.event.event import Event
 from safebox.models import cliQuote
+from safebox.monstrmore import ExtendedNIP44Encrypt
 from urllib.parse import quote, unquote
 
 
@@ -1251,6 +1252,28 @@ async def get_inbox(      request: Request,
         transmittal_relays = parsed_result['values'].get("transmittal_relays",settings.TRANSMITTAL_RELAYS)
         
         user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays)
+        for each_record in user_records:
+            record_ciphertext = each_record.get("ciphertext")
+            record_kemalg = each_record.get("kemalg")
+            payload_to_decrypt = each_record.get("pqc_encrypted_payload")
+            if not (record_ciphertext and record_kemalg and payload_to_decrypt):
+                continue
+            try:
+                pqc = oqs.KeyEncapsulation(record_kemalg, bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                k_pqc = Keys(priv_k=shared_secret.hex())
+                my_enc = ExtendedNIP44Encrypt(k_pqc)
+                each_record["payload"] = my_enc.decrypt(
+                    payload=payload_to_decrypt,
+                    for_pub_k=k_pqc.public_key_hex(),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "inbox payload decrypt skipped tag=%s kind=%s: %s",
+                    each_record.get("tag"),
+                    each_record.get("type"),
+                    exc,
+                )
         
 
     return templates.TemplateResponse(  "inbox.html", 
@@ -2388,6 +2411,26 @@ async def accept_incoming_record(       request: Request,
                 # acorn_obj.put_record(record_name=each_record['tag'][0][0],record_value=each_record['payload'],record_type='health',record_kind=37375)
                 record_name = f"{each_record['tag'][0][0]} {each_record['created_at']}" 
                 record_value = each_record['payload']
+                record_ciphertext = each_record.get("ciphertext")
+                record_kemalg = each_record.get("kemalg")
+                payload_to_decrypt = each_record.get("pqc_encrypted_payload")
+                if record_ciphertext and record_kemalg and payload_to_decrypt:
+                    try:
+                        pqc = oqs.KeyEncapsulation(record_kemalg, bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                        shared_secret = pqc.decap_secret(bytes.fromhex(record_ciphertext))
+                        k_pqc = Keys(priv_k=shared_secret.hex())
+                        my_enc = ExtendedNIP44Encrypt(k_pqc)
+                        record_value = my_enc.decrypt(
+                            payload=payload_to_decrypt,
+                            for_pub_k=k_pqc.public_key_hex(),
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "safebox acceptincomingrecord payload decrypt skipped tag=%s kind=%s: %s",
+                            each_record.get("tag"),
+                            transmittal_kind,
+                            exc,
+                        )
                 await acorn_obj.put_record(record_name=record_name, record_value=record_value, record_kind=32225)
                 
                 detail = f"Matched record {incoming_record.id} accepted!"
