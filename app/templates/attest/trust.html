@@ -1,6 +1,6 @@
 {% extends "uxbase.html" %}
 
-{% block title %}Danger Zone{% endblock %}
+{% block title %}Trust{% endblock %}
 {% block head %}
 {{ super() }}
 
@@ -16,9 +16,18 @@
     --sb-panel-border: #2f3d67;
     --sb-text-main: #eef2ff;
     --sb-text-sub: #bcc7ec;
+    --sb-content-width: min(100%, 720px);
+    --sb-space-1: 8px;
+    --sb-space-2: 10px;
+    --sb-space-3: 12px;
+    --sb-space-4: 16px;
+    --sb-space-5: 20px;
+    --sb-title-font: "Josefin Sans", "Avenir Next", "Trebuchet MS", sans-serif;
+    --sb-ui-font: "Inter", "Avenir Next", "Trebuchet MS", sans-serif;
   }
 
   .center-text {
+    width: min(96vw, 880px);
     max-width: 880px;
     margin: 0 auto;
     padding: 18px;
@@ -26,6 +35,7 @@
     border-radius: 16px;
     background: var(--sb-panel);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+    box-sizing: border-box;
   }
 
   .center-text > * {
@@ -34,51 +44,128 @@
   }
 
   .center-text > * + * {
-    margin-top: 12px;
+    margin-top: var(--sb-space-4);
   }
 
   h1, h2, h3, h4, h5, p, span, label, a, pre {
     color: var(--sb-text-main);
   }
 
-  .hint {
-    color: var(--sb-text-sub);
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+  h1, h2, h3, h4, h5 {
+    font-family: var(--sb-title-font);
+    letter-spacing: 0.01em;
   }
 
-  .actions {
-    display: grid;
-    gap: 10px;
+  p, span, label, pre, button, textarea {
+    font-family: var(--sb-ui-font);
   }
 
-  button {
-    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
-    color: #ffffff;
-    border: 0;
-    border-radius: 12px;
-    font-weight: 800;
-    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
-    width: 90%;
-    display: block;
+  .page-title {
+    text-align: center;
+    font-size: clamp(2rem, 4.8vw, 2.7rem);
+    line-height: 1.05;
+  }
+
+  .page-intro,
+  .hint,
+  .status-banner,
+  .panel-content,
+  .actions,
+  textarea,
+  #trust_list {
+    width: var(--sb-content-width);
+    max-width: 100%;
     margin-left: auto;
     margin-right: auto;
+    display: block;
     box-sizing: border-box;
+  }
+
+  .page-intro {
+    text-align: center;
+    color: var(--sb-text-sub);
+    line-height: 1.45;
+  }
+
+  .status-banner {
+    border-radius: 12px;
     padding: 10px 12px;
+    border: 1px solid #3c518b;
+    background: #0d1430;
+    color: #cad9ff;
+    min-height: 1.4em;
+    white-space: pre-wrap;
+  }
+
+  .status-banner.is-success {
+    border-color: #2d8f59;
+    background: rgba(45, 143, 89, 0.18);
+    color: #d8ffe9;
+  }
+
+  .status-banner.is-error {
+    border-color: #b63b4f;
+    background: rgba(182, 59, 79, 0.16);
+    color: #ffd6dc;
+  }
+
+  .account-box {
+    border: 1px solid #3c518b;
+    border-radius: 12px;
+    background: #0d1430;
+    padding: 16px 18px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .account-box > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .account-box > * + * {
+    margin-top: var(--sb-space-3);
+  }
+
+  .section-label {
+    width: var(--sb-content-width);
+    max-width: 100%;
+    margin: 0 auto var(--sb-space-2);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--sb-text-sub);
+  }
+
+  .section-anchor {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .section-anchor:hover {
+    text-decoration: underline;
+  }
+
+  .hint {
+    color: var(--sb-text-sub);
+    line-height: 1.45;
+  }
+
+  .panel-content {
+    display: grid;
+    gap: var(--sb-space-2);
   }
 
   textarea {
+    min-height: 170px;
     background: #0d1430;
     color: #e2e8ff;
     border: 1px solid #39497a;
     border-radius: 10px;
-    padding: 10px 12px;
-    box-sizing: border-box;
-    width: 90% !important;
-    margin-left: auto;
-    margin-right: auto;
-    display: block;
+    padding: 12px 14px;
     resize: vertical;
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    line-height: 1.45;
   }
 
   textarea:focus {
@@ -87,22 +174,56 @@
     border-color: var(--sb-brand-blue-1);
   }
 
+  .actions {
+    display: grid;
+    gap: var(--sb-space-1);
+  }
+
+  .actions.actions-inline {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    box-shadow: 0 10px 20px rgba(8, 12, 28, 0.26);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  }
+
+  button:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: 0 14px 24px rgba(8, 12, 28, 0.32);
+  }
+
+  button:active {
+    transform: translateY(0);
+    box-shadow: 0 8px 16px rgba(8, 12, 28, 0.24);
+  }
+
+  button.secondary {
+    background: linear-gradient(135deg, #253250, #1d2841);
+    color: var(--sb-text-main);
+  }
+
   #trust_list {
-    display: block;
     border: 1px solid #3c518b;
     border-radius: 10px;
     background: #0d1430;
     color: #cad9ff;
-    padding: 10px 12px;
+    padding: 12px 14px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
-  }
-
-  hr {
-    border: 0;
-    border-top: 1px solid #2f416d;
-    margin: 16px 0;
+    line-height: 1.45;
+    min-height: 80px;
   }
 
   @media (max-width: 700px) {
@@ -110,169 +231,152 @@
       padding: 14px;
     }
 
-    button,
-    textarea {
-      width: 100% !important;
+    .actions.actions-inline {
+      grid-template-columns: 1fr;
     }
   }
 </style>
 
-
 <script>
-
-
-
-async function backToHome() {
-
-window.location.href="/safebox/access" ;
-
+function backToHome() {
+  window.location.href = "/safebox/access";
 }
 
+function setStatus(message, tone = "info") {
+  const el = document.getElementById("status_banner");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.remove("is-success", "is-error");
+  if (tone === "success") el.classList.add("is-success");
+  if (tone === "error") el.classList.add("is-error");
+}
 
-
-
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  if (!response.ok || data.status === "ERROR") {
+    const error = new Error(data.detail || "Request failed.");
+    error.payload = data;
+    throw error;
+  }
+  return data;
+}
 
 async function setRootEntities() {
-
-var entities = document.getElementById('root_entities');
-
-
-  submit_data = {"root_entities": entities.value};
-
-  await fetch('/safebox/setrootentities', {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},        
-        body: JSON.stringify(submit_data)         
-       })
-    .then((response) => response.json())
-    .then((data) => {data});
-
-  alert("Root entities have been set. Refreshing page to see updated list.")
-  window.location.reload(); 
-
+  const entities = document.getElementById("root_entities").value;
+  setStatus("Saving root authorities...");
+  try {
+    const data = await postJson("/safebox/setrootentities", { root_entities: entities });
+    document.getElementById("root_entities").value = data.detail || entities;
+    setStatus("Root authorities updated.", "success");
+  } catch (error) {
+    const normalizedValue = error?.payload?.normalized_value;
+    if (typeof normalizedValue === "string") {
+      document.getElementById("root_entities").value = normalizedValue;
+    }
+    setStatus(`Failed to update root authorities: ${error.message}`, "error");
+  }
 }
 
 async function setWOTEntities() {
-
-var wot_entities = document.getElementById('wot_entities');
-
-
-  submit_data = {"wot_entities": wot_entities.value};
-
-  await fetch('/safebox/setwotentities', {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},        
-        body: JSON.stringify(submit_data)         
-       })
-    .then((response) => response.json())
-    .then((data) => {data});
-
-  alert("WoT entities have been set. Refreshing page to see updated list.")
-  window.location.reload(); 
-
+  const entities = document.getElementById("wot_entities").value;
+  setStatus("Saving trusted assertion providers...");
+  try {
+    const data = await postJson("/safebox/setwotentities", { wot_entities: entities });
+    document.getElementById("wot_entities").value = data.detail || entities;
+    setStatus("Trusted assertion providers updated.", "success");
+  } catch (error) {
+    const normalizedValue = error?.payload?.normalized_value;
+    if (typeof normalizedValue === "string") {
+      document.getElementById("wot_entities").value = normalizedValue;
+    }
+    setStatus(`Failed to update trusted assertion providers: ${error.message}`, "error");
+  }
 }
 
 async function getTrustList() {
-
-
-
-
-
-// if (!confirm("OK to proceed?"))  { return;}
-
-
-
-
-  await fetch('/safebox/gettrustlist', {
-        method: "GET",
-        headers: {"Content-Type": "application/json"}       
-                
-       })
-    .then((response) => response.json())
-    .then((data) => { data;
-
-                    
-                    document.getElementById("trust_list").textContent = 'Result:\n ' + data.detail;
-
-                    });
-
-    
-  // window.location.reload(); 
-
-}
-
-</script>
-
-
-<script>
-
-  
-
-  
-
-
-  function consoleLog(data) {
-    var logElement = document.getElementById('log');
-    logElement.innerHTML += data + '\n';
-  };
-  
-  if (localStorage) {
-  
-      //alert("Local Storage!");
-      // localStorage.setItem("name", "Tim");
+  setStatus("Loading effective trust list...");
+  try {
+    const response = await fetch("/safebox/gettrustlist", {
+      method: "GET",
+      headers: {"Content-Type": "application/json"}
+    });
+    const data = await response.json();
+    if (!response.ok || data.status === "ERROR") {
+      throw new Error(data.detail || "Unable to fetch trust list.");
+    }
+    document.getElementById("trust_list").textContent = data.detail || "No trusted entities configured.";
+    setStatus("Effective trust list loaded.", "success");
+  } catch (error) {
+    setStatus(`Failed to load effective trust list: ${error.message}`, "error");
   }
-
-
-
-
-  
-  </script>
+}
+</script>
 
 {% endblock %}
 
 {% block page_content %}
-
 <div class="center-text">
-<h1>Trust</h1>
+  <h1 class="page-title">Trust</h1>
+  <p class="page-intro">
+    Manage the root authorities and trusted assertion providers used to recognize issuers in your trust graph.
+  </p>
+  <div id="status_banner" class="status-banner">Ready.</div>
 
-  <p class="hint">Warning this is experimental.</p>
-  <p class="hint">Enter npubs for root authorities. Any npubs followed by those root authorities will be considered trusted issuers.</p>
-  <hr>
-  <h2>Root Authorities</h2>  
-  <textarea id="root_entities"  rows="8">{{root_entities}}</textarea>
-  <div class="actions">
-    <button onclick="setRootEntities()">Set Root Entities</button>
-    <button onclick="getTrustList()">Get Root List</button>
-  </div>
-  <hr>
-  <h2>Trusted Assertion Providers</h2>  
-  <textarea id="wot_entities"  rows="8">{{wot_entities}}</textarea>
-  <div class="actions">
-    <button onclick="setWOTEntities()">Set Web of Trust Entities</button>
-  </div>
- 
-  
-</div>
-
- 
-
-<div class="center-text">
-    <div class="actions">
-      <button onclick="backToHome()">Home</button>
+  <div class="account-box" id="root-authorities">
+    <p class="section-label"><a class="section-anchor" href="#root-authorities">Root Authorities</a></p>
+    <div class="panel-content">
+      <p class="hint">
+        Enter one `npub` per line. Entities rooted from these authorities are treated as recognized issuers.
+      </p>
+      <textarea id="root_entities" rows="8" spellcheck="false">{{ root_entities }}</textarea>
+      <div class="actions actions-inline">
+        <button onclick="setRootEntities()">Save Root Authorities</button>
+        <button onclick="window.location.href='/safebox/trust/profiles'">View Root Authority Profiles</button>
+        <button onclick="getTrustList()">Load Effective Trust List</button>
+      </div>
     </div>
-    <hr>
-    <span id="trust_list" ></span>
+  </div>
+
+  <div class="account-box" id="trusted-assertion-providers">
+    <p class="section-label"><a class="section-anchor" href="#trusted-assertion-providers">Trusted Assertion Providers</a></p>
+    <div class="panel-content">
+      <p class="hint">
+        Enter one entry per line using `npub:tag[:relay]`. The relay segment is optional and should be entered as a host or relay URL without requiring `https://`.
+      </p>
+      <p class="hint">
+        Expected format: `npub:tag[:relay]`
+      </p>
+      <textarea id="wot_entities" rows="8" spellcheck="false">{{ wot_entities }}</textarea>
+      <div class="actions">
+        <button onclick="setWOTEntities()">Save Trusted Assertion Providers</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="account-box" id="effective-trust-list">
+    <p class="section-label"><a class="section-anchor" href="#effective-trust-list">Effective Trust List</a></p>
+    <div class="panel-content">
+      <p class="hint">
+        This is the expanded list the wallet currently recognizes as trusted after root and web-of-trust resolution.
+      </p>
+      <pre id="trust_list">Use "Load Effective Trust List" to fetch the current list.</pre>
+      <div class="actions">
+        <button class="secondary" onclick="backToHome()">Back To Home</button>
+      </div>
+    </div>
+  </div>
 </div>
-     
+
 <script>
   setDarkMode();
 </script>
-
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-
-
 {% endblock %}

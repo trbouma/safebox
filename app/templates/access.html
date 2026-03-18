@@ -16,6 +16,14 @@
     --sb-panel-border: #2f3d67;
     --sb-text-main: #eef2ff;
     --sb-text-sub: #bcc7ec;
+    --sb-content-width: min(100%, 720px);
+    --sb-space-1: 8px;
+    --sb-space-2: 10px;
+    --sb-space-3: 12px;
+    --sb-space-4: 16px;
+    --sb-space-5: 20px;
+    --sb-title-font: "Josefin Sans", "Avenir Next", "Trebuchet MS", sans-serif;
+    --sb-ui-font: "Inter", "Avenir Next", "Trebuchet MS", sans-serif;
   }
 
   .center-text {
@@ -37,7 +45,7 @@
   }
 
   .center-text > * + * {
-    margin-top: 10px;
+    margin-top: var(--sb-space-3);
   }
 
   /* Legacy layout uses many direct-child <br> nodes; neutralize them */
@@ -46,27 +54,37 @@
     margin-top: 0 !important;
   }
 
-  .center-text form > * + * {
-    margin-top: 8px;
+  .center-text form {
+    display: grid;
+    gap: var(--sb-space-2);
   }
 
   .balance-currency-selector {
-    margin-bottom: 12px;
+    margin-bottom: var(--sb-space-3);
   }
 
   #ln_select_invoice_currency,
   #ln_select_currency {
     display: block;
-    margin: 10px auto 0;
+    margin: var(--sb-space-2) auto 0;
   }
 
   h1, h2, h3, h5, p, span, pre, label, a, b {
     color: var(--sb-text-main);
   }
 
+  h1, h2, h3, h5 {
+    font-family: var(--sb-title-font);
+    letter-spacing: 0.01em;
+  }
+
+  p, span, label, pre, button, input, textarea, select {
+    font-family: var(--sb-ui-font);
+  }
+
   a {
     color: #a6beff;
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
+    font-family: var(--sb-title-font);
   }
 
   input[type="text"],
@@ -79,14 +97,24 @@
     border-radius: 10px;
     padding: 10px 12px;
     box-sizing: border-box;
-    font-family: "Josefin Sans", "Trebuchet MS", Tahoma, sans-serif;
   }
 
   .center-text input[type="text"],
   .center-text input[type="number"],
   .center-text textarea,
-  .center-text select {
-    width: 90% !important;
+  .center-text select,
+  .center-text button,
+  #pay_to_message,
+  #npub,
+  #payment_notification,
+  .helper-note,
+  #ln_address_text,
+  #ln_invoice_summary,
+  #request_qr,
+  .balance-currency-selector,
+  .account-box > a:not(.section-anchor) {
+    width: var(--sb-content-width) !important;
+    max-width: 100%;
     margin-left: auto;
     margin-right: auto;
     display: block;
@@ -111,14 +139,27 @@
     color: #ffffff;
     border: 0;
     border-radius: 12px;
-    font-weight: 600;
-    font-family: "Inter", "Trebuchet MS", Tahoma, sans-serif;
-    width: 90%;
+    font-weight: 700;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
     display: block;
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
-    padding: 10px 12px;
+    padding: 12px 14px;
+    box-shadow: 0 10px 20px rgba(8, 12, 28, 0.26);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  }
+
+  button:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: 0 14px 24px rgba(8, 12, 28, 0.32);
+  }
+
+  button:active {
+    transform: translateY(0);
+    box-shadow: 0 8px 16px rgba(8, 12, 28, 0.24);
   }
 
   #payment_notification,
@@ -140,6 +181,7 @@
     background: transparent;
     padding: 0;
     color: var(--sb-text-main);
+    text-align: center;
   }
 
   /* Keep the top action area compact */
@@ -152,6 +194,8 @@
   }
 
   #img_qr_display {
+    display: block;
+    margin: 0 auto;
     border-radius: 14px;
     border: 1px solid #3c518b;
     background: #0d1430;
@@ -188,8 +232,12 @@
 
   .btn-stack {
     display: grid;
-    gap: 6px;
-    margin-top: 8px;
+    gap: var(--sb-space-1);
+    margin-top: var(--sb-space-2);
+    width: var(--sb-content-width);
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .btn-stack button {
@@ -200,8 +248,8 @@
     border: 1px solid #3c518b;
     border-radius: 12px;
     background: #0d1430;
-    padding: 12px;
-    margin-top: 10px;
+    padding: 16px 18px;
+    margin-top: var(--sb-space-4);
     box-sizing: border-box;
     overflow: hidden;
   }
@@ -212,14 +260,26 @@
   }
 
   .account-box > * + * {
-    margin-top: 8px;
+    margin-top: var(--sb-space-2);
+  }
+
+  .account-box label,
+  .account-box > p,
+  .account-box > h1,
+  .account-box > h2,
+  .account-box > h3,
+  .account-box > pre,
+  .account-box > span {
+    max-width: var(--sb-content-width);
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .section-label {
-    margin: 0 0 6px;
-    font-size: 0.92rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    margin: 0 0 var(--sb-space-2);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--sb-text-sub);
   }
@@ -234,16 +294,73 @@
   }
 
   .helper-note {
-    margin-top: 4px;
+    margin-top: 0;
     font-size: 0.84rem;
     color: var(--sb-text-sub);
     text-align: center;
+    line-height: 1.35;
   }
 
   .balance-updated {
     font-size: 0.8rem;
     color: var(--sb-text-sub);
     text-align: center;
+  }
+
+  #fiat_balance {
+    font-size: clamp(2rem, 4.8vw, 2.7rem);
+    line-height: 1.05;
+    text-align: center;
+  }
+
+  #heading_balance {
+    font-size: 1rem;
+    color: var(--sb-text-sub);
+    text-align: center;
+  }
+
+  #ln_address_text {
+    font-size: 1.08rem;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+
+  #ln_address_text,
+  #ln_invoice_summary,
+  #pay_to_message,
+  #npub,
+  .account-box > a:not(.section-anchor) {
+    text-align: center;
+  }
+
+  #pay_to_message,
+  #npub {
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  #pay_to_message {
+    margin-top: var(--sb-space-4);
+  }
+
+  #payment_notification {
+    font-size: 0.96rem;
+    line-height: 1.45;
+  }
+
+  #invoice_pay_panel {
+    padding-top: var(--sb-space-1);
+    margin-bottom: var(--sb-space-4);
+    border-top: 1px solid rgba(60, 81, 139, 0.55);
+  }
+
+  #invoice_pay_panel h3 {
+    text-align: center;
+  }
+
+  #pay_to_message,
+  #npub {
+    white-space: pre-wrap;
   }
 
   .danger-button {
@@ -1652,7 +1769,7 @@ function getInvoiceStatus(ln_invoice_status) {
   <div id="successFlash" class="success-flash"></div>
   <p id="branding_probe" class="branding-badge">
     <span class="branding-message">{{ branding_message }}</span>
-    <span class="branding-domain">{{ request.url.hostname }}</span>
+    <span class="branding-domain">{{ lightning_address }}</span>
   </p>
 
   <div class="account-box" id="overview">

@@ -46,6 +46,7 @@ from app.branding import build_templates, get_branding_for_request
 from app.tasks import service_poll_for_payment, invoice_poll_for_payment, handle_payment, handle_ecash, task_pay_to_nfc_tag, task_to_send_along_ecash, task_pay_multi, task_pay_multi_invoice
 from app.rates import get_currency_rate
 from safebox.models import TokenV3
+from safebox.func_utils import get_profile_for_pub_hex
 
 import logging, jwt
 from sqlalchemy.exc import IntegrityError
@@ -68,6 +69,79 @@ templates = build_templates()
 router = APIRouter()
 
 # SQLModel.metadata.create_all(engine,checkfirst=True)
+
+
+def _validate_npub_list_strict(pub_list_str: str) -> tuple[list[str], list[str], list[str]]:
+    entries = [entry.strip() for entry in (pub_list_str or "").split() if entry.strip()]
+    normalized: list[str] = []
+    invalid: list[str] = []
+    duplicates: list[str] = []
+    seen: set[str] = set()
+
+    for entry in entries:
+        try:
+            normalized_value = Keys(pub_k=entry).public_key_bech32()
+            if normalized_value in seen:
+                duplicates.append(normalized_value)
+                continue
+            seen.add(normalized_value)
+            normalized.append(normalized_value)
+        except Exception:
+            invalid.append(entry)
+
+    return normalized, invalid, duplicates
+
+
+def _validate_wot_entity_list_strict(pub_list_str: str) -> tuple[list[str], list[str], list[str]]:
+    entries = [entry.strip() for entry in (pub_list_str or "").split() if entry.strip()]
+    normalized: list[str] = []
+    invalid: list[str] = []
+    duplicates: list[str] = []
+    seen: set[str] = set()
+
+    for entry in entries:
+        parts = entry.split(":")
+        if len(parts) < 2 or len(parts) > 3:
+            invalid.append(entry)
+            continue
+
+        base_npub = parts[0].strip()
+        tag = parts[1].strip()
+        relay = parts[2].strip() if len(parts) == 3 else ""
+
+        if not base_npub or not tag:
+            invalid.append(entry)
+            continue
+
+        try:
+            normalized_base = Keys(pub_k=base_npub).public_key_bech32()
+            normalized_value = f"{normalized_base}:{tag}"
+            if relay:
+                normalized_value = f"{normalized_value}:{relay}"
+            if normalized_value in seen:
+                duplicates.append(normalized_value)
+                continue
+            seen.add(normalized_value)
+            normalized.append(normalized_value)
+        except Exception:
+            invalid.append(entry)
+
+    return normalized, invalid, duplicates
+
+
+def _build_validation_error_detail(
+    invalid_entities: list[str],
+    duplicate_entities: list[str],
+    invalid_label: str,
+    duplicate_label: str,
+) -> str:
+    messages: list[str] = []
+    if invalid_entities:
+        messages.append(f"{invalid_label}: {', '.join(invalid_entities)}.")
+    if duplicate_entities:
+        messages.append(f"{duplicate_label}: {', '.join(duplicate_entities)}.")
+    messages.append("Invalid and duplicate entries were removed from the input.")
+    return " ".join(messages)
 
 
 def _b64_pad(value: str) -> str:
@@ -1339,9 +1413,7 @@ async def my_attest(       request: Request,
     except Exception as exc:
         logger.exception("Failed loading trust page data")
 
-    wot_entities_str = ""
-    for each in wot_entities:
-        wot_entities_str += each + " "
+    wot_entities_str = "\n".join([each for each in wot_entities if each])
     
 
     
@@ -1355,16 +1427,74 @@ async def my_attest(       request: Request,
 
                                         })  
 
+
+@router.get("/trust/profiles", tags=["safebox", "protected"])
+async def trust_profiles(
+    request: Request,
+    acorn_obj: Acorn = Depends(get_acorn)
+):
+    profile_cards: list[dict[str, str | None]] = []
+
+    try:
+        await acorn_obj.load_data()
+        root_entities = await acorn_obj.get_root_entities(relays=settings.RELAYS)
+    except Exception:
+        logger.exception("Failed loading root authority list for trust profiles")
+        root_entities = ""
+
+    normalized_root_entities, _, _ = _validate_npub_list_strict(root_entities)
+
+    for root_npub in normalized_root_entities:
+        owner_info = "No owner profile found"
+        picture = None
+        try:
+            pub_hex = Keys(pub_k=root_npub).public_key_hex()
+            owner_info, picture = await get_profile_for_pub_hex(pub_hex, settings.RELAYS)
+        except Exception:
+            logger.exception("Failed loading trust profile for root authority npub=%s", root_npub)
+
+        profile_cards.append(
+            {
+                "npub": root_npub,
+                "owner_info": owner_info,
+                "picture": picture,
+            }
+        )
+
+    return templates.TemplateResponse(
+        "attest/trust_profiles.html",
+        {
+            "request": request,
+            "profiles": profile_cards,
+        },
+    )
+
 @router.post("/setrootentities", tags=["safebox", "protected"])
 async def set_root_entities(            request: Request, 
                                         root_entity: rootEntity,
                                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
     
-   
     await acorn_obj.load_data()
     print(f"root entities received: {root_entity.root_entities}")
-    await acorn_obj.set_trusted_entities(pub_list_str=root_entity.root_entities)
+
+    normalized_entities, invalid_entities, duplicate_entities = _validate_npub_list_strict(root_entity.root_entities)
+    normalized_root_entities = "\n".join(normalized_entities)
+    if invalid_entities or duplicate_entities:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "ERROR",
+                "detail": _build_validation_error_detail(
+                    invalid_entities,
+                    duplicate_entities,
+                    "Invalid npub value(s)",
+                    "Duplicate npub value(s)",
+                ),
+                "normalized_value": normalized_root_entities,
+            },
+        )
+    await acorn_obj.set_trusted_entities(pub_list_str=normalized_root_entities)
     root_entities = await acorn_obj.get_root_entities(relays=settings.RELAYS)
     
    
@@ -1379,12 +1509,26 @@ async def set_wot_entities(            request: Request,
    
     await acorn_obj.load_data()
     print(f"wot entities received: {wot_entity.wot_entities}")
-    await acorn_obj.set_wot_entities(pub_list_str=wot_entity.wot_entities)
+    normalized_entities, invalid_entities, duplicate_entities = _validate_wot_entity_list_strict(wot_entity.wot_entities)
+    normalized_wot_entities = "\n".join(normalized_entities)
+    if invalid_entities or duplicate_entities:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "ERROR",
+                "detail": _build_validation_error_detail(
+                    invalid_entities,
+                    duplicate_entities,
+                    "Invalid trusted assertion provider value(s)",
+                    "Duplicate trusted assertion provider value(s)",
+                ),
+                "normalized_value": normalized_wot_entities,
+            },
+        )
+    await acorn_obj.set_wot_entities(pub_list_str=normalized_wot_entities)
     wot_entities = await acorn_obj.get_wot_entities(relays=settings.RELAYS)
     # convert to a string with npubs
-    wot_entities_str = ""
-    for each in wot_entities:
-        wot_entities_str += each + ' '
+    wot_entities_str = "\n".join([each for each in wot_entities if each])
     
    
     return {"status": "OK", "detail": wot_entities_str}
@@ -1395,7 +1539,7 @@ async def get_trust_list(            request: Request,
                                     acorn_obj: Acorn = Depends(get_acorn)
                     ):
     
-    trust_out = ''
+    trust_entries: list[str] = []
     trust_count = 1
     await acorn_obj.load_data()
    
@@ -1405,15 +1549,16 @@ async def get_trust_list(            request: Request,
         for each in trust_list:
             try:
                 k_each = Keys(pub_k=each)            
-                trust_out += f"{k_each.public_key_bech32()} "
+                trust_entries.append(k_each.public_key_bech32())
                 trust_count +=1
             except Exception as exc:
                 logger.debug("Skipping invalid trusted entity entry=%s error=%s", each, exc)
     except Exception as exc:
         logger.exception("Failed to fetch trusted entities")
-        trust_out = "Error"
+        return {"status": "ERROR", "detail": "Unable to fetch trusted entities."}
     
    
+    trust_out = "\n".join(trust_entries) if trust_entries else "No trusted entities configured."
     return {"status": "OK", "detail": trust_out}
 
                                     

@@ -1,0 +1,229 @@
+{% extends "uxbase.html" %}
+
+{% block title %}Trust Profiles{% endblock %}
+{% block head %}
+{{ super() }}
+
+<style>
+  :root {
+    --sb-brand-blue-1: #5267ec;
+    --sb-brand-blue-2: #5369ec;
+    --sb-panel: #121a33;
+    --sb-panel-alt: #0d1430;
+    --sb-panel-border: #2f3d67;
+    --sb-text-main: #eef2ff;
+    --sb-text-sub: #bcc7ec;
+    --sb-content-width: min(100%, 980px);
+    --sb-space-1: 8px;
+    --sb-space-2: 12px;
+    --sb-space-3: 16px;
+    --sb-space-4: 22px;
+    --sb-title-font: "Josefin Sans", "Avenir Next", "Trebuchet MS", sans-serif;
+    --sb-ui-font: "Inter", "Avenir Next", "Trebuchet MS", sans-serif;
+  }
+
+  .trust-profiles-shell {
+    width: min(96vw, 1040px);
+    margin: 0 auto;
+    padding: 18px;
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 16px;
+    background: var(--sb-panel);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+    box-sizing: border-box;
+  }
+
+  .trust-profiles-shell > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .trust-profiles-shell > * + * {
+    margin-top: var(--sb-space-4);
+  }
+
+  .page-title,
+  .page-intro,
+  .actions-row,
+  .empty-state,
+  .profiles-grid {
+    width: var(--sb-content-width);
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  .page-title {
+    color: var(--sb-text-main);
+    text-align: center;
+    font-family: var(--sb-title-font);
+    font-size: clamp(2rem, 4.4vw, 2.6rem);
+    line-height: 1.05;
+  }
+
+  .page-intro {
+    color: var(--sb-text-sub);
+    text-align: center;
+    font-family: var(--sb-ui-font);
+    line-height: 1.45;
+  }
+
+  .actions-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--sb-space-1);
+  }
+
+  button {
+    background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    box-shadow: 0 10px 20px rgba(8, 12, 28, 0.26);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    font-family: var(--sb-ui-font);
+  }
+
+  button:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: 0 14px 24px rgba(8, 12, 28, 0.32);
+  }
+
+  button:active {
+    transform: translateY(0);
+    box-shadow: 0 8px 16px rgba(8, 12, 28, 0.24);
+  }
+
+  button.secondary {
+    background: linear-gradient(135deg, #253250, #1d2841);
+    color: var(--sb-text-main);
+  }
+
+  .profiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--sb-space-3);
+  }
+
+  .profile-card,
+  .empty-state {
+    border: 1px solid var(--sb-panel-border);
+    border-radius: 14px;
+    background: var(--sb-panel-alt);
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .profile-card {
+    display: grid;
+    gap: var(--sb-space-2);
+    min-height: 220px;
+    align-content: start;
+  }
+
+  .profile-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #41558f;
+    background: #1a2341;
+  }
+
+  .profile-avatar-fallback {
+    display: grid;
+    place-items: center;
+    color: var(--sb-text-sub);
+    font-family: var(--sb-title-font);
+    font-size: 1.8rem;
+  }
+
+  .profile-label {
+    color: var(--sb-text-sub);
+    font-family: var(--sb-ui-font);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .profile-owner,
+  .profile-npub {
+    color: var(--sb-text-main);
+    font-family: var(--sb-ui-font);
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  .profile-owner {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .profile-npub {
+    font-size: 0.92rem;
+    color: var(--sb-text-sub);
+  }
+
+  .empty-state {
+    color: var(--sb-text-sub);
+    text-align: center;
+    font-family: var(--sb-ui-font);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 700px) {
+    .trust-profiles-shell {
+      padding: 14px;
+    }
+
+    .actions-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="trust-profiles-shell">
+  <h1 class="page-title">Root Authority Profiles</h1>
+  <p class="page-intro">
+    Latest kind 0 social profiles for the currently configured root authorities.
+  </p>
+
+  <div class="actions-row">
+    <button onclick="window.location.href='/safebox/trust'">Back To Trust Settings</button>
+    <button onclick="window.location.reload()">Refresh Profiles</button>
+  </div>
+
+  {% if profiles %}
+  <div class="profiles-grid">
+    {% for profile in profiles %}
+    <div class="profile-card">
+      {% if profile.picture %}
+      <img class="profile-avatar" src="{{ profile.picture }}" alt="Profile picture for {{ profile.npub }}">
+      {% else %}
+      <div class="profile-avatar profile-avatar-fallback">RA</div>
+      {% endif %}
+      <div class="profile-label">Profile</div>
+      <div class="profile-owner">{{ profile.owner_info or "No owner profile found" }}</div>
+      <div class="profile-label">Npub</div>
+      <div class="profile-npub">{{ profile.npub }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    No root authorities are configured yet, or no valid root authority `npub` values are available to resolve.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
