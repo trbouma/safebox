@@ -14,6 +14,10 @@ For the recommended OpenBao-backed steady-state integration model, also see:
 
 - `/Users/trbouma/projects/safebox-2/docs/devops/openbao-integration-procedure.md`
 
+For a concrete troubleshooting note on PQC wrapper text appearing instead of decrypted record content, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/pqc-offer-wrapper-troubleshooting.md`
+
 ---
 
 ## Current Behavior

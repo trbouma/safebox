@@ -10,6 +10,10 @@ For the concrete Kubernetes bootstrap manifest pattern and the Compose-to-Kubern
 
 - `/Users/trbouma/projects/safebox-2/docs/devops/kubernetes-secret-bootstrap-and-promotion.md`
 
+For a recipient-side troubleshooting note on PQC/KEM secret drift causing record offers to display `This record is quantum-safe`, also see:
+
+- `/Users/trbouma/projects/safebox-2/docs/devops/pqc-offer-wrapper-troubleshooting.md`
+
 ## Zero-Config Bootstrap Goal
 
 In bootstrap mode, Safebox should:
