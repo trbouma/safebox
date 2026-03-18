@@ -108,6 +108,21 @@ If recipient is not Safebox-capable (`safebox` absent/false):
 
 Safebox selects proofs, requests melt quote, and executes melt against mint APIs.
 
+### 2a. Resilience behavior during Lightning fallback
+
+The Lightning fallback path is now managed with explicit fail-closed proof discipline:
+
+- Safebox requests the melt quote before any proof replacement is committed.
+- Proofs selected for swap/payment are taken from a working copy of the chosen keyset set.
+- The wallet only commits the post-payment proof set after successful melt completion.
+- Swap/consolidation helpers refuse destructive overwrite when a replacement proof set is empty.
+
+This means:
+
+- if the mint is unavailable during quote, key fetch, checkstate, or swap, payment fails and existing proofs remain unchanged;
+- if the mint becomes unavailable after melt submission, the result is potentially uncertain and MUST NOT be treated as confirmed success;
+- proof-shape failures may trigger one bounded retry after proof consolidation, but generic mint transport failures are not retried indefinitely.
+
 ### 3. Recipient gets a regular Lightning payment
 
 No Safebox-specific secure ecash messaging is required.
@@ -138,6 +153,12 @@ In particular:
 - ecash delivery failures MUST trigger rollback/recovery behavior,
 - timeout/retry behavior MUST be bounded and explicit,
 - and uncertain settlement MUST NOT be surfaced as successful completion.
+
+For Lightning-address fallback specifically:
+
+- pre-melt mint failures fail closed with proof preservation,
+- post-submission melt failures are treated as uncertain until reconciled,
+- and payment assembly no longer mutates the active proof set before settlement commit.
 
 ## Relevant Implementation Files
 

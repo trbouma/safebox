@@ -116,6 +116,12 @@ Instead, users interact with:
 
 Safebox may trigger proof consolidation when proof count or keyset fragmentation increases, to keep spending paths reliable.
 
+Current hardening rules for proof mutation:
+
+- swap/consolidate paths MUST refuse destructive replacement when zero replacement proofs were produced,
+- payment assembly SHOULD operate on copied keyset proof lists until swap/melt succeeds,
+- and mint/swap failures SHOULD surface the real mint/keyset cause instead of masking it behind generic empty-proof replacement errors.
+
 ## Implementation References
 
 - `safebox/acorn.py`

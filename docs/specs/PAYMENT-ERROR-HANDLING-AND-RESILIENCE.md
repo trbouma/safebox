@@ -109,6 +109,8 @@ During mutation:
 
 - The runtime MUST NOT delete existing proof events until non-empty replacement proofs are confirmed ready.
 - The runtime MUST NOT overwrite in-memory or persisted proofs with an empty replacement set unless the expected target state is explicitly empty.
+- Payment assembly routines MUST NOT destructively mutate the selected working proof set before swap/melt success is confirmed.
+- Proof selection for payment SHOULD operate on a copy of the candidate keyset proof list and only commit back into wallet state after successful settlement commit.
 - If no proofs are present, mutation routines MUST no-op (not crash wallet load paths).
 
 After mutation:
@@ -132,6 +134,28 @@ Mint/relay/LN dependency failures:
 - Timeout values MUST be explicit and configurable.
 - Terminal timeout MUST surface as explicit error, not silent hang.
 - Retry loops MUST avoid unbounded resource amplification.
+
+### Mint Unavailability Semantics
+
+Payment implementations MUST distinguish at least two mint-failure phases:
+
+1. `PRE_COMMIT_DEPENDENCY_FAILURE`
+   - quote/checkstate/key fetch/swap request fails before melt commit is accepted,
+   - payment MUST fail closed,
+   - existing proofs MUST remain unchanged in memory and in persistence.
+
+2. `POST_SUBMISSION_UNCERTAIN`
+   - melt submission may have been accepted remotely but client loses final confirmation,
+   - payment MUST be surfaced as uncertain rather than success,
+   - implementation MUST preserve existing wallet proofs unless authoritative confirmation supports replacement,
+   - operator/user recovery MAY require reconciliation against mint state and payment hash/preimage evidence.
+
+### Swap Retry Policy
+
+- Automatic retry-after-swap SHOULD be limited to proof-shape or proof-state failures
+  (for example fragmented proof sets, stale local proof composition, or deterministic "swap recommended" conditions).
+- Generic mint unavailability or transport failures MUST NOT enter unbounded swap/retry loops.
+- When a retry-after-swap path is attempted and fails, the final surfaced error SHOULD preserve the underlying mint/keyset context.
 
 Client-visible behavior:
 
@@ -184,6 +208,12 @@ A payment implementation is conformant only if all checks below pass:
    - dependency timeout returns terminal error class, not indefinite pending.
 8. Auth invalidation:
    - stale invalid session cookie leads to logout/reset behavior, not repeated server exception loops.
+9. Pre-commit mint outage:
+   - quote/checkstate/swap outage MUST leave proofs unchanged.
+10. Zero-proof replacement guard:
+   - swap/consolidate/async-swap MUST refuse destructive replacement when no new proofs were produced.
+11. Post-submission uncertainty:
+   - melt submission failure after remote side-effect may be possible MUST surface uncertain wording, not success.
 
 ## Implementation References
 
