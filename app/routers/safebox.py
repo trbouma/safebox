@@ -1549,6 +1549,8 @@ async def set_wot_entities(            request: Request,
             },
         )
     await acorn_obj.set_wot_entities(pub_list_str=normalized_wot_entities)
+    if not normalized_wot_entities.strip():
+        return {"status": "OK", "detail": ""}
     wot_entities = await acorn_obj.get_wot_entities(relays=settings.RELAYS)
     # convert to a string with npubs
     wot_entities_str = "\n".join([each for each in wot_entities if each])

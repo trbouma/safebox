@@ -31,11 +31,13 @@ class FakeEvent:
 
 
 class FakeAcorn:
-    def __init__(self, trusted_entities=None, wot_scores=None):
+    def __init__(self, trusted_entities=None, wot_scores=None, trusted_entity_sources=None):
         self.pubkey_bech32 = "npub1testpresenterxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         self._trusted_entities = trusted_entities or []
         self._wot_scores = wot_scores or [["score", "5"]]
+        self._trusted_entity_sources = trusted_entity_sources or {}
         self.get_trusted_entities = AsyncMock(return_value=self._trusted_entities)
+        self.get_trusted_entity_sources = AsyncMock(return_value=self._trusted_entity_sources)
         self.get_wot_scores = AsyncMock(return_value=self._wot_scores)
 
 
@@ -44,19 +46,27 @@ class RecordsVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(parse_event_payload("not-json"))
 
     async def test_build_record_trust_context_optionally_loads_trusted_entities(self):
-        acorn = FakeAcorn(trusted_entities=["abc"])
+        acorn = FakeAcorn(trusted_entities=["abc"], trusted_entity_sources={"roothex": ["abc"]})
 
         context = await build_record_trust_context(acorn, include_trusted_entities=True)
 
         self.assertEqual(context["trusted_entities"], ["abc"])
+        self.assertEqual(context["root_recognition_sources"], {"roothex": ["abc"]})
         acorn.get_trusted_entities.assert_awaited_once()
+        acorn.get_trusted_entity_sources.assert_awaited_once()
 
     async def test_resolve_record_verification_facts_normalizes_owner_and_uses_cache(self):
         owner_keys = Keys()
         owner_hex = owner_keys.public_key_hex()
         owner_npub = owner_keys.public_key_bech32()
         event = FakeEvent(owner_value=owner_hex, holder_value="presenter-npub")
-        acorn = FakeAcorn(trusted_entities=[owner_hex], wot_scores=[["reputation", "7"]])
+        root_keys = Keys()
+        root_hex = root_keys.public_key_hex()
+        acorn = FakeAcorn(
+            trusted_entities=[owner_hex],
+            wot_scores=[["reputation", "7"]],
+            trusted_entity_sources={root_hex: [owner_hex]},
+        )
         trust_context = await build_record_trust_context(acorn, include_trusted_entities=True)
 
         with (
@@ -85,8 +95,9 @@ class RecordsVerificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(facts_first["is_attested"])
         self.assertTrue(facts_first["is_presenter"])
         self.assertEqual(facts_first["wot_scores"], [["reputation", "7"]])
+        self.assertEqual(facts_first["recognized_by"], ["Owner Name nip05"])
         self.assertEqual(facts_second["owner_info"], "Owner Name nip05")
-        profile_mock.assert_awaited_once_with(owner_hex, unittest.mock.ANY)
+        self.assertEqual(profile_mock.await_count, 2)
         attestation_mock.assert_awaited_once()
         acorn.get_wot_scores.assert_awaited_once()
         acorn.get_trusted_entities.assert_awaited_once()

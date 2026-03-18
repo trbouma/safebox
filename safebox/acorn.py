@@ -7490,6 +7490,53 @@ class Acorn:
         pubhex_list_out = list(set(pubhex_list_out))
         return pubhex_list_out
 
+    async def get_trusted_entity_sources(self, kind: int = 37376, relays: List[str] = None):
+        root_to_trusted: dict[str, set[str]] = {}
+        relays = relays or self.relays
+
+        try:
+            record_out = await self.get_wallet_info(label="trusted entities", record_kind=kind)
+            if record_out is None:
+                return {}
+            record_out_json = json.loads(record_out)
+            pubs_to_process = [
+                each.strip()
+                for each in str(record_out_json.get("payload", "")).split()
+                if each.strip()
+            ]
+        except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            self.logger.debug("No trusted entity sources configured: %s", exc)
+            return {}
+
+        root_hexes: list[str] = []
+        for each in pubs_to_process:
+            try:
+                root_hex = Keys(pub_k=each).public_key_hex()
+                root_hexes.append(root_hex)
+                root_to_trusted[root_hex] = {root_hex}
+            except Exception as exc:
+                self.logger.debug("Skipping invalid root entity=%s error=%s", each, exc)
+
+        if not root_hexes:
+            return {}
+
+        filter_obj = [{
+            'limit': RECORD_LIMIT,
+            'authors': root_hexes,
+            'kinds': [3]
+        }]
+        async with ClientPool(relays) as c:
+            events = await c.query(filter_obj)
+            if events:
+                for each in events:
+                    root_hex = each.pub_key
+                    root_to_trusted.setdefault(root_hex, {root_hex})
+                    for each_tag in each.tags:
+                        if each_tag[0] == "p" and len(each_tag) > 1:
+                            root_to_trusted[root_hex].add(each_tag[1])
+
+        return {root_hex: sorted(list(trusted_hexes)) for root_hex, trusted_hexes in root_to_trusted.items()}
+
     async def get_root_entities(self,kind:int=37376, relays: List[str]=None):
 
         try:
@@ -7557,7 +7604,11 @@ class Acorn:
             if not record_out:
                 return []
             record_out_json = json.loads(record_out)
-            pubs_to_process = record_out_json.get('payload', '').split(' ')
+            pubs_to_process = [
+                each.strip()
+                for each in str(record_out_json.get('payload', '')).split()
+                if each.strip()
+            ]
             self.logger.debug("op=get_wot_entities status=processing count=%s", len(pubs_to_process))
         
             for each in pubs_to_process:
@@ -7583,7 +7634,7 @@ class Acorn:
                     
                     pubhex_list_out.append(final_entry)
                    
-                except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+                except Exception as exc:
                     self.logger.debug("Skipping malformed wot score entity=%s error=%s", each, exc)
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.logger.debug("Could not load wot entities: %s", exc)
@@ -7597,7 +7648,6 @@ class Acorn:
         return pubhex_list_out
     
     async def get_wot_scores(self, pub_key_to_score: str, relays: List[str]=None):
-        rank = '0'
         scores_out = []
         try:
             k_to_use = Keys(pub_k=pub_key_to_score)
@@ -7611,6 +7661,7 @@ class Acorn:
         for each_wot in wot_entities:
             each_wot_npub, each_wot_tag, each_wot_relay = (each_wot.split(':') + [None, None, None])[:3]
             each_wot_relay = each_wot_relay if not each_wot_relay or each_wot_relay.startswith("wss://") else f"wss://{each_wot_relay}"
+            found_score = False
             self.logger.debug("op=get_wot_scores status=processing_entity npub=%s", each_wot_npub)
             FILTER = [{
             'limit': RECORD_LIMIT,
@@ -7629,11 +7680,16 @@ class Acorn:
                             self.logger.debug("op=get_wot_scores status=event_tags pubkey=%s", each_event.pub_key)
                             for each_tag in each_event.tags:
                                 if each_tag[0] == each_wot_tag:
-                                    score = 0
                                     score = each_tag[1]
-                                    scores_out.append([each_wot_tag,score])
+                                    scores_out.append([each_wot_tag, score])
+                                    found_score = True
+                                    break
+                            if found_score:
+                                break
             except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
                 self.logger.warning("Failed querying wot score relay=%s error=%s", each_wot_relay, exc)
+            if each_wot_tag and not found_score:
+                scores_out.append([each_wot_tag, "na"])
         
 
         return scores_out

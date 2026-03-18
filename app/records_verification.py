@@ -101,10 +101,14 @@ async def resolve_record_verification_facts(
     is_attested = False
     is_trusted = False
     is_presenter = False
+    is_held_by_current_safebox = False
     wot_scores = []
     attestation_cache = (trust_context or {}).setdefault("attestation_cache", {})
     wot_score_cache = (trust_context or {}).setdefault("wot_score_cache", {})
     trusted_entities = (trust_context or {}).get("trusted_entities")
+    root_recognition_sources = (trust_context or {}).get("root_recognition_sources", {})
+    root_profile_cache = (trust_context or {}).setdefault("root_profile_cache", {})
+    recognized_by = []
 
     if owner_display:
         attestation_cache_key = owner_pub_hex or owner_display
@@ -122,6 +126,14 @@ async def resolve_record_verification_facts(
             if trust_context is not None:
                 trust_context["trusted_entities"] = trusted_entities
         is_trusted = bool(owner_pub_hex and owner_pub_hex in trusted_entities)
+        if owner_pub_hex:
+            for root_hex, recognized_hexes in root_recognition_sources.items():
+                if owner_pub_hex not in recognized_hexes:
+                    continue
+                if root_hex not in root_profile_cache:
+                    root_profile_cache[root_hex] = await get_profile_for_pub_hex(root_hex, settings.RELAYS)
+                root_owner_info, _ = root_profile_cache[root_hex]
+                recognized_by.append(root_owner_info or Keys(pub_k=root_hex).public_key_bech32())
 
         logger.debug("record_verification is_attested=%s", is_attested)
         wot_cache_key = owner_pub_hex or owner_display
@@ -135,13 +147,22 @@ async def resolve_record_verification_facts(
     logger.debug("record_verification presenter=%s tag_holder=%s", presenter, tag_holder)
     if presenter == tag_holder:
         is_presenter = True
+    if tag_holder:
+        try:
+            holder_keys = Keys(pub_k=tag_holder)
+            current_keys = Keys(pub_k=acorn_obj.pubkey_bech32)
+            is_held_by_current_safebox = holder_keys.public_key_hex() == current_keys.public_key_hex()
+        except Exception:
+            is_held_by_current_safebox = tag_holder == acorn_obj.pubkey_bech32
 
     facts.update(
         {
             "is_attested": is_attested,
             "is_trusted": is_trusted,
             "is_presenter": is_presenter,
+            "is_held_by_current_safebox": is_held_by_current_safebox,
             "wot_scores": wot_scores,
+            "recognized_by": recognized_by,
         }
     )
     return facts
@@ -155,10 +176,13 @@ async def build_record_trust_context(
         "profile_cache": {},
         "attestation_cache": {},
         "wot_score_cache": {},
+        "root_profile_cache": {},
         "trusted_entities": None,
+        "root_recognition_sources": {},
     }
 
     if include_trusted_entities:
         trust_context["trusted_entities"] = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
+        trust_context["root_recognition_sources"] = await acorn_obj.get_trusted_entity_sources(relays=settings.RELAYS)
 
     return trust_context

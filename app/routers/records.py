@@ -1097,7 +1097,7 @@ async def my_present_records(       request: Request,
     is_valid = "Cannot Validate"
     trust_context = await build_record_trust_context(
         acorn_obj=acorn_obj,
-        include_trusted_entities=False,
+        include_trusted_entities=True,
     )
     for each in user_records:        
 
@@ -1106,7 +1106,7 @@ async def my_present_records(       request: Request,
             facts = await resolve_record_verification_facts(
                 event_to_validate=event_to_validate,
                 acorn_obj=acorn_obj,
-                include_trust_details=False,
+                include_trust_details=True,
                 trust_context=trust_context,
             )
             is_valid = facts["is_valid"]
@@ -1116,10 +1116,16 @@ async def my_present_records(       request: Request,
             owner_info = facts["owner_info"]
             picture = facts["picture"]
             content = facts["content"]
-            is_trusted = "TBD"
+            is_trusted = facts["is_trusted"]
+            is_attested = facts["is_attested"]
+            is_held_by_current_safebox = facts["is_held_by_current_safebox"]
+            recognized_by = facts.get("recognized_by", [])
+            wot_scores = facts["wot_scores"]
+            wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
+            recognized_by_to_show = ", ".join(recognized_by) if recognized_by else "na"
             each["content"] = content
             print(f"line 418 {content}")
-            each["verification"] = f"\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {owner_info} [{tag_owner[:6]}:{tag_owner[-6:]}] \nValid: {is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+            each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_held_by_current_safebox else '❌'} Held By Current Safebox|\n{'✅' if is_attested else '❌'} Attested By Owner|{'✅' if is_trusted else '❌'} Recognized|\nRecognized By\n ------\n{recognized_by_to_show}\n-----\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
             each["picture"]=picture
         else:
             each["content"] = _extract_payload_content(each.get("payload"))
@@ -1903,23 +1909,27 @@ async def display_grant(     request: Request,
             event_to_validate = parse_event_payload(private_record)
             if not event_to_validate:
                 raise ValueError("payload is not a signed event")
-            
-            
-            # tag_owner = get_tag_value(private_record["tags"], "safebox_owner")
-            # tag_safebox = get_tag_value(private_record["tags"], "safebox")
-            tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
-            tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
-            type_name = get_label_by_id(settings.GRANT_KINDS,event_to_validate.kind)
-            # Need to check signature too
-            print("let's check signature")
-           
-            
-            print(f"event to validate: {event_to_validate.data()}")
-            
-            event_is_valid = event_to_validate.is_valid()
-            is_trusted = "TBD"
-
-            content = f"{event_to_validate.content}\n\n{'_'*40}\n\nIssued From: {tag_safebox[:6]}:{tag_safebox[-6:]} \nOwner: {tag_owner[:6]}:{tag_owner[-6:]} \nValid: {event_is_valid} | Trusted: {is_trusted} \nType:{type_name} Kind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at}"
+            trust_context = await build_record_trust_context(
+                acorn_obj=acorn_obj,
+                include_trusted_entities=True,
+            )
+            facts = await resolve_record_verification_facts(
+                event_to_validate=event_to_validate,
+                acorn_obj=acorn_obj,
+                include_trust_details=True,
+                trust_context=trust_context,
+            )
+            tag_owner = facts["tag_owner_display"] or facts["tag_owner"] or ""
+            owner_info = facts["owner_info"]
+            event_is_valid = facts["is_valid"]
+            is_trusted = facts["is_trusted"]
+            is_attested = facts["is_attested"]
+            is_held_by_current_safebox = facts["is_held_by_current_safebox"]
+            recognized_by = facts.get("recognized_by", [])
+            wot_scores = facts["wot_scores"]
+            wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
+            recognized_by_to_show = ", ".join(recognized_by) if recognized_by else "na"
+            content = f"{facts['content']}\n\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if event_is_valid else '❌'} Valid|{'✅' if is_held_by_current_safebox else '❌'} Held By Current Safebox|\n{'✅' if is_attested else '❌'} Attested By Owner|{'✅' if is_trusted else '❌'} Recognized|\nRecognized By\n ------\n{recognized_by_to_show}\n-----\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
         except Exception as exc:
             content = _extract_payload_content(record.get("payload"))
         
@@ -2887,11 +2897,13 @@ async def ws_request_record( websocket: WebSocket,
                         is_attested = facts["is_attested"]
                         is_trusted = facts["is_trusted"]
                         is_presenter = facts["is_presenter"]
+                        recognized_by = facts.get("recognized_by", [])
                         wot_scores = facts["wot_scores"]
                         wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
+                        recognized_by_to_show = ", ".join(recognized_by) if recognized_by else "na"
                         content = facts["content"]
                         each["content"] = content
-                        each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_presenter else '❌'} Self-Presented|\n{'✅' if is_attested else '❌'} Attested By Issuer|{'✅' if is_trusted else '❌'} Recognized|\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
+                        each["verification"] = f"\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if is_valid else '❌'} Valid|{'✅' if is_presenter else '❌'} Self-Presented|\n{'✅' if is_attested else '❌'} Attested By Owner|{'✅' if is_trusted else '❌'} Recognized|\nRecognized By\n ------\n{recognized_by_to_show}\n-----\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
                         each["picture"] = picture
                         each["is_attested"] = is_attested
                         each["original_record"] = original_record_to_present_json
