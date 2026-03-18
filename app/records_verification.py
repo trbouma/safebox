@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, Optional
 
 from monstr.encrypt import Keys
@@ -11,6 +12,7 @@ from safebox.func_utils import get_attestation, get_profile_for_pub_hex
 
 
 settings = Settings()
+logger = logging.getLogger(__name__)
 
 
 def parse_event_payload(payload) -> Optional[Event]:
@@ -46,7 +48,7 @@ async def resolve_record_verification_facts(
     include_trust_details: bool = False,
     trust_context: dict[str, Any] | None = None,
 ) -> dict:
-    print(f"event to validate tags: {event_to_validate.tags}")
+    logger.debug("record_verification tags=%s", event_to_validate.tags)
     tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
     tag_issuer = get_tag_value(event_to_validate.tags, "safebox_issuer")
     tag_holder = get_tag_value(event_to_validate.tags, "safebox_holder")
@@ -72,9 +74,9 @@ async def resolve_record_verification_facts(
         if owner_pub_hex not in profile_cache:
             profile_cache[owner_pub_hex] = await get_profile_for_pub_hex(owner_pub_hex, settings.RELAYS)
         owner_info, picture = profile_cache[owner_pub_hex]
-    print(f"safebox issuer: {owner_display} {owner_info}")
-    print("let's check signature")
-    print(f"event to validate: {event_to_validate.data()}")
+    logger.debug("record_verification issuer=%s owner_info=%s", owner_display, owner_info)
+    logger.debug("record_verification checking signature")
+    logger.debug("record_verification event=%s", event_to_validate.data())
 
     is_valid = "True" if event_to_validate.is_valid() else "Cannot Validate"
     content = f"{event_to_validate.content}"
@@ -114,14 +116,14 @@ async def resolve_record_verification_facts(
             )
         is_attested = attestation_cache[attestation_cache_key]
 
-        print(f"trusted_entities: {trusted_entities} tag owner {owner_display}")
+        logger.debug("record_verification trusted_entities=%s owner=%s", trusted_entities, owner_display)
         if trusted_entities is None:
             trusted_entities = await acorn_obj.get_trusted_entities(relays=settings.RELAYS)
             if trust_context is not None:
                 trust_context["trusted_entities"] = trusted_entities
         is_trusted = bool(owner_pub_hex and owner_pub_hex in trusted_entities)
 
-        print(f"is attested: {is_attested}")
+        logger.debug("record_verification is_attested=%s", is_attested)
         wot_cache_key = owner_pub_hex or owner_display
         if wot_cache_key not in wot_score_cache:
             wot_score_cache[wot_cache_key] = await acorn_obj.get_wot_scores(
@@ -130,7 +132,7 @@ async def resolve_record_verification_facts(
             )
         wot_scores = wot_score_cache[wot_cache_key]
 
-    print(f"test for presenter: {presenter} tag holder: {tag_holder}")
+    logger.debug("record_verification presenter=%s tag_holder=%s", presenter, tag_holder)
     if presenter == tag_holder:
         is_presenter = True
 

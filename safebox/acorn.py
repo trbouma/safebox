@@ -7452,7 +7452,11 @@ class Acorn:
             if record_out is None:
                 return []
             record_out_json = json.loads(record_out)
-            pubs_to_process = record_out_json.get("payload", "").split(" ")
+            pubs_to_process = [
+                each.strip()
+                for each in str(record_out_json.get("payload", "")).split()
+                if each.strip()
+            ]
         except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
             self.logger.debug("No trusted entities configured: %s", exc)
             return []
@@ -7463,8 +7467,11 @@ class Acorn:
                 # Now we are going to get the followers
                 
                 pubhex_list_out.append(k_to_add.public_key_hex())
-            except (RuntimeError, ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError, httpx.HTTPError) as exc:
+            except Exception as exc:
                 self.logger.debug("Skipping invalid root entity=%s error=%s", each, exc)
+
+        if not pubhex_list_out:
+            return []
         
         self.logger.debug("op=get_trusted_entities status=expanded_roots count=%s relays=%s", len(pubhex_list_out), self.relays)
         FILTER = [{
