@@ -10,6 +10,7 @@ When starting a new session, fetch these files before executing any workflows:
 | MS-02 Market Spec | `docs/specs/mkt/MS-02-entitlement-market.md` |
 | MS-02 Scenario | `docs/specs/mkt/MS-02-END-TO-END-SCENARIO.md` |
 | MS-02 Conformance | `docs/specs/mkt/MS-02-CONFORMANCE.md` |
+| MS-02 Operator Guide | `docs/operators/ms02-agent-operator-guide.md` |
 | WS Conformance | `docs/specs/WS-CONFORMANCE.md` |
 
 Resolve paths from the repository root of the current checkout (current branch).
@@ -17,6 +18,14 @@ If using HTTP fetches, map these paths onto the same branch/source used to load 
 Do not rely on cached or summarized versions.
 
 Do not load `MS-01` by default. It is deprecated and retained only as a legacy reference.
+
+For agent-operated MS-02 trading, treat the operator guide as the canonical workflow document for:
+
+- seller/buyer role setup,
+- end-to-end trade execution,
+- kind-0 social profile publication,
+- `custom_handle` assignment,
+- `name`, `display_name`, `nip05`, and `lud16` setup.
 
 ## Purpose
 
@@ -216,6 +225,17 @@ Right after onboarding, before social actions:
 Operational guardrail:
 
 - Do not run DM-first or mention/zap response workflows until kind-0 includes valid `nip05` + `lud16` + `picture`.
+
+Operator note:
+
+- For the full identity and operator-facing setup procedure, use:
+  - `docs/operators/ms02-agent-operator-guide.md`
+- That guide is the canonical reference for:
+  - `custom_handle`
+  - `name`
+  - `display_name`
+  - `lud16`
+  - MS-02 seller/buyer preparation
 
 ### 2) Read Wallet State
 
