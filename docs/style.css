@@ -39,15 +39,15 @@ body {
   background: var(--panel);
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
+  text-align: center;
 }
 
-.eyebrow {
-  margin: 0 0 14px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.logo {
+  display: block;
+  width: min(260px, 72%);
+  height: auto;
+  margin: 0 auto 22px;
+  border-radius: 18px;
 }
 
 h1 {
@@ -58,7 +58,7 @@ h1 {
 }
 
 .lede {
-  margin: 0;
+  margin: 0 auto;
   max-width: 42rem;
   color: var(--muted);
   font-size: 1.08rem;
@@ -70,6 +70,7 @@ h1 {
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 28px;
+  justify-content: center;
 }
 
 .button {
