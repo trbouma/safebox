@@ -1,5 +1,5 @@
 # The Acceptance Model
-*A generic framework for how statements become facts*
+*A generic framework for how statements become system facts*
 
 ## Overview
 
@@ -30,6 +30,13 @@ Typical applications:
 The model avoids metaphysical claims. It asks:
 
 > What must be accepted so action can proceed?
+
+This specification updates the model by integrating two concrete Nostr-facing structures:
+
+- the **Attestations Custom Protocol**, which standardizes attestation, attestation requests, and attestor recommendations
+- **NIP-85 Trusted Assertions**, which standardize advisory reputation-style calculations used at scale
+
+Taken together, these mechanisms explain how decentralized systems transform raw statements into operationally settled outcomes that are sufficient for taking action.
 
 ## Working-Group Context and Safebox Position
 
@@ -68,13 +75,16 @@ The model separates:
 
 ## Core Concepts
 
-- **Claim**: A declaration about reality at a point in time. A claim may be factual or evaluative.
+- **Statement**: A raw expression about reality at a point in time. Statements may be factual or evaluative.
+- **Claim**: A statement that is being proposed for system consideration.
 - **Fact**: A claim that is defined in verifiable terms and can be accepted as true by a system.
 - **View**: A claim that depends on judgment, perspective, or norms rather than factual conditions alone.
 - **Assertion**: A claim put forward by an actor as true, with responsibility attached.
-- **Attestation**: An assertion about another assertion or actor (for example, validity or control).
+- **Attestation**: An assertion about another assertion or actor (for example, validity, invalidity, revocation, or control).
 - **Recognition**: A system-level decision to treat an actor as having standing.
+- **Trusted Assertion**: A signed calculation or reputation-style output published by a designated service or authority and used as advisory input.
 - **Acceptance**: A system-level decision to treat a claim-chain as operationally resolved.
+- **System Fact**: A claim that has passed through the system’s required validation, attestation, recognition, and trust stages and is therefore treated as settled and actionable.
 
 ## Recognition, Authority, and Delegation
 
@@ -107,31 +117,33 @@ The diagram below illustrates these relationships:
 
 ![Acceptance Model](../img/acceptance-model.png)
 
-## Statements: Facts and Views
+## Foundation: Statements and Assertions
+
+The first layer of the model concerns raw language about reality.
+
+### Statements
 
 A statement is an expression about conditions. It is not automatically a fact.
 
-### Factual statements
+Statements may be:
 
-- defined in verifiable terms
-- measurable or binary
-- true/false capable
+- **factual**
+  - defined in verifiable terms
+  - measurable or binary
+  - true/false capable
+- **evaluative**
+  - include judgment or perspective
+  - depend on purpose, comfort, or norms
+  - require a standard to become fact-capable
 
-Example: *The light is on*
+Examples:
 
-### Evaluative statements (views)
+- Factual statement: *"The light is on"*
+- Evaluative statement: *"The light is too bright"*
 
-- include judgment or perspective
-- depend on purpose, comfort, or norms
-- require a standard to become testable
+### Assertions (Level 1)
 
-Example: *The light is too bright*
-
-> Facts require conditions; views require interpretation.
-
-## Assertions
-
-An assertion introduces responsibility:
+An assertion is a signed statement for which an actor takes responsibility.
 
 - assertions may concern facts or views
 - a signed event binds the claim to an identity
@@ -143,7 +155,9 @@ Example:
 
 This is an assertion. It may later be accepted as a fact by the system.
 
-## Attestations (Nth-Order)
+> A statement becomes an assertion when an actor signs it and assumes accountability for it.
+
+## Verification Layer: Attestations (Nth-Order)
 
 An attestation is an assertion about another assertion:
 
@@ -161,7 +175,27 @@ Important:
 
 > Attestations increase confidence, not truth by themselves.
 
-## Recognition (Orthogonal to Attestation)
+### Standardized Attestation Primitives
+
+The **Attestations Custom Protocol** provides explicit event structures for this layer:
+
+- **Kind 31871**: Attestation Event
+  - a signed attestation about an assertion or related claim
+  - may communicate validity, invalidity, or revocation
+- **Kind 31872**: Attestation Request
+  - a request for verification or evaluation of a subject claim
+- **Kind 31873**: Attestor Recommendation
+  - a recommendation that a given attestor is suitable for evaluating specific subjects or event types
+
+These structures formalize Level 2 and Level 3 of the Acceptance Model.
+
+They also extend the model beyond passive evaluation by allowing systems to ask:
+
+- who should verify this?
+- how is a verifier discovered?
+- what is the attestation status of the subject assertion?
+
+## Standing Layer: Recognition and Authorization
 
 Recognition is actor-directed (not claim-directed) and creates standing.
 
@@ -172,6 +206,41 @@ Example:
 - Bob signs: *"Alice is reliable/authorized."*
 
 Recognition can enable authorization or delegation policies, independent of any single fact claim.
+
+In Safebox and similar systems, this is the **Authorized** stage:
+
+- the subject actor or issuer must appear in a recognition or authorization policy
+- if the actor lacks standing, their otherwise valid records may still be rejected
+
+Recognition is therefore orthogonal to the truth of a claim. It governs whether the actor has standing in the relevant system realm.
+
+## Evaluation Layer: Trusted Assertions and Reputation
+
+At scale, systems often need advisory inputs that are too expensive or dynamic to recompute inline for every decision.
+
+**NIP-85 Trusted Assertions** provide a standardized way to publish such inputs.
+
+Trusted assertion providers publish signed calculations such as:
+
+- user rank
+- follower count
+- zap metrics
+- other thresholdable or score-based signals
+
+Relevant structures include:
+
+- **Kind 30382**: user-scoped trusted assertions
+- **Kind 30383**: event-scoped trusted assertions
+
+These are not final determinations by themselves. They are advisory inputs used by the verifier to decide whether the subject meets the system’s required trust threshold.
+
+In the Acceptance Model:
+
+- recognition determines whether an actor has standing
+- trusted assertions contribute reputation or scoring data
+- verifier policy decides whether those scores are sufficient
+
+This is the **Trusted** stage in implementation terms.
 
 ## Standards: Turning Views into Facts
 
@@ -185,7 +254,7 @@ Example:
 
 > Standards convert judgment into testable conditions.
 
-## Acceptance and System Fact
+## Finality: Acceptance and System Fact
 
 A system-level fact emerges when:
 
@@ -201,6 +270,26 @@ Acceptance is:
 
 > A legal/system fact is reality as recognized by the system.
 
+Acceptance is the stop condition:
+
+- the verifier stops asking further questions
+- the claim-chain is treated as settled for the current purpose
+- the system proceeds
+
+This does not mean the claim is metaphysically or universally true. It means the system has enough validated, attested, authorized, and trusted material to act.
+
+## Implementation Summary
+
+The Acceptance Model can be implemented as a staged pipeline:
+
+| Stage | Description | Technical Primitive |
+| :--- | :--- | :--- |
+| **Validated** | Cryptographic and schema integrity. | NIP-01 signature and schema checks. |
+| **Attested** | Independent parties vouch for the claim. | Kind 31871 Attestation Event. |
+| **Authorized** | Actor has standing in the system. | Recognition or policy match. |
+| **Trusted** | Reputation or Web-of-Trust thresholds met. | NIP-85 Trusted Assertions, e.g. Kind 30382 or Kind 30383. |
+| **Accepted** | System stops asking questions and proceeds. | Verifier stop condition. |
+
 ## Key Distinctions
 
 - **State**: reality as it exists
@@ -212,9 +301,22 @@ Acceptance is:
 
 ## Acceptance Steps
 
-Acceptance is a recursive resolution model that halts at first-order assertions.
+Acceptance is a recursive resolution model that halts when the verifier has enough information to act.
 
-![Acceptance Steps](../img/acceptance-steps.png)
+In implementation terms, the verifier evaluates a claim-chain through these steps:
+
+1. **Validated**
+   - the record or assertion is structurally and cryptographically valid
+2. **Attested**
+   - one or more competent parties vouch for the claim, issuer, or chain status
+3. **Authorized**
+   - the relevant actor has standing under the applicable recognition or authorization policy
+4. **Trusted**
+   - advisory trust or reputation thresholds are satisfied where policy requires them
+5. **Accepted**
+   - the verifier stops asking further questions and treats the matter as settled for action
+
+Not every verifier requires every stage in every case. The required stop condition is policy-specific.
 
 ## Synthesis
 
@@ -232,12 +334,30 @@ Safebox implements this model for record acceptance and trust evaluation.
 
 | No. | Stage | Confirmation | Success Criteria |
 |---|---|---|---|
-| 1 | Validated | Record is cryptographically correct | Signature validity checks pass |
-| 2 | Attested | Owner attestation exists | Valid owner attestation event |
-| 3 | Authorized | Actor appears in recognition/authorization policy | Membership or policy match |
-| 4 | Trusted | Web-of-Trust or equivalent reputation policy | Score/policy threshold |
+| 1 | Validated | Record is cryptographically correct | Signature validity and schema checks pass |
+| 2 | Attested | Owner or independent attestation exists | Valid Kind 31871 attestation event or equivalent attestation evidence |
+| 3 | Authorized | Actor appears in recognition/authorization policy | Membership, standing, or policy match |
+| 4 | Trusted | Web-of-Trust or trusted-assertion threshold is met | NIP-85-style score or policy threshold satisfied |
+| 5 | Accepted | Verifier stops asking questions and proceeds | Stop condition reached for the current action |
 
 Acceptance is evaluated by the verifier. One or more stages may be required depending on verifier policy.
+
+## Synthesis
+
+The updated Acceptance Model can be read as a layered system:
+
+1. **Statements and Assertions**
+   - raw statements become accountable assertions when signed
+2. **Attestations**
+   - other actors vouch for, reject, or revoke those assertions
+3. **Recognition**
+   - the system determines whether actors have standing
+4. **Trusted Assertions / Reputation**
+   - advisory scoring and reputation signals are incorporated
+5. **Acceptance**
+   - the system treats the claim-chain as sufficiently settled to act
+
+In decentralized systems, the resulting system fact is not ultimate truth. It is a claim that has passed the required stages and is therefore treated as settled and actionable.
 
 ### Private Record Format
 
