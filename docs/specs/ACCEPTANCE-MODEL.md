@@ -33,8 +33,8 @@ The model avoids metaphysical claims. It asks:
 
 This specification updates the model by integrating two concrete Nostr-facing structures:
 
-- the **Attestations Custom Protocol**, which standardizes attestation, attestation requests, and attestor recommendations
-- **NIP-85 Trusted Assertions**, which standardize advisory reputation-style calculations used at scale
+- the [**Attestations Custom Protocol**](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qyfhwumn8ghj7un9d3shjtnyv9ujuct89uqqcct5w3jhxarpw35k7mnnaawl4h), which standardizes attestation, attestation requests, and attestor recommendations
+- [**NIP-85 Trusted Assertions**](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qyfhwumn8ghj7un9d3shjtnyv9ujuct89uqqcct5w3jhxarpw35k7mnnaawl4h), which standardize advisory reputation-style calculations used at scale
 
 Taken together, these mechanisms explain how decentralized systems transform raw statements into operationally settled outcomes that are sufficient for taking action.
 
@@ -113,9 +113,7 @@ In this model:
 | - | Recognition | Actor | Actor standing decision | Bob: "Alice is authorized to act for me" |
 | - | Acceptance | Chain | Stop condition for action | System concludes and proceeds |
 
-The diagram below illustrates these relationships:
-
-![Acceptance Model](../img/acceptance-model.png)
+The layers above describe the conceptual relationship between statements, assertions, attestations, recognition, and acceptance. In implementation contexts, these layers are evaluated through explicit stage and policy checks rather than a single fixed graph.
 
 ## Foundation: Statements and Assertions
 
@@ -178,6 +176,11 @@ Important:
 ### Standardized Attestation Primitives
 
 The **Attestations Custom Protocol** provides explicit event structures for this layer:
+
+Reference:
+
+- [Attestations Custom Protocol](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qyfhwumn8ghj7un9d3shjtnyv9ujuct89uqqcct5w3jhxarpw35k7mnnaawl4h)
+- [NIP-85 Trusted Assertions](https://nostrhub.io/naddr1qvzqqqrcvypzp384u7n44r8rdq74988lqcmggww998jjg0rtzfd6dpufrxy9djk8qyfhwumn8ghj7un9d3shjtnyv9ujuct89uqqcct5w3jhxarpw35k7mnnaawl4h)
 
 - **Kind 31871**: Attestation Event
   - a signed attestation about an assertion or related claim

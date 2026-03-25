@@ -16,6 +16,7 @@ It also defines the explicit Human-Agent Flow Parity Principle: one interoperabl
 Architectural companion:
 
 - [Safebox Alternative Ecosystem Approach](./SAFEBOX-ALTERNATIVE-ECOSYSTEM-APPROACH.md)
+- [Web of Trust Hackathon Criteria](../WEB-OF-TRUST-HACKATHON-CRITERIA.md)
 
 This companion document explains broader ecosystem rationale, trust/compliance boundaries, and protocol posture in relation to other wallet ecosystems.
 
@@ -47,6 +48,8 @@ Section convention used across current Safebox specs:
   - Includes `Field Discoveries and Applied Fixes (2026-02)` and `Remaining Fragility and Risk Concentration` sections documenting recent QR/NFC handshake issues, applied remediations, and the immediate hardening backlog.
 - [Acorn Modularization Transition Plan](./ACORN-MODULARIZATION-TRANSITION-PLAN.md) - Design note for evolving Acorn from a god-class into compartmentalized services with phased migration and compatibility safeguards.
 - [Acceptance Model](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
+- [WoT, Attestation, and Record Verification](./WOT-ATTESTATION-AND-RECORD-VERIFICATION.md) - Current implementation of root recognition, owner attestation lookup, trusted assertion provider scoring, and verification rendering across record flows.
+- [Issued-to-Holder Presentation Profile](./ISSUED-TO-HOLDER-PRESENTATION-PROFILE.md) - Generic acceptance profile for records issued to one actor and later presented by that same holder to another verifier.
 - [Threat Model](./THREAT-MODEL.md) - Safebox threat boundaries, key risks, mitigations, and residual risk considerations.
 - [nAuth Protocol](./NAUTH-PROTOCOL.md) - Authorization envelope used to coordinate cross-party record flows.
 - [nAuth Extensible Handshake](./NAUTH-EXTENSIBLE-HANDSHAKE.md) - Step/state handshake model for adding PQC and policy-driven sequence extensions without breaking flow compatibility.
