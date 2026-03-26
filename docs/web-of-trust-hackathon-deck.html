@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Safebox Web of Trust Deck</title>
+  <meta name="description" content="Web of Trust hackathon slide deck for Safebox.">
+  <style>
+    :root {
+      --bg: #07111d;
+      --panel: rgba(12, 21, 37, 0.92);
+      --text: #edf3ff;
+      --muted: #b9c5df;
+      --accent: #4f6df5;
+      --accent-strong: #3655dc;
+      --line: rgba(128, 153, 204, 0.24);
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(79, 109, 245, 0.20), transparent 34%),
+        linear-gradient(180deg, #08111a 0%, #07111d 52%, #050b14 100%);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }
+
+    .deck {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 24px;
+      gap: 16px;
+    }
+
+    .slide {
+      display: none;
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      padding: 42px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .slide.active {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+      gap: 36px;
+      align-items: start;
+    }
+
+    .slide-main h1 {
+      margin: 0 0 16px;
+      font-size: clamp(2.6rem, 6vw, 4.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .slide-main h2 {
+      margin: 0 0 18px;
+      font-size: clamp(2rem, 4.8vw, 3rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 1.2rem;
+      line-height: 1.6;
+    }
+
+    .lede {
+      margin: 0 0 26px;
+      max-width: 40rem;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.7;
+    }
+
+    .logo {
+      width: min(240px, 70%);
+      height: auto;
+      border-radius: 18px;
+      display: block;
+      margin: 0 0 26px;
+    }
+
+    ul,
+    ol {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 1.08rem;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    code,
+    .chip {
+      padding: 0.12rem 0.42rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--line);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.96em;
+    }
+
+    .flow {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .flow span {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .aside {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .aside h3 {
+      margin: 0 0 14px;
+      font-size: 1rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .aside p,
+    .aside li {
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.6;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .metric {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1rem;
+    }
+
+    .controls {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 4px;
+    }
+
+    .controls-left,
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+    }
+
+    .button:hover {
+      background: var(--accent-strong);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(54, 85, 220, 0.28);
+    }
+
+    .button-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--line);
+    }
+
+    .button-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+      box-shadow: none;
+    }
+
+    .counter {
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    @media (max-width: 900px) {
+      .slide.active {
+        grid-template-columns: 1fr;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .deck {
+        padding: 14px;
+      }
+
+      .slide {
+        padding: 24px 20px;
+      }
+
+      .controls {
+        flex-direction: column;
+      }
+
+      .controls-left,
+      .controls-right {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <section class="slide active" data-title="Safebox: Web of Trust Record Verification">
+      <div class="slide-main">
+        <img class="logo" src="./img/safebox.png" alt="Safebox logo">
+        <h1>Safebox: Web of Trust Record Verification</h1>
+        <p class="subtitle">Issued, Held, Presented, Verified</p>
+        <p class="lede">A Nostr-native wallet and records system with staged trust verification.</p>
+      </div>
+      <aside class="aside">
+        <h3>Speaker Note</h3>
+        <p>Introduce Safebox as a Nostr-native wallet and records system and frame the talk around a simple issued-to-holder verification flow.</p>
+        <ul>
+          <li>Safebox is intended to be <span class="chip">client-zero</span>.</li>
+          <li>A playful variation on “patient-zero”.</li>
+          <li>An early real client demonstrating the practical potential of this group’s Web of Trust work.</li>
+          <li>Grounded especially in <span class="chip">NIP-85 Trusted Assertions</span> and <span class="chip">Attestations</span>.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Identity Neutrality">
+      <div class="slide-main">
+        <h2>Identity Neutrality</h2>
+        <p class="lede"><code>npub</code> is the base unit of accountable identity.</p>
+        <ul>
+          <li>No protocol distinction between person, agent, service, device, or Safebox instance.</li>
+          <li>Issuer, holder, presenter, and verifier are functional roles layered on the same identity primitive.</li>
+          <li>Trust and policy are added above identity, not encoded into identity class.</li>
+        </ul>
+      </div>
+      <aside class="aside">
+        <h3>Speaker Note</h3>
+        <p>Explain that Safebox and Nostr do not hard-code identity classes.</p>
+        <ul>
+          <li>If these NIPs are going to matter, they need to be exercised by a real client.</li>
+          <li>Safebox is trying to be that proving ground for live Web of Trust flows.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="How Safebox Decides Enough Is Enough">
+      <div class="slide-main">
+        <h2>How Safebox Decides Enough Is Enough</h2>
+        <div class="metrics">
+          <div class="metric"><strong>Validated</strong><span>Valid signature</span></div>
+          <div class="metric"><strong>Attested</strong><span>Owner control claim</span></div>
+          <div class="metric"><strong>Recognized</strong><span>Issuer in verifier WoT</span></div>
+          <div class="metric"><strong>Trusted</strong><span>Advisory score inputs</span></div>
+          <div class="metric"><strong>Accepted</strong><span>Verifier proceeds</span></div>
+        </div>
+      </div>
+      <aside class="aside">
+        <h3>Speaker Note</h3>
+        <p>Safebox does not declare ultimate truth. It gives the verifier enough structured evidence to decide when enough checks have passed to act.</p>
+        <ul>
+          <li>Attestations support ownership and issuer assertions.</li>
+          <li>NIP-85 supports trusted advisory signals.</li>
+          <li>Safebox combines them into a verifier-facing acceptance flow.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="What You’re About To See">
+      <div class="slide-main">
+        <h2>What You’re About To See</h2>
+        <ol>
+          <li>Issuer sends signed record to Holder.</li>
+          <li>Holder presents record to Verifier.</li>
+          <li>Verifier confirms:
+            <ul>
+              <li><code>Valid</code></li>
+              <li><code>Self-Presented</code></li>
+              <li><code>Recognized</code></li>
+            </ul>
+          </li>
+        </ol>
+        <div class="flow">
+          <span>Issuer</span>
+          <span>Holder</span>
+          <span>Verifier</span>
+        </div>
+      </div>
+      <aside class="aside">
+        <h3>Speaker Note</h3>
+        <p>Set up the live demo and tell the audience exactly what three fields to watch for on the verifier screen.</p>
+      </aside>
+    </section>
+
+    <section class="slide" data-title="Reusable WoT Building Block">
+      <div class="slide-main">
+        <h2>Reusable WoT Building Block</h2>
+        <ul>
+          <li>Not limited to one vertical.</li>
+          <li>Works for records, credentials, attestations, and agent flows.</li>
+          <li>Verifier-local trust policy.</li>
+          <li>Interoperable Nostr-native model.</li>
+        </ul>
+      </div>
+      <aside class="aside">
+        <h3>Speaker Note</h3>
+        <p>Close by positioning the demo as a reusable trust primitive rather than a one-off application flow.</p>
+      </aside>
+    </section>
+
+    <div class="controls">
+      <div class="controls-left">
+        <button class="button button-secondary" id="prev">Previous</button>
+        <button class="button" id="next">Next</button>
+      </div>
+      <div class="controls-right">
+        <span class="counter" id="counter">1 / 5</span>
+        <a class="button button-secondary" href="./">Back to Landing Page</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const counter = document.getElementById("counter");
+    const nextButton = document.getElementById("next");
+    const prevButton = document.getElementById("prev");
+    let index = 0;
+
+    function renderSlide(nextIndex) {
+      index = Math.max(0, Math.min(nextIndex, slides.length - 1));
+      slides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("active", slideIndex === index);
+      });
+      counter.textContent = `${index + 1} / ${slides.length}`;
+      document.title = `${slides[index].dataset.title} | Safebox`;
+    }
+
+    nextButton.addEventListener("click", () => renderSlide(index + 1));
+    prevButton.addEventListener("click", () => renderSlide(index - 1));
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+        event.preventDefault();
+        renderSlide(index + 1);
+      }
+      if (event.key === "ArrowLeft" || event.key === "PageUp") {
+        event.preventDefault();
+        renderSlide(index - 1);
+      }
+    });
+
+    renderSlide(0);
+  </script>
+</body>
+</html>
