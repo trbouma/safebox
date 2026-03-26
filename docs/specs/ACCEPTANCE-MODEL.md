@@ -70,6 +70,7 @@ The model separates:
 
 - reality from language
 - claims from validation
+- validation from verification
 - trust in statements from trust in action
 - truth from recognition
 
@@ -80,11 +81,76 @@ The model separates:
 - **Fact**: A claim that is defined in verifiable terms and can be accepted as true by a system.
 - **View**: A claim that depends on judgment, perspective, or norms rather than factual conditions alone.
 - **Assertion**: A claim put forward by an actor as true, with responsibility attached.
+- **Validated Assertion**: An assertion that has been determined to be internally consistent, properly formed, and compliant with applicable rules, schema, or logical constraints.
+- **Verified Assertion**: An assertion that has been confirmed as congruent with the relevant state of affairs, whether by observation, authoritative record, reliable attestation, or other accepted means of establishing correspondence.
 - **Attestation**: An assertion about another assertion or actor (for example, validity, invalidity, revocation, or control).
 - **Recognition**: A system-level decision to treat an actor as having standing.
 - **Trusted Assertion**: A signed calculation or reputation-style output published by a designated service or authority and used as advisory input.
 - **Acceptance**: A system-level decision to treat a claim-chain as operationally resolved.
 - **System Fact**: A claim that has passed through the system’s required validation, attestation, recognition, and trust stages and is therefore treated as settled and actionable.
+
+## Validation and Verification
+
+In this model, **validation** and **verification** are not synonyms.
+
+Safebox uses them in the following sense:
+
+- **Validated**
+  - internally consistent
+  - rule-conformant
+  - structurally correct
+- **Verified**
+  - checked against the relevant state of affairs
+  - congruent with operative reality
+
+This yields a deliberate distinction:
+
+| Term | Meaning in this model | Main question |
+|---|---|---|
+| Validated | Conforms to expected rules, schema, logic, or internal consistency | “Does this hold together correctly?” |
+| Verified | Congruent with the relevant world, record, event, or operative state of affairs | “Is this actually so?” |
+
+This is a stronger epistemic distinction than the more common narrow software usage.
+
+### Compact Formulation
+
+> Validation asks whether the claim fits the system. Verification asks whether the claim fits the world.
+
+Or, stated more compactly:
+
+- validation = coherence test
+- verification = correspondence test
+
+### Drafting Note
+
+Some technical readers may expect different terminology, especially in cryptography and software engineering, where:
+
+- verification often means signature or proof checking
+- validation often means rule, schema, or business-logic checking
+
+This specification intentionally uses:
+
+- **validation** for internal correctness and rule-conformity
+- **verification** for correspondence with the relevant state of affairs
+
+Those terms should therefore be read in that sense throughout this model.
+
+### Why the Distinction Matters
+
+This distinction separates three different questions:
+
+1. coherence
+2. correspondence
+3. acceptance
+
+That means an assertion may be:
+
+- validated but not verified
+- verified but not yet accepted
+- accepted without being fully verified
+- legally or institutionally recognized despite imperfect verification
+
+This is useful in legal, records, and institutional systems, where system action often depends on more than one kind of sufficiency.
 
 ## Recognition, Authority, and Delegation
 
@@ -154,6 +220,29 @@ Example:
 This is an assertion. It may later be accepted as a fact by the system.
 
 > A statement becomes an assertion when an actor signs it and assumes accountability for it.
+
+### Example: Validation vs Verification
+
+Claim:
+
+- “Invoice #123 is paid.”
+
+Validated:
+
+- invoice identifier exists
+- required fields are present
+- amount format is correct
+- referenced payment record is properly linked
+
+This means the claim is systemically coherent.
+
+Verified:
+
+- settlement actually occurred
+- payment was received by the payee
+- the operative state of affairs is in fact “paid”
+
+This means the claim is congruent with the relevant state of affairs.
 
 ## Verification Layer: Attestations (Nth-Order)
 
@@ -287,7 +376,8 @@ The Acceptance Model can be implemented as a staged pipeline:
 
 | Stage | Description | Technical Primitive |
 | :--- | :--- | :--- |
-| **Validated** | Cryptographic and schema integrity. | NIP-01 signature and schema checks. |
+| **Validated** | Internal correctness, structural integrity, and rule-conformity. | Signature, schema, and system-rule checks. |
+| **Verified** | Congruence with the relevant world, record, event, or operative condition. | Observation, authoritative record, reliable attestation, or accepted correspondence check. |
 | **Attested** | Independent parties vouch for the claim. | Kind 31871 Attestation Event. |
 | **Authorized** | Actor has standing in the system. | Recognition or policy match. |
 | **Trusted** | Reputation or Web-of-Trust thresholds met. | NIP-85 Trusted Assertions, e.g. Kind 30382 or Kind 30383. |
@@ -337,11 +427,12 @@ Safebox implements this model for record acceptance and trust evaluation.
 
 | No. | Stage | Confirmation | Success Criteria |
 |---|---|---|---|
-| 1 | Validated | Record is cryptographically correct | Signature validity and schema checks pass |
-| 2 | Attested | Owner or independent attestation exists | Valid Kind 31871 attestation event or equivalent attestation evidence |
-| 3 | Authorized | Actor appears in recognition/authorization policy | Membership, standing, or policy match |
-| 4 | Trusted | Web-of-Trust or trusted-assertion threshold is met | NIP-85-style score or policy threshold satisfied |
-| 5 | Accepted | Verifier stops asking questions and proceeds | Stop condition reached for the current action |
+| 1 | Validated | Record is internally coherent | Signature, schema, and structural checks pass |
+| 2 | Verified | Record corresponds to the relevant operative state of affairs | Verification method defined by context |
+| 3 | Attested | Owner or independent attestation exists | Valid Kind 31871 attestation event or equivalent attestation evidence |
+| 4 | Authorized | Actor appears in recognition/authorization policy | Membership, standing, or policy match |
+| 5 | Trusted | Web-of-Trust or trusted-assertion threshold is met | NIP-85-style score or policy threshold satisfied |
+| 6 | Accepted | Verifier stops asking questions and proceeds | Stop condition reached for the current action |
 
 Acceptance is evaluated by the verifier. One or more stages may be required depending on verifier policy.
 
