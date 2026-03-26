@@ -60,6 +60,7 @@ Section convention used across current Safebox specs:
 - [Agent Flows](./AGENT-FLOWS.md) - Automation-oriented wallet flow model aligned with NFC and QR pathways.
 - [Safebox Considerations](./SAFEBOX-CONSIDERATIONS.md) - Cross-cutting engineering, security, market, and operations checklist for Safebox design and release decisions.
 - [ToIP Architecture And Implementation Considerations](./TOIP-ARCHITECTURE-IMPLEMENTATION-CONSIDERATIONS.md) - ToIP-aligned trust-layer architecture mapping for Safebox agents, with practical implementation guidance for identity continuity, delegation, provenance, and phased adoption.
+- [Willow Comparative Analysis](./WILLOW-COMPARATIVE-ANALYSIS.md) - Working-group note comparing Willow’s data/access/sync model with Safebox’s trust, attestation, recognition, and acceptance model.
 - [Agent Offer Recipient-First Flow](./AGENT-OFFER-RECIPIENT-FIRST-FLOW.md) - Recipient-first agent offer flow where the recipient presents QR handshake data and the sender scans/transmits using existing record-send pathways.
 - [Emergent Markets Over Safebox](./EMERGENT-MARKETS-OVER-SAFEBOX.md) - Market pattern specification for decentralized bid/ask intent publication, NIP-57 zap settlement, private fulfillment delivery, and public settlement confirmation across human and agent flows.
 - [NFC Flows and Security](./NFC-FLOWS-AND-SECURITY.md) - Card issuance, rotation, NFC payment/record flows, and security controls.

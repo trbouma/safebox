@@ -152,6 +152,24 @@ That means an assertion may be:
 
 This is useful in legal, records, and institutional systems, where system action often depends on more than one kind of sufficiency.
 
+Direct verification is often expensive, delayed, partial, or unavailable. For that reason, verification is not identical to acceptance.
+
+- verification is one possible path toward acceptance
+- acceptance is the stop condition for action
+
+That means a system may accept a claim because:
+
+- it has been directly verified
+- or because validation, attestation, recognition, trusted assertions, and policy together are sufficient for reliance
+
+In this model, the practical question is not only:
+
+- “Is this actually so?”
+
+but also:
+
+- “Do we have enough to rely on this now?”
+
 ## Recognition, Authority, and Delegation
 
 Recognition, authority, and delegation are distinct:
@@ -367,6 +385,16 @@ Acceptance is the stop condition:
 - the verifier stops asking further questions
 - the claim-chain is treated as settled for the current purpose
 - the system proceeds
+
+This is especially important when direct verification is difficult or unavailable.
+
+In such cases, acceptance may still be justified through a sufficient combination of:
+
+- validation
+- attestation
+- recognition
+- trusted assertions
+- policy
 
 This does not mean the claim is metaphysically or universally true. It means the system has enough validated, attested, authorized, and trusted material to act.
 
