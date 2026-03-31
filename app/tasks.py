@@ -76,6 +76,23 @@ def _is_proof_rejection_or_swap_recommended(exc: Exception) -> bool:
     return any(marker in msg for marker in markers)
 
 
+def _is_stale_proof_rejection(exc: Exception) -> bool:
+    """
+    Narrow matcher for stale-proof / already-spent proof selection cases where
+    repair_proofs is safer than a direct consolidate retry.
+    """
+    msg = _exception_chain_text(exc).lower()
+    markers = [
+        "token already spent",
+        "already spent",
+        "local wallet proof state is stale",
+        "refresh/reconcile proofs before retrying payment",
+        "swap rejected because one or more selected proofs were already spent",
+        "11001",
+    ]
+    return any(marker in msg for marker in markers)
+
+
 async def _persist_registered_safebox_balance(acorn_obj: Acorn) -> None:
     await acorn_obj.load_data()
     with Session(engine) as session:
@@ -728,12 +745,17 @@ async def task_pay_multi(
         )
     except Exception as e:
         if _is_proof_rejection_or_swap_recommended(e):
+            stale_proof_retry = _is_stale_proof_rejection(e)
             logger.warning(
-                "op=task_pay_multi status=retry_swap_start reason=%s",
+                "op=task_pay_multi status=retry_start strategy=%s reason=%s",
+                "repair" if stale_proof_retry else "swap",
                 _exception_chain_text(e),
             )
             try:
-                await acorn_obj.swap_multi_consolidate()
+                if stale_proof_retry:
+                    await acorn_obj.repair_proofs()
+                else:
+                    await acorn_obj.swap_multi_consolidate()
                 msg_out, fee = await acorn_obj.pay_multi(
                     amount=amount,
                     lnaddress=lnaddress,
@@ -742,13 +764,20 @@ async def task_pay_multi(
                     tendered_currency=tendered_currency,
                 )
                 status = "SENT"
-                msg_out = f"{msg_out} (auto-recovered after swap)"
-                logger.info("op=task_pay_multi status=retry_swap_success")
+                msg_out = (
+                    f"{msg_out} (auto-recovered after "
+                    f"{'repair' if stale_proof_retry else 'swap'})"
+                )
+                logger.info(
+                    "op=task_pay_multi status=retry_success strategy=%s",
+                    "repair" if stale_proof_retry else "swap",
+                )
             except Exception as retry_exc:
                 msg_out = f"{retry_exc}"
                 status = "ERROR"
                 logger.warning(
-                    "op=task_pay_multi status=retry_swap_failed reason=%s",
+                    "op=task_pay_multi status=retry_failed strategy=%s reason=%s",
+                    "repair" if stale_proof_retry else "swap",
                     _exception_chain_text(retry_exc),
                 )
         else:
@@ -813,24 +842,36 @@ async def task_pay_multi_invoice(
         )
     except Exception as e:
         if _is_proof_rejection_or_swap_recommended(e):
+            stale_proof_retry = _is_stale_proof_rejection(e)
             logger.warning(
-                "op=task_pay_multi_invoice status=retry_swap_start reason=%s",
+                "op=task_pay_multi_invoice status=retry_start strategy=%s reason=%s",
+                "repair" if stale_proof_retry else "swap",
                 _exception_chain_text(e),
             )
             try:
-                await acorn_obj.swap_multi_consolidate()
+                if stale_proof_retry:
+                    await acorn_obj.repair_proofs()
+                else:
+                    await acorn_obj.swap_multi_consolidate()
                 msg_out, final_fees, _, _, _ = await acorn_obj.pay_multi_invoice(
                     lninvoice=lninvoice,
                     comment=comment,
                 )
                 status = "SENT"
-                msg_out = f"{msg_out} (auto-recovered after swap)"
-                logger.info("op=task_pay_multi_invoice status=retry_swap_success")
+                msg_out = (
+                    f"{msg_out} (auto-recovered after "
+                    f"{'repair' if stale_proof_retry else 'swap'})"
+                )
+                logger.info(
+                    "op=task_pay_multi_invoice status=retry_success strategy=%s",
+                    "repair" if stale_proof_retry else "swap",
+                )
             except Exception as retry_exc:
                 msg_out = f"{retry_exc}"
                 status = "ERROR"
                 logger.warning(
-                    "op=task_pay_multi_invoice status=retry_swap_failed reason=%s",
+                    "op=task_pay_multi_invoice status=retry_failed strategy=%s reason=%s",
+                    "repair" if stale_proof_retry else "swap",
                     _exception_chain_text(retry_exc),
                 )
         else:

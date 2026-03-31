@@ -813,6 +813,13 @@ async def ln_swap(   request: Request,
        pass
  
     except (ValueError, RuntimeError) as e:
+        error_text = str(e)
+        if "Token already spent" in error_text or "code\":11001" in error_text or "code':11001" in error_text:
+            logger.warning("Swap found stale proofs: %s", e)
+            return {
+                "status": "ADVISORY",
+                "detail": "Wallet contains stale proofs. Run Repair Proofs first, then try Swap Proofs again.",
+            }
         logger.warning("Swap failed: %s", e)
         return {"status": "ERROR", "detail": f"error {e}"}
     except Exception as e:

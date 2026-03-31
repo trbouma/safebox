@@ -118,6 +118,23 @@
     background: #0d1430;
   }
 
+  .warning-box {
+    width: 90%;
+    margin: 0 auto;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #8c6a1a;
+    background: linear-gradient(180deg, rgba(120, 83, 16, 0.34), rgba(70, 47, 8, 0.28));
+    box-shadow: inset 0 1px 0 rgba(255, 221, 150, 0.08);
+    text-align: left;
+  }
+
+  .warning-box p {
+    margin: 0;
+    color: #fff0c7;
+    line-height: 1.45;
+  }
+
   .center-text br {
     display: block;
     content: "";
@@ -474,6 +491,10 @@ window.location.href="/safebox/attest/";
       <hr>
 
       <br><br>
+      <div class="warning-box">
+        <p><b>Warning:</b> Proof maintenance actions can race with in-progress payments. If you have just sent a payment, wait for the final status update before using <i>Swap Proofs</i> or <i>Repair Proofs</i>.</p>
+      </div>
+      <br>
       <button onclick="swapProofs()">Swap Proofs</button>
       <br><br>
       <button onclick="repairProofs()">Repair Proofs</button>
