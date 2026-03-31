@@ -4744,12 +4744,7 @@ class Acorn:
 
             repaired_balance = sum(each.amount for each in rebuilt_proofs)
             repaired_count = len(rebuilt_proofs)
-
-            if repaired_count == original_count and duplicate_dropped == 0:
-                return (
-                    "repair-proofs found no spent proofs "
-                    f"({original_balance} sats across {original_count} proofs)"
-                )
+            total_spent_dropped = sum(dropped_counts.values())
 
             if repaired_count == 0 and original_count > 0:
                 raise RuntimeError(
@@ -4761,9 +4756,16 @@ class Acorn:
             self.balance = repaired_balance
             await self.write_proofs()
 
+            if repaired_count == original_count and duplicate_dropped == 0 and total_spent_dropped == 0:
+                return (
+                    "repair-proofs refreshed all proofs successfully "
+                    f"({repaired_balance} sats across {repaired_count} proofs). "
+                    "No stale proofs were removed."
+                )
+
             return (
                 "repair-proofs completed: "
-                f"dropped {original_count - repaired_count - duplicate_dropped} spent proofs, "
+                f"dropped {total_spent_dropped} spent proofs, "
                 f"dropped {duplicate_dropped} duplicate proofs, "
                 f"kept {repaired_count} proofs, "
                 f"balance {original_balance} -> {repaired_balance} sats"
