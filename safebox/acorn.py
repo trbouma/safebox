@@ -4592,10 +4592,6 @@ class Acorn:
         """
         headers = {"Content-Type": "application/json"}
         timeout = httpx.Timeout(30.0, connect=5.0)
-        keyset_proofs, _keyset_amounts = self._proofs_by_keyset()
-        if not keyset_proofs:
-            return "repair-proofs skipped (no proofs)"
-
         lock_acquired = False
         rebuilt_proofs: list[Proof] = []
         dropped_counts: dict[str, int] = {}
@@ -4604,6 +4600,14 @@ class Acorn:
         try:
             await self.acquire_lock()
             lock_acquired = True
+            await self._load_proofs()
+
+            keyset_proofs, _keyset_amounts = self._proofs_by_keyset()
+            if not keyset_proofs:
+                return "repair-proofs skipped (no proofs)"
+
+            original_count = len(self.proofs)
+            original_balance = sum(each.amount for each in self.proofs)
 
             for each_keyset, proofs in keyset_proofs.items():
                 mint_url = self.known_mints.get(each_keyset)
@@ -4738,8 +4742,6 @@ class Acorn:
                             )
                         )
 
-            original_count = len(self.proofs)
-            original_balance = sum(each.amount for each in self.proofs)
             repaired_balance = sum(each.amount for each in rebuilt_proofs)
             repaired_count = len(rebuilt_proofs)
 
@@ -4747,6 +4749,12 @@ class Acorn:
                 return (
                     "repair-proofs found no spent proofs "
                     f"({original_balance} sats across {original_count} proofs)"
+                )
+
+            if repaired_count == 0 and original_count > 0:
+                raise RuntimeError(
+                    "repair-proofs found zero usable replacement proofs and refused to overwrite the wallet. "
+                    "If a payment or swap just completed, reload and retry after the wallet state settles."
                 )
 
             self.proofs = rebuilt_proofs
@@ -5724,11 +5732,7 @@ class Acorn:
         #TODO figure out how to catch doublespends in this routine
         headers = { "Content-Type": "application/json"}
         timeout = httpx.Timeout(30.0, connect=5.0)
-        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         lock_acquired = False
-        if not keyset_proofs:
-            self.logger.info("op=swap_multi_consolidate status=skip reason=no_proofs")
-            return "multi swap skipped (no proofs)"
         combined_proofs = []
         combined_proof_objs =[]
         proof_objs = []
@@ -5737,6 +5741,11 @@ class Acorn:
         try:
             await self.acquire_lock()
             lock_acquired = True
+            await self._load_proofs()
+            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+            if not keyset_proofs:
+                self.logger.info("op=swap_multi_consolidate status=skip reason=no_proofs")
+                return "multi swap skipped (no proofs)"
             audit_report = await self.proof_safety_audit(check_relay=False)
             if not audit_report.get("safe_to_swap", False):
                 raise RuntimeError(
@@ -5893,7 +5902,6 @@ class Acorn:
         #FIXME this is used before consolidate to throw out any dups or doublespend. Fix events
         headers = { "Content-Type": "application/json"}
         timeout = httpx.Timeout(30.0, connect=5.0)
-        keyset_proofs,keyset_amounts = self._proofs_by_keyset()
         combined_proofs = []
         combined_proof_objs =[]
         lock_acquired = False
@@ -5902,6 +5910,8 @@ class Acorn:
         try:
             await self.acquire_lock()
             lock_acquired = True
+            await self._load_proofs()
+            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
             if not keyset_proofs:
                 self.logger.info("op=swap_multi_each status=skip reason=no_proofs")
                 return "multi swap skipped (no proofs)"
