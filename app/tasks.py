@@ -93,6 +93,21 @@ def _is_stale_proof_rejection(exc: Exception) -> bool:
     return any(marker in msg for marker in markers)
 
 
+def _friendly_payment_error(exc: Exception) -> str:
+    """
+    Convert deeply wrapped payment exceptions into one short user-facing
+    message. Keep the detailed chain in logs only.
+    """
+    if _is_stale_proof_rejection(exc):
+        return (
+            "Payment could not proceed because the wallet contains stale proofs. "
+            "Run Repair Proofs, then try the payment again."
+        )
+
+    text = str(exc).strip()
+    return text or "Payment failed."
+
+
 async def _persist_registered_safebox_balance(acorn_obj: Acorn) -> None:
     await acorn_obj.load_data()
     with Session(engine) as session:
@@ -773,7 +788,7 @@ async def task_pay_multi(
                     "repair" if stale_proof_retry else "swap",
                 )
             except Exception as retry_exc:
-                msg_out = f"{retry_exc}"
+                msg_out = _friendly_payment_error(retry_exc)
                 status = "ERROR"
                 logger.warning(
                     "op=task_pay_multi status=retry_failed strategy=%s reason=%s",
@@ -781,7 +796,7 @@ async def task_pay_multi(
                     _exception_chain_text(retry_exc),
                 )
         else:
-            msg_out = f"{e}"
+            msg_out = _friendly_payment_error(e)
             status = "ERROR"
             logger.warning(
                 "op=task_pay_multi status=failed_non_retry reason=%s",
@@ -867,7 +882,7 @@ async def task_pay_multi_invoice(
                     "repair" if stale_proof_retry else "swap",
                 )
             except Exception as retry_exc:
-                msg_out = f"{retry_exc}"
+                msg_out = _friendly_payment_error(retry_exc)
                 status = "ERROR"
                 logger.warning(
                     "op=task_pay_multi_invoice status=retry_failed strategy=%s reason=%s",
@@ -875,7 +890,7 @@ async def task_pay_multi_invoice(
                     _exception_chain_text(retry_exc),
                 )
         else:
-            msg_out = f"{e}"
+            msg_out = _friendly_payment_error(e)
             status = "ERROR"
             logger.warning(
                 "op=task_pay_multi_invoice status=failed_non_retry reason=%s",

@@ -5096,6 +5096,15 @@ class Acorn:
                     try: 
                         proofs_remaining = await self.swap_for_payment_multi(chosen_keyset,proofs_to_use, amount_needed)
                     except (ValueError, RuntimeError) as e:
+                        error_text = str(e)
+                        if (
+                            "Token already spent" in error_text
+                            or "11001" in error_text
+                            or "Local wallet proof state is stale" in error_text
+                        ):
+                            raise RuntimeError(
+                                "Payment could not proceed because the wallet contains stale proofs."
+                            ) from e
                         raise RuntimeError(f"ERROR Swap for Payment: {e}. You may need to try the payment again.") from e
                         
 
@@ -5187,7 +5196,14 @@ class Acorn:
                 await self.add_tx_history(tx_type='D', amount=amount, comment=comment, tendered_amount=tendered_amount, tendered_currency=tendered_currency, fees=final_fees)
         except (ValueError, RuntimeError, httpx.HTTPError) as e:
             final_fees = 0
-            msg_out = f"There is an error sending the payment. Did it go through?"
+            if (
+                "Token already spent" in str(e)
+                or "11001" in str(e)
+                or "stale proofs" in str(e).lower()
+            ):
+                msg_out = "Payment could not proceed because the wallet contains stale proofs."
+            else:
+                msg_out = f"There is an error sending the payment. Did it go through?"
             self.logger.error("%s original_error=%s", msg_out, e)
             raise RuntimeError(msg_out) from e
         finally:
