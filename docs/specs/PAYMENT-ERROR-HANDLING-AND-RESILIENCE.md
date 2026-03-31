@@ -112,6 +112,22 @@ During mutation:
 - Payment assembly routines MUST NOT destructively mutate the selected working proof set before swap/melt success is confirmed.
 - Proof selection for payment SHOULD operate on a copy of the candidate keyset proof list and only commit back into wallet state after successful settlement commit.
 - If no proofs are present, mutation routines MUST no-op (not crash wallet load paths).
+- Implementations SHOULD avoid deferring all proof normalization to spend time alone; receive-side proof maintenance MAY be used to keep long-lived wallets below fragmentation thresholds.
+
+### Receive-Side Maintenance Guidance
+
+Where proof-bearing receive paths exist, implementations SHOULD support best-effort receive-side maintenance triggered by configurable thresholds such as:
+
+- total proof count
+- per-keyset proof count
+
+Recommended behavior:
+
+1. receive succeeds first
+2. maintenance runs only when thresholds are exceeded
+3. maintenance failure is logged but MUST NOT retroactively mark the receive as failed
+
+This reduces the likelihood that a wallet accumulates large fragmented proof sets and only discovers proof-state problems during a later payment attempt.
 
 After mutation:
 

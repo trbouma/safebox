@@ -186,6 +186,9 @@ class Settings(BaseSettings):
                         ] 
 
     WALLET_SWAP_MODE: bool = False
+    RECEIVE_PROOF_MAINTENANCE_ENABLED: bool = True
+    RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT: int = 32
+    RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT: int = 16
 
     class Config:
         env_file = '.env'

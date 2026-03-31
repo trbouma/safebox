@@ -71,6 +71,7 @@ Examples:
 - UI-side preflight checks before NFC actions proceed.
 - Proof-safety audit gates before destructive proof mutation (`swap`/`consolidate`) to fail closed on invalid or ambiguous proof state.
 - Non-destructive proof replacement requirement: existing proofs are not deleted/overwritten until replacement proofs are confirmed non-empty and persistence checks pass.
+- Receive-side proof maintenance trigger: incoming proof-ingest paths may trigger best-effort normalization when proof fragmentation crosses configured thresholds, reducing the chance that long-lived wallets defer all proof cleanup until spend time.
 
 ### 3. Transport/Session Guards
 
@@ -100,6 +101,39 @@ Current behavior:
 - Retry with bounded attempts where safe.
 - Emit explicit timeout/failure statuses upstream for operator/user visibility.
 - Use fallback channels (for example status/notify combinations) when primary async signaling is delayed.
+
+### 4a. Receive-Side Proof Maintenance
+
+Safebox may perform best-effort proof maintenance after proof-ingest operations such as:
+
+- minting fresh proofs after Lightning deposit settlement
+- accepting ecash tokens
+
+The current trigger model supports:
+
+- total proof-count threshold
+- per-keyset proof-count threshold
+- enable/disable flag for receive-side maintenance
+
+Default intent:
+
+- keep long-lived wallets in a spend-ready state
+- reduce proof fragmentation before the next payment path
+- fail open on receive if maintenance cannot complete
+
+Current configuration:
+
+- `RECEIVE_PROOF_MAINTENANCE_ENABLED`
+- `RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT`
+- `RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT`
+
+Behavior:
+
+- if thresholds are not crossed, receive flow writes proofs and returns normally
+- if thresholds are crossed, Safebox attempts:
+  - `swap_multi_each()`
+  - `swap_multi_consolidate()`
+- if maintenance fails, the receive remains successful and a warning is logged
 
 ### 5. Flow Integrity Guards (NFC / QR / Record Transfer)
 

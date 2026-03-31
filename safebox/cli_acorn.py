@@ -563,6 +563,14 @@ def swap(consolidate):
         result_out = asyncio.run(acorn_obj.swap_multi_each())
         click.echo(result_out)
 
+@click.command("repair-proofs", help="Prune spent proofs and rewrite wallet proof state")
+def repair_proofs():
+    acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
+    asyncio.run(acorn_obj.load_data())
+    click.echo("Repair proofs")
+    result_out = asyncio.run(acorn_obj.repair_proofs())
+    click.echo(result_out)
+
 @click.command("pay", help="Payout funds to lightning address")
 @click.argument('amount', default=21)
 @click.argument('lnaddress', default='trbouma@openbalance.app')
@@ -1193,6 +1201,7 @@ cli.add_command(tx_history)
 cli.add_command(deposit)
 cli.add_command(proofs)
 cli.add_command(swap)
+cli.add_command(repair_proofs)
 cli.add_command(pay)
 cli.add_command(put)
 cli.add_command(get)
