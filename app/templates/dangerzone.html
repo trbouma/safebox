@@ -266,6 +266,24 @@ async function setCustomHandle() {
 
       }
 
+  async function repairProofs() {
+    
+    var data;
+   
+    user_confirm = confirm(`Are you sure you want to repair proofs? This may remove stale or unusable proofs.`);
+    if (user_confirm == false) {return;}
+
+   await fetch('/safebox/repairproofs', {
+        method: "POST",
+        headers: {"Content-Type": "application/json"}        
+               
+       })
+    .then((response) => response.json())
+    .then((data) => { alert(`${data.status} ${data.detail}`);});
+
+
+      }
+
 async function scanFace() {
 // alert("scan!");
 
@@ -457,6 +475,8 @@ window.location.href="/safebox/attest/";
 
       <br><br>
       <button onclick="swapProofs()">Swap Proofs</button>
+      <br><br>
+      <button onclick="repairProofs()">Repair Proofs</button>
       <br><br>    
 </div>
 <div class="center-text">

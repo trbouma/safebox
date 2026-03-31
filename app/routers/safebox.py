@@ -822,6 +822,25 @@ async def ln_swap(   request: Request,
 
     return {"status": "OK", "detail": f"{msg_out} {acorn_obj.balance} sats"}
 
+
+@router.post("/repairproofs", tags=["protected"])
+async def repair_proofs(
+    request: Request,
+    acorn_obj: Acorn = Depends(get_acorn)
+):
+    msg_out = "No repair performed"
+
+    try:
+        msg_out = await acorn_obj.repair_proofs()
+    except (ValueError, RuntimeError) as e:
+        logger.warning("Repair proofs failed: %s", e)
+        return {"status": "ERROR", "detail": f"error {e}"}
+    except Exception as e:
+        logger.exception("Unexpected error in repair proofs")
+        return {"status": "ERROR", "detail": f"error {e}"}
+
+    return {"status": "OK", "detail": msg_out}
+
 @router.post("/payinvoice", tags=["protected"])
 async def ln_pay_invoice(   request: Request, 
                         ln_invoice: lnPayInvoice,
