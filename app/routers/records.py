@@ -65,7 +65,7 @@ class PresenterAnnounceRequest(BaseModel):
 
 def _redirect_if_missing_acorn(acorn_obj: Acorn):
     if acorn_obj is None:
-        logger.warning("records route called without an active acorn session")
+        logger.info("records route redirected because no active acorn session was present")
         return RedirectResponse(url="/", status_code=302)
     return None
 
