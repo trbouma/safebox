@@ -51,11 +51,24 @@ async def resolve_record_verification_facts(
     logger.debug("record_verification tags=%s", event_to_validate.tags)
     tag_owner = get_tag_value(event_to_validate.tags, "safebox_owner")
     tag_issuer = get_tag_value(event_to_validate.tags, "safebox_issuer")
+    tag_safebox = get_tag_value(event_to_validate.tags, "safebox")
     tag_holder = get_tag_value(event_to_validate.tags, "safebox_holder")
     type_name = get_label_by_id(settings.GRANT_KINDS, event_to_validate.kind)
     owner_pub_hex = None
     owner_npub = None
     owner_display = tag_owner
+    issuer_safebox_hex = None
+    issuer_safebox_npub = None
+
+    issuer_safebox_value = tag_safebox or tag_issuer or event_to_validate.pub_key
+    if issuer_safebox_value:
+        try:
+            issuer_safebox_keys = Keys(pub_k=issuer_safebox_value)
+            issuer_safebox_hex = issuer_safebox_keys.public_key_hex()
+            issuer_safebox_npub = issuer_safebox_keys.public_key_bech32()
+        except Exception:
+            issuer_safebox_hex = None
+            issuer_safebox_npub = None
 
     if tag_owner:
         try:
@@ -87,7 +100,10 @@ async def resolve_record_verification_facts(
         "tag_owner_npub": owner_npub,
         "tag_owner_display": owner_display,
         "tag_issuer": tag_issuer,
+        "tag_safebox": tag_safebox,
         "tag_holder": tag_holder,
+        "issuer_safebox_hex": issuer_safebox_hex,
+        "issuer_safebox_npub": issuer_safebox_npub,
         "type_name": type_name,
         "owner_info": owner_info,
         "picture": picture,
@@ -111,11 +127,12 @@ async def resolve_record_verification_facts(
     recognized_by = []
 
     if owner_display:
-        attestation_cache_key = owner_pub_hex or owner_display
+        attestation_target = issuer_safebox_npub or issuer_safebox_hex or issuer_safebox_value
+        attestation_cache_key = f"{owner_pub_hex or owner_display}|{attestation_target or ''}"
         if attestation_cache_key not in attestation_cache:
             attestation_cache[attestation_cache_key] = await get_attestation(
                 owner_npub=owner_npub or owner_display,
-                safebox_npub=acorn_obj.pubkey_bech32,
+                safebox_npub=attestation_target,
                 relays=settings.RELAYS,
             )
         is_attested = attestation_cache[attestation_cache_key]
