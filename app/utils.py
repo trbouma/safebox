@@ -83,6 +83,38 @@ def get_id_by_label(data, target_label):
             return entry[0]
     return None
 
+
+def get_effective_request_scheme(request: Request) -> str:
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    if forwarded_proto:
+        return forwarded_proto
+
+    forwarded_scheme = (request.headers.get("x-forwarded-scheme") or "").split(",")[0].strip().lower()
+    if forwarded_scheme:
+        return forwarded_scheme
+
+    return (request.url.scheme or "http").lower()
+
+
+def build_websocket_url(request: Request, path: str) -> str:
+    request_scheme = get_effective_request_scheme(request)
+    ws_scheme = "wss" if request_scheme == "https" else "ws"
+
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    host = forwarded_host or (request.url.hostname or "")
+    if not host:
+        raise ValueError("Unable to determine request host for websocket URL")
+
+    if ":" in host:
+        host_with_port = host
+    else:
+        port = request.url.port
+        default_port = 443 if request_scheme == "https" else 80
+        host_with_port = f"{host}:{port}" if port and port != default_port else host
+
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{ws_scheme}://{host_with_port}{normalized_path}"
+
 def create_jwt_token(data: dict, expires_delta: timedelta = None):
     k = Keys(priv_k=config.SERVICE_NSEC)
 

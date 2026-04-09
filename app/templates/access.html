@@ -1634,8 +1634,24 @@ function getInvoiceStatus(ln_invoice_status) {
 </script>
 
 <script>
-  const ws_notify = new WebSocket("{{ws_url_notify}}");
-  ws_notify.onopen = () => { console.log("WebSocket for notify connected for: {{ws_url_notify}} ");}
+  function resolveWebSocketUrl(rawUrl) {
+    const pageWsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    if (!rawUrl) {
+      return `${pageWsScheme}//${window.location.host}`;
+    }
+    try {
+      const parsed = new URL(rawUrl, window.location.origin);
+      parsed.protocol = pageWsScheme;
+      return parsed.toString();
+    } catch (error) {
+      const normalizedPath = rawUrl.startsWith("/") ? rawUrl : `/${rawUrl}`;
+      return `${pageWsScheme}//${window.location.host}${normalizedPath}`;
+    }
+  }
+
+  const wsNotifyUrl = resolveWebSocketUrl("{{ws_url_notify}}");
+  const ws_notify = new WebSocket(wsNotifyUrl);
+  ws_notify.onopen = () => { console.log(`WebSocket for notify connected for: ${wsNotifyUrl}`);}
   ws_notify.onmessage = (event) => {
     console.log("Notification received:", event.data);
     const payload = JSON.parse(event.data);
@@ -1692,9 +1708,10 @@ function getInvoiceStatus(ln_invoice_status) {
 <script>
   document.addEventListener("touchstart", handleInteraction); 
   //document.addEventListener("click", handleInteraction); 
-  const ws = new WebSocket("{{ws_url}}");
+  const wsStatusUrl = resolveWebSocketUrl("{{ws_url}}");
+  const ws = new WebSocket(wsStatusUrl);
 
-  ws.onopen = () => console.log("WebSocket connected for: {{ws_url}}");
+  ws.onopen = () => console.log(`WebSocket connected for: ${wsStatusUrl}`);
   ws.onmessage = (event) => {
       console.log("Message received:", event.data);
       const response = JSON.parse(event.data);

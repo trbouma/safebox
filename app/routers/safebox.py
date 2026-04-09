@@ -38,7 +38,7 @@ from safebox.monstrmore import ExtendedNIP44Encrypt
 from urllib.parse import quote, unquote
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request, create_nfc_request_bind_payload
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, get_safebox, get_acorn, db_lookup_safebox, create_nembed_compressed, parse_nembed_compressed, sign_payload, verify_payload, fetch_safebox_by_npub, generate_secure_pin, encode_lnurl, lightning_address_to_lnurl, ensure_csrf_cookie, validate_csrf_token, listen_for_request, create_nfc_request_bind_payload, build_websocket_url
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, paymentByToken, nwcVault, nfcCard, nfcPayOutRequest, signedEvent, attestationOwner, rootEntity, wotEntity, NWCSecret, creqPayRequest
 from app.config import Settings, ConfigWithFallback
@@ -684,12 +684,8 @@ async def protected_route(    request: Request,
     final_url, final_lnurl= lightning_address_to_lnurl(lightning_address)
 
 
-    host = request.url.hostname
-    request_scheme = (request.url.scheme or "").lower()
-    ws_scheme = "wss" if request_scheme == "https" else "ws"
-    port = f":{request.url.port}" if request.url.port not in (None, 80, 443) else ""
-    ws_url = f"{ws_scheme}://{host}{port}/safebox/ws/status"
-    ws_url_notify = f"{ws_scheme}://{host}{port}/safebox/ws/notify"
+    ws_url = build_websocket_url(request, "/safebox/ws/status")
+    ws_url_notify = build_websocket_url(request, "/safebox/ws/notify")
     
     print(f"ws url {ws_url}")
 

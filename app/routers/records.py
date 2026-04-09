@@ -25,7 +25,7 @@ from monstr.encrypt import NIP44Encrypt
 import oqs
 
 
-from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, parse_nembed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub, create_record_request_bind_payload
+from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, parse_nembed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub, create_record_request_bind_payload, build_websocket_url
 
 from sqlmodel import Field, Session, SQLModel, select
 from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
@@ -466,10 +466,7 @@ async def offer_list(      request: Request,
 
     grant_kinds = settings.GRANT_KINDS
     offer_kind_label = get_label_by_id(offer_kinds, kind)
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
+    ws_url = build_websocket_url(request, "/records/ws/listenfornauth/")
 
     # Get correspond grant kind
     grant_kind = get_id_by_label(grant_kinds,offer_kind_label)
@@ -592,10 +589,7 @@ async def record_request(      request: Request,
     # this is the replacement for records/request.html
     # const ws = new WebSocket(`wss://{{request.url.hostname}}/records/ws/request/${nauth}`); 
     
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/request/"
+    ws_url = build_websocket_url(request, "/records/ws/request/")
     
 
     request_mode = (mode or "request").strip().lower()
@@ -1141,10 +1135,7 @@ async def my_present_records(       request: Request,
     # FIXME this is what is being replaced in present.html
     # const ws_present = new WebSocket(`wss://{{request.url.hostname}}/records/ws/present/{{nauth}}`);
 
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/present/{nauth}"
+    ws_url = build_websocket_url(request, f"/records/ws/present/{nauth}")
     
     return templates.TemplateResponse(  "records/present.html", 
                                         {   "request": request,
@@ -1401,10 +1392,7 @@ async def retrieve_grant_list(       request: Request,
   
     record_label = get_label_by_id(grant_kinds, record_kind)
 
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/offer/{nauth}"
+    ws_url = build_websocket_url(request, f"/records/ws/offer/{nauth}")
 
     # this is the hardcoded one from grantlist.html
     # ws_url = "wss://{{request.url.hostname}}/records/ws/offer/${global_nauth}"
@@ -1455,14 +1443,11 @@ async def accept_records(            request: Request,
     grant_kind_label = ""
     transmittal_kind = 0
 
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
     nauth_clean = None if str(nauth).strip().lower() in {"none", "null", ""} else nauth
     if nauth_clean:
-        ws_url = f"{scheme}://{host}{port}/records/ws/accept?nauth={nauth_clean}"
+        ws_url = build_websocket_url(request, f"/records/ws/accept?nauth={nauth_clean}")
     else:
-        ws_url = f"{scheme}://{host}{port}/records/ws/accept"
+        ws_url = build_websocket_url(request, "/records/ws/accept")
 
     
 
@@ -2016,10 +2001,7 @@ async def display_offer(     request: Request,
 
     #FIXME hard-coded to replace in offer.html
     # `wss://{{request.url.hostname}}/records/ws/listenfornauth/${global_nauth}`
-    host = request.url.hostname
-    scheme = "ws" if host in ("localhost", "127.0.0.1") else "wss"
-    port = f":{request.url.port}" if request.url.port not in (None, 80) else ""
-    ws_url = f"{scheme}://{host}{port}/records/ws/listenfornauth/"
+    ws_url = build_websocket_url(request, "/records/ws/listenfornauth/")
     # need to add in global_nauth in the page
     normalized_mode = (recipient_mode or "").strip().lower()
     if normalized_mode not in {"auto_send", "review"}:
