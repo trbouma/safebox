@@ -354,7 +354,9 @@ async function createQRCode() {
     resetOfferChannelState();
     qr_img_func.src="/img/circle-256.gif";   
     
-    const submit_data = {"scope": scope, "grant": grant, "compact": compact_qr.checked };
+    // Offer-by-QR still relies on the full nauth carrying relay/context hints.
+    // Compact mode strips too much context and can break the auth handshake.
+    const submit_data = {"scope": scope, "grant": grant, "compact": false };
     console.log(`scope: ${scope} grant: ${grant}`);
 
     await fetch(`/records/nauth`, {
@@ -835,8 +837,8 @@ document.addEventListener("DOMContentLoaded", () => {
     <label>
     <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
     Offer by NFC
-    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
-    Compact QR Code
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" disabled>
+    Full QR Code Required
   <br><br>
     <br><br>
     </label>

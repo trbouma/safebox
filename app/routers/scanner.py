@@ -157,8 +157,12 @@ async def get_scan_result(  request: Request,
                 status_code=SCAN_REDIRECT_STATUS,
             )
         if "offer" in scope:
-            # Use POST handoff to avoid URL/query loss on some mobile scanners.
-            return _post_accept_scan({"nauth": qr_code})
+            # Plain offer QR flows only need the scanned nauth; a direct redirect
+            # avoids an extra auto-submit handoff before the accept websocket page.
+            return RedirectResponse(
+                f"/records/accept?nauth={quote(qr_code)}",
+                status_code=SCAN_REDIRECT_STATUS,
+            )
         if "verifier" in scope:
             return _post_present_scan({"nauth": qr_code})
         if "vissue" in scope:
