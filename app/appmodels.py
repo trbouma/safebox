@@ -182,6 +182,8 @@ class proofByToken(BaseModel):
     label: str|None=None
     kind: int|None=None
     pin: str|None=None
+    kem_public_key: str|None = None
+    kemalg: str|None = None
     requester_pubkey: str|None = None
     requester_sig: str|None = None
     requester_nonce: str|None = None
@@ -248,6 +250,8 @@ class proofVault(BaseModel):
     label: str|None = None
     kind: int|None = None
     pin: str|None = None
+    kem_public_key:str|None = None
+    kemalg:str|None=None
     pubkey:str|None= None
     sig: str|None = None
     requester_pubkey: str|None = None

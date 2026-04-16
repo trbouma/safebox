@@ -3377,6 +3377,16 @@ async def accept_proof_token( request: Request,
         # On transport-level uncertainty, continue and rely on authoritative vault validation.
         logger.warning("Proof preflight advisory host=%s detail=%s", host, card_detail)
 
+    # NFC proof/request uses the requester server's KEM, not the remote NFC host's.
+    kem_public_key = proof_token.kem_public_key
+    kemalg = proof_token.kemalg
+    if (
+        not kem_public_key or kem_public_key == "None" or
+        not kemalg or kemalg == "None"
+    ):
+        kem_public_key = config.PQC_KEM_PUBLIC_KEY
+        kemalg = settings.PQC_KEMALG
+
     # need to send off to the vault for processing
     request_auth = _build_record_request_auth(
         service_keys=k,
@@ -3386,6 +3396,8 @@ async def accept_proof_token( request: Request,
         label=label_to_use,
         kind=record_kind_to_use,
         pin=proof_token.pin,
+        kem_public_key=kem_public_key,
+        kemalg=kemalg,
         requester_pubkey=proof_token.requester_pubkey,
         requester_sig=proof_token.requester_sig,
         requester_nonce=proof_token.requester_nonce,
@@ -3397,6 +3409,8 @@ async def accept_proof_token( request: Request,
         "label": label_to_use,
         "kind": record_kind_to_use,
         "pin": proof_token.pin,
+        "kem_public_key": kem_public_key,
+        "kemalg": kemalg,
         "pubkey": pubkey,
         "sig": sig,
         **request_auth,

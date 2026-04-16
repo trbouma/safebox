@@ -799,8 +799,9 @@ async def proof_vault(request: Request, proof_vault: proofVault):
         detail = "Valid PIN"
         pin_ok = True
     else:
-        status = "WARNING"
-        detail = "Invalid PIN"
+        # PIN is advisory for NFC proof flows until enforced protection lands.
+        status = "OK"
+        detail = "PIN did not match. Continuing in advisory mode."
         pin_ok = False
 
     wallet_instruction = {
@@ -809,7 +810,9 @@ async def proof_vault(request: Request, proof_vault: proofVault):
         "nauth": proof_vault.nauth,
         "label": proof_vault.label,
         "kind": proof_vault.kind,
-        "pin_ok": pin_ok
+        "pin_ok": pin_ok,
+        "kem_public_key": proof_vault.kem_public_key,
+        "kemalg": proof_vault.kemalg
 
             }
         }

@@ -20,6 +20,7 @@ from safebox.monstrmore import ExtendedNIP44Encrypt
 import signal
 import json
 import bolt11
+import requests
 from typing import Optional
 
 from app.appmodels import RegisteredSafebox, NWCEvent, NWCSecret
@@ -347,6 +348,8 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         label = instruction_obj['params']['label']
         record_kind = int(instruction_obj['params']['kind'])
         pin_ok = instruction_obj['params'].get("pin_ok", False)
+        kem_public_key = instruction_obj['params'].get("kem_public_key")
+        kemalg = instruction_obj['params'].get("kemalg")
         print(f"we are going to present a record! label: {label} kind: {record_kind} pin ok: {pin_ok}")
 
         parsed_result = parse_nauth(nauth)
@@ -464,33 +467,132 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         # send the recipient nauth message
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nauth_response,dm_relays=auth_relays,kind=auth_kind)
 
-        print(f"filtered records out: {filtered_records_out}")
-        try:
-            nembed_records = create_nembed_compressed(filtered_records_out)
-        except Exception as exc:
-            print(f"present_record nembed encode failed: {exc}")
-            nembed_records = create_nembed_compressed([{
-                "tag": [label or "none"],
-                "type": "generic",
-                "payload": "Record encoding failed during presentation.",
-            }])
-        # print(f"nembed records: {nembed_records}")
+        async def _send_legacy_present_records() -> None:
+            print(f"filtered records out: {filtered_records_out}")
+            try:
+                nembed_records = create_nembed_compressed(filtered_records_out)
+            except Exception as exc:
+                print(f"present_record nembed encode failed: {exc}")
+                nembed_records = create_nembed_compressed([{
+                    "tag": [label or "none"],
+                    "type": "generic",
+                    "payload": "Record encoding failed during presentation.",
+                }])
 
-        print(f"nwc record out for {label} {record_kind}: {filtered_records_out}")
-        #TODO This error handling can be improved
-        try:
-            nembed = create_nembed_compressed(records_out)
-        except:
-            record_out = [{'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}]
-            nembed = create_nembed_compressed(record_out)
+            print(f"nwc record out for {label} {record_kind}: {filtered_records_out}")
+            try:
+                nembed = create_nembed_compressed(records_out)
+            except Exception:
+                record_out = [{'tag': ['none'], 'type': 'generic', 'payload': 'Record is not found!'}]
+                nembed = create_nembed_compressed(record_out)
 
-        print(f"nembed: {nembed}")
-        t_sleep = 0.1
-        print(f"sleep for {t_sleep} seconds")
-        await asyncio.sleep(t_sleep)
-        print(f"done sleep for {t_sleep} seconds")
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=nembed_records, dm_relays=transmittal_relays,kind=transmittal_kind)
-        print(f"msg outx: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+            print(f"nembed: {nembed}")
+            t_sleep = 0.1
+            print(f"sleep for {t_sleep} seconds")
+            await asyncio.sleep(t_sleep)
+            print(f"done sleep for {t_sleep} seconds")
+            msg_out = await acorn_obj.secure_transmittal(
+                nrecipient=npub_initiator,
+                message=nembed_records,
+                dm_relays=transmittal_relays,
+                kind=transmittal_kind,
+            )
+            print(f"msg outx: {msg_out} dm relays: {transmittal_relays} kind: {transmittal_kind}")
+
+        if (
+            not kem_public_key or kem_public_key == "None" or
+            not kemalg or kemalg == "None"
+        ):
+            logger.warning("present_record missing KEM material; falling back to legacy direct transmittal")
+            await _send_legacy_present_records()
+        else:
+            print(f"present_record using KEM for PQC transmittal kemalg={kemalg}")
+
+            def _resolve_numeric_grant_kind(each_record: dict) -> int:
+                candidate_kind = each_record.get("type")
+                try:
+                    resolved_kind = int(candidate_kind)
+                except (TypeError, ValueError):
+                    resolved_kind = int(record_kind)
+                if not (30000 <= resolved_kind < 40000 and resolved_kind % 2 == 0):
+                    resolved_kind = int(record_kind)
+                return resolved_kind
+
+            for each_record in filtered_records_out:
+                tag_values = each_record.get("tag", [])
+                grant_name = tag_values[0] if isinstance(tag_values, list) and tag_values else (label or "none")
+                grant_kind = _resolve_numeric_grant_kind(each_record)
+
+                pqc = oqs.KeyEncapsulation(kemalg, bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+                kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(kem_public_key))
+                kem_shared_secret_hex = kem_shared_secret.hex()
+                kem_ciphertext_hex = kem_ciphertext.hex()
+
+                k_pqc = Keys(priv_k=kem_shared_secret_hex)
+                my_enc = ExtendedNIP44Encrypt(k_pqc)
+
+                try:
+                    issued_grant_record, original_record = await acorn_obj.create_request_from_grant(
+                        grant_name=grant_name,
+                        grant_kind=grant_kind,
+                        shared_secret_hex=kem_shared_secret_hex,
+                        blossom_xfer_server=settings.BLOSSOM_XFER_SERVER,
+                    )
+                except requests.exceptions.ConnectionError as exc:
+                    fallback_server = settings.BLOSSOM_HOME_SERVER
+                    if not fallback_server or fallback_server == settings.BLOSSOM_XFER_SERVER:
+                        raise
+                    logger.warning(
+                        "present_record primary blossom transfer server unreachable (%s); retrying on fallback (%s): %s",
+                        settings.BLOSSOM_XFER_SERVER,
+                        fallback_server,
+                        exc,
+                    )
+                    issued_grant_record, original_record = await acorn_obj.create_request_from_grant(
+                        grant_name=grant_name,
+                        grant_kind=grant_kind,
+                        shared_secret_hex=kem_shared_secret_hex,
+                        blossom_xfer_server=fallback_server,
+                    )
+
+                issued_record_str = json.dumps(issued_grant_record.data())
+                pqc_encrypted_payload = my_enc.encrypt(
+                    to_pub_k=k_pqc.public_key_hex(),
+                    plain_text=issued_record_str,
+                )
+
+                if original_record:
+                    original_record_str = original_record.model_dump_json(exclude_none=True)
+                    pqc_encrypted_original = my_enc.encrypt(
+                        to_pub_k=k_pqc.public_key_hex(),
+                        plain_text=original_record_str,
+                    )
+                else:
+                    pqc_encrypted_original = None
+
+                transmittal_obj = {
+                    "tag": [grant_name],
+                    "type": str(grant_kind),
+                    "payload": "This record is quantum-safe",
+                    "timestamp": int(datetime.now(timezone.utc).timestamp()),
+                    "endorsement": acorn_obj.pubkey_bech32,
+                    "ciphertext": kem_ciphertext_hex,
+                    "kemalg": kemalg,
+                    "pqc_encrypted_payload": pqc_encrypted_payload,
+                    "pqc_encrypted_original": pqc_encrypted_original,
+                }
+
+                msg_out = await acorn_obj.secure_transmittal(
+                    nrecipient=npub_initiator,
+                    message=json.dumps(transmittal_obj),
+                    dm_relays=transmittal_relays,
+                    kind=transmittal_kind,
+                )
+                print(
+                    "present_record PQC transmittal sent "
+                    f"grant={grant_name} kind={grant_kind} dm relays={transmittal_relays} "
+                    f"kind={transmittal_kind} result={msg_out}"
+                )
 
 
     elif instruction_obj['method'] == 'offer_record':
@@ -548,7 +650,29 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         # Use a small lookback to avoid missing same-second arrivals.
         since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
         # send the recipient nauth message
-        msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
+        msg_out = await acorn_obj.secure_transmittal(
+            nrecipient=npub_initiator,
+            message=response_nauth_with_kem,
+            dm_relays=auth_relays,
+            kind=auth_kind,
+        )
+        print(
+            "offer_record auth response sent with embedded KEM "
+            f"nonce={nonce} relays={auth_relays} result={msg_out}"
+        )
+        # Fallback: also send a plain nauth response. Sender prefers the KEM-bearing
+        # payload when present, but this smaller auth message can still unblock the
+        # flow when a larger KEM-bearing payload is delayed or dropped.
+        plain_msg_out = await acorn_obj.secure_transmittal(
+            nrecipient=npub_initiator,
+            message=response_nauth,
+            dm_relays=auth_relays,
+            kind=auth_kind,
+        )
+        print(
+            "offer_record plain auth fallback sent "
+            f"nonce={nonce} relays={auth_relays} result={plain_msg_out}"
+        )
         
         # await asyncio.sleep(5)
 
