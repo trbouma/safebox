@@ -187,9 +187,42 @@ async function createQRCode() {
   var record_label = document.getElementById("record_label").value;
   const nfc_request = document.getElementById("nfc_request_checkbox");
   const compact_qr = document.getElementById("compact_qr_checkbox");
+  let qr_payload = null;
 
 
+  if (requestMode === "receive_offer") {
+    const offerKind = resolveOfferKindFromGrantKind(grant_kind);
+    if (offerKind === null) {
+      setRequestStatus("Could not resolve offer kind for this record type.");
+      qr_img_func.src = "/img/safebox.png";
+      return;
+    }
 
+    const bootstrapData = {
+      grant_kind: parseInt(grant_kind, 10),
+      offer_kind: offerKind,
+      label: record_label || null
+    };
+
+    console.log(JSON.stringify(bootstrapData));
+
+    const bootstrapResp = await fetch(`/records/bootstrap/receive-offer`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(bootstrapData)
+    });
+    const bootstrapJson = await bootstrapResp.json();
+    if (!bootstrapResp.ok || bootstrapJson.status !== "OK") {
+      const detail = bootstrapJson.detail || "Unable to create receive-offer QR.";
+      setRequestStatus(detail);
+      alert(detail);
+      qr_img_func.src = "/img/safebox.png";
+      return;
+    }
+
+    global_nauth = bootstrapJson.nauth;
+    qr_payload = bootstrapJson.qr;
+  } else {
     var scope = `${requestScopePrefix}:${grant_kind}`;
     if (requestScopePrefix === "offer_request") {
       const offerKind = resolveOfferKindFromGrantKind(grant_kind);
@@ -225,6 +258,8 @@ async function createQRCode() {
   
 
     });
+    qr_payload = global_nauth;
+  }
 
   if (presenterNauth) {
     try {
@@ -244,7 +279,7 @@ async function createQRCode() {
     } catch (err) {
       consoleLog(`presenter callback failed: ${err}`);
       setRequestStatus("Could not notify presenter. Tap QR to retry.");
-      qr_img_func.src = "/safebox/qr/"+ global_nauth;
+      qr_img_func.src = "/safebox/qr/"+ encodeURIComponent(qr_payload || global_nauth);
       return;
     }
   }
@@ -267,7 +302,7 @@ async function createQRCode() {
     console.log(`grant kind: ${grant_kind}`);
 
     // qr_img_func.src="/img/circle-256.gif";
-    qr_img_func.src = "/safebox/qr/"+ global_nauth;
+    qr_img_func.src = "/safebox/qr/"+ encodeURIComponent(qr_payload || global_nauth);
     setTimeout(centerQrImageInView, 80);
 
   }
@@ -326,13 +361,15 @@ async function createQRCode() {
   </datalist>
 
   <br><br>
-  <label>
+  <label id="nfc_request_option">
     <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
     Request by NFC
+  </label>
+  <label id="compact_qr_option">
     <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
     Compact QR Code
-    <br><br>
   </label>
+  <br><br>
 
   <img id="img_qr_display" src="/img/safebox.png" onclick="createQRCode()">
 </div>
@@ -407,14 +444,16 @@ function updateSubtypes() {
     const titleEl = document.getElementById("request_title");
     const statusEl = document.getElementById("span_msg_status");
     const nfcCheckbox = document.getElementById("nfc_request_checkbox");
+    const nfcOption = document.getElementById("nfc_request_option");
     const qrImg = document.getElementById("img_qr_display");
     const compactQrCheckbox = document.getElementById("compact_qr_checkbox");
 
     if (requestMode === "receive_offer") {
       if (titleEl) titleEl.textContent = "Receive Offer";
-      if (statusEl) statusEl.textContent = "Generating recipient QR...";
+      if (statusEl) statusEl.textContent = "Generating recipient QR for sender to scan...";
       if (nfcCheckbox) nfcCheckbox.checked = false;
-      if (compactQrCheckbox) compactQrCheckbox.checked = false;
+      if (nfcOption) nfcOption.style.display = "none";
+      if (compactQrCheckbox) compactQrCheckbox.checked = true;
       if (qrImg) qrImg.title = "Tap to refresh QR if timed out";
       createQRCode();
     } else if (presenterNauth) {
@@ -426,8 +465,7 @@ function updateSubtypes() {
           : "Preparing verifier handshake...";
       }
       if (nfcCheckbox) nfcCheckbox.checked = false;
-      const nfcLabel = nfcCheckbox ? nfcCheckbox.closest("label") : null;
-      if (nfcLabel) nfcLabel.style.display = "none";
+      if (nfcOption) nfcOption.style.display = "none";
       if (compactQrCheckbox) compactQrCheckbox.checked = false;
       if (qrImg) qrImg.style.display = "none";
       const targetLabel = getTargetLabel(presenterTarget);

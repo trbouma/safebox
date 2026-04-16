@@ -267,6 +267,64 @@ Accordingly:
 
 The system SHOULD treat compact mode as an optional optimization rather than a default for high-context flows.
 
+## Implemented Compact Receive-Offer QR
+
+As of the April 2026 QR regression pass, Safebox implements a compact recipient-presented QR path for receiving an offered record.
+
+This is the canonical QR offer flow:
+
+- the receiving Safebox opens the grant list and chooses "Show QR to Receive Offer"
+- the receiving Safebox generates a compact `safebox:nembed...` bootstrap QR
+- the sending Safebox opens the specific offer record it wants to send
+- the sending Safebox scans the recipient QR from that offer context
+- the scanner resolves the compact bootstrap to the active recipient listener
+- the existing offer auto-send path transmits the selected offer record
+
+The compact QR does not contain the KEM public key and does not contain the full listener `nauth`. It contains only enough bootstrap data to resolve a live, server-owned receive context.
+
+The QR payload is encoded as:
+
+- URI prefix: `safebox:`
+- compressed bech32 payload: `nembed...`
+
+The current receive-offer bootstrap object uses compact keys:
+
+- `v`: version, currently `1`
+- `t`: protocol marker, currently `sb`
+- `f`: flow marker, currently `ro` for receive offer
+- `n`: nonce
+- `h`: recipient service host
+- `gk`: grant kind expected by the recipient
+- `ok`: offer kind expected from the sender
+- `l`: optional label hint
+- `s`: optional scheme hint, emitted only when the recipient service is not HTTPS
+
+The recipient stores the full listener state server-side using the nonce. The public resolver endpoint is:
+
+- `GET /.well-known/safebox/receive-offer/{nonce}`
+
+The resolver returns the active listener `nauth` and associated offer/grant metadata only while the bootstrap is fresh and unused.
+
+The sender scanner handles `safebox:nembed...` by:
+
+- parsing the compact bootstrap
+- verifying the flow marker is receive-offer
+- requiring the scan to originate from an offer context
+- resolving the full listener `nauth` from the recipient host
+- posting into `/records/offerlist-scan` with `recipient_initiated=1` and `recipient_mode=auto_send`
+
+The specific offer page is the preferred sender context because it binds the scan to the exact record label being sent. Scanning a receive-offer QR outside an offer context MUST NOT trigger an automatic send.
+
+The nonce lifecycle is:
+
+- QR generation creates a short-lived bootstrap row
+- stale rows are pruned opportunistically
+- resolver access rejects expired rows
+- resolver access marks the nonce consumed
+- replay attempts are rejected
+
+This pattern keeps the QR compact while preserving host binding, nonce freshness, server-owned listener state, and the existing KEM-based offer transmittal pipeline.
+
 ## Server-Owned KEM Resolution
 
 Critical KEM resolution SHOULD be server-owned.

@@ -27,8 +27,8 @@ import oqs
 
 from app.utils import create_jwt_token, fetch_safebox,extract_leading_numbers, fetch_balance, db_state_change, create_nprofile_from_hex, npub_to_hex, validate_local_part, parse_nostr_bech32, hex_to_npub, get_acorn,create_naddr_from_npub,create_nprofile_from_npub, generate_nonce, create_nauth_from_npub, create_nauth, parse_nauth, listen_for_request, create_nembed_compressed, parse_nembed_compressed, parse_nembed, get_label_by_id, get_id_by_label, sign_payload, get_tag_value, fetch_safebox_by_npub, create_record_request_bind_payload, build_websocket_url
 
-from sqlmodel import Field, Session, SQLModel, select
-from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, proofByToken, OfferToken, BlobRequest
+from sqlmodel import Field, Session, SQLModel, select, delete
+from app.appmodels import RegisteredSafebox, CurrencyRate, lnPayAddress, lnPayInvoice, lnInvoice, ecashRequest, ecashAccept, ownerData, customHandle, addCard, deleteCard, updateCard, transmitConsultation, incomingRecord, sendRecordParms, nauthRequest, receiveOfferBootstrapRequest, ReceiveOfferBootstrap, proofByToken, OfferToken, BlobRequest
 from app.config import Settings, ConfigWithFallback
 from app.db import engine
 from app.branding import build_templates
@@ -2215,6 +2215,122 @@ async def delete_card(         request: Request,
     
 
     return {"status": status, "detail": detail} 
+
+@router.post("/bootstrap/receive-offer", tags=["records", "protected"])
+async def generate_receive_offer_bootstrap(
+                        request: Request,
+                        bootstrap_request: receiveOfferBootstrapRequest,
+                        acorn_obj: Acorn = Depends(get_acorn)
+                    ):
+    """Create a compact recipient-presented QR bootstrap for receiving an offer."""
+    _raise_if_missing_acorn(acorn_obj)
+
+    try:
+        grant_kind = int(bootstrap_request.grant_kind)
+        offer_kind = bootstrap_request.offer_kind
+        if offer_kind is None:
+            grant_label = get_label_by_id(settings.GRANT_KINDS, grant_kind)
+            offer_kind = get_id_by_label(settings.OFFER_KINDS, grant_label) if grant_label else None
+        if offer_kind is None:
+            raise HTTPException(status_code=400, detail="Unable to resolve offer kind for grant kind.")
+        offer_kind = int(offer_kind)
+
+        forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+        host_header = (request.headers.get("host") or "").split(",")[0].strip()
+        service_host = forwarded_host or host_header
+        if not service_host:
+            service_host = request.url.hostname or ""
+            if request.url.port:
+                service_host = f"{service_host}:{request.url.port}"
+        if not service_host:
+            raise HTTPException(status_code=400, detail="Unable to determine recipient service host.")
+        service_scheme = "https"
+        for header_name in ("origin", "referer"):
+            header_value = (request.headers.get(header_name) or "").split(",")[0].strip()
+            if header_value.startswith("http://") or header_value.startswith("https://"):
+                parsed_header_url = urllib.parse.urlparse(header_value)
+                if parsed_header_url.scheme in {"http", "https"}:
+                    service_scheme = parsed_header_url.scheme
+                    if parsed_header_url.netloc:
+                        service_host = parsed_header_url.netloc
+                    break
+        else:
+            service_scheme = (
+                (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+                or (request.headers.get("x-forwarded-scheme") or "").split(",")[0].strip().lower()
+                or (request.url.scheme or "https").lower()
+            )
+
+        nonce = str(bootstrap_request.nonce or generate_nonce(length=8)).strip()
+        scope = f"offer_request:{grant_kind}:{offer_kind}:{service_host}"
+        listen_nauth = create_nauth(
+            npub=acorn_obj.pubkey_bech32,
+            nonce=nonce,
+            auth_kind=settings.AUTH_KIND,
+            auth_relays=settings.AUTH_RELAYS,
+            transmittal_npub=acorn_obj.pubkey_bech32,
+            transmittal_kind=settings.RECORD_TRANSMITTAL_KIND,
+            transmittal_relays=settings.RECORD_TRANSMITTAL_RELAYS,
+            name=acorn_obj.handle,
+            scope=scope,
+            grant=f"record:{grant_kind}",
+        )
+
+        with Session(engine) as session:
+            cutoff = datetime.utcnow() - timedelta(minutes=10)
+            session.exec(
+                delete(ReceiveOfferBootstrap).where(ReceiveOfferBootstrap.created_at < cutoff)
+            )
+            existing = session.exec(
+                select(ReceiveOfferBootstrap).where(ReceiveOfferBootstrap.nonce == nonce)
+            ).first()
+            if existing:
+                existing.nauth = listen_nauth
+                existing.grant_kind = grant_kind
+                existing.offer_kind = offer_kind
+                existing.host = service_host
+                existing.label = str(bootstrap_request.label).strip() if bootstrap_request.label else None
+                existing.created_at = datetime.utcnow()
+                session.add(existing)
+            else:
+                session.add(
+                    ReceiveOfferBootstrap(
+                        nonce=nonce,
+                        nauth=listen_nauth,
+                        grant_kind=grant_kind,
+                        offer_kind=offer_kind,
+                        host=service_host,
+                        label=str(bootstrap_request.label).strip() if bootstrap_request.label else None,
+                    )
+                )
+            session.commit()
+
+        bootstrap = {
+            "v": 1,
+            "t": "sb",
+            "f": "ro",
+            "n": nonce,
+            "h": service_host,
+            "gk": grant_kind,
+            "ok": offer_kind,
+        }
+        if service_scheme and service_scheme != "https":
+            bootstrap["s"] = service_scheme
+        if bootstrap_request.label:
+            bootstrap["l"] = str(bootstrap_request.label).strip()
+
+        qr_payload = f"safebox:{create_nembed_compressed(bootstrap)}"
+        return {
+            "status": "OK",
+            "qr": qr_payload,
+            "nauth": listen_nauth,
+            "bootstrap": bootstrap,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("receive-offer bootstrap generation failed")
+        raise HTTPException(status_code=500, detail=f"Unable to create receive-offer QR: {exc}")
 
 @router.post("/nauth", tags=["records", "protected"])
 async def generate_nauth(    request: Request, 

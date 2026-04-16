@@ -53,6 +53,16 @@ class NWCEvent(SQLModel, table=True):
     event_id: str = Field(unique=True, nullable=False)
     # Add more fields below as needed for your use case    
 
+class ReceiveOfferBootstrap(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nonce: str = Field(index=True, unique=True, nullable=False)
+    nauth: str = Field(nullable=False)
+    grant_kind: int = Field(index=True, nullable=False)
+    offer_kind: int = Field(index=True, nullable=False)
+    host: str = Field(nullable=False)
+    label: Optional[str] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
 class NWCSecret(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nwc_secret: str = Field(unique=True, nullable=False)
@@ -120,6 +130,12 @@ class nauthRequest(BaseModel):
     nonce: str|None = None
     source_nauth: str|None = None
     compact: bool = False
+
+class receiveOfferBootstrapRequest(BaseModel):
+    grant_kind: int
+    offer_kind: int|None = None
+    label: str|None = None
+    nonce: str|None = None
 
     
 

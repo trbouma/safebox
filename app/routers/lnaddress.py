@@ -21,7 +21,7 @@ from monstr.event.event import Event
 from monstr.client.client import Client, ClientPool
 from safebox.acorn import Acorn
 
-from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent, NWCSecret, cardStatusRequest, NFCRequesterNonce
+from app.appmodels import RegisteredSafebox, PaymentQuote, recoverIdentity, nwcVault, nfcPayOutVault, proofVault, offerVault, attestationOwner, signedEvent, NWCSecret, cardStatusRequest, NFCRequesterNonce, ReceiveOfferBootstrap
 from safebox.models import cliQuote
 from app.tasks import service_poll_for_payment, handle_payment, task_to_accept_ecash, handle_ecash, send_payment_message
 from app.utils import ( create_jwt_token, 
@@ -730,6 +730,38 @@ async def get_kem_material(request: Request):
         "kem_public_key": config.PQC_KEM_PUBLIC_KEY,
         "kemalg": settings.PQC_KEMALG,
     }
+
+@router.get("/.well-known/safebox/receive-offer/{nonce}", tags=["public"])
+async def resolve_receive_offer_bootstrap(request: Request, nonce: str):
+    """Resolve a compact receive-offer QR nonce to the active recipient listener."""
+    clean_nonce = str(nonce or "").strip()
+    if not clean_nonce:
+        raise HTTPException(status_code=400, detail="Missing receive-offer nonce.")
+
+    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    with Session(engine) as session:
+        session.exec(
+            delete(ReceiveOfferBootstrap).where(ReceiveOfferBootstrap.created_at < cutoff)
+        )
+        bootstrap = session.exec(
+            select(ReceiveOfferBootstrap).where(ReceiveOfferBootstrap.nonce == clean_nonce)
+        ).first()
+        if not bootstrap or bootstrap.created_at < cutoff:
+            raise HTTPException(status_code=404, detail="Receive-offer bootstrap expired or not found.")
+        response = {
+            "status": "OK",
+            "nauth": bootstrap.nauth,
+            "grant_kind": bootstrap.grant_kind,
+            "offer_kind": bootstrap.offer_kind,
+            "host": bootstrap.host,
+            "label": bootstrap.label,
+        }
+        session.delete(bootstrap)
+        session.commit()
+        return {
+            **response,
+            "consumed": True,
+        }
 
 @router.post("/.well-known/card-status", tags=["public"])
 async def card_status(request: Request, card_status_request: cardStatusRequest):

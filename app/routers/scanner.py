@@ -6,13 +6,14 @@ from urllib.parse import quote, unquote, urlparse, urlencode, parse_qsl, urlunpa
 
 import bolt11
 import cbor2
+import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.branding import build_templates
 
 from app.config import Settings
-from app.utils import check_ln_address, decode_lnurl, parse_nauth
+from app.utils import check_ln_address, decode_lnurl, parse_nauth, parse_nembed_compressed
 
 settings = Settings()
 logger = logging.getLogger(__name__)
@@ -127,6 +128,9 @@ async def get_scan_result(  request: Request,
 
     if qr_code[:6] in {"cashuA", "cashuB"}:
         return _redirect_access(ecash=qr_code)
+
+    if qr_code.lower().startswith("safebox:nembed") or qr_code.lower().startswith("safebox://nembed"):
+        return await _redirect_receive_offer_bootstrap_scan(qr_code, referer)
 
     if qr_code[:5].lower() == "creqa":
         parsed_creq = _parse_creq_payment_request(qr_code)
@@ -357,6 +361,184 @@ def _redirect_offer_request_scan(nauth: str, referer: str | None) -> HTMLRespons
             "recipient_mode": recipient_mode,
         }
     )
+
+
+async def _redirect_receive_offer_bootstrap_scan(
+    qr_code: str,
+    referer: str | None,
+) -> HTMLResponse | RedirectResponse:
+    try:
+        nembed = _strip_safebox_nembed(qr_code)
+        bootstrap = parse_nembed_compressed(nembed)
+    except Exception as exc:
+        logger.warning("Invalid Safebox receive-offer bootstrap QR: %s", exc)
+        return _redirect_access(action_comment="Invalid Safebox receive-offer QR.")
+
+    if bootstrap.get("t") != "sb" or bootstrap.get("f") != "ro":
+        logger.warning("Unsupported Safebox QR bootstrap payload: %s", bootstrap)
+        return _redirect_access(action_comment="Unsupported Safebox QR.")
+
+    nonce = str(bootstrap.get("n") or "").strip()
+    host = str(bootstrap.get("h") or "").strip()
+    if not nonce or not host:
+        logger.warning("Safebox receive-offer QR missing nonce or host: %s", bootstrap)
+        return _redirect_access(action_comment="Receive-offer QR is missing bootstrap data.")
+
+    context_fields = _extract_offer_scan_context(referer, bootstrap)
+    if context_fields is None:
+        logger.warning(
+            "Safebox receive-offer QR scanned outside offer context referer=%s bootstrap=%s",
+            referer,
+            bootstrap,
+        )
+        return _redirect_access(
+            action_comment=(
+                "Receive-offer QR must be scanned from a specific offer page. "
+                "Open the record offer you want to send, then tap Scan Recipient QR."
+            )
+        )
+
+    origin = _origin_from_host(host, preferred_scheme=str(bootstrap.get("s") or "").strip().lower())
+    if not origin:
+        logger.warning("Safebox receive-offer QR has invalid host=%s", host)
+        return _redirect_access(action_comment="Receive-offer QR has an invalid recipient host.")
+
+    resolver_urls = _candidate_receive_offer_resolver_urls(host, nonce, preferred_origin=origin)
+    resolved = None
+    last_resolver_error = None
+    last_resolver_status = None
+    last_resolver_body = ""
+    for resolver_url in resolver_urls:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                response = await client.get(resolver_url)
+                last_resolver_status = response.status_code
+                last_resolver_body = response.text[:300]
+                response.raise_for_status()
+                resolved = response.json()
+                logger.info("Resolved receive-offer bootstrap using url=%s", resolver_url)
+                break
+        except Exception as exc:
+            last_resolver_error = exc
+            logger.warning(
+                "Unable to resolve receive-offer bootstrap url=%s status=%s body=%s error=%s",
+                resolver_url,
+                last_resolver_status,
+                last_resolver_body,
+                exc,
+            )
+    if resolved is None:
+        detail = "Could not resolve receive-offer channel. Ask recipient to refresh QR."
+        if last_resolver_status == 404:
+            detail = "Receive-offer channel was not found or has expired. Ask recipient to refresh QR."
+        elif last_resolver_status == 410:
+            detail = "Receive-offer QR was already used. Ask recipient to refresh QR."
+        logger.warning(
+            "Receive-offer bootstrap resolution failed host=%s nonce=%s urls=%s last_error=%s",
+            host,
+            nonce,
+            resolver_urls,
+            last_resolver_error,
+        )
+        return _redirect_access(action_comment=detail)
+
+    resolved_nauth = str(resolved.get("nauth") or "").strip()
+    if not resolved_nauth:
+        logger.warning("Receive-offer resolver returned no nauth url=%s response=%s", resolver_url, resolved)
+        return _redirect_access(action_comment="Receive-offer channel did not return authentication data.")
+
+    fields = {
+        "nauth": resolved_nauth,
+        "recipient_initiated": "1",
+        "recipient_mode": "auto_send",
+        **context_fields,
+    }
+    if "kind" not in fields and resolved.get("offer_kind"):
+        fields["kind"] = str(resolved.get("offer_kind"))
+    if "card" not in fields and resolved.get("label"):
+        fields["card"] = str(resolved.get("label"))
+
+    return _post_offerlist_scan(fields)
+
+
+def _strip_safebox_nembed(qr_code: str) -> str:
+    payload = str(qr_code or "").strip()
+    lower_payload = payload.lower()
+    if lower_payload.startswith("safebox://"):
+        return payload[len("safebox://"):]
+    if lower_payload.startswith("safebox:"):
+        return payload[len("safebox:"):]
+    return payload
+
+
+def _candidate_receive_offer_resolver_urls(
+    host: str,
+    nonce: str,
+    preferred_origin: str | None = None,
+) -> list[str]:
+    urls: list[str] = []
+
+    def add(origin: str | None):
+        if not origin:
+            return
+        candidate = f"{origin.rstrip('/')}/.well-known/safebox/receive-offer/{quote(nonce)}"
+        if candidate not in urls:
+            urls.append(candidate)
+
+    add(preferred_origin)
+    parsed = urlparse(str(host or "").strip() if "://" in str(host or "") else f"//{host}", scheme="")
+    netloc = parsed.netloc or parsed.path
+    hostname = netloc.split("@")[-1].split(":")[0].lower() if netloc else ""
+    if hostname in {"localhost", "127.0.0.1", "0.0.0.0"}:
+        add(f"http://{netloc}")
+        add(f"https://{netloc}")
+    else:
+        add(f"https://{netloc}")
+        add(f"http://{netloc}")
+    return urls
+
+
+def _extract_offer_scan_context(referer: str | None, bootstrap: dict[str, Any]) -> dict[str, str] | None:
+    if not referer:
+        return None
+
+    parsed_ref = urlparse(referer)
+    if parsed_ref.path not in {"/records/offerlist", "/records/displayoffer"}:
+        return None
+
+    query_params = dict(parse_qsl(parsed_ref.query, keep_blank_values=True))
+    fields: dict[str, str] = {}
+
+    offer_kind = query_params.get("kind") or bootstrap.get("ok")
+    if offer_kind:
+        fields["kind"] = str(offer_kind)
+
+    card = query_params.get("card")
+    if card:
+        fields["card"] = card
+
+    if parsed_ref.path == "/records/displayoffer" and not fields.get("card"):
+        return None
+
+    return fields
+
+
+def _origin_from_host(host: str | None, preferred_scheme: str | None = None) -> str | None:
+    if not host:
+        return None
+    cleaned = str(host).strip().rstrip("/")
+    if not cleaned:
+        return None
+    parsed = urlparse(cleaned if "://" in cleaned else f"//{cleaned}", scheme="")
+    netloc = parsed.netloc or parsed.path
+    if not netloc:
+        return None
+    hostname = netloc.split("@")[-1].split(":")[0].lower()
+    if preferred_scheme in {"http", "https"}:
+        scheme = preferred_scheme
+    else:
+        scheme = "http" if hostname in {"localhost", "127.0.0.1", "0.0.0.0"} else "https"
+    return f"{scheme}://{netloc}"
 
 
 def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
