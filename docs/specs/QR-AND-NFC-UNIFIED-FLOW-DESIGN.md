@@ -1,0 +1,344 @@
+# QR and NFC Unified Flow Design
+
+## Overview
+
+This specification defines a convergence strategy for Safebox QR and NFC interaction flows.
+
+The core design decision is:
+
+- NFC and QR SHOULD share the same downstream processing architecture.
+- QR and NFC MUST remain distinct at the bootstrap security layer.
+
+In practice, this means the system should stop treating QR and NFC as separate end-to-end protocols and instead treat them as two different ways of acquiring bootstrap material for the same server-driven flow engine.
+
+NFC remains the cleaner operational reference because it already demonstrates a narrower and more robust pattern:
+
+- acquire bootstrap material
+- hand off quickly to a server endpoint
+- resolve host, KEM, authorization, and delivery state on the server
+
+QR should converge toward that same model, while adding stronger replay and misuse protections because QR bootstrap material is visually observable and therefore easier to capture, copy, and replay.
+
+## Scope
+
+This specification applies to:
+
+- offer acceptance flows
+- proof acceptance flows
+- record request and presentation bootstrap flows
+- scan-driven recipient and presenter flows
+- `nauth`-based QR handshakes
+- token-based NFC handshakes
+
+This specification does not redefine:
+
+- record formats
+- grant and offer object structure
+- attestation, recognition, or acceptance semantics
+- Cashu proof lifecycle behavior
+
+Those concerns are defined elsewhere in the spec set.
+
+## Problem Statement
+
+Safebox currently contains multiple flow families that have diverged over time:
+
+- NFC token flows
+- plain QR offer flows
+- recipient-initiated QR request flows
+- presenter/verifier QR request flows
+
+The NFC flows remain comparatively stable because they are mostly token-to-server flows. The QR flows are more fragile because they currently depend on:
+
+- scanner redirects
+- browser-local websocket timing
+- multiple partially overlapping receive pages
+- browser-held KEM state
+- relay and host reconstruction in multiple places
+- compact versus full QR behavior
+
+This creates architectural drift. The result is that QR flows are more vulnerable to regressions even when the underlying issuance, transmittal, and verification primitives remain sound.
+
+## Design Principle
+
+The unified design principle is:
+
+- QR and NFC differ only in bootstrap acquisition.
+- After bootstrap acquisition, they SHOULD pass through the same normalized flow contract.
+
+This implies a layered model:
+
+1. Bootstrap Acquisition Layer
+- NFC reads bootstrap material from a local token.
+- QR acquires bootstrap material from a scanned visual code.
+
+2. Bootstrap Normalization Layer
+- both NFC and QR are converted into a shared internal bootstrap object
+
+3. Server Flow Engine
+- the server validates bootstrap state
+- resolves host and KEM context
+- applies replay and freshness checks
+- drives authorization and delivery
+
+4. Delivery and Ingestion Layer
+- the system performs transmittal
+- the recipient or verifier polls or listens using one shared mechanism
+
+## Canonical Flow Shape
+
+All scan- or tap-initiated flows SHOULD be normalized into a shared bootstrap structure with fields such as:
+
+- `flow_type`
+- `bootstrap_type`
+- `scope`
+- `token` or `nauth`
+- `origin_hint`
+- `nonce`
+- `requested_kind`
+- `selected_label`
+- `service_host`
+- `requires_confirmation`
+
+The exact transport encoding may differ between QR and NFC, but the internal processing contract should be the same.
+
+## NFC as Reference Architecture
+
+NFC flows should be treated as the reference behavior for bootstrap-to-server handoff.
+
+Current NFC behavior demonstrates these desirable properties:
+
+- low browser complexity
+- authoritative server-side processing
+- host-aware token handling
+- server-driven KEM resolution
+- fewer websocket timing dependencies
+
+The unified design therefore adopts the following rule:
+
+- if a QR flow and an NFC flow perform the same business operation, they SHOULD converge on the same server-side handler after normalization.
+
+Examples:
+
+- QR offer acceptance and NFC offer acceptance should both normalize into the same offer-acceptance pipeline
+- QR proof acceptance and NFC proof acceptance should both normalize into the same proof-acceptance pipeline
+- QR request initiation and NFC request initiation should both normalize into the same request-start pipeline
+
+## QR Security Distinction
+
+QR bootstrap material is visually observable and therefore more vulnerable than NFC bootstrap material.
+
+A QR code may be:
+
+- photographed
+- screen-captured
+- shoulder-surfed
+- replayed later
+- replayed by a different party
+
+Therefore QR MUST NOT be treated as security-equivalent to NFC even if both reuse the same downstream processing pipeline.
+
+The design rule is:
+
+- same downstream architecture
+- stronger QR bootstrap security policy
+
+## QR Replay and Misuse Protection
+
+QR bootstrap flows MUST implement replay protections.
+
+### Required Controls
+
+1. Short-lived nonce
+- every QR bootstrap MUST include a nonce
+- the nonce MUST be unpredictable
+- the nonce MUST have a bounded TTL
+
+2. Single-use consumption
+- a consumed QR bootstrap nonce MUST be marked used
+- replay attempts using the same nonce MUST be rejected
+
+3. Flow binding
+- the bootstrap MUST be bound to its intended flow type and scope
+- a QR issued for one flow MUST NOT be replayable into a different flow
+
+4. Context binding
+- the bootstrap SHOULD include or resolve:
+  - expected service host
+  - expected kind
+  - expected action
+
+5. Server-side validation
+- replay protection MUST be enforced by the server
+- browser-only guards are insufficient
+
+6. Optional explicit confirmation
+- for higher-risk QR flows, the recipient SHOULD confirm:
+  - issuer or requester identity
+  - requested action
+  - kind or label
+
+### Stronger Pattern
+
+The preferred QR model is:
+
+- QR starts a time-bound, single-use handshake
+- QR does not itself contain all authority needed to complete the action
+
+In other words:
+
+- QR SHOULD bootstrap a live challenge-response flow
+- QR SHOULD NOT function as a durable bearer credential
+
+## Full versus Compact QR Policy
+
+Compact QR encoding is a transport optimization, not a flow identity.
+
+Compact QR MUST NOT be used when it removes context required for:
+
+- KEM resolution
+- replay protection
+- host binding
+- service routing
+- challenge-response completion
+
+Accordingly:
+
+- flows requiring host-sensitive KEM recovery SHOULD default to full QR
+- compact QR MAY be allowed only when the remaining bootstrap data is still sufficient to complete the flow safely
+
+The system SHOULD treat compact mode as an optional optimization rather than a default for high-context flows.
+
+## Server-Owned KEM Resolution
+
+Critical KEM resolution SHOULD be server-owned.
+
+The browser MAY surface:
+
+- `kem_public_key`
+- `kemalg`
+
+but the server SHOULD remain capable of resolving KEM material from authoritative hints such as:
+
+- service host
+- relay-derived origin
+- recipient transmittal identity
+- known wallet service metadata
+
+This avoids making successful completion depend on:
+
+- browser timing
+- websocket ordering
+- ephemeral in-memory page state
+
+The rule is:
+
+- browser-provided KEM is an optimization
+- server-side KEM recovery is the reliability baseline
+
+## Unified Receive and Delivery Model
+
+Safebox SHOULD converge on one receive-side delivery model per flow class.
+
+The current pattern of having multiple overlapping receive pages and websocket paths increases regression risk.
+
+For each flow family, there should be:
+
+- one canonical scan entry
+- one canonical authorization response path
+- one canonical transmittal listener
+- one canonical ingest path
+
+Legacy alternate routes MAY remain temporarily for compatibility, but SHOULD be treated as migration shims rather than equal first-class implementations.
+
+## Recommended Refactor Direction
+
+### Phase 1: Normalize Bootstraps
+
+Introduce a shared normalized bootstrap object for all QR and NFC initiated flows.
+
+This should include:
+
+- flow type
+- bootstrap source
+- nonce
+- host or origin hint
+- selected kind
+- selected label
+- replay policy
+
+### Phase 2: Converge Endpoints
+
+Map QR and NFC into shared server-side handlers for:
+
+- offer acceptance
+- proof acceptance
+- request initiation
+- presentation initiation
+
+### Phase 3: Serverize Critical State
+
+Move critical state ownership away from browser pages where feasible:
+
+- KEM resolution
+- replay ledger
+- bootstrap freshness
+- consumed bootstrap tracking
+- service host resolution
+
+### Phase 4: Retire Duplicated QR Paths
+
+Deprecate older QR-only receive paths once canonical paths are stable.
+
+The objective is to reduce:
+
+- route branching
+- websocket duplication
+- mixed legacy and new semantics
+
+## Security Considerations
+
+### NFC
+
+NFC is not inherently secure, but it is more proximity-constrained than QR.
+
+Residual NFC risks include:
+
+- token cloning
+- replay if tokens are durable
+- device or middleware compromise
+
+NFC flows SHOULD still use:
+
+- short-lived bootstrap material where possible
+- server validation
+- anti-replay protections where stateful actions are involved
+
+### QR
+
+QR requires stricter security controls because it is observable.
+
+QR security MUST assume:
+
+- passive capture is easy
+- delayed replay is plausible
+- unintended observers may obtain bootstrap material
+
+Therefore:
+
+- QR bootstrap state MUST be single-use and time-bound
+- QR flows SHOULD prefer challenge-response completion over bearer-style completion
+- QR SHOULD use explicit confirmation for higher-risk actions
+
+### Shared Rule
+
+Reusing the same downstream server architecture does not mean assigning equal security assumptions to NFC and QR. The security distinction belongs at the bootstrap layer.
+
+## Implementation References
+
+- `/Users/trbouma/projects/safebox-2/docs/specs/NFC-FLOWS-AND-SECURITY.md`
+- `/Users/trbouma/projects/safebox-2/docs/specs/OFFERS-AND-GRANTS-FLOWS.md`
+- `/Users/trbouma/projects/safebox-2/docs/specs/NAUTH-EXTENSIBLE-HANDSHAKE.md`
+- `/Users/trbouma/projects/safebox-2/docs/specs/RECORD-PRESENTATION-NAUTH-STRATEGY.md`
+- `/Users/trbouma/projects/safebox-2/docs/specs/PROTOCOL-NORMALIZATION-RELAY-FIRST-KEM.md`
+- `/Users/trbouma/projects/safebox-2/docs/specs/THREAT-MODEL.md`

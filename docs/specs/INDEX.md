@@ -64,6 +64,7 @@ Section convention used across current Safebox specs:
 - [Agent Offer Recipient-First Flow](./AGENT-OFFER-RECIPIENT-FIRST-FLOW.md) - Recipient-first agent offer flow where the recipient presents QR handshake data and the sender scans/transmits using existing record-send pathways.
 - [Emergent Markets Over Safebox](./EMERGENT-MARKETS-OVER-SAFEBOX.md) - Market pattern specification for decentralized bid/ask intent publication, NIP-57 zap settlement, private fulfillment delivery, and public settlement confirmation across human and agent flows.
 - [NFC Flows and Security](./NFC-FLOWS-AND-SECURITY.md) - Card issuance, rotation, NFC payment/record flows, and security controls.
+- [QR and NFC Unified Flow Design](./QR-AND-NFC-UNIFIED-FLOW-DESIGN.md) - Convergence design for treating QR and NFC as different bootstrap surfaces over one shared server-side flow engine, with stricter replay and misuse protections for QR.
 - [Offers and Grants Flows](./OFFERS-AND-GRANTS-FLOWS.md) - End-to-end offer/grant lifecycle over QR and NFC, including legacy rendering fallback.
 - [Payments: Safebox/Cashu/Lightning Fallback](./PAYMENTS-SAFEBOX-CASHU-LIGHTNING-FALLBACK.md) - Payment routing between Safebox wallets and Lightning interoperability behavior.
 - [Payment Error Handling and Resilience Requirements](./PAYMENT-ERROR-HANDLING-AND-RESILIENCE.md) - Normative reliability contract for payment methods, including proof-safety gates, rollback rules, uncertainty handling, and conformance checks.

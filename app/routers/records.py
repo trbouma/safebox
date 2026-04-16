@@ -484,6 +484,7 @@ async def offer_list(      request: Request,
                                             "client_nprofile_parse": nprofile_parse,
                                             "client_nauth": auth_msg,
                                             "offer_kinds": offer_kinds,
+                                            "grant_kinds": grant_kinds,
                                             "ws_url": ws_url,
                                             "recipient_initiated": bool(recipient_initiated),
                                             "recipient_mode": normalized_mode,
@@ -607,6 +608,7 @@ async def record_request(      request: Request,
                                         {   "request": request,
                                             "record_kind": resolved_kind,
                                             "grant_kinds": grant_kinds,
+                                            "offer_kinds": settings.OFFER_KINDS,
                                             "ws_url": ws_url,
                                             "request_mode": request_mode,
                                             "request_scope_prefix": request_scope_prefix,
@@ -1027,7 +1029,7 @@ async def my_present_records(       request: Request,
         nonce = parsed_result['values'].get('nonce', '0')
         auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
         auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
-        transmittal_npub = parsed_result['values'].get("transmittal_npub")
+        transmittal_pubhex = parsed_result['values'].get("transmittal_pubhex")
         transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
         transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
         scope = parsed_result['values'].get("scope")
@@ -1056,13 +1058,24 @@ async def my_present_records(       request: Request,
                                         nonce=nonce,
                                         auth_kind= auth_kind,
                                         auth_relays=auth_relays,
-                                        transmittal_npub=transmittal_npub,
+                                        transmittal_npub=acorn_obj.pubkey_bech32,
                                         transmittal_kind=transmittal_kind,
                                         transmittal_relays=transmittal_relays,
                                         name=acorn_obj.handle,
                                         scope=scope,
                                         grant=scope
             )
+
+        logger.info(
+            "present route announcing presenter nonce=%s auth_kind=%s auth_relays=%s transmittal_kind=%s transmittal_relays=%s verifier=%s verifier_transmittal_pubhex=%s",
+            nonce,
+            auth_kind,
+            auth_relays,
+            transmittal_kind,
+            transmittal_relays,
+            npub_initiator,
+            transmittal_pubhex,
+        )
 
 
 
@@ -1419,6 +1432,11 @@ async def accept_records(            request: Request,
     """Protected access to inbox in home relay"""
     redirect = _redirect_if_missing_acorn(acorn_obj)
     if redirect:
+        logger.info(
+            "accept_records redirecting because no active acorn session nauth_present=%s path=%s",
+            bool((nauth or "").strip()),
+            request.url.path,
+        )
         return redirect
     nprofile_parse = None
     scope = ""
@@ -1444,6 +1462,11 @@ async def accept_records(            request: Request,
     transmittal_kind = 0
 
     nauth_clean = None if str(nauth).strip().lower() in {"none", "null", ""} else nauth
+    logger.info(
+        "accept_records rendering accept page nauth_present=%s ws_accept_path=%s",
+        bool(nauth_clean),
+        f"/records/ws/accept?nauth={nauth_clean}" if nauth_clean else "/records/ws/accept",
+    )
     if nauth_clean:
         ws_url = build_websocket_url(request, f"/records/ws/accept?nauth={nauth_clean}")
     else:
@@ -1506,7 +1529,11 @@ async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: 
     auth_kind = settings.AUTH_KIND
     auth_relays = settings.AUTH_RELAYS
     transmittal_kind = settings.RECORD_TRANSMITTAL_KIND
-    transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
+    recipient_transmittal_relays = _normalize_relay_list(
+        settings.RECORD_TRANSMITTAL_RELAYS,
+        settings.RECORD_TRANSMITTAL_RELAYS,
+    )
+    poll_transmittal_relays = recipient_transmittal_relays
     scope = None
     grant = None
     if nauth_clean:
@@ -1519,10 +1546,7 @@ async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: 
             settings.AUTH_RELAYS,
         )
         transmittal_kind = parsed_result['values'].get("transmittal_kind",settings.RECORD_TRANSMITTAL_KIND)
-        transmittal_relays = _normalize_relay_list(
-            parsed_result['values'].get("transmittal_relays"),
-            settings.RECORD_TRANSMITTAL_RELAYS,
-        )
+        poll_transmittal_relays = recipient_transmittal_relays
         scope = parsed_result['values'].get("scope",None)
         grant = parsed_result['values'].get("grant",None)
     
@@ -1536,7 +1560,7 @@ async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: 
                                 auth_relays=auth_relays,
                                 transmittal_npub=acorn_obj.pubkey_bech32,
                                 transmittal_kind=transmittal_kind,
-                                transmittal_relays=transmittal_relays,
+                                transmittal_relays=recipient_transmittal_relays,
                                 name=acorn_obj.handle,
                                 scope=scope,
                                 grant=grant
@@ -1563,6 +1587,15 @@ async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: 
     print(f"response nauth with kem {response_nauth_with_kem}")
 
     if npub_initiator:
+        logger.info(
+            "ws_accept announcing recipient auth nonce=%s auth_kind=%s auth_relays=%s transmittal_kind=%s transmittal_relays=%s initiator=%s",
+            nonce,
+            auth_kind,
+            auth_relays,
+            transmittal_kind,
+            recipient_transmittal_relays,
+            npub_initiator,
+        )
         msg_out = await acorn_obj.secure_transmittal(nrecipient=npub_initiator,message=response_nauth_with_kem,dm_relays=auth_relays,kind=auth_kind)
     else:
         logger.info("websocket_accept started without nauth; skipping presenter announce and waiting for incoming records")
@@ -1575,9 +1608,24 @@ async def websocket_accept(websocket: WebSocket,  nauth: str = None, acorn_obj: 
     wait_start = datetime.now(timezone.utc)
     wait_timeout = timedelta(seconds=max(10, settings.LISTEN_TIMEOUT))
     while user_records == []:
-        user_records = await acorn_obj.get_user_records(record_kind=transmittal_kind, relays=transmittal_relays,since=since_now)
-        if user_records:
+        try:
+            incoming_record, presenter, kem_public_key = await listen_for_request(
+                acorn_obj=acorn_obj,
+                kind=transmittal_kind,
+                since_now=since_now,
+                relays=poll_transmittal_relays,
+            )
+        except Exception as exc:
+            logger.warning("websocket_accept listen_for_request failed: %s", exc)
+            incoming_record = None
+
+        if incoming_record:
+            if isinstance(incoming_record, list):
+                user_records = incoming_record
+            else:
+                user_records = [incoming_record]
             break
+
         if datetime.now(timezone.utc) - wait_start > wait_timeout:
             await websocket.send_json({"status": "TIMEOUT", "detail": "Record offer timed out before transmittal arrived."})
             return
@@ -2205,7 +2253,9 @@ async def generate_nauth(    request: Request,
         if nauth_request.compact:
             auth_relays = None
             transmittal_relays = None
-            default_nonce = generate_nonce(length=1)
+            # Compact QR can omit relay hints, but a 1-byte nonce is too collision-prone
+            # once the relay has accumulated older auth events from repeated tests.
+            default_nonce = generate_nonce(length=8)
         else:
             auth_relays = settings.AUTH_RELAYS
             transmittal_relays = settings.RECORD_TRANSMITTAL_RELAYS
@@ -2313,9 +2363,65 @@ async def post_send_record(      request: Request,
 
 
         # Add in PQC stuff
-        print(f"PQC Step 2a {record_parms.kem_public_key} {record_parms.kemalg}")
-        pqc = oqs.KeyEncapsulation(record_parms.kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
-        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(record_parms.kem_public_key))
+        kem_public_key = record_parms.kem_public_key
+        kemalg = record_parms.kemalg
+        if (
+            not kem_public_key or kem_public_key == "None" or
+            not kemalg or kemalg == "None"
+        ):
+            candidate_origins: list[str] = []
+            seen_origins: set[str] = set()
+
+            def add_origin(origin: str | None):
+                if origin and origin not in seen_origins:
+                    seen_origins.add(origin)
+                    candidate_origins.append(origin)
+
+            def add_origin_from_relay(relay: str | None):
+                add_origin(_relay_to_http_origin(relay or ""))
+
+            request_host = request.url.hostname or ""
+            request_port = request.url.port
+            if request_host:
+                if request_port and request_port not in (80, 443):
+                    request_host = f"{request_host}:{request_port}"
+                add_origin(_origin_from_host(request_host))
+
+            for relay in (transmittal_relays or []):
+                add_origin_from_relay(relay)
+            for relay in (auth_relays or []):
+                add_origin_from_relay(relay)
+
+            try:
+                transmittal_npub = hex_to_npub(transmittal_pubhex)
+                recipient_local = await fetch_safebox_by_npub(transmittal_npub)
+                if recipient_local and recipient_local.home_relay:
+                    add_origin_from_relay(recipient_local.home_relay)
+            except Exception as exc:
+                logger.debug("sendrecord local recipient lookup for KEM host failed: %s", exc)
+
+            resolved_kem_public_key, resolved_kemalg = await _resolve_kem_from_service_hosts(candidate_origins)
+            if resolved_kem_public_key and resolved_kemalg:
+                kem_public_key = resolved_kem_public_key
+                kemalg = resolved_kemalg
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Recipient channel is not quantum-safe yet. Please re-authenticate and retry.",
+                )
+
+        print(f"PQC Step 2a {kem_public_key} {kemalg}")
+        logger.info(
+            "sendrecord resolved destination verifier=%s transmittal_kind=%s transmittal_relays=%s scope=%s grant_name=%s kem=%s",
+            transmittal_npub,
+            transmittal_kind,
+            transmittal_relays,
+            scope,
+            record_parms.grant_name,
+            bool(kem_public_key and kemalg),
+        )
+        pqc = oqs.KeyEncapsulation(kemalg,bytes.fromhex(config.PQC_KEM_SECRET_KEY))
+        kem_ciphertext, kem_shared_secret = pqc.encap_secret(bytes.fromhex(kem_public_key))
         kem_shared_secret_hex = kem_shared_secret.hex()
         kem_ciphertext_hex = kem_ciphertext.hex()
 
@@ -2330,7 +2436,7 @@ async def post_send_record(      request: Request,
             raise HTTPException(status_code=500, detail="Encryption initialization failed")
         # Now add to record
         record_out['ciphertext']    = kem_ciphertext_hex
-        record_out['kemalg']        = record_parms.kemalg
+        record_out['kemalg']        = kemalg
 
         payload = record_out['payload']
         record_out['pqc_encrypted_payload'] =  my_enc.encrypt(payload, to_pub_k=k_nip44.public_key_hex())
@@ -2380,6 +2486,13 @@ async def post_send_record(      request: Request,
 
         print(f"we are sending a record to verify: {record_out}")
         msg_out = await acorn_obj.secure_transmittal(transmittal_npub,nembed, dm_relays=transmittal_relays,kind=transmittal_kind)
+        logger.info(
+            "sendrecord transmitted record verifier=%s transmittal_kind=%s transmittal_relays=%s result=%s",
+            transmittal_npub,
+            transmittal_kind,
+            transmittal_relays,
+            msg_out,
+        )
 
     return {"status": "OK", "result": True, "detail": f"Successfully sent to {transmittal_npub}for verification!"}
 
@@ -2652,6 +2765,15 @@ async def ws_request_record( websocket: WebSocket,
         request_scope = parsed_nauth['values'].get('scope')
         receive_offer_mode = isinstance(request_scope, str) and request_scope.startswith("offer_request")
         print(f"ws transmittal relays: {transmittal_relays}")
+        logger.info(
+            "ws_request_record waiting for presenter nonce=%s auth_kind=%s auth_relays=%s transmittal_kind=%s transmittal_relays=%s scope=%s",
+            expected_nonce,
+            auth_kind,
+            auth_relays,
+            transmittal_kind,
+            transmittal_relays,
+            request_scope,
+        )
 
 
     # since_now = None
@@ -2718,6 +2840,13 @@ async def ws_request_record( websocket: WebSocket,
     presenter_npub = hex_to_npub(presenter_nauth_parsed['values']['pubhex'])
     presenter_auth_kind = presenter_nauth_parsed['values'].get('auth_kind', settings.AUTH_KIND)
     presenter_auth_relays = presenter_nauth_parsed['values'].get('auth_relays', settings.AUTH_RELAYS)
+    logger.info(
+        "ws_request_record received presenter ack nonce=%s presenter=%s presenter_auth_kind=%s presenter_auth_relays=%s",
+        presenter_nauth_parsed['values'].get('nonce'),
+        presenter_npub,
+        presenter_auth_kind,
+        presenter_auth_relays,
+    )
     
     print("we can now send the kem public key and kemalg")
     #TODO Need to add in additional info for blossom blob transfer
@@ -2735,6 +2864,11 @@ async def ws_request_record( websocket: WebSocket,
 
 
     print(f"now let's wait for the presenting records...")
+    logger.info(
+        "ws_request_record waiting for presented record transmittal_kind=%s transmittal_relays=%s",
+        transmittal_kind,
+        transmittal_relays,
+    )
     while True:
         if datetime.now() - start_time > timedelta(minutes=1):
             print("1 minute has passed. Exiting loop.")
@@ -2777,6 +2911,12 @@ async def ws_request_record( websocket: WebSocket,
                         await asyncio.sleep(1)
                         continue
                 print(f"parse record json: {record_json}")
+                logger.info(
+                    "ws_request_record received presented record payload kind=%s presenter=%s parsed_type=%s",
+                    transmittal_kind,
+                    presenter,
+                    type(record_json).__name__,
+                )
                 #### Do the verification here... ####
                 verify_result = "Done"
                 #### Finish verification ####
@@ -3028,6 +3168,12 @@ async def ws_listen_for_nauth( websocket: WebSocket,
             "ws_listen_for_nauth resolved auth params "
             f"kind={auth_kind} relays={auth_relays} nonce={expected_nonce}"
         )
+        logger.info(
+            "ws_listen_for_nauth waiting for recipient auth nonce=%s auth_kind=%s auth_relays=%s",
+            expected_nonce,
+            auth_kind,
+            auth_relays,
+        )
 
 
 
@@ -3148,6 +3294,14 @@ async def ws_listen_for_nauth( websocket: WebSocket,
                     logger.info("ws_listen_for_nauth proceeding without embedded KEM; transmit path will resolve fallback")
                 #FIXME use a better variable name than nprofile. Also some extra parameters not needed.
                 nprofile = {'nauth': new_nauth, 'name': acorn_obj.handle, 'transmittal_kind': transmittal_kind, 'transmittal_relays': transmittal_relays, "kem_public_key": kem_public_key, 'kemalg': kemalg}
+                logger.info(
+                    "ws_listen_for_nauth received recipient auth nonce=%s recipient_pubhex=%s transmittal_kind=%s transmittal_relays=%s kem=%s",
+                    parsed_nauth['values'].get('nonce'),
+                    pubhex,
+                    transmittal_kind,
+                    transmittal_relays,
+                    bool(kem_public_key and kemalg),
+                )
                 print(f"send {client_nauth}") 
                 await websocket.send_json(nprofile)
                 nauth_old = client_nauth

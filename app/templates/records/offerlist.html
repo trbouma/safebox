@@ -11,6 +11,8 @@
 
   const jsonUserData = {{ user_records | tojson }};
   const record_kind = parseInt("{{ record_kind }}");
+  const grantKinds = {{ grant_kinds | tojson }};
+  const offerKinds = {{ offer_kinds | tojson }};
   //There are two ways to receive client nauth 1) from scan, 2) from websockets
   var client_nauth = "{{client_nauth}}";
   const recipientInitiated = {{ recipient_initiated | tojson }};
@@ -31,7 +33,12 @@ const preselectedCard = {{ preselected_card | default("") | tojson }};
 
 function getSelectedOfferAndGrantKinds() {
   const selectedOfferKind = parseInt(document.getElementById("offer_kind").value, 10);
-  const selectedGrantKind = selectedOfferKind + 1;
+  const selectedOfferEntry = offerKinds.find(entry => entry[0] === selectedOfferKind);
+  const selectedOfferLabel = selectedOfferEntry ? selectedOfferEntry[1] : null;
+  const matchingGrantEntry = selectedOfferLabel
+    ? grantKinds.find(entry => entry[1] === selectedOfferLabel)
+    : null;
+  const selectedGrantKind = matchingGrantEntry ? matchingGrantEntry[0] : null;
   return { selectedOfferKind, selectedGrantKind };
 }
 
@@ -356,9 +363,6 @@ async function offerKind() {
 <div id="card-container"></div>
 
 <script>
-  // Turn the Jinja grant_kinds into a JS array
-  const offerKinds = {{ offer_kinds | tojson }};
-
   // Build a map: code -> { label, subtypes[] }
   const offerKindMap = {};
   offerKinds.forEach(entry => {

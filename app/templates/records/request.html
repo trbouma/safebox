@@ -27,6 +27,8 @@ const requestMode = "{{ request_mode | default('request') }}";
 const requestScopePrefix = "{{ request_scope_prefix | default('verifier') }}";
 const presenterNauth = "{{ presenter_nauth | default('') }}";
 const presenterTarget = "{{ presenter_target | default('') }}";
+const grantKinds = {{ grant_kinds | tojson }};
+const offerKinds = {{ offer_kinds | tojson }};
 
 function consoleLog(data) {
     var logElement = document.getElementById('log');
@@ -67,6 +69,16 @@ function centerQrImageInView() {
     block: "center",
     inline: "nearest"
   });
+}
+
+function resolveOfferKindFromGrantKind(grantKindValue) {
+  const grantKindInt = parseInt(grantKindValue, 10);
+  const selectedGrantEntry = grantKinds.find(entry => entry[0] === grantKindInt);
+  const selectedGrantLabel = selectedGrantEntry ? selectedGrantEntry[1] : null;
+  const matchingOfferEntry = selectedGrantLabel
+    ? offerKinds.find(entry => entry[1] === selectedGrantLabel)
+    : null;
+  return matchingOfferEntry ? matchingOfferEntry[0] : null;
 }
 
 async function requestbyNFC(grant_kind, record_label, nauth, nfc_pin) {
@@ -193,8 +205,7 @@ async function createQRCode() {
 
     var scope = `${requestScopePrefix}:${grant_kind}`;
     if (requestScopePrefix === "offer_request") {
-      const grantKindInt = parseInt(grant_kind, 10);
-      const offerKind = Number.isNaN(grantKindInt) ? null : (grantKindInt - 1);
+      const offerKind = resolveOfferKindFromGrantKind(grant_kind);
       if (offerKind !== null) {
         // Include recipient service host so sender can resolve /.well-known/kem
         // against the correct wallet service (not relay hosts).
@@ -331,7 +342,7 @@ async function createQRCode() {
   <label>
     <input type="checkbox" id="nfc_request_checkbox" name="nfc_request_checkbox">
     Request by NFC
-    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" checked="checked">
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
     Compact QR Code
     <br><br>
   </label>
@@ -340,9 +351,6 @@ async function createQRCode() {
 </div>
 
 <script>
-  // Turn the Jinja grant_kinds into a JS array
-  const grantKinds = {{ grant_kinds | tojson }};
-
   // Build a map: code -> { label, subtypes[] }
   const grantKindMap = {};
   grantKinds.forEach(entry => {
@@ -419,6 +427,7 @@ function updateSubtypes() {
       if (titleEl) titleEl.textContent = "Receive Offer";
       if (statusEl) statusEl.textContent = "Generating recipient QR...";
       if (nfcCheckbox) nfcCheckbox.checked = false;
+      if (compactQrCheckbox) compactQrCheckbox.checked = false;
       if (qrImg) qrImg.title = "Tap to refresh QR if timed out";
       createQRCode();
     } else if (presenterNauth) {
@@ -432,7 +441,7 @@ function updateSubtypes() {
       if (nfcCheckbox) nfcCheckbox.checked = false;
       const nfcLabel = nfcCheckbox ? nfcCheckbox.closest("label") : null;
       if (nfcLabel) nfcLabel.style.display = "none";
-      if (compactQrCheckbox) compactQrCheckbox.checked = true;
+      if (compactQrCheckbox) compactQrCheckbox.checked = false;
       if (qrImg) qrImg.style.display = "none";
       const targetLabel = getTargetLabel(presenterTarget);
       if (targetLabel && labelInput && !labelInput.value) {

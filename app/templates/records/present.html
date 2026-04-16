@@ -281,8 +281,7 @@ console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
 if (!global_kem_public_key || !global_kemalg) {
-  alert("Channel is not quantum safe yet. Please wait for handshake to complete.");
-  return;
+  setQuantumStatus('Browser KEM not ready yet. Falling back to server-side KEM resolution...');
 }
 // send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,

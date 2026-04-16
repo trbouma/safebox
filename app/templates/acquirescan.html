@@ -262,24 +262,15 @@
   const scanReferer = {{ referer | tojson }};
 
   async function gotoScanResult(scandata) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/scanner/scanresult';
-
-    const dataInput = document.createElement('input');
-    dataInput.type = 'hidden';
-    dataInput.name = 'data';
-    dataInput.value = scandata || '';
-    form.appendChild(dataInput);
-
-    const refererInput = document.createElement('input');
-    refererInput.type = 'hidden';
-    refererInput.name = 'referer';
-    refererInput.value = scanReferer || '';
-    form.appendChild(refererInput);
-
-    document.body.appendChild(form);
-    form.submit();
+    const headerMsg = document.getElementById('header-msg');
+    if (headerMsg) {
+      headerMsg.innerText = 'QR detected. Opening result...';
+    }
+    const url = new URL('/scanner/scanresult', window.location.origin);
+    url.searchParams.set('qr_code', scandata || '');
+    url.searchParams.set('referer', scanReferer || '');
+    console.log('scanner redirecting to scanresult', url.toString());
+    window.location.assign(url.toString());
   }
 </script>
 

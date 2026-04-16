@@ -52,6 +52,13 @@ async def get_scan_result(  request: Request,
                             referer:str = "none"):
     """return wallet mode information"""
 
+    logger.info(
+        "scanresult entry method=%s referer=%s qr_prefix=%s",
+        request.method,
+        referer,
+        (qr_code or "")[:24],
+    )
+
     if request.method == "POST":
         data = {}
         try:
@@ -66,6 +73,12 @@ async def get_scan_result(  request: Request,
         referer = data.get("referer", referer)
     referer = (referer or "none").strip()
     qr_code = _normalize_scan_payload(qr_code)
+    logger.info(
+        "scanresult normalized referer=%s qr_prefix=%s qr_len=%s",
+        referer,
+        qr_code[:24] if qr_code else "",
+        len(qr_code or ""),
+    )
     if not qr_code:
         return RedirectResponse("/safebox/access", status_code=SCAN_REDIRECT_STATUS)
 
@@ -156,9 +169,12 @@ async def get_scan_result(  request: Request,
                 f"/credentials/present?nauth={quote(qr_code)}",
                 status_code=SCAN_REDIRECT_STATUS,
             )
-        if "offer" in scope:
-            # Plain offer QR flows only need the scanned nauth; a direct redirect
-            # avoids an extra auto-submit handoff before the accept websocket page.
+        if scope.startswith("offer:"):
+            logger.info(
+                "scanner redirecting plain offer QR to accept page scope=%s referer=%s",
+                scope,
+                referer,
+            )
             return RedirectResponse(
                 f"/records/accept?nauth={quote(qr_code)}",
                 status_code=SCAN_REDIRECT_STATUS,
