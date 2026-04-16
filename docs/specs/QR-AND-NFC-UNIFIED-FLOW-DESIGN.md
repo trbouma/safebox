@@ -106,6 +106,15 @@ The exact transport encoding may differ between QR and NFC, but the internal pro
 
 NFC flows should be treated as the reference behavior for bootstrap-to-server handoff.
 
+As of the April 2026 regression pass, the NFC record flows are the reference implementation for the unified flow architecture. The validated baseline includes:
+
+- NFC offer, same instance
+- NFC offer, cross instance
+- NFC proof/request, same instance
+- NFC proof/request, cross instance
+- original-record blob transfer through both offer and proof/request flows
+- KEM-wrapped record payloads and original-record metadata
+
 Current NFC behavior demonstrates these desirable properties:
 
 - low browser complexity
@@ -113,6 +122,8 @@ Current NFC behavior demonstrates these desirable properties:
 - host-aware token handling
 - server-driven KEM resolution
 - fewer websocket timing dependencies
+
+The NFC implementation should therefore be treated as the behavior QR needs to converge toward, not merely as a parallel transport option.
 
 The unified design therefore adopts the following rule:
 
@@ -123,6 +134,53 @@ Examples:
 - QR offer acceptance and NFC offer acceptance should both normalize into the same offer-acceptance pipeline
 - QR proof acceptance and NFC proof acceptance should both normalize into the same proof-acceptance pipeline
 - QR request initiation and NFC request initiation should both normalize into the same request-start pipeline
+
+## Canonical User Interaction Model
+
+For interactive record exchange, the preferred user model is receiver-presented bootstrap:
+
+- the receiving or requesting Safebox presents the bootstrap material
+- the sending or presenting Safebox acquires it by NFC tap or QR scan
+- the sender then transmits the record using the normalized server-side flow
+
+This model is preferred because the receiver controls the receive context, nonce, replay policy, and KEM context.
+
+For offers, this means:
+
+- canonical NFC offer: the sender taps the receiver's NFC card/token
+- canonical QR offer: the sender scans the receiver's QR code
+- sender-presented QR offer: optional convenience mode only, not the canonical secure flow
+
+Sender-presented QR is weaker because the visible QR can be photographed, copied, and replayed by an unintended party. It MAY be retained later as a constrained remote/convenience mode, but it should not drive the primary architecture.
+
+## KEM Directionality
+
+KEM direction depends on the flow:
+
+- NFC offer encrypts to the receiver's KEM
+- NFC proof/request encrypts to the requester's KEM
+
+This distinction is important.
+
+In an offer flow, the offered grant is being delivered to the receiving Safebox. The receiving Safebox's server KEM is therefore the correct encryption target.
+
+In a proof/request flow, the requested record is being presented back to the requester/verifier. The requester/verifier Safebox's server KEM is therefore the correct encryption target.
+
+The April 2026 NFC baseline implements this split:
+
+- offer acceptance resolves recipient KEM from the target service host when browser KEM is unavailable
+- proof/request acceptance injects the local requester server KEM into the proof request
+- the presenting wallet returns KEM-wrapped transmittal records
+- the requester decrypts `pqc_encrypted_payload` and `pqc_encrypted_original` using its local KEM secret
+
+The canonical record transmittal envelope contains:
+
+- `ciphertext`
+- `kemalg`
+- `pqc_encrypted_payload`
+- `pqc_encrypted_original`, when original-record transfer metadata is present
+
+This envelope shape is the target for QR convergence.
 
 ## QR Security Distinction
 
@@ -276,6 +334,14 @@ Map QR and NFC into shared server-side handlers for:
 - request initiation
 - presentation initiation
 
+The first QR convergence target should be recipient-presented QR, because it most closely matches the validated NFC model:
+
+- receiver presents bootstrap
+- sender acquires bootstrap
+- sender transmits to receiver
+
+Sender-presented QR should be deferred until the canonical NFC and recipient-presented QR paths are stable.
+
 ### Phase 3: Serverize Critical State
 
 Move critical state ownership away from browser pages where feasible:
@@ -295,6 +361,8 @@ The objective is to reduce:
 - route branching
 - websocket duplication
 - mixed legacy and new semantics
+
+Legacy sender-presented QR offer paths SHOULD NOT be treated as equivalent to the canonical recipient-presented flow. If retained, they should be marked as remote/convenience flows and protected with shorter TTLs, single-use nonce consumption, and explicit receiver confirmation.
 
 ## Security Considerations
 
