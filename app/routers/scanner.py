@@ -458,6 +458,9 @@ async def _redirect_receive_offer_bootstrap_scan(
     if "card" not in fields and resolved.get("label"):
         fields["card"] = str(resolved.get("label"))
 
+    handoff_target = fields.pop("_handoff_target", "")
+    if handoff_target == "displayoffer":
+        return _post_displayoffer_scan(fields)
     return _post_offerlist_scan(fields)
 
 
@@ -519,6 +522,8 @@ def _extract_offer_scan_context(referer: str | None, bootstrap: dict[str, Any]) 
 
     if parsed_ref.path == "/records/displayoffer" and not fields.get("card"):
         return None
+    if parsed_ref.path == "/records/displayoffer":
+        fields["_handoff_target"] = "displayoffer"
 
     return fields
 
@@ -547,6 +552,15 @@ def _post_offerlist_scan(fields: dict[str, str]) -> HTMLResponse:
         fields,
         form_id="scanOfferPost",
         message="Connecting offer channel...",
+    )
+
+
+def _post_displayoffer_scan(fields: dict[str, str]) -> HTMLResponse:
+    return _post_form_scan(
+        "/records/displayoffer-scan",
+        fields,
+        form_id="scanDisplayOfferPost",
+        message="Connecting selected offer channel...",
     )
 
 

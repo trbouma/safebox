@@ -2026,6 +2026,40 @@ async def display_offer(     request: Request,
    
     content = ""
     
+    effective_nauth = nauth
+    if nauth:
+        logger.info("display_offer received nauth for recipient-initiated offer flow")
+        parsed_result = parse_nauth(nauth)
+        npub_initiator = hex_to_npub(parsed_result['values']['pubhex'])
+        nonce = parsed_result['values'].get('nonce', '0')
+        auth_kind = parsed_result['values'].get("auth_kind", settings.AUTH_KIND)
+        auth_relays = parsed_result['values'].get("auth_relays", settings.AUTH_RELAYS)
+        transmittal_pubhex = parsed_result['values'].get("transmittal_pubhex")
+        transmittal_kind = parsed_result['values'].get("transmittal_kind", settings.RECORD_TRANSMITTAL_KIND)
+        transmittal_relays = parsed_result['values'].get("transmittal_relays", settings.RECORD_TRANSMITTAL_RELAYS)
+        scope = parsed_result['values'].get("scope")
+        if isinstance(scope, str) and scope.startswith("offer_request"):
+            recipient_initiated = 1
+        transmittal_npub = hex_to_npub(transmittal_pubhex)
+        effective_nauth = create_nauth(
+            npub=acorn_obj.pubkey_bech32,
+            nonce=nonce,
+            auth_kind=auth_kind,
+            auth_relays=auth_relays,
+            transmittal_npub=transmittal_npub,
+            transmittal_kind=transmittal_kind,
+            transmittal_relays=transmittal_relays,
+            name=acorn_obj.handle,
+            scope=scope,
+            grant=scope,
+        )
+        await acorn_obj.secure_transmittal(
+            nrecipient=npub_initiator,
+            message=effective_nauth,
+            dm_relays=auth_relays,
+            kind=auth_kind,
+        )
+        logger.info("display_offer sent recipient-initiated offer acknowledgement")
 
     record: SafeboxRecord = await acorn_obj.get_record_safebox(record_name=card, record_kind=kind)
     # record = await acorn_obj.get_record(record_name=card, record_kind=kind)
@@ -2072,11 +2106,53 @@ async def display_offer(     request: Request,
                                             "content": content,
                                             "credential_record": credential_record,
                                             "ws_url": ws_url,
-                                            "nauth": nauth,
+                                            "nauth": effective_nauth,
                                             "recipient_initiated": bool(recipient_initiated),
                                             "recipient_mode": normalized_mode
                                             
                                         })
+
+@router.post("/displayoffer-scan", tags=["records", "protected"])
+async def display_offer_scan_post(
+    request: Request,
+    card: str = Form(None),
+    kind: int = Form(34002),
+    nauth: str = Form(None),
+    recipient_initiated: int = Form(1),
+    recipient_mode: str = Form("auto_send"),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Scanner-only POST handoff back to the selected offer page."""
+    return await display_offer(
+        request=request,
+        card=card,
+        kind=kind,
+        nauth=nauth,
+        recipient_initiated=recipient_initiated,
+        recipient_mode=recipient_mode,
+        acorn_obj=acorn_obj,
+    )
+
+@router.get("/displayoffer-scan", tags=["records", "protected"])
+async def display_offer_scan_get(
+    request: Request,
+    card: str = None,
+    kind: int = 34002,
+    nauth: str = None,
+    recipient_initiated: int = 1,
+    recipient_mode: str = "auto_send",
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """GET fallback for scanner handoff back to the selected offer page."""
+    return await display_offer(
+        request=request,
+        card=card,
+        kind=kind,
+        nauth=nauth,
+        recipient_initiated=recipient_initiated,
+        recipient_mode=recipient_mode,
+        acorn_obj=acorn_obj,
+    )
 
 
 @router.post("/upload")

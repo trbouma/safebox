@@ -101,13 +101,19 @@ async function maybeAutoSendRecipientFlow() {
   if (!shouldAutoSendRecipientFlow()) return;
   const autoSendKey = getAutoSendKey();
   if (sessionStorage.getItem(autoSendKey) === "1") return;
-  sessionStorage.setItem(autoSendKey, "1");
   consoleLog("Recipient-initiated flow detected: sending offer automatically.");
+  setOfferStatusImage("/img/circle-256.gif", "Sending offer");
   try {
-    await offerRecord();
+    const sent = await offerRecord();
+    if (sent) {
+      sessionStorage.setItem(autoSendKey, "1");
+    } else {
+      sessionStorage.removeItem(autoSendKey);
+    }
   } catch (error) {
     consoleLog(`Auto-send failed: ${error}`);
     sessionStorage.removeItem(autoSendKey);
+    setOfferStatusImage("/img/safebox.png", "Offer send failed");
   }
 }
 
@@ -116,6 +122,13 @@ function hasQuantumReadyChannel() {
          global_kem_public_key !== "None" &&
          !!global_kemalg &&
          global_kemalg !== "None";
+}
+
+function setOfferStatusImage(src, altText = "Offer status") {
+  const statusImg = document.getElementById("img_qr_display");
+  if (!statusImg) return;
+  statusImg.src = src;
+  statusImg.alt = altText;
 }
 
 async function waitForQuantumReadyChannel(timeoutMs = 12000, intervalMs = 200) {
@@ -452,12 +465,20 @@ async function createQRCode() {
 
 }
 
+async function offerByNFC() {
+  const nfcOffer = document.getElementById("nfc_offer_checkbox");
+  if (nfcOffer) {
+    nfcOffer.checked = true;
+  }
+  await createQRCode();
+}
+
 async function offerRecord() {
 
     
     if (global_transmit_nauth=="None" && client_nauth == "None" ) {
       alert(`Please authenticate your credential recipient!`);
-      return;
+      return false;
     }
 
     // if (confirm(`Are you sure you want to send?`)) {
@@ -484,7 +505,7 @@ async function offerRecord() {
 
   if (!submit_data.record_name) {
     alert("Missing offer label. Please reload and try again.");
-    return;
+    return false;
   }
   if (!hasQuantumReadyChannel()) {
     consoleLog("Waiting for recipient quantum-safe channel...");
@@ -510,8 +531,12 @@ async function offerRecord() {
   console.log(`Done! ${responseData.status} ${detailText}`);
   if (!response.ok || responseData.status !== "OK") {
     alert(detailText || "Offer transmit failed.");
-    return;
+    setOfferStatusImage("/img/safebox.png", "Offer send failed");
+    return false;
   }
+  setOfferStatusImage("/img/green-check.png", "Offer sent");
+  consoleLog("Offer sent successfully.");
+  return true;
 
    // window.location.href=referer;
      }
@@ -800,7 +825,6 @@ document.addEventListener("DOMContentLoaded", () => {
    
 <div 
   id="offer_card" 
-  onclick="createQRCode()" 
   style="
     width: 80%;
     border-radius: 12px;
@@ -827,21 +851,16 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
     
     <h2>Offer {{offer_label}} Record to Recipient?</h2>
-    Click below to scan the recipient's receive-offer QR code. 
+    Use one of the recipient-presented bootstrap methods below.
+    <br>Scan the recipient's receive-offer QR code, or tap/read their NFC card.
     <br>This sends this selected offer record to that recipient.
     <br><br>
     <button onclick="scanCode()">Scan Recipient QR</button>
+    <button onclick="offerByNFC()">Offer by NFC</button>
     <br><br>
-    <label>
-    <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox">
-    Offer by NFC
-    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox">
-    Full QR Code Required
-  <br><br>
-    <br><br>
-    </label>
-    
-    <img id="img_qr_display" onclick="createQRCode()"  src="/img/safebox.png" >
+    <input type="checkbox" id="nfc_offer_checkbox" name="nfc_offer_checkbox" checked style="display:none;">
+    <input type="checkbox" id="compact_qr_checkbox" name="compact_qr_checkbox" style="display:none;">
+    <img id="img_qr_display" src="/img/safebox.png" alt="Offer status" >
     <br><br>
     <hr>
     <h3>Manage Original Record</h3>
