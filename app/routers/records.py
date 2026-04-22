@@ -63,6 +63,10 @@ class PresenterCallbackRequest(BaseModel):
 class PresenterAnnounceRequest(BaseModel):
     verifier_nauth: str
 
+
+class ResolveKemRequest(BaseModel):
+    nauth: str
+
 def _redirect_if_missing_acorn(acorn_obj: Acorn):
     if acorn_obj is None:
         logger.info("records route redirected because no active acorn session was present")
@@ -843,6 +847,79 @@ async def presenter_announce(
         raise HTTPException(status_code=502, detail="Could not announce presenter readiness") from exc
 
     return {"status": "OK", "detail": "Presenter announced.", "nauth": presenter_nauth, "result": msg_out}
+
+
+@router.post("/resolve-request-kem", tags=["records", "protected"])
+async def resolve_request_kem(
+    request: Request,
+    payload: ResolveKemRequest,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    """Resolve requester KEM for QR presentation without relying on browser websocket timing."""
+    _raise_if_missing_acorn(acorn_obj)
+    verifier_nauth = (payload.nauth or "").strip()
+    if not verifier_nauth:
+        raise HTTPException(status_code=400, detail="Missing verifier nauth.")
+
+    try:
+        parsed_nauth = parse_nauth(verifier_nauth)
+        values = parsed_nauth.get("values", {})
+        scope = values.get("scope")
+        auth_relays = values.get("auth_relays") or settings.AUTH_RELAYS
+        transmittal_relays = values.get("transmittal_relays") or settings.RECORD_TRANSMITTAL_RELAYS
+        transmittal_pubhex = values.get("transmittal_pubhex")
+    except Exception as exc:
+        logger.warning("resolve-request-kem invalid verifier nauth: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid verifier nauth.") from exc
+
+    candidate_origins: list[str] = []
+    seen_origins: set[str] = set()
+
+    def add_origin(origin: str | None):
+        if origin and origin not in seen_origins:
+            seen_origins.add(origin)
+            candidate_origins.append(origin)
+
+    def add_origin_from_relay(relay: str | None):
+        add_origin(_relay_to_http_origin(relay or ""))
+
+    add_origin(_extract_origin_from_scope(scope, "verifier"))
+    add_origin(_extract_origin_from_scope(scope, "prover"))
+
+    request_host = request.url.hostname or ""
+    request_port = request.url.port
+    if request_host:
+        if request_port and request_port not in (80, 443):
+            request_host = f"{request_host}:{request_port}"
+        add_origin(_origin_from_host(request_host))
+
+    for relay in (transmittal_relays or []):
+        add_origin_from_relay(relay)
+    for relay in (auth_relays or []):
+        add_origin_from_relay(relay)
+
+    try:
+        if transmittal_pubhex:
+            verifier_npub = hex_to_npub(transmittal_pubhex)
+            verifier_local = await fetch_safebox_by_npub(verifier_npub)
+            if verifier_local and verifier_local.home_relay:
+                add_origin_from_relay(verifier_local.home_relay)
+    except Exception as exc:
+        logger.debug("resolve-request-kem local verifier lookup failed: %s", exc)
+
+    logger.info("resolve-request-kem origin candidates=%s scope=%s", candidate_origins, scope)
+    kem_public_key, kemalg = await _resolve_kem_from_service_hosts(candidate_origins)
+    if not kem_public_key or not kemalg:
+        raise HTTPException(
+            status_code=404,
+            detail="Requester KEM could not be resolved from QR context.",
+        )
+
+    return {
+        "status": "OK",
+        "kem_public_key": kem_public_key,
+        "kemalg": kemalg,
+    }
 @router.get("/verificationrequest", tags=["records", "protected"])
 async def records_verfication_request(      request: Request,
                           
@@ -2792,47 +2869,52 @@ async def ws_record_present( websocket: WebSocket,
                                         acorn_obj: Acorn = Depends(get_acorn)
                                         ):
     print(f"websocket opened for /ws/present {nauth}")
-    since_now = int(datetime.now(timezone.utc).timestamp())
+    # Look back slightly because the requester may publish KEM material while
+    # the presenter page is still rendering after the scan redirect.
+    since_now = int((datetime.now(timezone.utc) - timedelta(seconds=5)).timestamp())
     requester_nauth = None
     requester_nembed = None
+    expected_nonce = None
     
     if nauth:
         parsed_nauth = parse_nauth(nauth) 
         pubhex_initiator =   parsed_nauth['values'] ['pubhex'] 
         auth_kind = parsed_nauth['values'].get('auth_kind', settings.AUTH_KIND)  
         auth_relays = parsed_nauth['values'].get('auth_relays', settings.AUTH_RELAYS)
+        expected_nonce = parsed_nauth['values'].get("nonce")
         print(f"npub initiator: {hex_to_npub(pubhex_initiator)}")
     
     await websocket.accept()
     
     print("start listening for requester data")
-    try:
-        requester_nauth, requester_nembed = await acorn_obj.listen_for_record_sub(
-            record_kind=auth_kind,
-            since=None,
-            relays=auth_relays,
-            timeout=settings.LISTEN_TIMEOUT,
-        )
-        print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
-    except TimeoutError:
+    handshake_deadline = datetime.now(timezone.utc) + timedelta(seconds=max(5, settings.LISTEN_TIMEOUT))
+    while datetime.now(timezone.utc) < handshake_deadline:
         try:
-            await websocket.send_json({"status": "TIMEOUT", "detail": "Requester handshake timed out."})
-        except WebSocketDisconnect:
-            logger.info("ws_record_present client disconnected before TIMEOUT send")
-        return
-    except Exception as exc:
-        logger.exception("ws_record_present handshake failure: %s", exc)
-        try:
-            await websocket.send_json({"status": "ERROR", "detail": "Handshake failed."})
-        except WebSocketDisconnect:
-            logger.info("ws_record_present client disconnected before ERROR send")
-        return
+            requester_nauth, _presenter, requester_nembed = await listen_for_request(
+                acorn_obj=acorn_obj,
+                kind=auth_kind,
+                since_now=since_now,
+                relays=auth_relays,
+                expected_nonce=expected_nonce,
+            )
+            print(f"requester nauth: {requester_nauth} requester nembed: {requester_nembed}")
+        except Exception as exc:
+            logger.exception("ws_record_present handshake poll failure: %s", exc)
+            requester_nauth, requester_nembed = None, None
+
+        if requester_nauth and requester_nembed:
+            break
+        if requester_nauth and not requester_nembed:
+            logger.warning("ws_record_present ignored requester auth without KEM nonce=%s", expected_nonce)
+
+        since_now = int((datetime.now(timezone.utc) - timedelta(seconds=1)).timestamp())
+        await asyncio.sleep(0.5)
 
     if not requester_nembed:
         try:
-            await websocket.send_json({"status": "ERROR", "detail": "Missing requester key material."})
+            await websocket.send_json({"status": "TIMEOUT", "detail": "Requester KEM handshake timed out."})
         except WebSocketDisconnect:
-            logger.info("ws_record_present client disconnected before missing-material send")
+            logger.info("ws_record_present client disconnected before KEM timeout send")
         return
 
     try:

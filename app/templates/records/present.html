@@ -16,6 +16,9 @@ var global_client_transmittal_kind = null;
 var global_vrequest_nauth = "{{nauth}}"; 
 var global_kem_public_key = null;
 var global_kemalg = null;
+let serverKemResolvePromise = null;
+let pendingQuantumStatus = 'securing...';
+let quantumStatusInitStarted = false;
 
 
 async function scanCode() {
@@ -107,9 +110,60 @@ const handshakeTimeoutMs = 30000;
 let handshakeTimeoutHandle = null;
 
 function setQuantumStatus(message) {
+  pendingQuantumStatus = message;
   const el = document.getElementById('quantum_safe');
   if (el) el.innerHTML = message;
 }
+
+function hasQuantumReadyChannel() {
+  return !!global_kem_public_key &&
+         global_kem_public_key !== "None" &&
+         !!global_kemalg &&
+         global_kemalg !== "None";
+}
+
+async function resolveServerKem() {
+  if (hasQuantumReadyChannel()) return true;
+  if (!global_vrequest_nauth || global_vrequest_nauth === "None") return false;
+  if (serverKemResolvePromise) return serverKemResolvePromise;
+
+  serverKemResolvePromise = (async () => {
+    try {
+      setQuantumStatus('Resolving requester quantum-safe channel...');
+      const response = await fetch('/records/resolve-request-kem', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nauth: global_vrequest_nauth})
+      });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'OK') {
+        throw new Error(data.detail || `KEM resolve failed with HTTP ${response.status}`);
+      }
+      global_kem_public_key = data.kem_public_key;
+      global_kemalg = data.kemalg;
+      setQuantumStatus('Channel is now quantum safe');
+      return true;
+    } catch (error) {
+      console.log('Server KEM resolve failed:', error);
+      setQuantumStatus('Waiting for requester quantum-safe handshake...');
+      return false;
+    } finally {
+      serverKemResolvePromise = null;
+    }
+  })();
+  return serverKemResolvePromise;
+}
+
+async function initializeQuantumStatus() {
+  if (quantumStatusInitStarted) return;
+  quantumStatusInitStarted = true;
+  setQuantumStatus(pendingQuantumStatus);
+  if (!hasQuantumReadyChannel()) {
+    await resolveServerKem();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initializeQuantumStatus);
 
 // alert(`we are here! nauth {{nauth}}`);
 ws_present.onopen = () => console.log("WebSocket connected");
@@ -139,7 +193,7 @@ ws_present.onerror = () => {
     clearTimeout(handshakeTimeoutHandle);
     handshakeTimeoutHandle = null;
   }
-  if (!global_kem_public_key || !global_kemalg) {
+  if (!hasQuantumReadyChannel()) {
     setQuantumStatus('Handshake transport error. Please retry.');
   }
 };
@@ -151,13 +205,13 @@ ws_present.onclose = () => {
     handshakeTimeoutHandle = null;
   }
   const el = document.getElementById('quantum_safe');
-  if (el && (!global_kem_public_key || !global_kemalg) && el.innerHTML === 'securing...') {
+  if (el && !hasQuantumReadyChannel() && el.innerHTML === 'securing...') {
     setQuantumStatus('Handshake closed before completion. Please retry.');
   }
 };
 
 handshakeTimeoutHandle = setTimeout(() => {
-  if (!global_kem_public_key || !global_kemalg) {
+  if (!hasQuantumReadyChannel()) {
     setQuantumStatus('Handshake timed out (relay/network delay). Please retry.');
     try { ws_present.close(); } catch (e) {}
   }
@@ -177,6 +231,7 @@ handshakeTimeoutHandle = setTimeout(() => {
   {% if record_select %}
     <h1>Select from {{ record_label }} to Present</h1>
     <pre id="quantum_safe">securing...</pre>
+    <script>initializeQuantumStatus();</script>
   {% else %}
   <h1>Display My {{ record_label}}</h1>
   {% endif %}
@@ -297,8 +352,11 @@ async function sendRecord(title) {
 console.log(`send record ${title}`);
 
 console.log(`Sending record... ${global_vrequest_nauth}`);
-if (!global_kem_public_key || !global_kemalg) {
-  setQuantumStatus('Browser KEM not ready yet. Falling back to server-side KEM resolution...');
+if (!hasQuantumReadyChannel()) {
+  await resolveServerKem();
+}
+if (!hasQuantumReadyChannel()) {
+  setQuantumStatus('Requester KEM not ready yet. Falling back to server-side send resolution...');
 }
 // send record to verifier
 submit_data = { "nauth": global_vrequest_nauth,
