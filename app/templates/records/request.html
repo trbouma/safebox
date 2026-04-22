@@ -234,6 +234,11 @@ async function createQRCode() {
           ? `${scope}:${offerKind}:${recipientHost}`
           : `${scope}:${offerKind}`;
       }
+    } else if (requestScopePrefix === "verifier" || requestScopePrefix === "prover") {
+      // Browser KEM handshakes can miss over QR/relay timing. Carry the
+      // requester's exact origin so the presenter server can resolve
+      // /.well-known/kem without guessing host/scheme.
+      scope = `${scope}:origin=${encodeURIComponent(window.location.origin)}`;
     }
     const submit_data = {"scope": scope, "compact": compact_qr.checked  };
     if (presenterNauth) {
@@ -632,10 +637,18 @@ async function listenForPresentation(nauth) {
 
 <script>
 
-  function getRightSide(str) {
+  function getRightSide(value) {
+      let rawValue = value;
+      if (Array.isArray(rawValue)) {
+        rawValue = rawValue.length > 0 ? rawValue[0] : "";
+      }
+      if (rawValue && typeof rawValue === "object") {
+        rawValue = rawValue.name || rawValue.label || rawValue.tag || rawValue.value || "";
+      }
+      const str = String(rawValue || "");
       const idx = str.indexOf(':');
-      if (idx === -1) return str;        // No delimiter → return original
-      return str.substring(idx + 1);     // Return everything after the colon
+      if (idx === -1) return str;
+      return str.substring(idx + 1);
     }
 
 async function fetchOriginalBlob(record, mediaHost) {
@@ -792,7 +805,7 @@ async function fetchOriginalBlob(record, mediaHost) {
     // Create and add the title element
     const cardTitle = document.createElement('div');
     cardTitle.className = 'card-title';
-    cardTitle.textContent = getRightSide(title[0]);
+    cardTitle.textContent = getRightSide(title) || "Untitled record";
     card.appendChild(cardTitle);
 
 

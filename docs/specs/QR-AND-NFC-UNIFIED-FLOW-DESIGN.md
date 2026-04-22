@@ -325,6 +325,89 @@ The nonce lifecycle is:
 
 This pattern keeps the QR compact while preserving host binding, nonce freshness, server-owned listener state, and the existing KEM-based offer transmittal pipeline.
 
+## Sender-Presented Offer QR
+
+Sender-presented offer QR is a supported convenience mode for cases where the sender needs to show an offer from an iPad, desktop, kiosk, shared screen, or remote call and the recipient scans the sender's QR code to receive the record.
+
+This mode is useful, but it is not the canonical secure QR offer flow. The canonical QR offer flow remains recipient-presented QR, where the receiver creates the receive context and the sender scans it from the selected offer page.
+
+Sender-presented QR has a different risk profile because the QR is visually exposed by the sender. It may be copied, photographed, screen-captured, or replayed by an unintended party. For this reason, sender-presented QR MUST be treated as a constrained remote/convenience mode and MUST use stricter replay controls than NFC.
+
+The sender-presented QR flow SHOULD reuse the same downstream offer delivery pipeline as recipient-presented QR and NFC offer:
+
+- the sender selects the exact offer record to send
+- the sender generates a short-lived sender-offer bootstrap QR
+- the recipient scans the QR
+- the recipient resolves the bootstrap to an active sender offer context
+- the recipient authenticates or accepts the offer
+- the sender transmits the selected record through the existing KEM-wrapped `/records/transmit` path
+- the sender UI shows completion only after transmittal succeeds
+
+The QR payload SHOULD use the same compact Safebox QR envelope:
+
+- URI prefix: `safebox:`
+- compressed bech32 payload: `nembed...`
+
+The sender-offer bootstrap object SHOULD use compact keys:
+
+- `v`: version, currently `1`
+- `t`: protocol marker, currently `sb`
+- `f`: flow marker, `so` for sender offer
+- `n`: nonce
+- `h`: sender service host
+- `ok`: offer kind being offered
+- `gk`: grant kind that will be delivered
+- `l`: optional label hint for display only
+- `s`: optional scheme hint, emitted only when the sender service is not HTTPS
+
+The compact QR MUST NOT contain the KEM public key and SHOULD NOT contain the full sender `nauth`. It should contain only enough information to resolve a live, server-owned sender-offer context.
+
+The public resolver endpoint SHOULD be:
+
+- `GET /.well-known/safebox/send-offer/{nonce}`
+
+The resolver SHOULD return the active sender offer `nauth` and associated metadata only while the bootstrap is fresh and unused. Resolver output may include:
+
+- `nauth`
+- `offer_kind`
+- `grant_kind`
+- `label`
+- `host`
+
+The nonce lifecycle MUST be:
+
+- QR generation creates a short-lived sender-offer bootstrap row
+- stale rows are pruned opportunistically
+- resolver access rejects expired rows
+- resolver access marks the nonce consumed
+- replay attempts are rejected
+
+The scanner SHOULD dispatch compact Safebox QR payloads by flow marker:
+
+- `f = "ro"` routes to the receive-offer resolver and selected sender offer context
+- `f = "so"` routes to the send-offer resolver and recipient accept context
+
+The recipient scanner handling a sender-presented QR SHOULD:
+
+- parse the compact bootstrap
+- verify the flow marker is sender-offer
+- resolve the full sender offer context from the sender host
+- route into the offer acceptance path using the resolved `nauth`
+- rely on the established accept/transmit handshake rather than trusting the QR alone
+
+The sender UI SHOULD make the security posture explicit. Suggested language:
+
+- "Sender QR is convenient for remote issuance. Anyone who can see or copy this QR may attempt to claim the offer. Use only for short-lived, intended-recipient interactions."
+
+The first implementation MAY keep the sender browser page open and use the existing sender listener to complete the offer, provided that:
+
+- the QR is compact and resolves through a server-side nonce
+- the nonce is short-lived and single-use
+- KEM resolution remains server-owned when browser KEM state is unavailable
+- success is shown only after `/records/transmit` succeeds
+
+A later production-grade implementation SHOULD move more of the sender-offer intent into server-owned state so that the browser is used primarily for display and status rather than orchestration.
+
 ## Server-Owned KEM Resolution
 
 Critical KEM resolution SHOULD be server-owned.

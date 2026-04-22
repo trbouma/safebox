@@ -177,8 +177,31 @@ async function selectRecordKind() {
   <script>
     const jsonUserData = {{ user_records | tojson }}; 
 
+    function getRecordStorageLabel(value) {
+      let rawValue = value;
+      if (Array.isArray(rawValue)) {
+        rawValue = rawValue.length > 0 ? rawValue[0] : "";
+      }
+      if (rawValue && typeof rawValue === "object") {
+        rawValue = rawValue.name || rawValue.label || rawValue.tag || rawValue.value || "";
+        if (rawValue && typeof rawValue === "object") {
+          return getRecordStorageLabel(rawValue);
+        }
+      }
+      return String(rawValue || "");
+    }
+
+    function getRecordLabel(value) {
+      const str = getRecordStorageLabel(value);
+      const idx = str.indexOf(':');
+      if (idx === -1) return str;
+      return str.substring(idx + 1);
+    }
+
     // Function to create and add a card
     function addCard(title, content) {
+      const storageLabel = getRecordStorageLabel(title);
+      const recordLabel = getRecordLabel(title);
       // Create a card element
       const card = document.createElement('div');
       card.className = 'card';
@@ -186,7 +209,7 @@ async function selectRecordKind() {
       // Create and add the title element
       const cardTitle = document.createElement('div');
       cardTitle.className = 'card-title';
-      cardTitle.textContent = title;
+      cardTitle.textContent = recordLabel || "Untitled record";
 
       // Create and add the content element
       const cardContent = document.createElement('div');
@@ -200,14 +223,14 @@ async function selectRecordKind() {
       card.addEventListener('click', () => {
 
         {% if record_select %}
-          if (confirm(`Present this credential ${title}`)) {
+          if (confirm(`Present this credential ${recordLabel || "Untitled record"}`)) {
             
-            sendRecord(title); 
+            sendRecord(storageLabel); 
           }
 
         {% else %}
 
-          window.location.href=`/records/displayrecord?card=${title}&kind={{record_kind}}&action_mode=edit`;
+          window.location.href=`/records/displayrecord?card=${encodeURIComponent(storageLabel)}&kind={{record_kind}}&action_mode=edit`;
         {% endif %}
        
       });
@@ -243,7 +266,8 @@ console.log(`send record ${title}`);
 console.log(`Sending record... ${global_vrequest_nauth}`);
 // send credential to verfier
 submit_data = { "nauth": global_vrequest_nauth,
-                "grant": `${title}`
+                "grant_name": `${title}`,
+                "grant_kind": {{record_kind}}
               };
 
 console.log(submit_data) ;            

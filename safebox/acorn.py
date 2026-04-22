@@ -3112,7 +3112,7 @@ class Acorn:
     async def get_record(self,record_name:str=None, record_kind: int =37375, record_by_hash=None, record_origin:str = None):
         #FIXME - not sure if this function is used - get_wallet_info is doing is
         
-        record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash)
+        record_out = await self.get_wallet_info(label=record_name,record_kind=record_kind, record_by_hash=record_by_hash, record_origin=record_origin)
         if record_out is None:
             return None
         try:

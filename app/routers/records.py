@@ -150,6 +150,75 @@ def _extract_target_from_scope(scope: str | None, expected_prefix: str = "verifi
     return target_value or None
 
 
+def _extract_origin_from_scope(scope: str | None, expected_prefix: str = "verifier") -> Optional[str]:
+    """Return optional origin from '<prefix>:<kind>:origin=<urlencoded-origin>' scope."""
+    if not isinstance(scope, str):
+        return None
+    parts = scope.split(":", 2)
+    if len(parts) < 3 or parts[0] != expected_prefix:
+        return None
+    suffix = str(parts[2]).strip()
+    for segment in suffix.split(";"):
+        segment = segment.strip()
+        if not segment.startswith("origin="):
+            continue
+        origin_value = urllib.parse.unquote(segment[len("origin="):]).strip()
+        return origin_value or None
+    return None
+
+
+def _record_storage_label(record: dict | None) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    tag_value = record.get("tag")
+    if isinstance(tag_value, list) and tag_value:
+        tag_value = tag_value[0]
+    if isinstance(tag_value, dict):
+        tag_value = (
+            tag_value.get("name")
+            or tag_value.get("label")
+            or tag_value.get("tag")
+            or tag_value.get("value")
+        )
+    if tag_value is None:
+        return None
+    tag_str = str(tag_value).strip()
+    return tag_str or None
+
+
+def _record_display_label_from_storage(storage_label: str | None) -> str | None:
+    if not storage_label:
+        return None
+    return storage_label.split(":", 1)[1] if ":" in storage_label else storage_label
+
+
+async def _find_wallet_record_by_label(acorn_obj: Acorn, card: str | None, kind: int) -> tuple[dict | None, str | None]:
+    """Find a wallet record by exact storage tag or friendly display label."""
+    if not card:
+        return None, None
+    card = str(card).strip()
+    if not card:
+        return None, None
+
+    record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+    if record is not None:
+        return record, card
+
+    try:
+        user_records = await acorn_obj.get_user_records(record_kind=kind)
+    except Exception as exc:
+        logger.warning("find_wallet_record_by_label list failed card=%s kind=%s error=%s", card, kind, exc)
+        return None, card
+
+    for candidate in user_records or []:
+        storage_label = _record_storage_label(candidate)
+        display_label = _record_display_label_from_storage(storage_label)
+        if card in {storage_label, display_label}:
+            return candidate, storage_label or card
+
+    return None, card
+
+
 def _parse_offer_request_scope(scope: str | None) -> tuple[Optional[int], Optional[int], Optional[str]]:
     """
     Parse 'offer_request:<grant_kind>:<offer_kind>[:<recipient_host...>]'
@@ -1929,42 +1998,48 @@ async def display_grant(     request: Request,
     
     if action_mode == 'edit':
 
-        record = await acorn_obj.get_record(record_name=card, record_kind=kind)
+        record, resolved_card = await _find_wallet_record_by_label(acorn_obj, card, kind)
+        if resolved_card:
+            card = resolved_card
         label_hash = await acorn_obj.get_label_hash(label=card)
-        grant_record = GrantRecord(**record)
-        print(f"safebox record: {record} {grant_record}")
-
-        try:
+        if record is None:
+            logger.warning("display_grant missing record card=%s kind=%s", card, kind)
+            content = f"Record not found: {card} ({kind})"
+        else:
             grant_record = GrantRecord(**record)
-            # content = record["payload"]
-            # content=grant_record.payload
-            private_record = record["payload"]
-            event_to_validate = parse_event_payload(private_record)
-            if not event_to_validate:
-                raise ValueError("payload is not a signed event")
-            trust_context = await build_record_trust_context(
-                acorn_obj=acorn_obj,
-                include_trusted_entities=True,
-            )
-            facts = await resolve_record_verification_facts(
-                event_to_validate=event_to_validate,
-                acorn_obj=acorn_obj,
-                include_trust_details=True,
-                trust_context=trust_context,
-            )
-            tag_owner = facts["tag_owner_display"] or facts["tag_owner"] or ""
-            owner_info = facts["owner_info"]
-            event_is_valid = facts["is_valid"]
-            is_trusted = facts["is_trusted"]
-            is_attested = facts["is_attested"]
-            is_held_by_current_safebox = facts["is_held_by_current_safebox"]
-            recognized_by = facts.get("recognized_by", [])
-            wot_scores = facts["wot_scores"]
-            wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
-            recognized_by_to_show = ", ".join(recognized_by) if recognized_by else "na"
-            content = f"{facts['content']}\n\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if event_is_valid else '❌'} Valid|{'✅' if is_held_by_current_safebox else '❌'} Held By Current Safebox|\n{'✅' if is_attested else '❌'} Attested By Owner|{'✅' if is_trusted else '❌'} Recognized|\nRecognized By\n ------\n{recognized_by_to_show}\n-----\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
-        except Exception as exc:
-            content = _extract_payload_content(record.get("payload"))
+            print(f"safebox record: {record} {grant_record}")
+
+            try:
+                grant_record = GrantRecord(**record)
+                # content = record["payload"]
+                # content=grant_record.payload
+                private_record = record["payload"]
+                event_to_validate = parse_event_payload(private_record)
+                if not event_to_validate:
+                    raise ValueError("payload is not a signed event")
+                trust_context = await build_record_trust_context(
+                    acorn_obj=acorn_obj,
+                    include_trusted_entities=True,
+                )
+                facts = await resolve_record_verification_facts(
+                    event_to_validate=event_to_validate,
+                    acorn_obj=acorn_obj,
+                    include_trust_details=True,
+                    trust_context=trust_context,
+                )
+                tag_owner = facts["tag_owner_display"] or facts["tag_owner"] or ""
+                owner_info = facts["owner_info"]
+                event_is_valid = facts["is_valid"]
+                is_trusted = facts["is_trusted"]
+                is_attested = facts["is_attested"]
+                is_held_by_current_safebox = facts["is_held_by_current_safebox"]
+                recognized_by = facts.get("recognized_by", [])
+                wot_scores = facts["wot_scores"]
+                wot_scores_to_show = "\n".join(f"⭐️ {label}: {value}" for label, value in wot_scores)
+                recognized_by_to_show = ", ".join(recognized_by) if recognized_by else "na"
+                content = f"{facts['content']}\n\nIssuer: {owner_info}\n[{tag_owner[:6]}:{tag_owner[-6:]}]  \nKind: {event_to_validate.kind} \nCreated at: {event_to_validate.created_at} \n\n|{'✅' if event_is_valid else '❌'} Valid|{'✅' if is_held_by_current_safebox else '❌'} Held By Current Safebox|\n{'✅' if is_attested else '❌'} Attested By Owner|{'✅' if is_trusted else '❌'} Recognized|\nRecognized By\n ------\n{recognized_by_to_show}\n-----\nIssuer WoT Scores\n ------\n{wot_scores_to_show}\n-----"
+            except Exception as exc:
+                content = _extract_payload_content(record.get("payload"))
         
     elif action_mode == 'offer':
 
@@ -2540,16 +2615,26 @@ async def post_send_record(      request: Request,
             # record_hash = scope.replace("prover:","")
             # print(f"need to select credential with record hash {record_hash}")
             # record_out = await acorn_obj.get_record(record_kind=34002, record_by_hash=record_hash)
-            record_out = await acorn_obj.get_record(record_name=record_parms.grant_name, record_kind=verifier_kind)
+            record_out, resolved_grant_name = await _find_wallet_record_by_label(acorn_obj, record_parms.grant_name, verifier_kind)
+            if resolved_grant_name:
+                record_parms.grant_name = resolved_grant_name
             
         elif "verifier" in scope:
             transmittal_npub = hex_to_npub(transmittal_pubhex)
             #need to figure how to pass in the label to look up
             print(f"grant: {record_parms.grant_name}")
-            record_out = await acorn_obj.get_record(record_name=record_parms.grant_name, record_kind=verifier_kind)
+            record_out, resolved_grant_name = await _find_wallet_record_by_label(acorn_obj, record_parms.grant_name, verifier_kind)
+            if resolved_grant_name:
+                record_parms.grant_name = resolved_grant_name
             # record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
         else:
             record_out = {"tag": "TBD", "payload" : "This will be a real credential soon!"}
+
+        if record_out is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Record not found: {record_parms.grant_name} ({verifier_kind})",
+            )
 
         
 
@@ -2571,6 +2656,12 @@ async def post_send_record(      request: Request,
 
             def add_origin_from_relay(relay: str | None):
                 add_origin(_relay_to_http_origin(relay or ""))
+
+            # Preferred for request-by-QR: requester embeds its exact browser
+            # origin so the presenter can resolve the requester's KEM endpoint
+            # without relying on relay-derived or same-host guesses.
+            add_origin(_extract_origin_from_scope(scope, "verifier"))
+            add_origin(_extract_origin_from_scope(scope, "prover"))
 
             request_host = request.url.hostname or ""
             request_port = request.url.port
@@ -3422,6 +3513,9 @@ async def ws_listen_for_nauth( websocket: WebSocket,
 
                         def add_origin_from_relay(relay: str | None):
                             add_origin(_relay_to_http_origin(relay or ""))
+
+                        add_origin(_extract_origin_from_scope(candidate_scope, "verifier"))
+                        add_origin(_extract_origin_from_scope(candidate_scope, "prover"))
 
                         if isinstance(candidate_scope, str) and candidate_scope.startswith("offer_request:"):
                             _, _, scope_host = _parse_offer_request_scope(candidate_scope)

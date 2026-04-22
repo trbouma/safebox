@@ -203,15 +203,32 @@ handshakeTimeoutHandle = setTimeout(() => {
 
   <script>
 
-    function getRightSide(str) {
+    function extractRecordStorageLabel(value) {
+      let rawValue = value;
+      if (Array.isArray(rawValue)) {
+        rawValue = rawValue.length > 0 ? rawValue[0] : "";
+      }
+      if (rawValue && typeof rawValue === "object") {
+        rawValue = rawValue.name || rawValue.label || rawValue.tag || rawValue.value || "";
+        if (rawValue && typeof rawValue === "object") {
+          return extractRecordStorageLabel(rawValue);
+        }
+      }
+      return String(rawValue || "");
+    }
+
+    function extractRecordLabel(value) {
+      const str = extractRecordStorageLabel(value);
       const idx = str.indexOf(':');
-      if (idx === -1) return str;        // No delimiter → return original
-      return str.substring(idx + 1);     // Return everything after the colon
+      if (idx === -1) return str;
+      return str.substring(idx + 1);
     }
     const jsonUserData = {{ user_records | tojson }}; 
 
     // Function to create and add a card
     function addCard(title, content, verification) {
+      const storageLabel = extractRecordStorageLabel(title);
+      const recordLabel = extractRecordLabel(title);
       // Create a card element
       const card = document.createElement('div');
       card.className = 'card';
@@ -219,7 +236,7 @@ handshakeTimeoutHandle = setTimeout(() => {
       // Create and add the title element
       const cardTitle = document.createElement('div');
       cardTitle.className = 'card-title';
-      cardTitle.textContent = getRightSide(title[0]);
+      cardTitle.textContent = recordLabel || "Untitled record";
       
       // Create and add the content element
       const cardContent = document.createElement('div');
@@ -239,14 +256,14 @@ handshakeTimeoutHandle = setTimeout(() => {
       card.addEventListener('click', () => {
 
         {% if record_select %}
-          if (confirm(`Present this record ${title}?`)) {
+          if (confirm(`Present this record ${recordLabel || "Untitled record"}?`)) {
             
-            sendRecord(title); 
+            sendRecord(storageLabel); 
           }
 
         {% else %}
 
-          window.location.href=`/records/displayrecord?card=${title}&kind={{record_kind}}&action_mode=edit`;
+          window.location.href=`/records/displayrecord?card=${encodeURIComponent(storageLabel)}&kind={{record_kind}}&action_mode=edit`;
         {% endif %}
        
       });
@@ -292,16 +309,26 @@ submit_data = { "nauth": global_vrequest_nauth,
               };
 
 console.log(submit_data) ;            
-await fetch(`/records/sendrecord`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"}, 
-        body: JSON.stringify(submit_data)     
-              
-       })
-    .then((response) => response.json())
-    .then((data) => {
-    alert(`{{record_label}} sent!`);
-});
+try {
+  const response = await fetch(`/records/sendrecord`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(submit_data)
+  });
+  const data = await response.json();
+  if (!response.ok || data.status !== "OK") {
+    const detail = data.detail || data.message || `Send failed with HTTP ${response.status}`;
+    setQuantumStatus(detail);
+    alert(detail);
+    return;
+  }
+  setQuantumStatus('Record sent.');
+  alert(`{{record_label}} sent!`);
+} catch (error) {
+  const detail = `Send failed: ${error}`;
+  setQuantumStatus(detail);
+  alert(detail);
+}
 
 }
 

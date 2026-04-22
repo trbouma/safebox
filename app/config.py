@@ -148,7 +148,7 @@ class Settings(BaseSettings):
                             [34031, "Voucher"],  
                             [34033, "Letter"],
                             [34035, "Emergency"],
-                            [34037, "Negotiable Cargo Document",["Bill of Lading","Warehouse Receipt"]],
+                            [34043, "Trade Document",["Bill of Lading","Warehouse Receipt"]],
                             [34041, "Skilled Trade",["Electrician","Plumber", "Welder"]]
                                                       
                             
@@ -179,7 +179,7 @@ class Settings(BaseSettings):
                             [34032, "Voucher"],
                             [34034, "Letter"],
                             [34036, "Emergency", ["medical","contact"]],    
-                            [34038, "Negotiable Cargo Document"], 
+                            [34044, "Trade Document"], 
                             [34042, "Skilled Trade"]                        
                             
                             
