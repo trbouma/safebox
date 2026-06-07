@@ -564,11 +564,12 @@ def swap(consolidate):
         click.echo(result_out)
 
 @click.command("repair-proofs", help="Prune spent proofs and rewrite wallet proof state")
-def repair_proofs():
+@click.option("--force", "-f", is_flag=True, default=False, help="Allow repair to clear the wallet if no usable proofs survive")
+def repair_proofs(force):
     acorn_obj = Acorn(nsec=NSEC, relays=RELAYS, mints=MINTS, home_relay=HOME_RELAY, logging_level=LOGGING_LEVEL)
     asyncio.run(acorn_obj.load_data())
     click.echo("Repair proofs")
-    result_out = asyncio.run(acorn_obj.repair_proofs())
+    result_out = asyncio.run(acorn_obj.repair_proofs(force_prune_stale=force))
     click.echo(result_out)
 
 @click.command("pay", help="Payout funds to lightning address")

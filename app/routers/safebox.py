@@ -829,12 +829,13 @@ async def ln_swap(   request: Request,
 @router.post("/repairproofs", tags=["protected"])
 async def repair_proofs(
     request: Request,
+    force: bool = False,
     acorn_obj: Acorn = Depends(get_acorn)
 ):
     msg_out = "No repair performed"
 
     try:
-        msg_out = await acorn_obj.repair_proofs()
+        msg_out = await acorn_obj.repair_proofs(force_prune_stale=force)
     except (ValueError, RuntimeError) as e:
         logger.warning("Repair proofs failed: %s", e)
         return {"status": "ERROR", "detail": f"error {e}"}

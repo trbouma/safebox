@@ -72,6 +72,12 @@ RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT: int = int(
 RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT: int = int(
     os.getenv("RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT", "16")
 )
+RECEIVE_PROOF_MAINTENANCE_EAGER_TOTAL_LIMIT: int = int(
+    os.getenv("RECEIVE_PROOF_MAINTENANCE_EAGER_TOTAL_LIMIT", "12")
+)
+RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT: int = int(
+    os.getenv("RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT", "4")
+)
 DEFAULT_BLOSSOM_HOME_SERVER: str = "https://blossom.getsafebox.app"
 DEFAULT_BLOSSOM_XFER_SERVER: str = "https://blossomx.getsafebox.app"
 
@@ -3907,7 +3913,10 @@ class Acorn:
             if lock_acquired:
                 await self.release_lock()
 
-        await self._maybe_maintain_received_proofs(reason="mint_proofs")
+        await self._maybe_maintain_received_proofs(
+            reason="mint_proofs",
+            added_proof_count=len(proof_objs),
+        )
         
         return True
 
@@ -4579,7 +4588,7 @@ class Acorn:
 
         return report
 
-    async def repair_proofs(self) -> str:
+    async def repair_proofs(self, force_prune_stale: bool = False) -> str:
         """
         Reconcile local/relay-backed proof state against mint state and
         rewrite the wallet to contain only currently usable proofs.
@@ -4747,9 +4756,15 @@ class Acorn:
             total_spent_dropped = sum(dropped_counts.values())
 
             if repaired_count == 0 and original_count > 0:
-                raise RuntimeError(
-                    "repair-proofs found zero usable replacement proofs and refused to overwrite the wallet. "
-                    "If a payment or swap just completed, reload and retry after the wallet state settles."
+                if not force_prune_stale:
+                    raise RuntimeError(
+                        "repair-proofs found zero usable replacement proofs and refused to overwrite the wallet. "
+                        "If you want to discard all stale proofs, rerun with force enabled."
+                    )
+                self.logger.warning(
+                    "op=repair_proofs status=force_prune_empty_wallet original_count=%s original_balance=%s",
+                    original_count,
+                    original_balance,
                 )
 
             self.proofs = rebuilt_proofs
@@ -4774,7 +4789,7 @@ class Acorn:
             if lock_acquired:
                 await self.release_lock()
 
-    async def _maybe_maintain_received_proofs(self, reason: str) -> None:
+    async def _maybe_maintain_received_proofs(self, reason: str, added_proof_count: int = 0) -> None:
         """
         Best-effort receive-side proof maintenance.
 
@@ -4796,27 +4811,38 @@ class Acorn:
 
             total_triggered = proof_count > RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT
             keyset_triggered = largest_keyset_count > RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT
+            eager_batch_triggered = (
+                added_proof_count >= RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT
+                and proof_count >= RECEIVE_PROOF_MAINTENANCE_EAGER_TOTAL_LIMIT
+            )
 
-            if not total_triggered and not keyset_triggered:
+            if not total_triggered and not keyset_triggered and not eager_batch_triggered:
                 self.logger.debug(
-                    "op=receive_maintenance status=skip reason=under_limit trigger=%s proofs=%s total_limit=%s largest_keyset=%s keyset_limit=%s",
+                    "op=receive_maintenance status=skip reason=under_limit trigger=%s proofs=%s total_limit=%s largest_keyset=%s keyset_limit=%s added_proofs=%s eager_total_limit=%s eager_batch_limit=%s",
                     reason,
                     proof_count,
                     RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT,
                     largest_keyset_count,
                     RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT,
+                    added_proof_count,
+                    RECEIVE_PROOF_MAINTENANCE_EAGER_TOTAL_LIMIT,
+                    RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT,
                 )
                 return
 
             self.logger.info(
-                "op=receive_maintenance status=start trigger=%s proofs=%s total_limit=%s largest_keyset=%s keyset_limit=%s total_triggered=%s keyset_triggered=%s",
+                "op=receive_maintenance status=start trigger=%s proofs=%s total_limit=%s largest_keyset=%s keyset_limit=%s added_proofs=%s eager_total_limit=%s eager_batch_limit=%s total_triggered=%s keyset_triggered=%s eager_batch_triggered=%s",
                 reason,
                 proof_count,
                 RECEIVE_PROOF_MAINTENANCE_TOTAL_LIMIT,
                 largest_keyset_count,
                 RECEIVE_PROOF_MAINTENANCE_KEYSET_LIMIT,
+                added_proof_count,
+                RECEIVE_PROOF_MAINTENANCE_EAGER_TOTAL_LIMIT,
+                RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT,
                 total_triggered,
                 keyset_triggered,
+                eager_batch_triggered,
             )
             await self.swap_multi_each()
             await self.swap_multi_consolidate()
@@ -5923,13 +5949,15 @@ class Acorn:
         combined_proofs = []
         combined_proof_objs =[]
         lock_acquired = False
+        duplicate_dropped = 0
+        stale_dropped = 0
         
         # Let's check all the proofs before we do anything
         try:
             await self.acquire_lock()
             lock_acquired = True
             await self._load_proofs()
-            keyset_proofs,keyset_amounts = self._proofs_by_keyset()
+            keyset_proofs,_keyset_amounts = self._proofs_by_keyset()
             if not keyset_proofs:
                 self.logger.info("op=swap_multi_each status=skip reason=no_proofs")
                 return "multi swap skipped (no proofs)"
@@ -5938,32 +5966,65 @@ class Acorn:
                 raise RuntimeError(
                     f"Proof safety audit failed before swap_each: {audit_report.get('reason')}"
                 )
-            for each_keyset in keyset_proofs:
-                check = []
-                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
-                for each_proof in keyset_proofs[each_keyset]:
-                    check.append(each_proof.Y)
 
-                # print(mint_verify_url, check)
+            candidate_keyset_proofs = {}
+
+            for each_keyset, proofs_for_keyset in keyset_proofs.items():
+                unique_proofs = []
+                seen_proofs = set()
+                for each_proof in proofs_for_keyset:
+                    proof_key = (str(each_proof.id), str(each_proof.secret))
+                    if proof_key in seen_proofs:
+                        duplicate_dropped += 1
+                        continue
+                    seen_proofs.add(proof_key)
+                    unique_proofs.append(each_proof)
+
+                if not unique_proofs:
+                    continue
+
+                check = [each_proof.Y for each_proof in unique_proofs]
+                mint_verify_url = f"{self.known_mints[each_keyset]}/v1/checkstate"
                 Ys = {"Ys": check}
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(url=mint_verify_url, headers=headers, json=Ys)
                     response.raise_for_status()
                     check_response = response.json()
-                proofs_to_check = check_response['states']
-                for each_proof in proofs_to_check:
-                    assert each_proof['state'] == "UNSPENT"
-                    # print(each_proof['state'])
+                proofs_to_check = check_response.get("states", []) if isinstance(check_response, dict) else []
+                if len(proofs_to_check) != len(unique_proofs):
+                    raise RuntimeError(
+                        f"Swap-each checkstate length mismatch for keyset {each_keyset}: "
+                        f"{len(proofs_to_check)} states for {len(unique_proofs)} proofs"
+                    )
+
+                surviving_proofs = []
+                invalid_states = []
+                for each_proof, state_obj in zip(unique_proofs, proofs_to_check):
+                    state_value = state_obj.get("state") if isinstance(state_obj, dict) else None
+                    if state_value == "UNSPENT":
+                        surviving_proofs.append(each_proof)
+                    else:
+                        stale_dropped += 1
+                        invalid_states.append(state_value or "<missing>")
+
+                if invalid_states:
+                    self.logger.warning(
+                        "op=swap_multi_each status=drop_invalid_checkstate keyset=%s mint=%s dropped=%s states=%s",
+                        each_keyset,
+                        self.known_mints.get(each_keyset),
+                        len(invalid_states),
+                        ",".join(invalid_states),
+                    )
+
+                if surviving_proofs:
+                    candidate_keyset_proofs[each_keyset] = surviving_proofs
                 
             # return
             # All the proofs are verified, we are good to go for the swap   
             # In multi_each we are going to swap for each proof 
             
 
-            for each_keyset in keyset_proofs:
-                
-                each_keyset_url = self.known_mints[each_keyset]
-
+            for each_keyset, proofs_for_keyset in candidate_keyset_proofs.items():
                 mint_key_url = f"{self.known_mints[each_keyset]}/v1/keys/{each_keyset}"
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.get(mint_key_url, headers=headers)
@@ -5972,7 +6033,7 @@ class Acorn:
                 # print(each_keyset,each_keyset_url)
                 swap_url = f"{self.known_mints[each_keyset]}/v1/swap"
                 
-                for each_proof in keyset_proofs[each_keyset]:
+                for each_proof in proofs_for_keyset:
                     # print(each_proof.amount)
                     blinded_values =[]
                     blinded_messages = []
@@ -5999,6 +6060,25 @@ class Acorn:
                             response = await client.post(url=swap_url, json=data_to_send, headers=headers)
                             if response.is_error:
                                 response_text = response.text.strip()
+                                stale_proof_error = False
+                                try:
+                                    response_json = response.json()
+                                    stale_proof_error = (
+                                        response_json.get("code") == 11001
+                                        or "Token already spent" in str(response_json.get("detail", ""))
+                                    )
+                                except Exception:
+                                    stale_proof_error = "Token already spent" in response_text
+
+                                if stale_proof_error:
+                                    stale_dropped += 1
+                                    self.logger.warning(
+                                        "op=swap_multi_each status=drop_on_swap keyset=%s mint=%s amount=%s reason=already_spent",
+                                        each_keyset,
+                                        self.known_mints.get(each_keyset),
+                                        each_proof.amount,
+                                    )
+                                    continue
                                 raise RuntimeError(
                                     "Mint rejected swap-each for keyset "
                                     f"{each_keyset} at mint {self.known_mints.get(each_keyset)} "
@@ -6047,7 +6127,10 @@ class Acorn:
                     combined_proof_objs = combined_proof_objs + proof_objs
 
             if not combined_proof_objs:
-                raise RuntimeError("Swap produced zero proofs; refusing destructive proof replacement")
+                raise RuntimeError(
+                    "swap-each found zero usable replacement proofs and refused to overwrite the wallet. "
+                    "Run repair-proofs only after confirming the mint state is stable."
+                )
 
             await self.delete_proof_events()
             self.logger.debug("XXXXX swap multi each")
@@ -6063,7 +6146,11 @@ class Acorn:
                 await self.release_lock()
                    
         
-        return "multi swap ok"
+        return (
+            "multi swap ok"
+            if duplicate_dropped == 0 and stale_dropped == 0
+            else f"multi swap ok (dropped {stale_dropped} stale proofs, {duplicate_dropped} duplicates)"
+        )
     async def _async_swap(self):
         # This is the async version of swap
         headers = { "Content-Type": "application/json"}
@@ -6704,7 +6791,10 @@ class Acorn:
             tendered_amount=tendered_amount,
             tendered_currency=tendered_currency,
         )
-        await self._maybe_maintain_received_proofs(reason="accept_token")
+        await self._maybe_maintain_received_proofs(
+            reason="accept_token",
+            added_proof_count=len(swap_proofs),
+        )
         return f'Successfully accepted {token_amount} sats!', token_amount
 
 
