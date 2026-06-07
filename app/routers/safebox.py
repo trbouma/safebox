@@ -219,6 +219,28 @@ def get_or_create_nwc_secret(npub: str, rotate: bool = False) -> str:
         return nwc_secret
 
 
+def build_nwc_uri(nwc_secret: str) -> str:
+    nwc_service_keys = Keys(priv_k=nwc_secret)
+    relay = settings.NWC_RELAYS[0]
+    return (
+        f"nostr+walletconnect://{nwc_service_keys.public_key_hex()}"
+        f"?relay={relay}&secret={nwc_secret}"
+    )
+
+
+async def publish_nwc_info_event(nwc_secret: str, capabilities: str, notifications: list[str]) -> None:
+    nwc_service_keys = Keys(priv_k=nwc_secret)
+    async with ClientPool(settings.NWC_RELAYS) as c:
+        n_msg = Event(
+            kind=13194,
+            content=capabilities,
+            pub_key=nwc_service_keys.public_key_hex(),
+            tags=[["notifications", " ".join(notifications)]],
+        )
+        n_msg.sign(nwc_secret)
+        c.publish(n_msg)
+
+
 def resolve_npub_from_card_secret(token_secret: str) -> str:
     """
     Resolve an NFC token secret to safebox npub from active NWCSecret mapping.
@@ -557,7 +579,7 @@ async def create_qr(qr_text: str):
 async def create_nwc_qr(request: Request,
                         acorn_obj: Acorn= Depends(get_acorn)):
     nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
-    qr_text = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
+    qr_text = build_nwc_uri(nwc_secret)
 
     # &lud16={handle}@{request.url.hostname}
     encoded_qr_text = urllib.parse.quote(qr_text)
@@ -567,18 +589,13 @@ async def create_nwc_qr(request: Request,
     # 
    
     # 
-    async with ClientPool(settings.NWC_RELAYS) as c:
-        capabilities = "pay_invoice pay_keysend get_balance get_info make_invoice lookup_invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications"
-        n_msg = Event(kind=13194,
-                content= capabilities,
-                pub_key=acorn_obj.pubkey_hex,
-                tags= [["notifications","payment_received payment_sent"]]
-                )
-
-
-        n_msg.sign(acorn_obj.privkey_hex)
-        c.publish(n_msg)
-        print(f"we published info event ") 
+    capabilities = "pay_invoice pay_keysend get_balance get_info make_invoice lookup_invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications"
+    await publish_nwc_info_event(
+        nwc_secret,
+        capabilities=capabilities,
+        notifications=["payment_received", "payment_sent"],
+    )
+    print(f"we published info event ") 
           
     img = qrcode.make(qr_text)
     buf = io.BytesIO()
@@ -1630,20 +1647,14 @@ async def my_danger_zone(       request: Request,
 
     # Do the nostr wallet connect
     nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
+    nwc_key = build_nwc_uri(nwc_secret)
 
     # Publish profile
-    async with ClientPool(settings.NWC_RELAYS) as c:
-        n_msg = Event(kind=13194,
-                    content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
-                    pub_key=acorn_obj.pubkey_hex,
-                    tags=[["notifications","payment_received payment_sent balance_changed"]],
-                   
-                    )
-
-
-        n_msg.sign(acorn_obj.privkey_hex)
-        c.publish(n_msg)
+    await publish_nwc_info_event(
+        nwc_secret,
+        capabilities="pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
+        notifications=["payment_received", "payment_sent", "balance_changed"],
+    )
 
 
     
@@ -1689,20 +1700,14 @@ async def issue_card(       request: Request,
 
     # Do the nostr wallet connect
     nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=rotate)
-    nwc_key = f"nostr+walletconnect://{acorn_obj.pubkey_hex}?relay={settings.NWC_RELAYS[0]}&secret={nwc_secret}"
+    nwc_key = build_nwc_uri(nwc_secret)
 
     # Publish profile
-    async with ClientPool(settings.NWC_RELAYS) as c:
-        n_msg = Event(kind=13194,
-                    content= "pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
-                    pub_key=acorn_obj.pubkey_hex,
-                    tags=[["notifications","payment_received payment_sent balance_changed"]],
-                   
-                    )
-
-
-        n_msg.sign(acorn_obj.privkey_hex)
-        c.publish(n_msg)
+    await publish_nwc_info_event(
+        nwc_secret,
+        capabilities="pay_invoice get_balance get_info make invoice list_transactions multi_pay_invoice multi_pay_keysend sign_message notifications payment_received",
+        notifications=["payment_received", "payment_sent", "balance_changed"],
+    )
 
 
     
