@@ -161,10 +161,15 @@ def nwc_subscription_target_pubkeys() -> list[str]:
     return sorted(pubkeys)
 
 
-async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_obj, evt: Event):
+async def nwc_handle_instruction(
+    safebox_found: RegisteredSafebox,
+    instruction_obj,
+    evt: Event,
+    nwc_secret: str,
+):
     print(f"nwc {safebox_found} pay instruction: {instruction_obj['method']}")
-    k = Keys(priv_k=safebox_found.nsec)
-    my_enc = NIP4Encrypt(key=k)
+    service_keys = Keys(priv_k=nwc_secret)
+    my_enc = NIP4Encrypt(key=service_keys)
     nwc_reply = False
 
     acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
@@ -331,7 +336,7 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         response_json = {
                             "result_type": "get_info",
                             "result": {
-                                "pubkey": k.public_key_hex(),
+                                "pubkey": service_keys.public_key_hex(),
                                 "methods": ["pay_invoice", "get_balance", "list_transactions", "get_info", "make_invoice"],
                                 "notifications":["payment_received", "payment_sent"]
 
@@ -951,12 +956,12 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
         async with ClientPool(settings.NWC_RELAYS) as c:
             n_msg = Event(kind=23195,
                         content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                        pub_key=k.public_key_hex(),
+                        pub_key=service_keys.public_key_hex(),
                         tags=[['e',evt.id],['p', evt.pub_key]],
                         created_at=int((datetime.now() - timedelta(seconds=0)).timestamp())
                         
                         )
-            n_msg.sign(k.private_key_hex())
+            n_msg.sign(nwc_secret)
             c.publish(n_msg)
             await asyncio.sleep(3)
 
@@ -968,23 +973,21 @@ async def nwc_handle_instruction(safebox_found: RegisteredSafebox, instruction_o
                                                     amount=amount,
                                                     mint=settings.HOME_MINT,
                                                     callback=paid_callback,
+                                                    nwc_secret=nwc_secret,
                                                     evt=evt
                                                    
                                                     ) 
 
         
-
-
-def paid_callback(nsec: str, payment_hash, evt: Event):  
+def paid_callback(nwc_secret: str, payment_hash, evt: Event):  
 
     print("This is the callback!")   
-    
-    # asyncio.run(paid_response(nsec,payment_hash,evt))
+    asyncio.create_task(paid_response(nwc_secret, payment_hash, evt))
 
-async def paid_response(nsec: str, payment_hash:str, evt: Event):
+async def paid_response(nwc_secret: str, payment_hash:str, evt: Event):
         
-    k = Keys(priv_k=nsec)
-    my_enc = NIP4Encrypt(key=k)
+    service_keys = Keys(priv_k=nwc_secret)
+    my_enc = NIP4Encrypt(key=service_keys)
     response_json = {
         "notification_type": "payment_received", 
         "notification": {
@@ -996,12 +999,12 @@ async def paid_response(nsec: str, payment_hash:str, evt: Event):
     async with ClientPool(settings.NWC_RELAYS) as c:
         n_msg = Event(kind=23196,
                     content= my_enc.encrypt(json.dumps(response_json), to_pub_k=evt.pub_key),
-                    pub_key=k.public_key_hex(),
+                    pub_key=service_keys.public_key_hex(),
                     tags=[['p', evt.pub_key],["encryption", "nip04"]],
                     created_at=int((datetime.now() - timedelta(seconds=60)).timestamp())
                     
                     )
-        n_msg.sign(k.private_key_hex())
+        n_msg.sign(nwc_secret)
         c.publish(n_msg)
         await asyncio.sleep(3)       
 
@@ -1047,7 +1050,14 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
                 decryptor = NIP4Encrypt(key=Keys(priv_k=decrypt_key))
                 decrypt_event = decryptor.decrypt_event(evt=evt)
                 pay_instruction = json.loads(decrypt_event.content)
-                asyncio.create_task(nwc_handle_instruction(safebox_found, pay_instruction,evt))
+                asyncio.create_task(
+                    nwc_handle_instruction(
+                        safebox_found,
+                        pay_instruction,
+                        evt,
+                        nwc_secret=decrypt_key,
+                    )
+                )
             else:
                 print('no wallet on file')
             

@@ -398,6 +398,7 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
                             tendered_currency: str = "SAT", 
                             comment: str ="",
                             callback: Callable[..., None]=None,
+                            nwc_secret: str | None = None,
                             payment_hash: str = None,                    
                             evt: Event = None  ):
     success = False
@@ -428,9 +429,11 @@ async def handle_nwc_payment(   acorn_obj: Acorn,
     
         await acorn_obj.add_tx_history(tx_type='C',amount=amount, tendered_amount=tendered_amount, tendered_currency=tendered_currency, comment=comment)
         if callback:
-            pass
-            
-            callback(nsec=acorn_obj.privkey_bech32, payment_hash="test", evt=evt)
+            callback(
+                nwc_secret=nwc_secret or acorn_obj.privkey_hex,
+                payment_hash=payment_hash or "test",
+                evt=evt,
+            )
 
     return success
 
