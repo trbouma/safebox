@@ -192,6 +192,24 @@ async def nwc_handle_instruction(
             return out if out else list(default_relays)
         return list(default_relays)
 
+    def _extract_zap_comment(metadata_obj, fallback_comment: str) -> str:
+        if not isinstance(metadata_obj, dict):
+            return fallback_comment
+
+        nostr_payload = metadata_obj.get("nostr", {})
+        if isinstance(nostr_payload, str):
+            try:
+                nostr_payload = json.loads(nostr_payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return fallback_comment
+
+        if isinstance(nostr_payload, dict):
+            content_value = nostr_payload.get("content")
+            if isinstance(content_value, str) and content_value.strip():
+                return content_value
+
+        return fallback_comment
+
     if instruction_obj['method'] == 'pay_invoice':
         invoice = instruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
@@ -200,7 +218,7 @@ async def nwc_handle_instruction(
 
         comment = instruction_obj['params'].get("comment", "Paid!")
         metadata = instruction_obj['params'].get("metadata", {})
-        zap_comment = metadata.get("nostr", {}).get("content", comment)
+        zap_comment = _extract_zap_comment(metadata, comment)
         tendered_amount = instruction_obj['params'].get("tendered_amount", None)
         tendered_currency = instruction_obj['params'].get("tendered_currency", "SAT")
         nwc_msg = f"Zap: {zap_comment} "
