@@ -5332,7 +5332,15 @@ class Acorn:
                     payment_preimage: str = None,
                     payment_hash: str = None,
                     description_hash: str = None): 
-                    
+        def _mint_error_with_body(action: str, response: httpx.Response) -> RuntimeError:
+            body_text = response.text.strip()
+            try:
+                body_text = json.dumps(response.json())
+            except Exception:
+                pass
+            return RuntimeError(
+                f"{action} failed with HTTP {response.status_code}: {body_text or '<empty body>'}"
+            )
 
         # decode amount from invoice
         try:
@@ -5385,7 +5393,8 @@ class Acorn:
                             }
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
-                response.raise_for_status()
+                if response.is_error:
+                    raise _mint_error_with_body("melt quote request", response)
             self.logger.debug(f"post melt response: {response.json()}")
             # check reponse for error
             # print(f"mint response: {response.json()}")
@@ -5429,7 +5438,8 @@ class Acorn:
                             }
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(url=melt_quote_url, json=data_to_send, headers=headers)
-                    response.raise_for_status()
+                    if response.is_error:
+                        raise _mint_error_with_body("melt quote request", response)
                 self.logger.debug(f"post melt response: {response.json()}")
                 post_melt_response = PostMeltQuoteResponse(**response.json())
                 self.logger.debug(f"mint response: {post_melt_response}")
@@ -5486,7 +5496,8 @@ class Acorn:
             self.logger.debug("we are here!!!")
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url=melt_url, json=data_to_send, headers=headers)
-                response.raise_for_status()
+                if response.is_error:
+                    raise _mint_error_with_body("melt request", response)
             self.logger.debug(response.json())  
             payment_json = response.json() 
             payment_preimage = payment_json.get('payment_preimage', None)            

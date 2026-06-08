@@ -27,8 +27,17 @@ from app.appmodels import RegisteredSafebox, NWCEvent, NWCSecret
 from sqlmodel import Field, Session, SQLModel, select
 from sqlalchemy.exc import IntegrityError
 
-from app.tasks import handle_payment, safe_handle_payment, handle_nwc_payment
+from app.tasks import (
+    handle_payment,
+    safe_handle_payment,
+    handle_nwc_payment,
+    _is_proof_rejection_or_swap_recommended,
+    _is_stale_proof_rejection,
+    _friendly_payment_error,
+    _exception_chain_text,
+)
 from app.db import engine
+from app.utils import send_zap_receipt
 
 import os
 from app.config import Settings, ConfigWithFallback
@@ -210,14 +219,38 @@ async def nwc_handle_instruction(
 
         return fallback_comment
 
+    def _extract_zap_request_json(metadata_obj) -> str | None:
+        if not isinstance(metadata_obj, dict):
+            return None
+
+        nostr_payload = metadata_obj.get("nostr")
+        if isinstance(nostr_payload, str):
+            try:
+                parsed_payload = json.loads(nostr_payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None
+            if isinstance(parsed_payload, dict):
+                return json.dumps(parsed_payload)
+            return None
+
+        if isinstance(nostr_payload, dict):
+            return json.dumps(nostr_payload)
+
+        return None
+
     if instruction_obj['method'] == 'pay_invoice':
         invoice = instruction_obj['params']['invoice']
         invoice_decoded = bolt11.decode(invoice)
         invoice_amount = invoice_decoded.amount_msat//1000
+        final_fees = 0
+        payment_hash = None
+        payment_preimage = None
+        description_hash = getattr(invoice_decoded, "description_hash", None)
         
 
         comment = instruction_obj['params'].get("comment", "Paid!")
         metadata = instruction_obj['params'].get("metadata", {})
+        zap_request_json = _extract_zap_request_json(metadata)
         zap_comment = _extract_zap_comment(metadata, comment)
         tendered_amount = instruction_obj['params'].get("tendered_amount", None)
         tendered_currency = instruction_obj['params'].get("tendered_currency", "SAT")
@@ -227,6 +260,8 @@ async def nwc_handle_instruction(
         print(f"balance {acorn_obj.balance}")
         try:
             msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(invoice, comment=nwc_msg, tendered_amount=tendered_amount,tendered_currency=tendered_currency)
+            if zap_request_json and invoice:
+                asyncio.create_task(send_zap_receipt(nostr=zap_request_json, lninvoice=invoice))
             
            
             #FIXME - need to add these parameters to pay_multi_invoice
@@ -241,20 +276,69 @@ async def nwc_handle_instruction(
             #                                    payment_preimage=payment_preimage)
             
         except Exception as e:
-            # raise Exception(f"Error {e}")
-            print(f"Error {e}")
+            if _is_proof_rejection_or_swap_recommended(e):
+                stale_proof_retry = _is_stale_proof_rejection(e)
+                logger.warning(
+                    "op=nwc_pay_invoice status=retry_start strategy=%s reason=%s",
+                    "repair" if stale_proof_retry else "swap",
+                    _exception_chain_text(e),
+                )
+                try:
+                    if stale_proof_retry:
+                        await acorn_obj.repair_proofs()
+                    else:
+                        await acorn_obj.swap_multi_consolidate()
+                    msg_out, final_fees, payment_hash, payment_preimage, description_hash = await acorn_obj.pay_multi_invoice(
+                        invoice,
+                        comment=nwc_msg,
+                        tendered_amount=tendered_amount,
+                        tendered_currency=tendered_currency,
+                    )
+                    if zap_request_json and invoice:
+                        asyncio.create_task(send_zap_receipt(nostr=zap_request_json, lninvoice=invoice))
+                    logger.info(
+                        "op=nwc_pay_invoice status=retry_success strategy=%s",
+                        "repair" if stale_proof_retry else "swap",
+                    )
+                except Exception as retry_exc:
+                    print(f"Error {retry_exc}")
+                    response_json = {
+                        "result_type": "pay_invoice",
+                        "error": {
+                            "code": "PAYMENT_FAILED",
+                            "message": _friendly_payment_error(retry_exc),
+                        },
+                    }
+                    nwc_reply = True
+                else:
+                    response_json = {
+                                        "result_type": "pay_invoice",
+                                        "result": {
+                                            "preimage": payment_preimage, 
+                                            "fees_paid": final_fees * 1000
+                                            }
+                                    }
+                    nwc_reply = True
+            else:
+                print(f"Error {e}")
+                response_json = {
+                    "result_type": "pay_invoice",
+                    "error": {
+                        "code": "PAYMENT_FAILED",
+                        "message": _friendly_payment_error(e),
+                    },
+                }
+                nwc_reply = True
+        else:
+            response_json = {
+                                "result_type": "pay_invoice",
+                                "result": {
+                                    "preimage": payment_preimage, 
+                                    "fees_paid": final_fees * 1000
+                                    }
+                            }
+            nwc_reply = True
 
-        
-        response_json = {
-                            "result_type": "pay_invoice",
-                            "result": {
-                                "preimage": payment_preimage, 
-                                "fees_paid": final_fees * 1000
-                                }
-                        }
-
-       
-        nwc_reply = True
 
 
     elif instruction_obj['method'] == 'make_invoice':

@@ -37,6 +37,7 @@ from app.utils import ( create_jwt_token,
                         create_nembed_compressed,
                         sign_payload,
                         verify_payload,
+                        get_effective_request_scheme,
                         create_nfc_request_bind_payload,
                         create_record_request_bind_payload)
 
@@ -73,6 +74,16 @@ def generate_short_code(length: int = 12) -> str:
     return ''.join(random.choice(chars) for _ in range(length))
 
 router = APIRouter()
+
+
+def _build_public_request_url(request: Request, path: str) -> str:
+    scheme = get_effective_request_scheme(request)
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    host = forwarded_host or request.headers.get("host") or request.url.netloc or ""
+    if not host:
+        raise ValueError("Unable to determine public request host")
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{scheme}://{host}{normalized_path}"
 
 def _resolve_card_target_npub(token_secret: str) -> tuple[str, str]:
     """
@@ -463,7 +474,7 @@ async def ln_resolve(request: Request, response: Response, name: str = None, amo
     
 
 
-    ln_callback = f"https://{request.url.hostname}/lnpay/{name}"
+    ln_callback = _build_public_request_url(request, f"/lnpay/{name}")
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
         safeboxes = session.exec(statement)
@@ -507,7 +518,14 @@ async def ln_resolve(request: Request, response: Response, name: str = None, amo
 
     }
 
-    print(f"{request.base_url} nonce: {nonce}") 
+    logger.info(
+        "op=lnurlp_resolve status=ok handle=%s callback=%s allows_nostr=%s min_sendable=%s max_sendable=%s",
+        name,
+        ln_callback,
+        True,
+        min_sendable,
+        max_sendable,
+    )
 
     return ln_response
 
@@ -541,8 +559,20 @@ async def ln_pay( amount: float,
             ):
     match = False
     pr = None
+    is_zap_request = bool(nostr)
    
     sat_amount = int(amount//1000)
+
+    logger.info(
+        "op=lnpay status=start handle=%s amount_msat=%s nonce=%s safebox=%s lninvoice=%s zap=%s comment=%s",
+        name,
+        amount,
+        nonce,
+        safebox,
+        lninvoice,
+        is_zap_request,
+        comment,
+    )
 
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.handle ==name)
@@ -590,7 +620,7 @@ async def ln_pay( amount: float,
     
     
     # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
-    if safebox:
+    if safebox and not is_zap_request:
         pass
         
         print(f"don't bother creating an invoice because ecash and use nonce: {nonce}")
@@ -600,6 +630,14 @@ async def ln_pay( amount: float,
         cli_quote = await asyncio.to_thread(acorn_obj.deposit, amount=sat_amount, mint=HOME_MINT)
         pr = cli_quote.invoice 
         task = asyncio.create_task(handle_payment(acorn_obj=acorn_obj,cli_quote=cli_quote, amount=sat_amount, mint=HOME_MINT, nostr=nostr, comment=comment))
+
+    logger.info(
+        "op=lnpay status=prepared handle=%s zap=%s safebox=%s invoice_present=%s",
+        name,
+        is_zap_request,
+        safebox,
+        bool(pr),
+    )
    
     print(f"current balance is: {acorn_obj.balance}, home relay: {acorn_obj.home_relay}")
 
@@ -617,11 +655,21 @@ async def ln_pay( amount: float,
 
     
 
-    return  {   "pr": pr,
+    response_payload = {   "pr": pr,
                 "hash": None,
                 "routes": [],
                 "successAction": success_obj
-            } 
+            }
+
+    if is_zap_request and not pr:
+        logger.error(
+            "op=lnpay status=zap_missing_invoice handle=%s safebox=%s nonce=%s",
+            name,
+            safebox,
+            nonce,
+        )
+
+    return response_payload 
 
     
 
