@@ -4867,6 +4867,33 @@ class Acorn:
                     tendered_amount: float = None,
                     tendered_currency: str = "SAT"
                     ): 
+        def _should_restore_post_swap_wallet(exc: BaseException) -> bool:
+            text = str(exc).lower()
+            return (
+                "no_route" in text
+                or "lightning payment failed" in text
+                or '"code": 20004' in text
+                or "'code': 20004" in text
+            )
+
+        async def _restore_post_swap_wallet_state(
+            chosen_keyset: str,
+            proofs_from_keyset: List[Proof],
+            swapped_proofs: List[Proof],
+            keyset_proofs: dict,
+        ) -> None:
+            keyset_proofs[chosen_keyset] = list(proofs_from_keyset) + list(swapped_proofs)
+            restored_proofs: List[Proof] = []
+            for key in keyset_proofs:
+                for each_proof in keyset_proofs[key]:
+                    restored_proofs.append(each_proof)
+            self.proofs = restored_proofs
+            self.logger.warning(
+                "op=pay_multi status=restore_post_swap keyset=%s restored_proofs=%s",
+                chosen_keyset,
+                len(swapped_proofs),
+            )
+            await self.write_proofs()
                     
         
         # print("pay from multiple mints")
@@ -5170,6 +5197,13 @@ class Acorn:
                             response = await client.post(url=melt_url, json=data_to_send, headers=headers)
                             response.raise_for_status()
                     except httpx.HTTPError as e:
+                        if _should_restore_post_swap_wallet(e):
+                            await _restore_post_swap_wallet_state(
+                                chosen_keyset=chosen_keyset,
+                                proofs_from_keyset=proofs_from_keyset,
+                                swapped_proofs=proofs_remaining,
+                                keyset_proofs=keyset_proofs,
+                            )
                         raise RuntimeError(f"payment melt request failed: {e}") from e
                     
                     self.logger.debug(f"response json: {response.json()}")
@@ -5183,6 +5217,12 @@ class Acorn:
                         self.logger.info(f"Lightning payment ok")
                     else:
                         self.logger.info(f"lighting payment did no go through")
+                        await _restore_post_swap_wallet_state(
+                            chosen_keyset=chosen_keyset,
+                            proofs_from_keyset=proofs_from_keyset,
+                            swapped_proofs=proofs_remaining,
+                            keyset_proofs=keyset_proofs,
+                        )
                         raise RuntimeError(f"Lightning payment to {lnaddress} of amount {amount} sats did not go through! Please try again.")
                         # The following code is not necessary
                         # Add back in spend proofs
@@ -5342,6 +5382,34 @@ class Acorn:
                 f"{action} failed with HTTP {response.status_code}: {body_text or '<empty body>'}"
             )
 
+        def _should_restore_post_swap_wallet(exc: BaseException) -> bool:
+            text = str(exc).lower()
+            return (
+                "no_route" in text
+                or "lightning payment failed" in text
+                or '"code": 20004' in text
+                or "'code': 20004" in text
+            )
+
+        async def _restore_post_swap_wallet_state(
+            chosen_keyset: str,
+            proofs_from_keyset: List[Proof],
+            swapped_proofs: List[Proof],
+            keyset_proofs: dict,
+        ) -> None:
+            keyset_proofs[chosen_keyset] = list(proofs_from_keyset) + list(swapped_proofs)
+            restored_proofs: List[Proof] = []
+            for key in keyset_proofs:
+                for each_proof in keyset_proofs[key]:
+                    restored_proofs.append(each_proof)
+            self.proofs = restored_proofs
+            self.logger.warning(
+                "op=pay_multi_invoice status=restore_post_swap keyset=%s restored_proofs=%s",
+                chosen_keyset,
+                len(swapped_proofs),
+            )
+            await self.write_proofs()
+
         # decode amount from invoice
         try:
             await self.acquire_lock()
@@ -5494,10 +5562,20 @@ class Acorn:
             
             self.logger.debug(data_to_send)
             self.logger.debug("we are here!!!")
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(url=melt_url, json=data_to_send, headers=headers)
-                if response.is_error:
-                    raise _mint_error_with_body("melt request", response)
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url=melt_url, json=data_to_send, headers=headers)
+                    if response.is_error:
+                        raise _mint_error_with_body("melt request", response)
+            except RuntimeError as exc:
+                if _should_restore_post_swap_wallet(exc):
+                    await _restore_post_swap_wallet_state(
+                        chosen_keyset=chosen_keyset,
+                        proofs_from_keyset=proofs_from_keyset,
+                        swapped_proofs=proofs_remaining,
+                        keyset_proofs=keyset_proofs,
+                    )
+                raise
             self.logger.debug(response.json())  
             payment_json = response.json() 
             payment_preimage = payment_json.get('payment_preimage', None)            
@@ -5505,6 +5583,12 @@ class Acorn:
                     self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
             else:
                 self.logger.info(f"lighting payment did no go through")
+                await _restore_post_swap_wallet_state(
+                    chosen_keyset=chosen_keyset,
+                    proofs_from_keyset=proofs_from_keyset,
+                    swapped_proofs=proofs_remaining,
+                    keyset_proofs=keyset_proofs,
+                )
                 raise RuntimeError(f"Lightning payment not go through! Please try again.")
             # add keep proofs back into selected keyset proofs
             post_swap_keyset_proofs = proofs_from_keyset + keep_proofs
