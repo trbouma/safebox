@@ -1214,6 +1214,7 @@ async def listen_notes_connected(url):
     attempt = 0
     refresh_interval_seconds = max(5, int(settings.NWC_FILTER_REFRESH_SECONDS))
     subscribe_wait_seconds = max(1, int(settings.NWC_SUBSCRIBE_WAIT_SECONDS))
+    max_session_seconds = max(refresh_interval_seconds * 2, int(settings.NWC_MAX_SESSION_SECONDS))
     while True:
         c = Client(url)
         run_task = asyncio.create_task(c.run())
@@ -1221,6 +1222,7 @@ async def listen_notes_connected(url):
         try:
             await c.wait_connect(timeout=30)
             attempt = 0
+            session_started_at = asyncio.get_running_loop().time()
             logger.info("[%s] Connected and listening...", url)
 
             subscribed = False
@@ -1260,6 +1262,15 @@ async def listen_notes_connected(url):
                         url,
                         len(subscribed_pubkeys),
                         len(latest_pubkeys),
+                    )
+                    break
+
+                session_age = asyncio.get_running_loop().time() - session_started_at
+                if session_age >= max_session_seconds:
+                    logger.info(
+                        "[%s] NWC listener session aged out after %.1fs; reconnecting",
+                        url,
+                        session_age,
                     )
                     break
 

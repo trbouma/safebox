@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     NWC_RELAYS: List = ['wss://relay.getsafebox.app']
     NWC_FILTER_REFRESH_SECONDS: int = 15
     NWC_SUBSCRIBE_WAIT_SECONDS: int = 5
+    NWC_MAX_SESSION_SECONDS: int = 300
     NFC_REQUESTER_NONCE_TTL_SECONDS: int = 300
     NFC_REQUESTER_NONCE_RETENTION_SECONDS: int = 86400
     NFC_REQUESTER_SERVICE_ALLOWLIST: List[str] = []
