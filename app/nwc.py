@@ -2,6 +2,7 @@ import asyncio
 import logging
 import inspect
 import random
+from collections import defaultdict
 from monstr.relay.relay import Relay
 from monstr.event.persist_sqlite import RelaySQLiteEventStore
 from monstr.client.client import Client, ClientPool
@@ -56,6 +57,9 @@ config = ConfigWithFallback()
 RELAYS = settings.RELAYS
 TIMEDELTA_SECONDS = 60
 SERVICE_NWC_KEYS: Keys | None = Keys(config.NWC_NSEC) if config.NWC_NSEC else None
+NWC_SERIALIZED_METHODS = {"pay_invoice", "pay_ecash", "accept_ecash"}
+_nwc_account_queue_locks: dict[str, asyncio.Lock] = {}
+_nwc_account_queue_depths: defaultdict[str, int] = defaultdict(int)
 
 import asyncio
 import logging
@@ -103,6 +107,56 @@ def add_nwc_event_if_not_exists(event_id: str) -> bool:
         except IntegrityError:
             session.rollback()
             return False
+
+def _get_nwc_account_queue_lock(npub: str) -> asyncio.Lock:
+    lock = _nwc_account_queue_locks.get(npub)
+    if lock is None:
+        lock = asyncio.Lock()
+        _nwc_account_queue_locks[npub] = lock
+    return lock
+
+
+async def _run_nwc_serialized(
+    *,
+    npub: str,
+    handle: str,
+    method: str,
+    worker,
+):
+    lock = _get_nwc_account_queue_lock(npub)
+    _nwc_account_queue_depths[npub] += 1
+    depth = _nwc_account_queue_depths[npub]
+    if depth > 1 or lock.locked():
+        logger.info(
+            "op=nwc_queue status=queued npub=%s handle=%s method=%s depth=%s",
+            npub,
+            handle,
+            method,
+            depth,
+        )
+    try:
+        async with lock:
+            logger.info(
+                "op=nwc_queue status=start npub=%s handle=%s method=%s queued_ahead=%s",
+                npub,
+                handle,
+                method,
+                max(0, _nwc_account_queue_depths[npub] - 1),
+            )
+            return await worker()
+    finally:
+        remaining = max(0, _nwc_account_queue_depths[npub] - 1)
+        if remaining:
+            _nwc_account_queue_depths[npub] = remaining
+        else:
+            _nwc_account_queue_depths.pop(npub, None)
+        logger.info(
+            "op=nwc_queue status=done npub=%s handle=%s method=%s remaining=%s",
+            npub,
+            handle,
+            method,
+            remaining,
+        )
 
 def nwc_db_lookup_safebox(npub: str) -> RegisteredSafebox:
    
@@ -1152,14 +1206,33 @@ def my_handler(the_client: Client, sub_id: str, evt: Event):
                 decryptor = NIP4Encrypt(key=Keys(priv_k=decrypt_key))
                 decrypt_event = decryptor.decrypt_event(evt=evt)
                 pay_instruction = json.loads(decrypt_event.content)
-                asyncio.create_task(
-                    nwc_handle_instruction(
-                        safebox_found,
-                        pay_instruction,
-                        evt,
-                        nwc_secret=decrypt_key,
+                method = str(pay_instruction.get("method") or "").strip()
+                if method in NWC_SERIALIZED_METHODS:
+                    async def queued_worker():
+                        return await nwc_handle_instruction(
+                            safebox_found,
+                            pay_instruction,
+                            evt,
+                            nwc_secret=decrypt_key,
+                        )
+
+                    asyncio.create_task(
+                        _run_nwc_serialized(
+                            npub=safebox_npub,
+                            handle=str(safebox_found.handle or ""),
+                            method=method,
+                            worker=queued_worker,
+                        )
                     )
-                )
+                else:
+                    asyncio.create_task(
+                        nwc_handle_instruction(
+                            safebox_found,
+                            pay_instruction,
+                            evt,
+                            nwc_secret=decrypt_key,
+                        )
+                    )
             else:
                 print('no wallet on file')
             
