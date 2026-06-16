@@ -1,5 +1,5 @@
 from fastapi import Request, APIRouter, Depends, Response, Form, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 
@@ -77,6 +77,11 @@ router = APIRouter()
 
 
 def _build_public_request_url(request: Request, path: str) -> str:
+    public_base_url = (settings.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if public_base_url:
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return f"{public_base_url}{normalized_path}"
+
     scheme = get_effective_request_scheme(request)
     forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
     host = forwarded_host or request.headers.get("host") or request.url.netloc or ""
@@ -84,6 +89,14 @@ def _build_public_request_url(request: Request, path: str) -> str:
         raise ValueError("Unable to determine public request host")
     normalized_path = path if path.startswith("/") else f"/{path}"
     return f"{scheme}://{host}{normalized_path}"
+
+
+def _apply_lnurl_cors(response: Response) -> None:
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
+    )
 
 def _resolve_card_target_npub(token_secret: str) -> tuple[str, str]:
     """
@@ -433,9 +446,7 @@ def get_info_post(request: Request):
 
 @router.get("/.well-known/lnurlp/{name}")
 async def ln_resolve(request: Request, response: Response, name: str = None, amount: int = None):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
+    _apply_lnurl_cors(response)
 
     match = False
     ln_payment_request = False
@@ -527,11 +538,24 @@ async def ln_resolve(request: Request, response: Response, name: str = None, amo
         max_sendable,
     )
 
-    return ln_response
+    return JSONResponse(content=ln_response, headers=dict(response.headers))
 
 
 @router.options("/.well-known/lnurlp/{name}")
 async def ln_resolve_options(name: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent",
+            "Access-Control-Max-Age": "600",
+        },
+    )
+
+
+@router.options("/lnpay/{name}")
+async def ln_pay_options(name: str):
     return Response(
         status_code=200,
         headers={
@@ -557,6 +581,11 @@ async def ln_pay( amount: float,
 
             
             ):
+    response_headers: dict[str, str] = {}
+    cors_response = Response()
+    _apply_lnurl_cors(cors_response)
+    response_headers.update(cors_response.headers)
+
     match = False
     pr = None
     is_zap_request = bool(nostr)
@@ -669,7 +698,7 @@ async def ln_pay( amount: float,
             nonce,
         )
 
-    return response_payload 
+    return JSONResponse(content=response_payload, headers=response_headers)
 
     
 

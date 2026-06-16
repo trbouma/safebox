@@ -44,6 +44,7 @@ def _default_secret_file(name: str) -> str:
 
 class Settings(BaseSettings):
     APP_ENV: str = "development"
+    PUBLIC_BASE_URL: str | None = None
     HOME_RELAY: str = 'wss://relay.getsafebox.app'
     HOME_MINT: str= 'https://mint.getsafebox.app'      
     SERVICE_NAME: str = 'Safebox'
