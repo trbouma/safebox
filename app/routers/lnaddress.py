@@ -635,12 +635,12 @@ async def ln_pay( amount: float,
        
         acorn_obj = Acorn(nsec=config.SERVICE_NSEC, relays=RELAYS, mints=MINTS, home_relay=settings.HOME_RELAY, logging_level=settings.LOGGING_LEVEL)
         await acorn_obj.load_data(force_profile_creation=True)
-        message = "Payment being sent as a non-custodial payment..."
+        payer_message = "Payment being sent as a non-custodial payment..."
     
     else:
         acorn_obj = Acorn(nsec=safebox_found.nsec, relays=RELAYS, mints=MINTS, home_relay=safebox_found.home_relay, logging_level=LOGGING_LEVEL)
         await acorn_obj.load_data()
-        message = f"Payment being sent to {name}@{request.url.hostname}"
+        payer_message = f"Payment sent to {name}@{request.url.hostname}"
     
     
     # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
@@ -674,13 +674,19 @@ async def ln_pay( amount: float,
     if safebox_found.owner:
         pass
         print("safebox has an owner!")
-        message = f"You just received {sat_amount} sats! Comment: {comment}"
-        task = asyncio.create_task(send_payment_message(nrecipient=safebox_found.owner, acorn_obj=acorn_obj, message=message))
+        owner_message = f"You just received {sat_amount} sats! Comment: {comment}"
+        task = asyncio.create_task(
+            send_payment_message(
+                nrecipient=safebox_found.owner,
+                acorn_obj=acorn_obj,
+                message=owner_message,
+            )
+        )
 
    
 
     success_obj = {     "tag": "message",
-                            "message" : message  }
+                            "message" : payer_message  }
 
     
 
