@@ -583,6 +583,7 @@ async def ln_pay( amount: float,
     match = False
     pr = None
     is_zap_request = bool(nostr)
+    use_safebox_ecash = bool(safebox and nonce and not is_zap_request)
    
     sat_amount = int(amount//1000)
 
@@ -643,9 +644,14 @@ async def ln_pay( amount: float,
     
     
     # If the payer can pay via safebox, they make this as true and know which ecash relays to listen
-    if safebox and not is_zap_request:
-        pass
-        
+    if safebox and not nonce and not is_zap_request:
+        logger.warning(
+            "op=lnpay status=ignore_safebox_without_nonce handle=%s amount_msat=%s",
+            name,
+            amount,
+        )
+
+    if use_safebox_ecash:
         print(f"don't bother creating an invoice because ecash and use nonce: {nonce}")
         pr = None
         task1 = asyncio.create_task(handle_ecash(acorn_obj, relays=settings.ECASH_RELAYS,nonce=nonce) ) 
