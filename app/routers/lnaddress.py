@@ -91,12 +91,14 @@ def _build_public_request_url(request: Request, path: str) -> str:
     return f"{scheme}://{host}{normalized_path}"
 
 
-def _apply_lnurl_cors(response: Response) -> None:
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = (
-        "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
-    )
+def _lnurl_cors_headers() -> dict[str, str]:
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": (
+            "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent"
+        ),
+    }
 
 def _resolve_card_target_npub(token_secret: str) -> tuple[str, str]:
     """
@@ -446,7 +448,7 @@ def get_info_post(request: Request):
 
 @router.get("/.well-known/lnurlp/{name}")
 async def ln_resolve(request: Request, response: Response, name: str = None, amount: int = None):
-    _apply_lnurl_cors(response)
+    response.headers.update(_lnurl_cors_headers())
 
     match = False
     ln_payment_request = False
@@ -538,7 +540,7 @@ async def ln_resolve(request: Request, response: Response, name: str = None, amo
         max_sendable,
     )
 
-    return JSONResponse(content=ln_response, headers=dict(response.headers))
+    return JSONResponse(content=ln_response, headers=_lnurl_cors_headers())
 
 
 @router.options("/.well-known/lnurlp/{name}")
@@ -558,12 +560,7 @@ async def ln_resolve_options(name: str):
 async def ln_pay_options(name: str):
     return Response(
         status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, X-Access-Key, Authorization, Accept, Origin, User-Agent",
-            "Access-Control-Max-Age": "600",
-        },
+        headers={**_lnurl_cors_headers(), "Access-Control-Max-Age": "600"},
     )
 
 @router.get("/lnpay/{name}")
@@ -581,10 +578,7 @@ async def ln_pay( amount: float,
 
             
             ):
-    response_headers: dict[str, str] = {}
-    cors_response = Response()
-    _apply_lnurl_cors(cors_response)
-    response_headers.update(cors_response.headers)
+    response_headers = _lnurl_cors_headers()
 
     match = False
     pr = None
