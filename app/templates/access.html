@@ -781,6 +781,7 @@ function getCreateInvoiceStatus(ln_invoice_status) {
     const img_qr_display_pic = document.getElementById("img_qr_display");
     const parsedObject = JSON.parse(JSON.stringify(ln_invoice_status));
     console.log(ln_invoice_status);
+    resetPaymentSuccessState();
 
     var status = JSON.stringify(ln_invoice_status["status"]);
     var invoice = JSON.stringify(ln_invoice_status["invoice"]);
@@ -838,6 +839,7 @@ function consoleLog(data) {
 
   let nfcSuccessCelebrating = false;
   let paymentSuccessCelebrating = false;
+  let paymentSuccessHandled = false;
   let nfcPaymentPending = false;
   let nfcSettlementWatchTimer = null;
   let nfcSettlementWatchDeadline = 0;
@@ -858,6 +860,11 @@ function consoleLog(data) {
       paymentSettlementWatchTimer = null;
     }
     paymentSettlementWatchDeadline = 0;
+  }
+
+  function resetPaymentSuccessState() {
+    paymentSuccessCelebrating = false;
+    paymentSuccessHandled = false;
   }
 
   function startNfcSettlementWatch(baselineBalance) {
@@ -906,6 +913,7 @@ function consoleLog(data) {
 
   function startPaymentSettlementWatch(baselineBalance) {
     stopPaymentSettlementWatch();
+    resetPaymentSuccessState();
     const baseline = Number(baselineBalance);
     if (!Number.isFinite(baseline)) return;
 
@@ -1025,7 +1033,8 @@ function consoleLog(data) {
   }
 
   function celebratePayment(detailMessage) {
-    if (paymentSuccessCelebrating) return;
+    if (paymentSuccessHandled || paymentSuccessCelebrating) return;
+    paymentSuccessHandled = true;
     paymentSuccessCelebrating = true;
     userMessage(detailMessage || "Payment complete.", "SENT");
     document.getElementById("img_qr_display").src = "/img/green-check.png";
@@ -1533,6 +1542,7 @@ async function lnPayAddress() {
     return;
 
   }
+  resetPaymentSuccessState();
   
   var old_text = pay_button.textContent;
   pay_button.textContent = "Paying now. Please wait...";

@@ -43,8 +43,13 @@ In `safebox/lightning.py` (`lightning_address_pay`), it reads:
 
 Decision in `safebox/acorn.py` (`Acorn.pay_multi`):
 
-- `safebox == True` -> use Cashu + secure transmittal
+- `safebox == True` and `nonce` present -> use Cashu + secure transmittal
 - otherwise -> pay Lightning invoice via Cashu melt
+
+This is intentionally fail-safe. Public LNURL clients may reflect custom query
+parameters differently, so the receiver callback only activates the Safebox
+ecash lane when a valid `nonce` is present. If `safebox=true` arrives without a
+nonce, the server falls back to standard LNURL invoice generation.
 
 ## Flow A: Safebox-to-Safebox Payment (Cashu over Secure Messaging)
 
@@ -57,6 +62,10 @@ Sender API path:
 ### 2. Recipient advertises Safebox capability
 
 Recipient LNURL metadata includes `safebox: true` and `nonce`.
+
+The `nonce` is required to bind the internal Safebox payment session. The
+presence of `safebox: true` alone is not sufficient to switch the callback into
+ecash delivery mode.
 
 ### 3. Sender mints ecash token
 
@@ -87,7 +96,7 @@ This uses gift-wrapped encrypted messaging to the recipient npub via configured 
 
 ### 6. Recipient listens and redeems token
 
-On recipient side (`/lnpay/{name}` with `safebox=true`):
+On recipient side (`/lnpay/{name}` with `safebox=true` and valid `nonce`):
 
 - no Lightning invoice is created (`pr = None`)
 - background `handle_ecash(...)` polls `get_ecash_latest(...)`
@@ -98,11 +107,16 @@ Result: value transfer happened peer-to-peer using ecash transmittal while prese
 
 ## Flow B: Automatic Fallback to Standard Lightning
 
-If recipient is not Safebox-capable (`safebox` absent/false):
+If recipient is not Safebox-capable, or if the callback does not include a
+valid Safebox payment nonce:
 
 ### 1. Sender receives standard LNURL callback invoice (`pr`)
 
 `Acorn.pay_multi(...)` gets invoice via `lightning_address_pay(...)`.
+
+This fallback also covers interoperability cases where an external Lightning
+wallet preserves custom LNURL fields such as `safebox=true` but does not supply
+the Safebox `nonce` expected for internal ecash delivery.
 
 ### 2. Sender pays invoice using Cashu melt
 
@@ -140,6 +154,8 @@ No Safebox-specific secure ecash messaging is required.
 - `nonce` is included to correlate expected payment sessions and reduce replay/confusion.
 - Payloads are encoded in `nembed` for robust transport across QR/NFC/text channels.
 - Fallback keeps compatibility with the broader Lightning ecosystem when Safebox features are unavailable.
+- Public LNURL endpoints MUST fail closed to ordinary invoice mode when Safebox
+  callback state is incomplete or ambiguous.
 
 ## Error Handling and Resilience Requirements
 

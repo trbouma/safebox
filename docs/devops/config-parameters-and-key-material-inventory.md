@@ -55,6 +55,7 @@ The following defaults are defined in `Settings` (`app/config.py`).
 
 ### Relay, Mint, and Network
 
+- `PUBLIC_BASE_URL`: `None`
 - `HOME_RELAY`: `"wss://relay.getsafebox.app"`
 - `HOME_MINT`: `"https://mint.getsafebox.app"`
 - `RELAYS`: `["wss://relay.getsafebox.app"]`
@@ -66,6 +67,12 @@ The following defaults are defined in `Settings` (`app/config.py`).
 - `DM_RELAYS`: `["wss://relay.getsafebox.app"]`
 - `WOT_RELAYS`: `["wss://wotr.relatr.xyz","wss://nip85.brainstorm.world"]`
 - `LOCAL_RELAY_PORT`: `8735`
+
+`PUBLIC_BASE_URL` is optional, but recommended in production when Safebox is
+running behind a reverse proxy or ingress. When set, public LNURL endpoints use
+this canonical origin when generating callback URLs instead of relying on
+forwarded request headers. This helps avoid wallet interoperability problems
+caused by mismatched host or scheme forwarding.
 
 ### Protocol and Kinds
 
