@@ -63,6 +63,8 @@ def _is_proof_rejection_or_swap_recommended(exc: Exception) -> bool:
     often recovers the wallet state.
     """
     msg = _exception_chain_text(exc).lower()
+    if _is_lightning_route_failure(exc):
+        return False
     markers = [
         "proof",
         "already spent",
@@ -71,7 +73,23 @@ def _is_proof_rejection_or_swap_recommended(exc: Exception) -> bool:
         "you need to swap",
         "insufficient balance in any one keyset",
         "keyset",
-        "melt request failed",
+    ]
+    return any(marker in msg for marker in markers)
+
+
+def _is_lightning_route_failure(exc: Exception) -> bool:
+    """
+    Detect external Lightning routing failures that should fail cleanly without
+    attempting proof repair or swap-based retry.
+    """
+    msg = _exception_chain_text(exc).lower()
+    markers = [
+        "no_route",
+        "no route",
+        '"code": 20004',
+        "'code': 20004",
+        "lightning payment failed: no_route",
+        "lightning payment unsuccessful. no_route",
     ]
     return any(marker in msg for marker in markers)
 
@@ -102,6 +120,12 @@ def _friendly_payment_error(exc: Exception) -> str:
         return (
             "Payment could not proceed because the wallet contains stale proofs. "
             "Run Repair Proofs, then try the payment again."
+        )
+
+    if _is_lightning_route_failure(exc):
+        return (
+            "Payment failed because the Lightning node could not find a route. "
+            "No payment was sent."
         )
 
     text = str(exc).strip()
