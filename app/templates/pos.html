@@ -382,6 +382,25 @@
 
     memoInputEl.value = "Paid from POS";
 
+    async function fetchJson(url, options = {}, fallbackMessage = "Request failed.") {
+      const response = await fetch(url, options);
+      const contentType = response.headers.get("content-type") || "";
+      let data;
+
+      if (contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = text ? { detail: text } : {};
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.detail || data?.message || `${fallbackMessage} HTTP ${response.status}`);
+      }
+
+      return data;
+    }
+
     function setStatus(message, type = "info") {
       const safeMessage = String(message || "");
       const pillMessage = safeMessage.length > 48 ? `${safeMessage.slice(0, 45)}...` : safeMessage;
@@ -497,9 +516,7 @@
           return;
         }
         try {
-          const response = await fetch("/safebox/poll");
-          if (!response.ok) return;
-          const data = await response.json();
+          const data = await fetchJson("/safebox/poll");
           const balance = Number(data.balance);
           if (Number.isFinite(balance)) {
             walletBalanceSats = balance;
@@ -508,22 +525,18 @@
             }
           }
         } catch {
-          // best-effort fallback; ignore transient errors
         }
       }, 2000);
     }
 
     async function hydrateBalanceBaseline() {
       try {
-        const response = await fetch("/safebox/poll");
-        if (!response.ok) return;
-        const data = await response.json();
+        const data = await fetchJson("/safebox/poll");
         const balance = Number(data.balance);
         if (Number.isFinite(balance)) {
           walletBalanceSats = balance;
         }
       } catch {
-        // best effort only
       }
     }
 
@@ -605,7 +618,7 @@
         return;
       }
       try {
-        const response = await fetch("/pos/invoice", {
+        const data = await fetchJson("/pos/invoice", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -613,11 +626,7 @@
             currency: POS_CURRENCY,
             comment: buildTenderedComment(total)
           })
-        });
-        if (!response.ok) {
-          throw new Error(`Invoice request failed (${response.status})`);
-        }
-        const data = await response.json();
+        }, "Invoice request failed.");
         if (!data.invoice) {
           throw new Error("No invoice returned.");
         }
@@ -770,13 +779,11 @@
             markInvoicePaid();
             return;
           }
-          // Fallback path: if notify channel is delayed/missed, settle NFC UI on balance delta.
           if (nfcPaymentPending && (payload.status === "RECD" || payload.status === "SENT")) {
             markNfcPaymentSuccess("NFC payment settled.");
             return;
           }
         } catch {
-          // ignore non-json frames
         }
       };
 
@@ -817,7 +824,6 @@
             setStatus(detail || "NFC payment failed.", "error");
           }
         } catch {
-          // ignore non-json frames
         }
       };
 

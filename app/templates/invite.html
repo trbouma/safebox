@@ -117,18 +117,18 @@
 </style>
 
 <script>
-async function backToWallet() {
+function backToWallet() {
   window.location.href = "/safebox/access";
 }
 
 async function copyInviteLink() {
   const inviteUrl = `${window.location.origin}/friend/{{onboard_code}}`;
-  const status = document.getElementById("copy_status");
+  const statusEl = document.getElementById("copy_status");
   try {
     await navigator.clipboard.writeText(inviteUrl);
-    if (status) status.textContent = "Invite link copied.";
+    if (statusEl) statusEl.textContent = "Invite link copied.";
   } catch (error) {
-    if (status) status.textContent = inviteUrl;
+    if (statusEl) statusEl.textContent = inviteUrl;
   }
 }
 </script>
