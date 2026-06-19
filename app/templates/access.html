@@ -104,6 +104,7 @@
   .center-text textarea,
   .center-text select,
   .center-text button,
+  .center-text .action-button,
   #pay_to_message,
   #npub,
   #payment_notification,
@@ -134,7 +135,8 @@
     border-color: var(--sb-brand-blue-1);
   }
 
-  button {
+  button,
+  .action-button {
     background: linear-gradient(135deg, var(--sb-brand-blue-1), var(--sb-brand-blue-2));
     color: #ffffff;
     border: 0;
@@ -149,15 +151,19 @@
     padding: 12px 14px;
     box-shadow: 0 10px 20px rgba(8, 12, 28, 0.26);
     transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    text-decoration: none;
+    text-align: center;
   }
 
-  button:hover {
+  button:hover,
+  .action-button:hover {
     filter: brightness(1.04);
     transform: translateY(-1px);
     box-shadow: 0 14px 24px rgba(8, 12, 28, 0.32);
   }
 
-  button:active {
+  button:active,
+  .action-button:active {
     transform: translateY(0);
     box-shadow: 0 8px 16px rgba(8, 12, 28, 0.24);
   }
@@ -210,19 +216,23 @@
     margin-top: 4px;
   }
 
-  .center-text button + br {
+  .center-text button + br,
+  .center-text .action-button + br {
     margin-top: 0;
   }
 
-  .center-text br + button {
+  .center-text br + button,
+  .center-text br + .action-button {
     margin-top: 4px;
   }
 
-  .center-text button + br + br {
+  .center-text button + br + br,
+  .center-text .action-button + br + br {
     margin-top: 0;
   }
 
-  .center-text button + br + br + button {
+  .center-text button + br + br + button,
+  .center-text .action-button + br + br + .action-button {
     margin-top: 4px;
   }
 
@@ -240,7 +250,8 @@
     margin-right: auto;
   }
 
-  .btn-stack button {
+  .btn-stack button,
+  .btn-stack .action-button {
     margin-top: 0 !important;
   }
 
@@ -453,10 +464,18 @@
     revealBalance: true,
     startingBalance: {{acorn.balance}},
     onboard: "{{onboard}}",
+    accessViewState: "{{access_view_state}}",
     actionMode: "{{action_mode}}",
     actionData: "{{action_data}}",
     actionAmount: "{{action_amount if action_amount is not none else ''}}",
     actionComment: "{{action_comment if action_comment else ''}}",
+    invoiceAmountless: {{ "true" if invoice_amountless else "false" }},
+    invoiceSummaryText: "{{invoice_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
+    paymentSummaryText: "{{payment_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
+    paymentButtonText: "{{payment_button_text|default('Send Payment', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
+    ecashSummaryText: "{{ecash_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
+    noticeStatus: "{{notice_status if notice_status else ''}}",
+    noticeMessage: "{{notice_message|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
     resetToHomeScheduled: false,
     currentSatsBalanceText: "({{ "\u20BF" + "{:,}".format(acorn.balance)}})",
     currentFiatBalanceText: "{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}",
@@ -474,61 +493,8 @@
     }, delayMs);
   }
 
-  async function getEcashStatus(data) {
-    const status = data?.status || "INFO";
-    const detail = data?.detail || "Ecash token processed.";
-    userMessage(detail, status);
-    window.location.href = "/safebox/access";
-  }
-
-  if (pageState.actionMode === "ecash") {
-    const submit_data = {"ecash_token": pageState.actionData };
-     fetchJson('/safebox/acceptecash', {
-           method: "POST",
-           headers: {"Content-Type": "application/json"},        
-           body: JSON.stringify(submit_data)         
-           }, "Ecash token processing failed.")
-         .then((data) => getEcashStatus(data))
-         .catch((error) => userMessage(error.message || "Ecash token processing failed.", "ERROR"));
-  }
-
-
-  async function attest() {
-
-  window.location.href="/safebox/attest/";
-
-  } 
-
-    async function trust() {
-
-  window.location.href="/safebox/trust/";
-
-  } 
-
-async function logout() {
-  await fetch('/safebox/logout', {
-        method: "GET",
-        headers: {"Content-Type": "application/json"}        
-               
-       })
-  window.location.href="/";
-}
-
 async function scanCode() {
 window.location.href="/scanner/scan/?wallet_name={{acorn.handle}}";
-}
-
-async function dangerZone() {
-
-
-window.location.href="/safebox/dangerzone/";
-
-}
-async function issueCard() {
-
-
-window.location.href="/safebox/issuecard/";
-
 }
 
 function revealBalance() {
@@ -576,73 +542,6 @@ function revealSeedPhrase() {
         pageState.revealAccessKey = false;
     }
   } 
-
-  
-
-function receivePayment() {
-  window.location.href="/safebox/profile/{{acorn.handle}}";
-}
-
-function onboardFriend() {
-  window.location.href="/invite?onboard_code={{acorn.handle}}";
-}
-
-async function privateData() {
-
-window.location.href="/safebox/privatedata";
-}
-
-async function personalMessages() {
-
-window.location.href="/safebox/personalmessages";
-}
-
-async function myRecords() {
-
-
-window.location.href="/records/grantlist";
-
-}
-
-
-
-async function requestRecord() {
-
-window.location.href="/records/request";
-}
-
-async function myEcash() {
-
-window.location.href="/safebox/ecash";
-}
-async function doOfferRecord() {
-
-window.location.href="/records/offerlist";
-
-}
-
-async function payOrPass() {
-
-    window.location.href="/public/paypass";
-  
-}
-
-async function doVerifyCredential() {
-window.location.href="/records/verificationrequest";
-}
-
-async function myHealthData() {
-
-window.location.href="/safebox/health";
-
-}
-
-async function doAccountHistory() {
-
-window.location.href="/safebox/txhistory";
-
-}
-
 async function copytoClipboard() {
 
 await navigator.clipboard.writeText(pageState.clipboardData);
@@ -731,6 +630,7 @@ function getCreateInvoiceStatus(ln_invoice_status) {
     img_qr_display_pic.removeEventListener("click", copyAddress);
     img_qr_display_pic.addEventListener("click", copyInvoicetoClipoboard);
     create_invoice_button.textContent = "Invoice Created! ";
+    userMessage("Invoice created. Waiting for incoming Lightning payment...", "INFO");
     window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -748,6 +648,24 @@ function userMessage(data, status="INFO"){
     logElement.textContent = data;
    
   };
+
+  async function syncStartingBalanceFromPoll(fiatBalance = null) {
+    try {
+      const response = await fetch('/safebox/poll');
+      const data = await response.json();
+      const polledBalance = Number(data?.balance);
+      const resolvedFiatBalance = data?.fiat_balance ?? fiatBalance;
+      if (Number.isFinite(polledBalance)) {
+        setBalanceDisplay(polledBalance, resolvedFiatBalance);
+        markBalanceUpdated();
+        pageState.startingBalance = polledBalance;
+        return { balance: polledBalance, fiatBalance: resolvedFiatBalance };
+      }
+    } catch (error) {
+      consoleLog(`Starting balance sync failed: ${error}`);
+    }
+    return null;
+  }
 
   async function fetchJson(url, options = {}, fallbackMessage = "Request failed.") {
     const response = await fetch(url, options);
@@ -797,6 +715,9 @@ function userMessage(data, status="INFO"){
   let nfcSettlementWatchDeadline = 0;
   let paymentSettlementWatchTimer = null;
   let paymentSettlementWatchDeadline = 0;
+  let inboundSettlementWatchTimer = null;
+  let inboundSettlementWatchDeadline = 0;
+  let inboundReceiptPending = false;
 
   function stopNfcSettlementWatch() {
     if (nfcSettlementWatchTimer) {
@@ -814,9 +735,19 @@ function userMessage(data, status="INFO"){
     paymentSettlementWatchDeadline = 0;
   }
 
+  function stopInboundSettlementWatch() {
+    if (inboundSettlementWatchTimer) {
+      clearInterval(inboundSettlementWatchTimer);
+      inboundSettlementWatchTimer = null;
+    }
+    inboundSettlementWatchDeadline = 0;
+    inboundReceiptPending = false;
+  }
+
   function resetPaymentSuccessState() {
     paymentSuccessCelebrating = false;
     paymentSuccessHandled = false;
+    stopInboundSettlementWatch();
   }
 
   function setBalanceDisplay(balance, fiatBalance = null) {
@@ -843,20 +774,9 @@ function userMessage(data, status="INFO"){
     notificationEl.textContent = message || "";
   }
 
-  function finalizeInvoicePaidUi(imgEl) {
-    document.body.style.backgroundColor = "#173627";
-    if (imgEl) imgEl.src = "/img/green-check.png";
-    setPaymentNotification("Invoice Paid!");
-    clearRequestPaymentFields();
-    pageState.uxMode = "init";
-  }
-
   function updateBalanceDeltaUi(newBalance, imgEl) {
     if (newBalance > pageState.startingBalance) {
       setPaymentNotification(`Net balance of ${newBalance - pageState.startingBalance} sats received!`);
-      if (pageState.uxMode === "wait_invoice") {
-        finalizeInvoicePaidUi(imgEl);
-      }
       return;
     }
 
@@ -875,6 +795,7 @@ function userMessage(data, status="INFO"){
   function handleOutboundPaymentSettled(detailMessage, reloadDelayMs = 1200) {
     stopPaymentSettlementWatch();
     stopNfcSettlementWatch();
+    stopInboundSettlementWatch();
     celebratePayment(detailMessage);
     if (!pageState.resetToHomeScheduled) {
       scheduleAccessReload(reloadDelayMs);
@@ -885,6 +806,24 @@ function userMessage(data, status="INFO"){
     if (!paymentSuccessHandled) {
       startPaymentSettlementWatch(pageState.startingBalance);
     }
+  }
+
+  function completeInboundPayment(detailMessage, confirmedBalance) {
+    stopInboundSettlementWatch();
+    checkBalance(confirmedBalance, pageState.currentFiatBalanceText);
+    if (pageState.uxMode === "wait_invoice") {
+      clearRequestPaymentFields();
+      pageState.uxMode = "init";
+    }
+    celebratePayment(detailMessage || "Payment confirmed.");
+  }
+
+  function scheduleInboundCompletion(detailMessage, confirmedBalance, delayMs = 700) {
+    setPaymentNotification("Incoming payment detected. Waiting for settlement...");
+    window.setTimeout(() => {
+      if (paymentSuccessHandled) return;
+      completeInboundPayment(detailMessage, confirmedBalance);
+    }, delayMs);
   }
 
   function startNfcSettlementWatch(baselineBalance) {
@@ -911,9 +850,8 @@ function userMessage(data, status="INFO"){
         if (polledBalance < baseline) {
           debugNfcFlow("poll detected NFC settlement", { baseline, polledBalance });
           stopNfcSettlementWatch();
-          checkBalance(polledBalance);
+          checkBalance(polledBalance, data?.fiat_balance);
           celebrateNfcPayment("NFC payment confirmed.");
-          scheduleAccessReload(1200);
           return;
         }
 
@@ -951,7 +889,7 @@ function userMessage(data, status="INFO"){
 
         if (polledBalance < baseline) {
           stopPaymentSettlementWatch();
-          checkBalance(polledBalance);
+          checkBalance(polledBalance, data?.fiat_balance);
           celebratePayment("Payment confirmed.");
           scheduleAccessReload(1200);
           return;
@@ -969,6 +907,38 @@ function userMessage(data, status="INFO"){
     }, 2000);
   }
 
+  function startInboundSettlementWatch(baselineBalance, detailMessage, fiatBalance = null) {
+    stopInboundSettlementWatch();
+    const baseline = Number(baselineBalance);
+    if (!Number.isFinite(baseline)) return;
+    inboundReceiptPending = true;
+
+    inboundSettlementWatchDeadline = Date.now() + 10000;
+    inboundSettlementWatchTimer = setInterval(async () => {
+      try {
+        const refreshed = await refreshBalanceFromPoll(fiatBalance);
+        if (refreshed && Number.isFinite(refreshed.balance) && refreshed.balance > baseline) {
+          checkBalance(refreshed.balance, refreshed.fiatBalance);
+          if (pageState.uxMode === "wait_invoice") {
+            clearRequestPaymentFields();
+            pageState.uxMode = "init";
+          }
+          celebratePayment(detailMessage || "Payment confirmed.");
+          return;
+        }
+
+        if (Date.now() > inboundSettlementWatchDeadline) {
+          stopInboundSettlementWatch();
+          userMessage("Payment notification received. Balance update is still settling.", "INFO");
+        }
+      } catch (error) {
+        if (Date.now() > inboundSettlementWatchDeadline) {
+          stopInboundSettlementWatch();
+        }
+      }
+    }, 1000);
+  }
+
   function celebrateSuccess() {
     const flashEl = document.getElementById("successFlash");
     const canvasEl = document.getElementById("confettiCanvas");
@@ -977,9 +947,7 @@ function userMessage(data, status="INFO"){
     if (!ctx) return;
 
     flashEl.classList.add("show");
-    setTimeout(() => flashEl.classList.remove("show"), 160);
-    setTimeout(() => flashEl.classList.add("show"), 220);
-    setTimeout(() => flashEl.classList.remove("show"), 420);
+    setTimeout(() => flashEl.classList.remove("show"), 220);
 
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -1278,9 +1246,11 @@ async function requestPayment() {
       headers: {"Content-Type": "application/json"},        
       body: JSON.stringify(submit_data)         
     }, "Invoice request failed.");
+    await syncStartingBalanceFromPoll();
     getCreateInvoiceStatus(data);
     invoiceCreated = true;
     pageState.uxMode = "wait_invoice";
+    userMessage("Invoice created. Waiting for incoming Lightning payment...", "INFO");
   } catch (error) {
     userMessage(error.message || "Invoice request failed. Please try again.", "ERROR");
   } finally {
@@ -1299,12 +1269,12 @@ function clearRequestPaymentFields() {
   if (memoEl) memoEl.value = "";
   if (nfcEl) nfcEl.checked = false;
 }
-function checkBalance(balance) {
+function checkBalance(balance, fiatBalance = null) {
   const img_qr_display_pic = document.getElementById("img_qr_display");
   const new_balance = Number.parseInt(JSON.stringify(balance), 10);
   updateBalanceDeltaUi(new_balance, img_qr_display_pic);
   
-  setBalanceDisplay(new_balance);
+  setBalanceDisplay(new_balance, fiatBalance);
   markBalanceUpdated();
   pageState.startingBalance = new_balance;
 }
@@ -1312,28 +1282,54 @@ function checkBalance(balance) {
 async function pollPayment() {
   const response = await fetch('/safebox/poll');
   const data = await response.json();
-  checkBalance(data.balance);
+  checkBalance(data.balance, data.fiat_balance);
+}
+
+async function refreshBalanceFromPoll(fiatBalance = null) {
+  try {
+    const response = await fetch('/safebox/poll');
+    const data = await response.json();
+    const polledBalance = Number(data?.balance);
+    const resolvedFiatBalance = data?.fiat_balance ?? fiatBalance;
+    if (Number.isFinite(polledBalance)) {
+      setBalanceDisplay(polledBalance, resolvedFiatBalance);
+      markBalanceUpdated();
+      return { balance: polledBalance, fiatBalance: resolvedFiatBalance };
+    }
+  } catch (error) {
+    consoleLog(`Balance refresh failed: ${error}`);
+  }
+  return null;
 }
 
 
 function setActions(local_action_mode,local_action_data) {
+  const paymentSummary = document.getElementById("make_payment_summary");
+  const recipientAddress = document.getElementById("ln_recipient_address");
+  const payButton = document.getElementById("ln_pay_button");
+  const ecashPanel = document.getElementById("ecash_accept_panel");
   if (local_action_mode === "lnaddress"){
-      const input_1 = document.getElementById("ln_recipient_address");
-      const pay_1 = document.getElementById("ln_pay_button");
-      input_1.value = local_action_data;
-      pay_1.textContent = "Authorize Payment";
+      if (recipientAddress) recipientAddress.value = local_action_data || "";
+      if (payButton) payButton.textContent = pageState.paymentButtonText || "Authorize Payment";
+      if (paymentSummary) paymentSummary.textContent = pageState.paymentSummaryText || "";
+      userMessage("Lightning address loaded. Review amount and authorize payment.", "INFO");
+      window.scrollTo({ top: 0, behavior: "smooth" });
   }
   if (local_action_mode === "lninvoice"){
       const invoicePanel = document.getElementById("invoice_pay_panel");
       const invoiceInput = document.getElementById("ln_invoice_input");
       const invoiceSummary = document.getElementById("ln_invoice_summary");
+      const invoicePayButton = document.getElementById("ln_invoice_pay_button");
       if (invoicePanel && invoiceInput) {
         invoicePanel.style.display = "block";
         invoiceInput.value = local_action_data || "";
-        const summaryParts = [];
-        if (pageState.actionAmount) summaryParts.push(`${Number(pageState.actionAmount).toLocaleString("en-US")} sats`);
-        if (pageState.actionComment) summaryParts.push(pageState.actionComment);
-        invoiceSummary.textContent = summaryParts.length ? `Invoice details: ${summaryParts.join(" | ")}` : "";
+        invoiceSummary.textContent = pageState.invoiceSummaryText || "Invoice loaded.";
+        if (invoicePayButton) {
+          invoicePayButton.disabled = pageState.invoiceAmountless;
+          invoicePayButton.textContent = pageState.invoiceAmountless
+            ? "Amountless Invoice Not Supported"
+            : "Authorize Invoice Payment";
+        }
         userMessage("Invoice loaded. Review and authorize payment.", "INFO");
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
@@ -1341,6 +1337,8 @@ function setActions(local_action_mode,local_action_data) {
   if (local_action_mode === "creq"){
       const recipientAmount = document.getElementById("ln_recipient_amount");
       const recipientMemo = document.getElementById("ln_recipient_memo");
+      if (payButton) payButton.textContent = pageState.paymentButtonText || "Send Cashu Payment";
+      if (paymentSummary) paymentSummary.textContent = pageState.paymentSummaryText || "";
       if (recipientAmount && pageState.actionAmount) {
         recipientAmount.value = pageState.actionAmount;
       }
@@ -1350,181 +1348,39 @@ function setActions(local_action_mode,local_action_data) {
       userMessage("Cashu payment request detected. Amount and memo were loaded from QR.", "INFO");
       window.scrollTo({ top: 0, behavior: "smooth" });
   }
+  if (local_action_mode === "ecash"){
+      if (ecashPanel) ecashPanel.style.display = "block";
+      userMessage(pageState.ecashSummaryText || "Ecash token loaded. Review and redeem when ready.", "INFO");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if ((local_action_mode || "").length > 0 && window.history && window.history.replaceState) {
       window.history.replaceState({}, "", "/safebox/access");
   }
 }
 
-function getlnPayStatus(ln_pay_status) {
-    const status = ln_pay_status.status || "INFO";
-    const detail = ln_pay_status.detail || "Payment request completed.";
-    userMessage(detail, status);
-    if (status === "OK") {
-      startPaymentSettlementWatch(pageState.startingBalance);
-      userMessage("Payment accepted. Waiting for confirmation...", "INFO");
-    } else if (status === "ERROR") {
-      stopPaymentSettlementWatch();
-    }
-}
-
-function clearMakePaymentFields() {
+function handlePaymentFormSubmit(event) {
   const recipientAddress = document.getElementById("ln_recipient_address");
-  const recipientAmount = document.getElementById("ln_recipient_amount");
-  const recipientMemo = document.getElementById("ln_recipient_memo");
-  const recipientCurrency = document.getElementById("ln_select_currency");
-  const payButton = document.getElementById("ln_pay_button");
-  const invoicePanel = document.getElementById("invoice_pay_panel");
-  const invoiceInput = document.getElementById("ln_invoice_input");
-  const invoiceMemo = document.getElementById("ln_invoice_memo");
-  const invoiceSummary = document.getElementById("ln_invoice_summary");
-
-  if (recipientAddress) recipientAddress.value = "";
-  if (recipientAmount) recipientAmount.value = "";
-  if (recipientMemo) recipientMemo.value = "";
-  if (recipientCurrency) {
-    const satOption = Array.from(recipientCurrency.options).find((opt) => opt.value === "SAT");
-    if (satOption) {
-      recipientCurrency.value = "SAT";
-    } else {
-      recipientCurrency.selectedIndex = 0;
-    }
+  if (!recipientAddress) {
+    return true;
   }
-  if (payButton) {
-    payButton.textContent = "Send Payment";
-    payButton.disabled = false;
-  }
-
-  if (invoicePanel) invoicePanel.style.display = "none";
-  if (invoiceInput) invoiceInput.value = "";
-  if (invoiceMemo) invoiceMemo.value = "";
-  if (invoiceSummary) invoiceSummary.textContent = "";
-}
-
-async function lnPayAddress() {
-  const recipient_address = document.getElementById("ln_recipient_address");
-  const recipient_amount = document.getElementById("ln_recipient_amount");
-  const recipient_memo = document.getElementById("ln_recipient_memo");
-  const pay_button = document.getElementById("ln_pay_button");
-  const ln_select_currency = document.getElementById("ln_select_currency");
-  const ln_address = recipient_address.value;
-  const ln_amount = recipient_amount.value;
-  const ln_comment = recipient_memo.value;
-  const ln_currency = ln_select_currency.value;
-
-  if (pageState.actionMode === "creq" && (pageState.actionData || "").toLowerCase().startsWith("creqa")) {
-    const proceed = confirm("Send this Cashu payment request now?");
-    if (!proceed) {
-      userMessage("Payment canceled.", "INFO");
-      return;
-    }
-
-    const old_creq_text = pay_button.textContent;
-    pay_button.textContent = "Sending Cashu payment...";
-    pay_button.disabled = true;
-    try {
-      const submit_creq_data = {
-        creq: pageState.actionData,
-        memo: ln_comment,
-        amount: ln_amount ? Number(ln_amount) : null,
-        currency: ln_currency
-      };
-      const data = await fetchJson('/safebox/paycreq', {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(submit_creq_data)
-      }, "Cashu payment request failed.");
-      getlnPayStatus(data);
-    } catch (error) {
-      userMessage(error.message || "Cashu payment request failed. Please try again.", "ERROR");
-    } finally {
-      pay_button.textContent = old_creq_text;
-      pay_button.disabled = false;
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    return;
-  }
-
-  if (recipient_address.value === "NFC Tag") {
-    const proceed = confirm("Get ready to tap your NFC card. Press OK to continue.");
-    if (!proceed) {
-      clearMakePaymentFields();
-      userMessage("Payment canceled.", "INFO");
-      return;
-    }
+  if (recipientAddress.value === "NFC Tag") {
+    event.preventDefault();
     paytoNFC();
-    return;
+    return false;
   }
-
-  if (!confirm("Are you sure")) {
-    return;
-
+  if (!window.confirm("Are you sure?")) {
+    event.preventDefault();
+    return false;
   }
-  resetPaymentSuccessState();
-  
-  const old_text = pay_button.textContent;
-  pay_button.textContent = "Paying now. Please wait...";
-  pay_button.disabled = true;
-
-  const submit_data = {"amount": ln_amount,
-                        "address":ln_address, 
-                        "currency" :ln_currency,
-                        "comment": ln_comment};
-
-      try {
-        const data = await fetchJson('/safebox/payaddress', {
-              method: "POST",
-              headers: {"Content-Type": "application/json"},        
-              body: JSON.stringify(submit_data)         
-            }, "Payment request failed.");
-        getlnPayStatus(data);
-      } catch (error) {
-        userMessage(error.message || "Payment request failed. Please try again.", "ERROR");
-      } finally {
-        pay_button.textContent = old_text;
-        pay_button.disabled = false;
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-
+  return true;
 }
 
-async function lnPayInvoice() {
-  const recipient_memo = document.getElementById("ln_invoice_memo");
-  const invoice_input = document.getElementById("ln_invoice_input");
-  const invoice_pay_button = document.getElementById("ln_invoice_pay_button");
-  const ln_comment = recipient_memo.value;
-  
-  const ln_invoice = (invoice_input?.value || "").trim();
-
-  if (!ln_invoice) {
-    userMessage("No lightning invoice loaded.", "ERROR");
-    return;
+function handleInvoicePaymentFormSubmit(event) {
+  if (!window.confirm("Are you sure?")) {
+    event.preventDefault();
+    return false;
   }
-  resetPaymentSuccessState();
-
-  const submit_data = {"invoice": ln_invoice,
-                       "comment": ln_comment};
-    const oldText = invoice_pay_button.textContent;
-    invoice_pay_button.disabled = true;
-    invoice_pay_button.textContent = "Please wait...";
-
-    try {
-      const data = await fetchJson('/safebox/payinvoice', {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(submit_data)
-      }, "Invoice payment request failed.");
-      getlnPayStatus(data);
-    } catch (error) {
-      userMessage(error.message || "Invoice payment request failed. Please try again.", "ERROR");
-    } finally {
-      invoice_pay_button.textContent = oldText;
-      invoice_pay_button.disabled = false;
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-}
-
-function getInvoiceStatus(ln_invoice_status) {
-    userMessage("Payment " + ln_invoice_status.detail, "INFO");
+  return true;
 }
 
 
@@ -1562,13 +1418,12 @@ function getInvoiceStatus(ln_invoice_status) {
         showNfcAlert(detail);
       }
       if (typeof payload.balance !== "undefined") {
-        checkBalance(Number(payload.balance));
+        checkBalance(Number(payload.balance), payload.fiat_balance);
       }
       if (nfcPaymentPending && (status === "OK" || status === "ADVISORY")) {
         stopNfcSettlementWatch();
         clearRequestPaymentFields();
         celebrateNfcPayment(detail);
-        scheduleAccessReload(900);
       } else if (status === "PENDING") {
         nfcPaymentPending = true;
       }
@@ -1578,10 +1433,8 @@ function getInvoiceStatus(ln_invoice_status) {
       const detail = payload.detail || "Payment update";
       userMessage(detail, status);
       if (typeof payload.balance !== "undefined") {
-        checkBalance(Number(payload.balance));
+        checkBalance(Number(payload.balance), payload.fiat_balance);
       }
-      setBalanceDisplay(undefined, payload.fiat_balance);
-      markBalanceUpdated();
       if (status === "SENT") {
         handleOutboundPaymentSettled(detail, 1200);
       } else if (status === "ERROR") {
@@ -1595,30 +1448,39 @@ function getInvoiceStatus(ln_invoice_status) {
   const wsStatusUrl = resolveWebSocketUrl("{{ws_url}}");
   const ws = new WebSocket(wsStatusUrl);
 
-  ws.onmessage = (event) => {
+  ws.onmessage = async (event) => {
       const response = JSON.parse(event.data);
       debugNfcFlow("ws_status message", response);
       const balance = response.balance;
       const fiat_balance = response.fiat_balance;
       const message = response.message;
       const status = response.status
-      userMessage(message, status)
+      if (status !== "RECD") {
+        userMessage(message, status);
+      }
 
       if (nfcPaymentPending && (status === "RECD" || status === "SENT")) {
         stopNfcSettlementWatch();
         celebrateNfcPayment("NFC payment settled.");
-        scheduleAccessReload(900);
       } else if (status === "RECD") {
-        
-        setBalanceDisplay(balance, fiat_balance);
-        setPaymentNotification(message);
-        markBalanceUpdated();
-        if (pageState.uxMode === "wait_invoice") {
-          clearRequestPaymentFields();
-          pageState.uxMode = "init";
+        if (paymentSuccessHandled) {
+          return;
         }
-        celebratePayment(message);
-        scheduleAccessReload(900);
+        const baselineBalance = Number(pageState.startingBalance);
+        const refreshed = await refreshBalanceFromPoll(fiat_balance);
+        const receiveConfirmed = refreshed && Number.isFinite(refreshed.balance) && refreshed.balance > baselineBalance;
+        if (refreshed === null) {
+          setBalanceDisplay(balance, fiat_balance);
+        }
+        setPaymentNotification("Incoming payment detected. Waiting for settlement...");
+        if (refreshed === null) {
+          markBalanceUpdated();
+        }
+        if (receiveConfirmed) {
+          scheduleInboundCompletion(message, refreshed.balance);
+        } else if (!inboundReceiptPending) {
+          startInboundSettlementWatch(baselineBalance, message, fiat_balance);
+        }
       
       } else if (status === "SENT" || status === "PENDING") {
 
@@ -1659,7 +1521,7 @@ function getInvoiceStatus(ln_invoice_status) {
     </select>
 
     <span id="payment_notification">
-      {{ action_comment if action_comment else ""}}
+      {{ notice_message if notice_message else (action_comment if action_comment else "") }}
     </span>  
     
     {% if onboard == true %}
@@ -1668,7 +1530,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <div class="btn-stack">
       <button id="ln_scan_button" onclick="scanCode()">Scan</button>
       <p class="helper-note">Scan QR code</p>
-      <button id="point_of_sale" onclick="window.location.href='/pos/'">Point of Sale</button>
+      <a id="point_of_sale" class="action-button" href="/pos/">Point of Sale</a>
       <p class="helper-note">Receive payments in person</p>
       <button id="ln_clipboard_button" onclick="useClipboard()">Copy from Clipboard</button>
       <p class="helper-note">For invoices or ecash tokens</p>
@@ -1683,33 +1545,67 @@ function getInvoiceStatus(ln_invoice_status) {
 
     <div class="account-box" id="make-payment">
       <p class="section-label"><a class="section-label section-anchor" href="#make-payment">Make a Payment</a></p>
-      <div id="invoice_pay_panel" style="display:none;">
-        <h3 style="margin:0 0 8px;">Pay Scanned Invoice</h3>
-        <input type="text" id="ln_invoice_input" placeholder="Lightning invoice" autocomplete="off">
-        <p id="ln_invoice_summary" style="margin: 6px 0 0;"></p>
-        <textarea id="ln_invoice_memo" placeholder="Enter optional comment" name="txt_invoice_comment" rows="3" cols="24"></textarea>
-        <button id="ln_invoice_pay_button" onclick="lnPayInvoice()">Authorize Invoice Payment</button>
+      <div
+        id="ecash_accept_panel"
+        {% if access_view_state != "ecash_loaded" %}style="display:none;"{% endif %}
+      >
+        <h3 style="margin:0 0 8px;">Redeem Scanned Ecash</h3>
+        <form action="/safebox/access/forms/acceptecash" method="post">
+          <p id="ecash_accept_summary" style="margin: 6px 0 10px;">{{ ecash_summary_text }}</p>
+          <textarea id="ecash_token_preview" name="ecash_token" rows="4" cols="24" readonly>{{ action_data if access_view_state == 'ecash_loaded' else '' }}</textarea>
+          <button id="ecash_accept_button" type="submit">Redeem Scanned Ecash</button>
+        </form>
       </div>
-      <input type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="ln_recipient_address"  size="32" ">
-      <datalist id="contacts">
-                <option value="NFC Tag"></option>
-               
-      </datalist>
-      <input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="ln_recipient_amount"   size="8">
-      
-      <select id="ln_select_currency" name="ln_select_currency"> 
-        <option value="SAT" >SAT</option>            
-        {% for each in currencies %}     
-         <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
-        {% endfor %}
-      </select>
-      
-      <textarea id="ln_recipient_memo" placeholder= "enter memo or comment" name="txt_comment" rows="3" cols="24"></textarea>
-      <button id="ln_pay_button" onclick="lnPayAddress()">Send Payment</button> 
+      <div
+        id="invoice_pay_panel"
+        {% if access_view_state not in ["invoice_loaded", "invoice_amount_required"] %}style="display:none;"{% endif %}
+      >
+        <h3 style="margin:0 0 8px;">Pay Scanned Invoice</h3>
+        <form action="/safebox/access/forms/payinvoice" method="post" onsubmit="return handleInvoicePaymentFormSubmit(event)">
+          <input
+            type="text"
+            id="ln_invoice_input"
+            name="invoice"
+            placeholder="Lightning invoice"
+            autocomplete="off"
+            value="{{ action_data if access_view_state in ['invoice_loaded', 'invoice_amount_required'] else '' }}"
+          >
+          <p id="ln_invoice_summary" style="margin: 6px 0 0;">{{ invoice_summary_text }}</p>
+          <textarea id="ln_invoice_memo" placeholder="Enter optional comment" name="comment" rows="3" cols="24">{{ action_comment if access_view_state in ['invoice_loaded', 'invoice_amount_required'] and action_comment else '' }}</textarea>
+          <button
+            id="ln_invoice_pay_button"
+            type="submit"
+            {% if invoice_amountless %}disabled{% endif %}
+          >
+            {% if invoice_amountless %}Amountless Invoice Not Supported{% else %}Authorize Invoice Payment{% endif %}
+          </button>
+        </form>
+      </div>
+      <form action="/safebox/access/forms/pay" method="post" onsubmit="return handlePaymentFormSubmit(event)">
+        <input type="hidden" name="action_mode" value="{{ action_mode if action_mode in ['creq'] else '' }}">
+        <input type="hidden" name="action_data" value="{{ action_data if access_view_state == 'creq_loaded' else '' }}">
+        <p id="make_payment_summary" style="margin: 8px 0 10px;">{{ payment_summary_text }}</p>
+        <input type="text" list= "contacts" placeholder="enter recipient address"  id="ln_recipient_address" name="address"  size="32" " value="{{ action_data if access_view_state == 'lnaddress_loaded' else '' }}">
+        <datalist id="contacts">
+                  <option value="NFC Tag"></option>
+                 
+        </datalist>
+        <input type="number" inputmode="decimal" step="any" placeholder="enter amount" id="ln_recipient_amount" name="amount"   size="8" value="{{ action_amount if access_view_state == 'creq_loaded' and action_amount is not none else '' }}">
+        
+        <select id="ln_select_currency" name="currency"> 
+          <option value="SAT" >SAT</option>            
+          {% for each in currencies %}     
+           <option value="{{each}}" {% if each == currency %}selected{% endif %}>{{each}}</option>        
+          {% endfor %}
+        </select>
+        
+        <textarea id="ln_recipient_memo" placeholder= "enter memo or comment" name="comment" rows="3" cols="24">{{ action_comment if access_view_state == 'creq_loaded' and action_comment else '' }}</textarea>
+        <button id="ln_pay_button" type="submit">{{ payment_button_text }}</button> 
+      </form>
 
     <div class="btn-stack">
-      <button id="my_ecash_button" onclick="myEcash()">Redeem Ecash</button>
-      <button onclick="doAccountHistory()">Account History</button>
+      <a id="my_ecash_button" class="action-button" href="/safebox/ecash">Redeem Ecash</a>
+      <a class="action-button" href="/safebox/txhistory">Account History</a>
     </div>
     <pre id="pay_to_message">Ready.</pre>
   </div>
@@ -1718,9 +1614,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <div class="account-box" id="my-records">
     <p class="section-label"><a class="section-label section-anchor" href="#my-records">My Records</a></p>
     <div class="btn-stack">
-      <button id="my_personal_messages_button" onclick="personalMessages()">Private Messages</button>
-      <button id="my_private_data_button" onclick="privateData()">My Notes</button>
-      <button id="my_personal_records_button" onclick="myRecords()">My Records</button>
+      <a id="my_personal_messages_button" class="action-button" href="/safebox/personalmessages">Private Messages</a>
+      <a id="my_private_data_button" class="action-button" href="/safebox/privatedata">My Notes</a>
+      <a id="my_personal_records_button" class="action-button" href="/records/grantlist">My Records</a>
     </div>
   </div>
 
@@ -1728,9 +1624,9 @@ function getInvoiceStatus(ln_invoice_status) {
   <div class="account-box" id="community">
     <p class="section-label"><a class="section-label section-anchor" href="#community">Community</a></p>
     <div class="btn-stack">
-      <button id="do_issue_credential" onclick="doOfferRecord()">Offer Record</button>
-      <button id="my_credentials_button" onclick="requestRecord()">Request a Record</button>
-      <button id="onboard_button" onclick="onboardFriend()">Onboard a Member</button>
+      <a id="do_issue_credential" class="action-button" href="/records/offerlist">Offer Record</a>
+      <a id="my_credentials_button" class="action-button" href="/records/request">Request a Record</a>
+      <a id="onboard_button" class="action-button" href="/invite?onboard_code={{acorn.handle}}">Onboard a Member</a>
     </div>
   </div>
 
@@ -1790,10 +1686,10 @@ function getInvoiceStatus(ln_invoice_status) {
     
     <div class="btn-stack">
       <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
-      <button id="issue_card" onclick="issueCard()">Issue Card</button>
-      <button onclick="attest()">Attest</button>
-      <button onclick="trust()">Trust</button>
-      <button id="logout_button" onclick="logout()">Logout</button>
+      <a id="issue_card" class="action-button" href="/safebox/issuecard/">Issue Card</a>
+      <a class="action-button" href="/safebox/attest/">Attest</a>
+      <a class="action-button" href="/safebox/trust/">Trust</a>
+      <a id="logout_button" class="action-button" href="/safebox/logout">Logout</a>
     </div>
   </div>
  
@@ -1812,7 +1708,7 @@ function getInvoiceStatus(ln_invoice_status) {
     <p>home relay: {{acorn.home_relay}}</p>
     <a href="/public/rates">Exchange Rates</a>
     <a href="/mybalance" hx-boost="false">My Balance (NFC)</a>
-    <button id="danger_zone" class="danger-button" onclick="dangerZone()">Danger Zone!</button>
+    <a id="danger_zone" class="action-button danger-button" href="/safebox/dangerzone/">Danger Zone!</a>
     <a href="https://github.com/trbouma/safebox">Source Code</a>
   </div>
 
@@ -1822,6 +1718,10 @@ function getInvoiceStatus(ln_invoice_status) {
 
 <script>
 setActions(pageState.actionMode, pageState.actionData);
+if (pageState.noticeMessage) {
+  userMessage(pageState.noticeMessage, pageState.noticeStatus || "INFO");
+}
+syncStartingBalanceFromPoll();
 setDarkMode();
 
 

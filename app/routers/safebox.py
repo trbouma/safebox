@@ -72,6 +72,32 @@ router = APIRouter()
 # SQLModel.metadata.create_all(engine,checkfirst=True)
 
 
+def _build_access_redirect_url(**params: Any) -> str:
+    filtered: dict[str, str] = {}
+    for key, value in params.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            filtered[key] = "1" if value else "0"
+        else:
+            filtered[key] = str(value)
+    query = urllib.parse.urlencode(filtered)
+    return f"/safebox/access?{query}" if query else "/safebox/access"
+
+
+def _redirect_access_with_notice(
+    notice_status: str,
+    notice_message: str,
+    **params: Any,
+) -> RedirectResponse:
+    url = _build_access_redirect_url(
+        notice_status=notice_status,
+        notice_message=notice_message,
+        **params,
+    )
+    return RedirectResponse(url=url, status_code=303)
+
+
 def _validate_npub_list_strict(pub_list_str: str) -> tuple[list[str], list[str], list[str]]:
     entries = [entry.strip() for entry in (pub_list_str or "").split() if entry.strip()]
     normalized: list[str] = []
@@ -610,8 +636,11 @@ async def protected_route(    request: Request,
                         action_data: str = None,
                         action_amount: int = None,
                         action_comment: str = None,
+                        notice_status: str | None = None,
+                        notice_message: str | None = None,
                         invoice: str | None = None,
                         invoice_amount: int | None = None,
+                        invoice_amountless: int | None = 0,
                         invoice_comment: str | None = None,
                         lnaddress: str | None = None,
                         ecash: str | None = None,
@@ -661,6 +690,51 @@ async def protected_route(    request: Request,
 
     if action_data:
         action_data = unquote(action_data)
+
+    invoice_amountless_flag = bool(int(invoice_amountless or 0))
+    access_view_state = "idle"
+    invoice_summary_text = ""
+    payment_summary_text = ""
+    payment_button_text = "Send Payment"
+    ecash_summary_text = ""
+    if action_mode == "lninvoice" and action_data:
+        access_view_state = "invoice_amount_required" if invoice_amountless_flag else "invoice_loaded"
+        if invoice_amountless_flag:
+            invoice_summary_text = "Amount not specified in invoice. Amountless invoices are not supported yet."
+        else:
+            try:
+                invoice_amount_value = int(action_amount or 0)
+            except (TypeError, ValueError):
+                invoice_amount_value = 0
+            summary_parts = []
+            if invoice_amount_value > 0:
+                summary_parts.append(f"{invoice_amount_value:,} sats")
+            if action_comment:
+                summary_parts.append(action_comment)
+            invoice_summary_text = (
+                f"Invoice details: {' | '.join(summary_parts)}" if summary_parts else "Invoice loaded."
+            )
+    elif action_mode == "lnaddress" and action_data:
+        access_view_state = "lnaddress_loaded"
+        payment_summary_text = "Lightning address loaded. Enter an amount, review the memo if needed, and authorize payment."
+        payment_button_text = "Authorize Payment"
+    elif action_mode == "creq" and action_data:
+        access_view_state = "creq_loaded"
+        payment_button_text = "Send Cashu Payment"
+        summary_parts = ["Cashu payment request detected."]
+        try:
+            action_amount_value = int(action_amount or 0)
+        except (TypeError, ValueError):
+            action_amount_value = 0
+        if action_amount_value > 0:
+            summary_parts.append(f"Amount: {action_amount_value:,} sats.")
+        if action_comment:
+            summary_parts.append(f"Memo: {action_comment}")
+        payment_summary_text = " ".join(summary_parts)
+    elif action_mode == "ecash" and action_data:
+        access_view_state = "ecash_loaded"
+        token_length = len(action_data)
+        ecash_summary_text = f"Ecash token loaded ({token_length} chars). Review and redeem when ready."
 
 
 
@@ -724,20 +798,31 @@ async def protected_route(    request: Request,
                                             "action_mode": action_mode,
                                             "action_data": action_data,
                                             "action_amount": action_amount,
+                                            "access_view_state": access_view_state,
+                                            "invoice_amountless": invoice_amountless_flag,
+                                            "invoice_summary_text": invoice_summary_text,
+                                            "payment_summary_text": payment_summary_text,
+                                            "payment_button_text": payment_button_text,
+                                            "ecash_summary_text": ecash_summary_text,
                                             "amount": amount,
                                             "currency": currency,
-                                            "action_comment": action_comment
+                                            "action_comment": action_comment,
+                                            "notice_status": notice_status,
+                                            "notice_message": notice_message,
 
                                         })
     
 
-@router.post("/payaddress", tags=["protected"])
-async def ln_pay_address(   request: Request, 
-                            ln_pay: lnPayAddress,
-                            acorn_obj: Acorn = Depends(get_acorn)):
+async def _pay_address_result(
+    request: Request,
+    ln_pay: lnPayAddress,
+    acorn_obj: Acorn,
+) -> dict[str, Any]:
     msg_out ="No payment"
     tendered = ""
-    status = "OK"
+
+    if not (ln_pay.address or "").strip():
+        return {"status": "ERROR", "detail": "Recipient address is required."}
 
     if ln_pay.currency == "SAT":
         sat_amount = int(ln_pay.amount)
@@ -814,6 +899,13 @@ async def ln_pay_address(   request: Request,
 
     return {"status": "OK", "detail": msg_out}
 
+
+@router.post("/payaddress", tags=["protected"])
+async def ln_pay_address(   request: Request, 
+                            ln_pay: lnPayAddress,
+                            acorn_obj: Acorn = Depends(get_acorn)):
+    return await _pay_address_result(request=request, ln_pay=ln_pay, acorn_obj=acorn_obj)
+
 @router.post("/swap", tags=["protected"])
 async def ln_swap(   request: Request, 
                             acorn_obj: Acorn = Depends(get_acorn)
@@ -862,10 +954,11 @@ async def repair_proofs(
 
     return {"status": "OK", "detail": msg_out}
 
-@router.post("/payinvoice", tags=["protected"])
-async def ln_pay_invoice(   request: Request, 
-                        ln_invoice: lnPayInvoice,
-                        acorn_obj: Acorn = Depends(get_acorn)):
+async def _pay_invoice_result(
+    request: Request,
+    ln_invoice: lnPayInvoice,
+    acorn_obj: Acorn,
+) -> dict[str, Any]:
     msg_out = "No payment"
     try:
         decoded_invoice = bolt11.decode(ln_invoice.invoice)
@@ -916,12 +1009,18 @@ async def ln_pay_invoice(   request: Request,
     return {"status": "OK", "detail": msg_out}
 
 
-@router.post("/paycreq", tags=["protected"])
-async def pay_creq_request(
+@router.post("/payinvoice", tags=["protected"])
+async def ln_pay_invoice(   request: Request, 
+                        ln_invoice: lnPayInvoice,
+                        acorn_obj: Acorn = Depends(get_acorn)):
+    return await _pay_invoice_result(request=request, ln_invoice=ln_invoice, acorn_obj=acorn_obj)
+
+
+async def _pay_creq_result(
     request: Request,
     creq_request: creqPayRequest,
-    acorn_obj: Acorn = Depends(get_acorn),
-):
+    acorn_obj: Acorn,
+) -> dict[str, Any]:
     try:
         parsed = _decode_creq(creq_request.creq)
     except ValueError as exc:
@@ -1046,6 +1145,15 @@ async def pay_creq_request(
         logger.exception("paycreq transport failed")
         return {"status": "ERROR", "detail": f"Transport failed: {exc}"}
 
+
+@router.post("/paycreq", tags=["protected"])
+async def pay_creq_request(
+    request: Request,
+    creq_request: creqPayRequest,
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    return await _pay_creq_result(request=request, creq_request=creq_request, acorn_obj=acorn_obj)
+
 @router.post("/issueecash", tags=["protected"])
 async def issue_ecash(   request: Request, 
                         ecash_request: ecashRequest,
@@ -1073,10 +1181,11 @@ async def issue_ecash(   request: Request,
                 "detail": msg_out
             }
 
-@router.post("/acceptecash", tags=["protected"])
-async def accept_ecash(   request: Request, 
-                        ecash_accept: ecashAccept,
-                        acorn_obj: Acorn = Depends(get_acorn)):
+async def _accept_ecash_result(
+    request: Request,
+    ecash_accept: ecashAccept,
+    acorn_obj: Acorn,
+) -> dict[str, Any]:
     msg_out ="No message"
     acorn_obj.load_data()
     try:
@@ -1098,6 +1207,112 @@ async def accept_ecash(   request: Request,
     return {    "status": "OK",
                 "detail": msg_out
             }
+
+
+@router.post("/acceptecash", tags=["protected"])
+async def accept_ecash(   request: Request, 
+                        ecash_accept: ecashAccept,
+                        acorn_obj: Acorn = Depends(get_acorn)):
+    return await _accept_ecash_result(request=request, ecash_accept=ecash_accept, acorn_obj=acorn_obj)
+
+
+@router.post("/access/forms/payinvoice", tags=["protected"])
+async def access_form_pay_invoice(
+    request: Request,
+    invoice: str = Form(...),
+    comment: str | None = Form(default=None),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    payload = lnPayInvoice(invoice=invoice, comment=comment)
+    result = await _pay_invoice_result(request=request, ln_invoice=payload, acorn_obj=acorn_obj)
+    status = str(result.get("status", "INFO")).upper()
+    detail = str(result.get("detail", "Payment request completed."))
+    if status == "OK":
+        return _redirect_access_with_notice("INFO", detail)
+
+    invoice_amountless = False
+    try:
+        decoded_invoice = bolt11.decode(invoice)
+        invoice_amountless = not bool(decoded_invoice.amount_msat)
+    except Exception:
+        invoice_amountless = False
+    return _redirect_access_with_notice(
+        "ERROR",
+        detail,
+        invoice=invoice,
+        invoice_comment=comment or "",
+        invoice_amountless=invoice_amountless,
+    )
+
+
+@router.post("/access/forms/pay", tags=["protected"])
+async def access_form_pay(
+    request: Request,
+    address: str = Form(default=""),
+    amount: float | None = Form(default=None),
+    currency: str = Form(default="SAT"),
+    comment: str | None = Form(default=None),
+    action_mode: str | None = Form(default=None),
+    action_data: str | None = Form(default=None),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    normalized_mode = (action_mode or "").strip().lower()
+    if normalized_mode == "creq" and action_data:
+        payload = creqPayRequest(
+            creq=action_data,
+            memo=comment,
+            amount=amount,
+            currency=currency or "SAT",
+        )
+        result = await _pay_creq_result(request=request, creq_request=payload, acorn_obj=acorn_obj)
+        status = str(result.get("status", "INFO")).upper()
+        detail = str(result.get("detail", "Payment request completed."))
+        if status == "OK":
+            return _redirect_access_with_notice("INFO", detail)
+        return _redirect_access_with_notice(
+            "ERROR",
+            detail,
+            action_mode="creq",
+            action_data=action_data,
+            action_amount=amount if amount is not None else "",
+            action_comment=comment or "",
+            currency=currency or "SAT",
+        )
+
+    payload = lnPayAddress(
+        address=address,
+        amount=amount or 0,
+        currency=currency or "SAT",
+        comment=comment or "",
+    )
+    result = await _pay_address_result(request=request, ln_pay=payload, acorn_obj=acorn_obj)
+    status = str(result.get("status", "INFO")).upper()
+    detail = str(result.get("detail", "Payment request completed."))
+    if status == "OK":
+        return _redirect_access_with_notice("INFO", detail)
+    return _redirect_access_with_notice(
+        "ERROR",
+        detail,
+        lnaddress=address,
+        action_amount=amount if amount is not None else "",
+        action_comment=comment or "",
+        currency=currency or "SAT",
+    )
+
+
+@router.post("/access/forms/acceptecash", tags=["protected"])
+async def access_form_accept_ecash(
+    request: Request,
+    ecash_token: str = Form(...),
+    acorn_obj: Acorn = Depends(get_acorn),
+):
+    payload = ecashAccept(ecash_token=ecash_token)
+    result = await _accept_ecash_result(request=request, ecash_accept=payload, acorn_obj=acorn_obj)
+    status = str(result.get("status", "INFO")).upper()
+    detail = str(result.get("detail", "Ecash token processed."))
+    if status == "OK":
+        return _redirect_access_with_notice("OK", detail)
+    return _redirect_access_with_notice("ERROR", detail, ecash=ecash_token)
 
 @router.post("/invoice", tags=["protected"])
 async def ln_invoice_payment(   request: Request, 
@@ -1143,6 +1358,7 @@ async def ln_invoice_payment(   request: Request,
 @router.get("/poll", tags=["protected"])
 async def poll_for_balance(request: Request, acorn_obj: Acorn = Depends(get_acorn)):
     safebox_handle = None
+    fiat_balance = None
     try:
         current_balance = await acorn_obj.get_current_balance()
         with Session(engine) as session:
@@ -1156,16 +1372,26 @@ async def poll_for_balance(request: Request, acorn_obj: Acorn = Depends(get_acor
                 session.commit()
             else:
                 raise HTTPException(status_code=404, detail="Safebox not found")
+
+        try:
+            fiat_currency = await get_currency_rate(acorn_obj.local_currency)
+            fiat_balance = (
+                f"{fiat_currency.currency_symbol}"
+                f"{(fiat_currency.currency_rate * current_balance / 1e8):.2f} "
+                f"{fiat_currency.currency_code}"
+            )
+        except Exception:
+            logger.debug("Unable to compute fiat balance during poll", exc_info=True)
     except HTTPException as exc:
         logger.warning("Poll auth failure: %s", exc.detail)
-        return {"detail": "error", "balance": 0}
+        return {"detail": "error", "balance": 0, "fiat_balance": None}
     except Exception:
         logger.exception("Unexpected error in poll_for_balance")
-        return {"detail": "error", "balance": 0}
+        return {"detail": "error", "balance": 0, "fiat_balance": None}
 
     print(f"safebox poll {safebox_handle} {current_balance}")
 
-    return {"detail": "polling", "balance": current_balance}
+    return {"detail": "polling", "balance": current_balance, "fiat_balance": fiat_balance}
 
 @router.get("/privatedata", tags=["safebox", "protected"])
 async def my_private_data(      request: Request,
@@ -1911,13 +2137,17 @@ async def ws_status(websocket: WebSocket,  acorn_obj: Acorn = Depends(get_acorn)
 
 
 
-    # starting_balance = safebox_found.balance
+    # Seed the watch from the authoritative live wallet balance, not a cached DB value.
     await acorn_obj.load_data()
+    starting_balance = await acorn_obj.get_current_balance()
     with Session(engine) as session:
         statement = select(RegisteredSafebox).where(RegisteredSafebox.npub == acorn_obj.pubkey_bech32)
         safeboxes = session.exec(statement)
         safebox_found = safeboxes.first()
-        starting_balance = safebox_found.balance if safebox_found else acorn_obj.get_balance()
+        if safebox_found:
+            safebox_found.balance = starting_balance
+            session.add(safebox_found)
+            session.commit()
     # new_balance = starting_balance
     message = "All payments up to date!"
     status = "SAME"

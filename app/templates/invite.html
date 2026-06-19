@@ -86,12 +86,16 @@
   }
 
   .invite-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-width: 120px;
     padding: 11px 16px;
     border-radius: 999px;
     color: #fff;
     background: var(--sb-brand-blue-1);
     box-shadow: 0 10px 24px rgba(82, 103, 236, 0.24);
+    text-decoration: none;
   }
 
   .invite-button.secondary {
@@ -117,10 +121,6 @@
 </style>
 
 <script>
-function backToWallet() {
-  window.location.href = "/safebox/access";
-}
-
 async function copyInviteLink() {
   const inviteUrl = `${window.location.origin}/friend/{{onboard_code}}`;
   const statusEl = document.getElementById("copy_status");
@@ -152,7 +152,7 @@ async function copyInviteLink() {
 
     <div class="invite-actions">
       <button class="invite-button" type="button" onclick="copyInviteLink()">Copy Link</button>
-      <button class="invite-button secondary" type="button" onclick="backToWallet()">Home</button>
+      <a class="invite-button secondary" href="/safebox/access">Home</a>
     </div>
     <p id="copy_status" class="invite-status" aria-live="polite"></p>
   </section>

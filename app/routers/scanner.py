@@ -113,16 +113,20 @@ async def get_scan_result(  request: Request,
     if qr_code[:4].lower() == "lnbc":
         action_amount = 0
         action_comment = ""
+        invoice_amountless = 0
         try:
             decoded_invoice = bolt11.decode(qr_code)
             if decoded_invoice.amount_msat:
                 action_amount = decoded_invoice.amount_msat // 1000
+            else:
+                invoice_amountless = 1
             action_comment = decoded_invoice.description or ""
         except Exception:
             logger.exception("Failed to decode lightning invoice in scanresult")
         return _redirect_access(
             invoice=qr_code,
             invoice_amount=action_amount,
+            invoice_amountless=invoice_amountless,
             invoice_comment=action_comment,
         )
 
