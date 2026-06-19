@@ -63,17 +63,21 @@
   }
 
   .tx-table-wrap {
+    display: block;
     width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid #3c518b;
     border-radius: 10px;
     background: #0d1430;
   }
 
   table.tx-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
-    min-width: 860px;
+    min-width: 980px;
   }
 
   .tx-table th,
