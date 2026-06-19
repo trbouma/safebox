@@ -159,6 +159,7 @@ async function backToHome() {
 <script src="/js/extensions.js"></script>
 
 <body hx-boost="true">
+    <!-- NFC/device-runtime entry points should opt out with hx-boost="false". -->
     <div class="wrapper">
         <div id="content">
             {% block page_content %}
