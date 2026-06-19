@@ -1,5 +1,5 @@
 services:
-  lnapp:
+  safebox:
     restart: always
     build:
       context: https://github.com/trbouma/safebox.git#release-candidate
@@ -9,6 +9,7 @@ services:
       - "7375:7375"
     environment:
       - TZ=America/New_York
+      # - PUBLIC_BASE_URL=https://getsafebox.app
       - CURRENCY_CSV=/app/setup/currency.csv
       - SECRET_BOOTSTRAP_MODE=true
       # Post-bootstrap hardening:
