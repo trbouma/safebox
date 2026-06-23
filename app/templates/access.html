@@ -645,6 +645,41 @@ function userMessage(data, status="INFO"){
     setPaymentNotification(data);
   };
 
+  function formatUiText(value, fallback = "") {
+    if (value === null || typeof value === "undefined") {
+      return fallback;
+    }
+    if (typeof value === "string") {
+      return value;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    if (Array.isArray(value)) {
+      const parts = value
+        .map((entry) => formatUiText(entry, ""))
+        .filter((entry) => entry && entry.trim().length > 0);
+      return parts.length ? parts.join(" | ") : fallback;
+    }
+    if (typeof value === "object") {
+      if (typeof value.detail !== "undefined") {
+        return formatUiText(value.detail, fallback);
+      }
+      if (typeof value.message !== "undefined") {
+        return formatUiText(value.message, fallback);
+      }
+      if (typeof value.status !== "undefined") {
+        return formatUiText(value.status, fallback);
+      }
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return fallback;
+      }
+    }
+    return String(value);
+  }
+
   async function syncStartingBalanceFromPoll(fiatBalance = null) {
     try {
       const response = await fetch('/safebox/poll');
@@ -765,7 +800,7 @@ function userMessage(data, status="INFO"){
   function setPaymentNotification(message) {
     const notificationEl = document.getElementById("payment_notification");
     if (!notificationEl) return;
-    notificationEl.textContent = message || "";
+    notificationEl.textContent = formatUiText(message);
   }
 
   function updateBalanceDeltaUi(newBalance, imgEl) {
@@ -1035,7 +1070,7 @@ function userMessage(data, status="INFO"){
 
   function paytoMessage(data) {
     const logElement = document.getElementById('pay_to_message');
-    logElement.textContent = data;
+    logElement.textContent = formatUiText(data);
   };
 
 async function requestbyNFC(nfc_amount, nfc_currency, nfc_comment) {
@@ -1376,8 +1411,8 @@ function handleInvoicePaymentFormSubmit(event) {
       debugNfcFlow("ws_status message", response);
       const balance = response.balance;
       const fiat_balance = response.fiat_balance;
-      const message = response.message;
-      const status = response.status
+      const message = formatUiText(response.message, "");
+      const status = formatUiText(response.status, "INFO");
       if (status !== "RECD") {
         userMessage(message, status);
       }
