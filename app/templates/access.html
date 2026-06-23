@@ -1561,8 +1561,8 @@ function handleInvoicePaymentFormSubmit(event) {
   <div class="account-box" id="community">
     <p class="section-label"><a class="section-label section-anchor" href="#community">Community</a></p>
     <div class="btn-stack">
-      <a id="do_issue_credential" class="action-button" href="/records/offerlist">Offer Record</a>
-      <a id="my_credentials_button" class="action-button" href="/records/request">Request a Record</a>
+      <a id="do_issue_credential" class="action-button" href="/records/offerlist" hx-boost="false">Offer Record</a>
+      <a id="my_credentials_button" class="action-button" href="/records/request" hx-boost="false">Request a Record</a>
       <a id="onboard_button" class="action-button" href="/invite?onboard_code={{acorn.handle}}">Onboard a Member</a>
     </div>
   </div>
