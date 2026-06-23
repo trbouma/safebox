@@ -504,32 +504,11 @@
 
 
 
+<script id="page-state-json" type="application/json">{{ page_state_json | safe }}</script>
 <script>
-
-  const pageState = {
-    uxMode: "init",
-    revealSeedPhrase: false,
-    revealAccessKey: false,
-    startingBalance: {{acorn.balance}},
-    onboard: "{{onboard}}",
-    accessViewState: "{{access_view_state}}",
-    actionMode: "{{action_mode}}",
-    actionData: "{{action_data}}",
-    actionAmount: "{{action_amount if action_amount is not none else ''}}",
-    actionComment: "{{action_comment if action_comment else ''}}",
-    invoiceAmountless: {{ "true" if invoice_amountless else "false" }},
-    invoiceSummaryText: "{{invoice_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
-    paymentSummaryText: "{{payment_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
-    paymentButtonText: "{{payment_button_text|default('Send Payment', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
-    ecashSummaryText: "{{ecash_summary_text|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
-    noticeStatus: "{{notice_status if notice_status else ''}}",
-    noticeMessage: "{{notice_message|default('', true)|replace('\\', '\\\\')|replace('\"', '\\\"') }}",
-    resetToHomeScheduled: false,
-    currentSatsBalanceText: "({{ "\u20BF" + "{:,}".format(acorn.balance)}})",
-    currentFiatBalanceText: "{{currency_symbol}}{{"{:.2f}".format(currency_rate * acorn.balance / 1e8)}} {{currency_code}}",
-    clipboardData: "*** MY IMPORTANT DATA ***\n\nService: https://{{request.url.hostname}} \n\nAccess Key: \n\n{{account_access_key}} \n\nRecovery Phrase (12 words):\n\n{{acorn.seed_phrase}}\n\n*** END OF MY IMPORTANT DATA ***",
-    backupMessage: "Your important data is copied to the clipboard! \n\nPlease save your access key and recovery phrase to a secure and private place. \n\nDon't delay. WRITE IT DOWN! ",
-  };
+  const pageState = JSON.parse(
+    document.getElementById("page-state-json").textContent
+  );
 
   function scheduleAccessReload(delayMs = 900) {
     if (pageState.resetToHomeScheduled) return;
@@ -673,7 +652,7 @@ function userMessage(data, status="INFO"){
       }
       try {
         return JSON.stringify(value);
-      } catch {
+      } catch (error) {
         return fallback;
       }
     }
@@ -684,8 +663,8 @@ function userMessage(data, status="INFO"){
     try {
       const response = await fetch('/safebox/poll');
       const data = await response.json();
-      const polledBalance = Number(data?.balance);
-      const resolvedFiatBalance = data?.fiat_balance ?? fiatBalance;
+      const polledBalance = Number(data && data.balance);
+      const resolvedFiatBalance = (data && typeof data.fiat_balance !== "undefined") ? data.fiat_balance : fiatBalance;
       if (Number.isFinite(polledBalance)) {
         setBalanceDisplay(polledBalance, resolvedFiatBalance);
         markBalanceUpdated();
@@ -711,7 +690,7 @@ function userMessage(data, status="INFO"){
     }
 
     if (!response.ok) {
-      throw new Error(data?.detail || data?.message || `${fallbackMessage} HTTP ${response.status}`);
+      throw new Error((data && data.detail) || (data && data.message) || `${fallbackMessage} HTTP ${response.status}`);
     }
 
     return data;
@@ -866,7 +845,7 @@ function userMessage(data, status="INFO"){
       try {
         const resp = await fetch("/safebox/poll");
         const data = await resp.json();
-        const polledBalance = Number(data?.balance);
+        const polledBalance = Number(data && data.balance);
         debugNfcFlow("poll tick", { baseline, polledBalance, pending: nfcPaymentPending, uxMode: pageState.uxMode });
         if (!Number.isFinite(polledBalance)) {
           if (Date.now() > nfcSettlementWatchDeadline) {
@@ -879,7 +858,7 @@ function userMessage(data, status="INFO"){
         if (polledBalance < baseline) {
           debugNfcFlow("poll detected NFC settlement", { baseline, polledBalance });
           stopNfcSettlementWatch();
-          checkBalance(polledBalance, data?.fiat_balance);
+          checkBalance(polledBalance, data ? data.fiat_balance : null);
           celebrateNfcPayment("NFC payment confirmed.");
           return;
         }
@@ -908,7 +887,7 @@ function userMessage(data, status="INFO"){
       try {
         const resp = await fetch("/safebox/poll");
         const data = await resp.json();
-        const polledBalance = Number(data?.balance);
+        const polledBalance = Number(data && data.balance);
         if (!Number.isFinite(polledBalance)) {
           if (Date.now() > paymentSettlementWatchDeadline) {
             stopPaymentSettlementWatch();
@@ -918,7 +897,7 @@ function userMessage(data, status="INFO"){
 
         if (polledBalance < baseline) {
           stopPaymentSettlementWatch();
-          checkBalance(polledBalance, data?.fiat_balance);
+          checkBalance(polledBalance, data ? data.fiat_balance : null);
           celebratePayment("Payment confirmed.");
           scheduleAccessReload(1200);
           return;
@@ -1243,8 +1222,8 @@ async function refreshBalanceFromPoll(fiatBalance = null) {
   try {
     const response = await fetch('/safebox/poll');
     const data = await response.json();
-    const polledBalance = Number(data?.balance);
-    const resolvedFiatBalance = data?.fiat_balance ?? fiatBalance;
+    const polledBalance = Number(data && data.balance);
+    const resolvedFiatBalance = (data && typeof data.fiat_balance !== "undefined") ? data.fiat_balance : fiatBalance;
     if (Number.isFinite(polledBalance)) {
       setBalanceDisplay(polledBalance, resolvedFiatBalance);
       markBalanceUpdated();

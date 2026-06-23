@@ -777,6 +777,44 @@ async def protected_route(    request: Request,
 
     ws_url = build_websocket_url(request, "/safebox/ws/status")
     ws_url_notify = build_websocket_url(request, "/safebox/ws/notify")
+    page_state_json = json.dumps(
+        {
+            "uxMode": "init",
+            "revealSeedPhrase": False,
+            "revealAccessKey": False,
+            "startingBalance": acorn_obj.balance,
+            "onboard": onboard,
+            "accessViewState": access_view_state,
+            "actionMode": action_mode or "",
+            "actionData": action_data or "",
+            "actionAmount": action_amount if action_amount is not None else "",
+            "actionComment": action_comment or "",
+            "invoiceAmountless": invoice_amountless_flag,
+            "invoiceSummaryText": invoice_summary_text or "",
+            "paymentSummaryText": payment_summary_text or "",
+            "paymentButtonText": payment_button_text or "Send Payment",
+            "ecashSummaryText": ecash_summary_text or "",
+            "noticeStatus": notice_status or "",
+            "noticeMessage": notice_message or "",
+            "resetToHomeScheduled": False,
+            "currentSatsBalanceText": f"(₿{acorn_obj.balance:,})",
+            "currentFiatBalanceText": f"{currency_symbol}{currency_rate * acorn_obj.balance / 1e8:.2f} {currency_code}",
+            "clipboardData": (
+                "*** MY IMPORTANT DATA ***\n\n"
+                f"Service: https://{request.url.hostname} \n\n"
+                "Access Key: \n\n"
+                f"{account_access_key} \n\n"
+                "Recovery Phrase (12 words):\n\n"
+                f"{acorn_obj.seed_phrase}\n\n"
+                "*** END OF MY IMPORTANT DATA ***"
+            ),
+            "backupMessage": (
+                "Your important data is copied to the clipboard! \n\n"
+                "Please save your access key and recovery phrase to a secure and private place. \n\n"
+                "Don't delay. WRITE IT DOWN! "
+            ),
+        }
+    )
     
     print(f"ws url {ws_url}")
 
@@ -794,6 +832,7 @@ async def protected_route(    request: Request,
                                             "ws_url": ws_url,
                                             "ws_url_notify": ws_url_notify,
                                             "lnurl": final_lnurl,
+                                            "page_state_json": page_state_json,
                                             "onboard": onboard,
                                             "action_mode": action_mode,
                                             "action_data": action_data,
