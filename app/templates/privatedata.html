@@ -1,10 +1,15 @@
 {% extends "uxbase.html" %}
 
-{% block title %}My Cards{% endblock %}
+{% block title %}My Notes{% endblock %}
 {% block head %}
 {{ super() }}
 
 <style>
+  .page-shell {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
   .center-text {
     max-width: 880px;
     margin: 0 auto;
@@ -33,7 +38,8 @@
     gap: 10px;
   }
 
-  button {
+  button,
+  .action-link {
     background: linear-gradient(135deg, #196c96, #1f8aa8);
     color: #ffffff;
     border: 0;
@@ -45,6 +51,8 @@
     margin-right: auto;
     box-sizing: border-box;
     padding: 10px 12px;
+    text-decoration: none;
+    text-align: center;
   }
 
   #card-container {
@@ -89,127 +97,79 @@
     .center-text {
       padding: 14px;
     }
-    button {
+
+    button,
+    .action-link {
       width: 100%;
     }
   }
 </style>
-
-
-<script>
-
-async function backToProfile() {
-
-
-window.location.href="/safebox/access" ;
-
-}
-async function goBack() {
-    window.history.back();
-}
-
-
-</script>
-
 {% endblock %}
 
 {% block page_content %}
-
-
-
-<div class="center-text">
+<div class="page-shell" hx-boost="false">
+  <div class="center-text">
     <h1>Personal Notes</h1>
     <div class="actions">
-      <button onclick="backToProfile()">Home</button>
-      <button onclick="addCardtoSafebox()">Add Card</button>
+      <a class="action-link" href="/safebox/access">Home</a>
+      <a class="action-link" href="/safebox/displaycard?action_mode=add">Add Note</a>
     </div>
-    <p class="hint">Click on a card to edit.</p>
-</div>
+    <p class="hint">Click on a note to edit it.</p>
+  </div>
 
-<div id="card-container"></div>
+  <div id="card-container"></div>
 
-<script>
-  const jsonUserData = {{ user_records | tojson }};
-  
+  <script>
+    const jsonUserData = {{ user_records | tojson }};
 
-  // Function to create and add a card
-  function addCard(title, created_at, content) {
-    // Create a card element
-    const card = document.createElement('div');
-    card.className = 'card';
+    function addCard(title, created_at, content) {
+      const card = document.createElement('div');
+      card.className = 'card';
 
-    // Create and add the title element
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'card-title';
-    cardTitle.textContent = title;
-    
+      const cardTitle = document.createElement('div');
+      cardTitle.className = 'card-title';
+      cardTitle.textContent = title;
 
-    // Create and add the content element
-    const cardCreatedAt = document.createElement('div');
-    cardCreatedAt.className = 'card-content';
-    cardCreatedAt.textContent = created_at;
+      const cardCreatedAt = document.createElement('div');
+      cardCreatedAt.className = 'card-content';
+      cardCreatedAt.textContent = created_at;
 
-    // Create and add the content element
-    const cardContent = document.createElement('div');
-    cardContent.className = 'card-content';
-    cardContent.textContent = content
+      const cardContent = document.createElement('div');
+      cardContent.className = 'card-content';
+      cardContent.textContent = content;
 
-    // Append title and content to the card
-    card.appendChild(cardTitle);
-    card.appendChild(cardCreatedAt);
-    card.appendChild(cardContent);
+      card.appendChild(cardTitle);
+      card.appendChild(cardCreatedAt);
+      card.appendChild(cardContent);
 
-    card.addEventListener('click', () => {
-        // alert(`You clicked on: ${title} with: ${content}`);
-        window.location.href=`/safebox/displaycard?card=${title}&action_mode=edit`;
+      card.addEventListener('click', () => {
+        window.location.href = `/safebox/displaycard?card=${encodeURIComponent(title)}&action_mode=edit`;
       });
 
-    // Append the card to the container
-    const container = document.getElementById('card-container');
-    container.appendChild(card);
-  }
-
-  // Example usage
-  // alert("hello"+ JSON.stringify(jsonUserData)); 
-  for (let record of jsonUserData)
-  {
-    if (record.hasOwnProperty("tag")) {
-        // console.log(`Name: ${record.name}`);
-        addCard(record.tag, record.created_at, record.payload);
-    } else {
-        console.log("This record does not have a 'name' property.");
+      document.getElementById('card-container').appendChild(card);
     }
-    // addCard('Private Data 1', JSON.stringify(record));
 
-  }
+    for (const record of jsonUserData) {
+      if (record.hasOwnProperty('tag')) {
+        addCard(record.tag, record.created_at, record.payload);
+      } else {
+        console.log("This record does not have a 'tag' property.");
+      }
+    }
 
-async function addCardtoSafebox() {
-// alert("add card!");
-window.location.href=`/safebox/displaycard?action_mode=add`;
+    setDarkMode();
+  </script>
 
-
-}
-
-setDarkMode();
-
-</script>
-   
-
-<div class="center-text">
-  <div class="actions">
-    <button onclick="addCardtoSafebox()">Add Card</button>
-    <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-    <button onclick="backToProfile()">Home</button>
+  <div class="center-text">
+    <div class="actions">
+      <a class="action-link" href="/safebox/displaycard?action_mode=add">Add Note</a>
+      <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+      <a class="action-link" href="/safebox/access">Home</a>
+    </div>
   </div>
 </div>
-     
-
-
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
-
-
 {% endblock %}

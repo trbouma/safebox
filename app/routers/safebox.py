@@ -98,6 +98,17 @@ def _redirect_access_with_notice(
     return RedirectResponse(url=url, status_code=303)
 
 
+def _safe_referer_path(request: Request, fallback: str) -> str:
+    raw_referer = request.headers.get("referer")
+    if not raw_referer:
+        return fallback
+    try:
+        parsed = urllib.parse.urlparse(raw_referer)
+        return parsed.path or fallback
+    except Exception:
+        return fallback
+
+
 def _validate_npub_list_strict(pub_list_str: str) -> tuple[list[str], list[str], list[str]]:
     entries = [entry.strip() for entry in (pub_list_str or "").split() if entry.strip()]
     normalized: list[str] = []
@@ -1458,7 +1469,7 @@ async def my_private_data(      request: Request,
 
     user_records = await acorn_obj.get_user_records(record_kind=kind)
     
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    referer = _safe_referer_path(request, "/safebox/access")
 
     return templates.TemplateResponse(  "privatedata.html", 
                                         {   "request": request,                                            
@@ -1481,7 +1492,7 @@ async def my_personal_messages(      request: Request,
     user_records = await acorn_obj.get_user_records(record_kind=kind, relays=dm_relays, reverse=True)
     
     
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    referer = _safe_referer_path(request, "/safebox/access")
 
     return templates.TemplateResponse(  "messages/privatemessages.html", 
                                         {   "request": request,                                            
@@ -2062,7 +2073,7 @@ async def display_card(     request: Request,
         card = ""
         content =""
     
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    referer = _safe_referer_path(request, "/safebox/privatedata")
 
     return templates.TemplateResponse(  "card.html", 
                                         {   "request": request,
@@ -2098,7 +2109,7 @@ async def display_message(     request: Request,
         card = ""
         content =""
     
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    referer = _safe_referer_path(request, "/safebox/personalmessages")
 
     return templates.TemplateResponse(  "messages/message.html", 
                                         {   "request": request,
@@ -2132,7 +2143,7 @@ async def message_detail(
     if selected_message is None:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    referer = urllib.parse.urlparse(request.headers.get("referer")).path
+    referer = _safe_referer_path(request, "/safebox/personalmessages")
     return templates.TemplateResponse(
         "messages/message_detail.html",
         {
