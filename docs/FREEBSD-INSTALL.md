@@ -200,6 +200,22 @@ If you are accessing the service from another machine on your network, open:
 http://<host-ip>:8000
 ```
 
+For a named public deployment, set `PUBLIC_BASE_URL` in `.env` so generated links and externally resolved wallet flows use the correct host:
+
+```env
+PUBLIC_BASE_URL=https://freebsd.safebox.dev
+```
+
+Branding values can also be set in `.env`, but visible UI branding is overridden by files in `branding/` when they exist. In practice, updating `branding/default.yml` is the most reliable way to change the displayed brand on a single-host FreeBSD deployment:
+
+```yaml
+brand_name: SafeBox FreeBSD
+brand_message: FreeBSD instance running
+branding_retry_message: FreeBSD instance: please try again.
+```
+
+If you later host multiple domains from one instance, add host-specific branding files such as `branding/freebsd.safebox.dev.yml`.
+
 ## Dependency Sanity Checks
 
 After installation, it is useful to verify the core native modules explicitly:
