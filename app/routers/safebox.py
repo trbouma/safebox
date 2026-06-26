@@ -604,6 +604,8 @@ async def create_qr(qr_text: str):
 @router.get("/nwcqr", tags=["public"])
 async def create_nwc_qr(request: Request,
                         acorn_obj: Acorn= Depends(get_acorn)):
+    if not acorn_obj:
+        return RedirectResponse(url="/")
     nwc_secret = get_or_create_nwc_secret(acorn_obj.pubkey_bech32, rotate=False)
     qr_text = build_nwc_uri(nwc_secret)
 
@@ -950,6 +952,8 @@ async def ln_swap(   request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                         ):
     msg_out ="No error"
+    if not acorn_obj:
+        return {"status": "ERROR", "detail": "No active safebox session."}
 
     try:
        # msg_out = await acorn_obj.swap_multi_each()
@@ -981,6 +985,8 @@ async def repair_proofs(
     acorn_obj: Acorn = Depends(get_acorn)
 ):
     msg_out = "No repair performed"
+    if not acorn_obj:
+        return {"status": "ERROR", "detail": "No active safebox session."}
 
     try:
         msg_out = await acorn_obj.repair_proofs(force_prune_stale=force)
@@ -1198,6 +1204,8 @@ async def issue_ecash(   request: Request,
                         ecash_request: ecashRequest,
                         acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
+    if not acorn_obj:
+        return {"status": "ERROR", "detail": "No active safebox session."}
     try:
         # safebox_found = await fetch_safebox(access_token=access_token)
         # acorn_obj = Acorn(nsec=safebox_found.nsec,home_relay=safebox_found.home_relay)
@@ -1358,6 +1366,8 @@ async def ln_invoice_payment(   request: Request,
                         ln_invoice: lnInvoice,
                         acorn_obj: Acorn = Depends(get_acorn)):
     msg_out ="No payment"
+    if not acorn_obj:
+        return {"status": "ERROR", "detail": "No active safebox session."}
     if ln_invoice.currency == "SAT":
         sat_amount = int(ln_invoice.amount)
     else:
@@ -1398,6 +1408,8 @@ async def ln_invoice_payment(   request: Request,
 async def poll_for_balance(request: Request, acorn_obj: Acorn = Depends(get_acorn)):
     safebox_handle = None
     fiat_balance = None
+    if not acorn_obj:
+        return {"balance": 0, "fiat_balance": None, "handle": None}
     try:
         current_balance = await acorn_obj.get_current_balance()
         with Session(engine) as session:
@@ -1440,6 +1452,8 @@ async def my_private_data(      request: Request,
                     ):
     """Protected access to private data stored in home relay"""
 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
 
     user_records = await acorn_obj.get_user_records(record_kind=kind)
@@ -1460,6 +1474,8 @@ async def my_personal_messages(      request: Request,
                     ):
     """Protected access to private data stored in home relay"""
 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
     dm_relays = settings.DM_RELAYS
     user_records = await acorn_obj.get_user_records(record_kind=kind, relays=dm_relays, reverse=True)
@@ -1718,6 +1734,8 @@ async def my_ecash(       request: Request,
 async def my_attest(       request: Request, 
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    if not acorn_obj:
+        return RedirectResponse(url="/")
     
     print(f"{acorn_obj.pubkey_bech32}")
     return templates.TemplateResponse(      "attest/attest.html", 
@@ -1731,6 +1749,8 @@ async def my_attest(       request: Request,
 async def my_attest(       request: Request, 
                         acorn_obj: Acorn = Depends(get_acorn)
                     ):
+    if not acorn_obj:
+        return RedirectResponse(url="/")
     
     root_entities = ""
     wot_entities = []
@@ -1762,6 +1782,8 @@ async def trust_profiles(
     acorn_obj: Acorn = Depends(get_acorn)
 ):
     profile_cards: list[dict[str, str | None]] = []
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
     try:
         await acorn_obj.load_data()
@@ -1871,6 +1893,8 @@ async def get_trust_list(            request: Request,
     
     trust_entries: list[str] = []
     trust_count = 1
+    if not acorn_obj:
+        return {"status": "ERROR", "detail": "No active safebox session."}
     await acorn_obj.load_data()
    
     try: 
@@ -1900,7 +1924,8 @@ async def my_danger_zone(       request: Request,
                     ):
     """Protected access to danger zone"""
 
- 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
 
     with Session(engine) as session:
@@ -1953,7 +1978,8 @@ async def issue_card(       request: Request,
                     ):
     """Protected access to danger zone"""
 
-    
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
 
     with Session(engine) as session:
@@ -2005,6 +2031,9 @@ async def my_face_rec(       request: Request,
                     ):
     """Protected access to danger zone"""
 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
+
     return templates.TemplateResponse(      "facerec/capture.html", 
                                         {   "request": request
                                             
@@ -2019,6 +2048,9 @@ async def display_card(     request: Request,
                             acorn_obj: Acorn = Depends(get_acorn)
                     ):
     """Protected access to updating the card"""
+
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
     
     if action_mode == 'edit':
@@ -2052,6 +2084,9 @@ async def display_message(     request: Request,
                     ):
     """Protected access to updating the card"""
 
+    if not acorn_obj:
+        return RedirectResponse(url="/")
+
     
     if action_mode == 'edit':
 
@@ -2084,6 +2119,8 @@ async def message_detail(
     acorn_obj: Acorn = Depends(get_acorn),
 ):
     """Read-only view for a private message by event id."""
+    if not acorn_obj:
+        return RedirectResponse(url="/")
 
     target_id = (message_id or "").strip()
     if not target_id:
@@ -3189,6 +3226,8 @@ async def pay_to_nfc_tag( request: Request,
 @router.get("/balance", tags=["public", "hx"])
 async def hx_balance(request: Request,
                         acorn_obj: Acorn= Depends(get_acorn)):
+            if not acorn_obj:
+                return HTMLResponse("Balance: unavailable")
     
             await acorn_obj.load_data()
             
@@ -3200,6 +3239,8 @@ async def hx_request_qr(    request: Request,
                             select_currency: str = Query(...), 
                             description: str = Query(...),
                             acorn_obj: Acorn = Depends(get_acorn)):
+            if not acorn_obj:
+                return HTMLResponse("Session unavailable.")
             await acorn_obj.load_data()
 
             with Session(engine) as session:  
