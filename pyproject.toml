@@ -10,10 +10,7 @@ readme = "README.md"
 python = ">=3.11,<3.14"
 monstr = "^0.1.9"
 click = "^8.1.7"
-coincurve = [
-    { version = "==20.0.0", python = ">=3.11,<3.13" },
-    { version = ">=21.0.0", python = ">=3.13,<3.14" }
-]
+coincurve = "20.0.0"
 wheel = "^0.43.0"
 pyyaml = "^6.0.1"
 pydantic = "^2.8.2"
@@ -51,6 +48,7 @@ liboqs-python = "^0.14.1"
 python-blossom = "^1.0.2"
 filetype = "^1.2.0"
 alembic = "^1.14.1"
+
 
 [tool.poetry.scripts]
 safedaemon = "safebox.safedaemon:main_program"
