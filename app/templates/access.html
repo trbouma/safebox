@@ -1541,7 +1541,7 @@ function handleInvoicePaymentFormSubmit(event) {
       </form>
 
     <div class="btn-stack">
-      <a id="my_ecash_button" class="action-button" href="/safebox/ecash">Redeem Ecash</a>
+      <a id="my_ecash_button" class="action-button" href="/safebox/ecash" hx-boost="false">Redeem Ecash</a>
       <a class="action-button" href="/safebox/txhistory" hx-boost="false">Account History</a>
     </div>
     <pre id="pay_to_message">Ready.</pre>
@@ -1551,9 +1551,9 @@ function handleInvoicePaymentFormSubmit(event) {
   <div class="account-box" id="my-records">
     <p class="section-label"><a class="section-label section-anchor" href="#my-records">My Records</a></p>
     <div class="btn-stack">
-      <a id="my_personal_messages_button" class="action-button" href="/safebox/personalmessages">Private Messages</a>
-      <a id="my_private_data_button" class="action-button" href="/safebox/privatedata">My Notes</a>
-      <a id="my_personal_records_button" class="action-button" href="/records/grantlist">My Records</a>
+      <a id="my_personal_messages_button" class="action-button" href="/safebox/personalmessages" hx-boost="false">Private Messages</a>
+      <a id="my_private_data_button" class="action-button" href="/safebox/privatedata" hx-boost="false">My Notes</a>
+      <a id="my_personal_records_button" class="action-button" href="/records/grantlist" hx-boost="false">My Records</a>
     </div>
   </div>
 
@@ -1563,7 +1563,7 @@ function handleInvoicePaymentFormSubmit(event) {
     <div class="btn-stack">
       <a id="offer_record_button" class="action-button" href="/records/offerlist" hx-boost="false">Offer Record</a>
       <a id="request_record_button" class="action-button" href="/records/request" hx-boost="false">Request a Record</a>
-      <a id="onboard_button" class="action-button" href="/invite?onboard_code={{acorn.handle}}">Onboard a Member</a>
+      <a id="onboard_button" class="action-button" href="/invite?onboard_code={{acorn.handle}}" hx-boost="false">Onboard a Member</a>
     </div>
   </div>
 
@@ -1624,9 +1624,9 @@ function handleInvoicePaymentFormSubmit(event) {
     <div class="btn-stack">
       <button id="clipboard_button" onclick="copytoClipboard()">Backup</button>
       <a id="issue_card" class="action-button" href="/safebox/issuecard" hx-boost="false">Issue Card</a>
-      <a class="action-button" href="/safebox/attest/">Attest</a>
-      <a class="action-button" href="/safebox/trust/">Trust</a>
-      <a id="logout_button" class="action-button" href="/safebox/logout">Logout</a>
+      <a class="action-button" href="/safebox/attest/" hx-boost="false">Attest</a>
+      <a class="action-button" href="/safebox/trust/" hx-boost="false">Trust</a>
+      <a id="logout_button" class="action-button" href="/safebox/logout" hx-boost="false">Logout</a>
     </div>
   </div>
  
@@ -1645,7 +1645,7 @@ function handleInvoicePaymentFormSubmit(event) {
     <p>pubhex: {{acorn.pubkey_hex[:10]}}...{{acorn.pubkey_hex[-8:]}}</p>
     <p>owner: {{acorn.owner[:10]}}...{{acorn.owner[-8:]}}</p>
     <p>home relay: {{acorn.home_relay}}</p>
-    <a href="/public/rates">Exchange Rates</a>
+    <a href="/public/rates" hx-boost="false">Exchange Rates</a>
     <a href="/mybalance" hx-boost="false">My Balance (NFC)</a>
     <a id="danger_zone" class="action-button danger-button" href="/safebox/dangerzone/" hx-boost="false">Danger Zone!</a>
     <a href="https://github.com/trbouma/safebox">Source Code</a>

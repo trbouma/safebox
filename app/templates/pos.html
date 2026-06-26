@@ -330,7 +330,7 @@
         <button class="btn-success" id="btnNfc">Pay NFC</button>
       </div>
       <div class="btn-row-single">
-        <a class="btn-muted btn-small button-link" id="btnBalance" href="/mybalance?from=pos">Check Card Balance</a>
+        <a class="btn-muted btn-small button-link" id="btnBalance" href="/mybalance?from=pos" hx-boost="false">Check Card Balance</a>
       </div>
 
       <p class="meta" id="statusText">Waiting for wallet connection.</p>
@@ -346,7 +346,7 @@
       <label class="label" for="memoInput">Invoice / NFC Comment</label>
       <textarea id="memoInput" placeholder="Paid from POS"></textarea>
 
-      <a class="btn-primary button-link" id="btnBackToAccess" href="/safebox/access">Back to Wallet</a>
+      <a class="btn-primary button-link" id="btnBackToAccess" href="/safebox/access" hx-boost="false">Back to Wallet</a>
     </section>
   </main>
 

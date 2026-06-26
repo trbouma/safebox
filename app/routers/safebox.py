@@ -566,7 +566,7 @@ async def nfc_login(request: Request, nfc_card: nfcCard):
 
 @router.get("/logout")
 async def logout():
-    response = JSONResponse({"message": "Successfully logged out"})
+    response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie(key="access_token")
     return response
 
