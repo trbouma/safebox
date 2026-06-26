@@ -206,7 +206,7 @@ For a named public deployment, set `PUBLIC_BASE_URL` in `.env` so generated link
 PUBLIC_BASE_URL=https://freebsd.safebox.dev
 ```
 
-Branding values can also be set in `.env`, but visible UI branding is overridden by files in `branding/` when they exist. In practice, updating `branding/default.yml` is the most reliable way to change the displayed brand on a single-host FreeBSD deployment:
+Branding values can be set in `.env`, and explicit `.env` values now act as the final override for displayed branding. On a single-host FreeBSD deployment, you can either update `branding/default.yml` or set the values directly in `.env`:
 
 ```yaml
 brand_name: SafeBox FreeBSD

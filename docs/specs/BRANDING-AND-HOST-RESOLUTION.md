@@ -64,6 +64,12 @@ Lookup order:
 2. Host without `www.` prefix (if request host starts with `www.`)
 3. `default.yml` (or equivalent extension)
 4. Built-in settings fallback from app config
+5. Explicit environment overrides from process env or `.env`:
+   - `BRANDING`
+   - `BRANDING_MESSAGE`
+   - `BRANDING_RETRY`
+
+Only explicitly provided environment values override file-based branding. Built-in config defaults by themselves do not override host branding files.
 
 ## Startup Bootstrap Behavior
 
@@ -96,6 +102,7 @@ Recommended container deployment:
    - `./branding:/app/branding`
 2. Add one file per domain as needed
 3. Keep `default.yml` as global fallback
+4. Use `.env` for deployment-wide final overrides when you want runtime config to win over branding files
 
 Recommended reverse-proxy behavior:
 

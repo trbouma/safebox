@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
 import yaml
+from dotenv import dotenv_values
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
@@ -35,6 +37,31 @@ def _fallback_branding() -> dict[str, Any]:
         "branding_message": settings.BRANDING_MESSAGE,
         "branding_retry": settings.BRANDING_RETRY,
     }
+
+
+def _explicit_env_branding_overrides() -> dict[str, str]:
+    env_file_path = Path(getattr(settings.Config, "env_file", ".env"))
+    file_values: dict[str, str | None] = {}
+    if env_file_path.exists():
+        try:
+            file_values = dotenv_values(env_file_path)
+        except Exception:
+            file_values = {}
+
+    merged: dict[str, str] = {}
+    key_map = {
+        "BRANDING": "branding",
+        "BRANDING_MESSAGE": "branding_message",
+        "BRANDING_RETRY": "branding_retry",
+    }
+
+    for env_key, branding_key in key_map.items():
+        if env_key in file_values and file_values[env_key] not in (None, ""):
+            merged[branding_key] = str(file_values[env_key])
+        if env_key in os.environ and os.environ[env_key] != "":
+            merged[branding_key] = os.environ[env_key]
+
+    return merged
 
 
 def ensure_branding_bootstrap() -> None:
@@ -92,9 +119,12 @@ def get_branding_for_host(host: str | None) -> dict[str, Any]:
     normalized = _normalize_host(host)
     path = _resolve_file_for_host(normalized)
     fallback = _fallback_branding()
+    env_overrides = _explicit_env_branding_overrides()
 
     if path is None:
-        return fallback
+        branding = dict(fallback)
+        branding.update(env_overrides)
+        return branding
 
     cache_key = str(path.resolve())
     mtime = path.stat().st_mtime
@@ -117,6 +147,8 @@ def get_branding_for_host(host: str | None) -> dict[str, Any]:
     for key in ("logo_url", "logo_path", "theme", "brand_url"):
         if key in loaded:
             branding[key] = loaded[key]
+
+    branding.update(env_overrides)
 
     _CACHE[cache_key] = (cache_key, mtime, branding)
     return branding
