@@ -123,6 +123,10 @@ A warning similar to the following is currently harmless:
 liboqs version (major, minor) 0.15.0 differs from liboqs-python version 0.14.1
 ```
 
+This differs from the Docker build path. In Docker, the `Dockerfile` explicitly clones and compiles `liboqs` from source and then installs the Python dependencies on top of that compiled shared library. On FreeBSD, the recommended path is to install both `liboqs` and `py311-liboqs-python` from the package repository, so the PQC library is supplied by the operating system rather than built locally during the Safebox install.
+
+As a result, a long `poetry install` on FreeBSD does not necessarily mean `liboqs` is being rebuilt. More commonly, other native Python dependencies such as `cryptography`, `pydantic-core`, `uvloop`, `asyncpg`, or `pyzmq` are what take time to compile.
+
 ## Poetry
 
 Install Poetry for the current user:
@@ -206,6 +210,8 @@ For a named public deployment, set `PUBLIC_BASE_URL` in `.env` so generated link
 PUBLIC_BASE_URL=https://freebsd.safebox.dev
 ```
 
+Safebox can derive a public origin from the incoming request when this value is unset, but explicit configuration is more reliable for public deployments. In particular, LNURL wallets such as Blink are sensitive to callback host and scheme mismatches, so `PUBLIC_BASE_URL` should be treated as recommended for production even though it remains optional in simpler environments.
+
 Branding values can be set in `.env`, and explicit `.env` values now act as the final override for displayed branding. On a single-host FreeBSD deployment, you can either update `branding/default.yml` or set the values directly in `.env`:
 
 ```yaml
@@ -215,6 +221,103 @@ branding_retry_message: FreeBSD instance: please try again.
 ```
 
 If you later host multiple domains from one instance, add host-specific branding files such as `branding/freebsd.safebox.dev.yml`.
+
+## Running as a Daemon
+
+For the current web application deployment, the simplest FreeBSD daemon approach is to run Safebox under a native `rc.d` service wrapper that starts the same Poetry-managed command you use interactively.
+
+If you want to test daemonized execution directly from the command line first, you can use FreeBSD's `daemon` utility:
+
+```sh
+cd /usr/local/safebox-2
+daemon -f -p /var/run/safebox.pid \
+  /usr/bin/env APP_ENV=production \
+  /home/trbouma/.local/bin/poetry run uvicorn app.main:app --host 0.0.0.0 --port 7375
+```
+
+To stop that manually started daemon:
+
+```sh
+kill "$(cat /var/run/safebox.pid)"
+```
+
+To inspect whether it is still running:
+
+```sh
+ps aux | grep uvicorn
+```
+
+For example, create `/usr/local/etc/rc.d/safebox`:
+
+```sh
+#!/bin/sh
+#
+# PROVIDE: safebox
+# REQUIRE: LOGIN NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="safebox"
+rcvar="safebox_enable"
+
+load_rc_config $name
+
+: ${safebox_enable:="NO"}
+: ${safebox_user:="trbouma"}
+: ${safebox_group:="trbouma"}
+: ${safebox_dir:="/usr/local/safebox-2"}
+: ${safebox_host:="0.0.0.0"}
+: ${safebox_port:="7375"}
+: ${safebox_command:="/home/trbouma/.local/bin/poetry"}
+: ${safebox_env:="APP_ENV=production"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+command_args="-f -p ${pidfile} /usr/bin/env ${safebox_env} ${safebox_command} run uvicorn app.main:app --host ${safebox_host} --port ${safebox_port}"
+
+start_precmd="${name}_precmd"
+
+safebox_precmd()
+{
+    cd "${safebox_dir}" || exit 1
+    install -d -o "${safebox_user}" -g "${safebox_group}" /var/run
+}
+
+run_rc_command "$1"
+```
+
+Then:
+
+```sh
+chmod +x /usr/local/etc/rc.d/safebox
+sysrc safebox_enable=YES
+service safebox start
+service safebox status
+```
+
+This keeps the service model close to your tested command:
+
+```sh
+poetry run uvicorn app.main:app --host 0.0.0.0 --port 7375
+```
+
+For a more production-style process model, you can replace the `uvicorn` command in `command_args` with Gunicorn:
+
+```sh
+/home/trbouma/.local/bin/poetry run gunicorn app.main:app \
+  --workers 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:7375 \
+  --timeout 120
+```
+
+Notes:
+
+- Adjust `safebox_user`, `safebox_group`, `safebox_dir`, and the Poetry path for your system.
+- Keep your `.env`, `branding/`, and `data/` paths readable by the service user.
+- If you use a reverse proxy such as Nginx or Caddy, bind Safebox to localhost or a private interface instead of exposing it directly.
+- The existing `safedaemon` script in the repository is for the older wallet-side daemon path and is not the recommended service wrapper for the FastAPI web application.
 
 ## Dependency Sanity Checks
 
