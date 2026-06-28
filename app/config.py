@@ -267,6 +267,7 @@ class ConfigWithFallback(BaseSettings):
     PQC_KEM_SECRET_KEY_FILE: str = _default_secret_file("pqc_kem_secret_key")
     PQC_KEM_PUBLIC_KEY_FILE: str = _default_secret_file("pqc_kem_public_key")
     SECRET_BOOTSTRAP_MODE: bool = False
+    AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE: bool = False
 
     class Config:
         case_sensitive = False
@@ -423,6 +424,28 @@ class ConfigWithFallback(BaseSettings):
                 values[value_name] = value
         return values
 
+    @classmethod
+    def _secret_store_looks_empty(cls, default_conf_path: Path, kwargs: Dict[str, object] | None = None) -> bool:
+        legacy_migrated_conf_path = default_conf_path.with_name(default_conf_path.name + ".deleteme")
+        relevant_env_keys = {
+            "SERVICE_NSEC",
+            "SERVICE_NPUB",
+            "NWC_NSEC",
+            "PQC_SIG_SECRET_KEY",
+            "PQC_SIG_PUBLIC_KEY",
+            "PQC_KEM_SECRET_KEY",
+            "PQC_KEM_PUBLIC_KEY",
+        }
+        if any(os.environ.get(key) not in (None, "", "notset") for key in relevant_env_keys):
+            return False
+        if default_conf_path.exists() or legacy_migrated_conf_path.exists():
+            return False
+        if any(cls._get_present_secret_files(kwargs).values()):
+            return False
+        if cls._load_companion_values_from_files(kwargs):
+            return False
+        return True
+
     @staticmethod
     def _derive_service_npub(service_nsec: str) -> str:
         return Keys(priv_k=service_nsec).public_key_bech32()
@@ -518,7 +541,13 @@ class ConfigWithFallback(BaseSettings):
     def __init__(self, **kwargs):
         default_conf_path = Path("data/default.conf")
         default_conf_path.parent.mkdir(parents=True, exist_ok=True)
-        bootstrap_mode = bool(self._get_effective_field_value("SECRET_BOOTSTRAP_MODE", kwargs))
+        explicit_bootstrap_mode = bool(self._get_effective_field_value("SECRET_BOOTSTRAP_MODE", kwargs))
+        auto_bootstrap_mode = bool(
+            self._get_effective_field_value("AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE", kwargs)
+        )
+        bootstrap_mode = explicit_bootstrap_mode
+        if not bootstrap_mode and auto_bootstrap_mode:
+            bootstrap_mode = self._secret_store_looks_empty(default_conf_path, kwargs)
         if bootstrap_mode:
             self._migrate_default_conf_to_secret_files(default_conf_path, kwargs)
         legacy_migrated_conf_path = default_conf_path.with_name(default_conf_path.name + ".deleteme")
@@ -557,9 +586,12 @@ class ConfigWithFallback(BaseSettings):
         # If anything is missing, generate *only* the missing ones and persist
         if missing:
             if not bootstrap_mode:
+                auto_hint = ""
+                if auto_bootstrap_mode:
+                    auto_hint = " AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE is enabled, but the secret store is not empty enough to permit implicit first-run generation."
                 raise RuntimeError(
                     "Missing required secret material and SECRET_BOOTSTRAP_MODE is disabled. "
-                    f"Missing values: {', '.join(sorted(missing))}"
+                    f"Missing values: {', '.join(sorted(missing))}.{auto_hint}"
                 )
 
             generated = self._gen_missing_values(missing)

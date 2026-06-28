@@ -72,7 +72,8 @@ The following defaults are defined in `Settings` (`app/config.py`).
 running behind a reverse proxy or ingress. When set, public LNURL endpoints use
 this canonical origin when generating callback URLs instead of relying on
 forwarded request headers. This helps avoid wallet interoperability problems
-caused by mismatched host or scheme forwarding.
+caused by mismatched host or scheme forwarding. In practice, public wallet
+clients such as Blink are a strong reason to set this explicitly.
 
 ### Protocol and Kinds
 

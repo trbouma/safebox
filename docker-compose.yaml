@@ -12,6 +12,8 @@ services:
       # - PUBLIC_BASE_URL=https://getsafebox.app
       - CURRENCY_CSV=/app/setup/currency.csv
       - SECRET_BOOTSTRAP_MODE=true
+      # Alternative first-run convenience:
+      # - AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE=true
       # Post-bootstrap hardening:
       # - SECRET_BOOTSTRAP_MODE=false
       - SERVICE_NSEC_FILE=/run/secrets/service_nsec

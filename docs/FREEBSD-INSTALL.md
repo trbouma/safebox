@@ -186,15 +186,23 @@ This is expected.
 
 ## Runtime Configuration
 
-For an initial installation, Safebox requires bootstrap mode in order to generate its cryptographic secrets.
+For an initial installation, Safebox can generate its cryptographic secrets in two ways:
 
-Start the application with:
+1. Explicit bootstrap mode:
 
 ```sh
 SECRET_BOOTSTRAP_MODE=true poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Run this only for first-time initialization so Safebox can generate the required secrets.
+2. Guarded first-run auto-bootstrap:
+
+```sh
+AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE=true poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+The automatic mode only bootstraps when the secret store is truly empty. If Safebox detects partial or previously initialized secret state, startup still fails closed instead of silently generating a new identity.
+
+Run either mode only for first-time initialization so Safebox can generate the required secrets.
 
 After the generated secrets have been written to your `.env` file, disable bootstrap mode and start normally.
 

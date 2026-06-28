@@ -66,6 +66,7 @@ Important:
 
 - this Compose shape should be treated as a bootstrap/test configuration, not the final hardened deployment shape,
 - it is acceptable to run single-worker during bootstrap so secret/key initialization happens deterministically,
+- `AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE=true` may be used as a first-run convenience when the mounted secret store is truly empty,
 - after bootstrap succeeds, the operator should harden the deployment by:
   - switching to pre-provisioned secrets,
   - setting `SECRET_BOOTSTRAP_MODE=false`,
