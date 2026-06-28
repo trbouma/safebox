@@ -267,7 +267,7 @@ class ConfigWithFallback(BaseSettings):
     PQC_KEM_SECRET_KEY_FILE: str = _default_secret_file("pqc_kem_secret_key")
     PQC_KEM_PUBLIC_KEY_FILE: str = _default_secret_file("pqc_kem_public_key")
     SECRET_BOOTSTRAP_MODE: bool = False
-    AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE: bool = False
+    AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE: bool = True
 
     class Config:
         case_sensitive = False
