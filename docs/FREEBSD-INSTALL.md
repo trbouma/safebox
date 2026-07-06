@@ -182,7 +182,17 @@ Packages commonly built locally include:
 
 On older hardware this may take 20 to 60 minutes.
 
+On Raspberry Pi and other lower-power ARM systems, the `Preparing metadata (pyproject.toml)` phase can also take a long time before you see obvious progress. That does not necessarily mean the install is stuck. It often means Poetry and `pip` are still evaluating or building native dependencies in the background.
+
 This is expected.
+
+If you want to confirm the install is still making progress, open another shell and run:
+
+```sh
+top
+```
+
+If you see processes such as `python3.11`, `rustc`, `cargo`, or `cc` using CPU, the install is usually still progressing normally.
 
 ## Runtime Configuration
 
@@ -237,22 +247,26 @@ For the current web application deployment, the simplest FreeBSD daemon approach
 If you want to test daemonized execution directly from the command line first, you can use FreeBSD's `daemon` utility:
 
 ```sh
-cd /usr/local/safebox-2
-daemon -f -p /var/run/safebox.pid \
+cd /usr/local/safebox
+daemon -f -p /usr/local/safebox/data/safebox.pid \
   /usr/bin/env APP_ENV=production \
-  /home/trbouma/.local/bin/poetry run uvicorn app.main:app --host 0.0.0.0 --port 7375
+  /home/safebox/.local/bin/poetry run gunicorn app.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:7375 \
+    --timeout 120
 ```
 
 To stop that manually started daemon:
 
 ```sh
-kill "$(cat /var/run/safebox.pid)"
+kill "$(cat /usr/local/safebox/data/safebox.pid)"
 ```
 
 To inspect whether it is still running:
 
 ```sh
-ps aux | grep uvicorn
+ps aux | grep gunicorn
 ```
 
 For example, create `/usr/local/etc/rc.d/safebox`:
@@ -272,25 +286,17 @@ rcvar="safebox_enable"
 load_rc_config $name
 
 : ${safebox_enable:="NO"}
-: ${safebox_user:="trbouma"}
-: ${safebox_group:="trbouma"}
-: ${safebox_dir:="/usr/local/safebox-2"}
-: ${safebox_host:="0.0.0.0"}
+: ${safebox_user:="safebox"}
+: ${safebox_group:="safebox"}
+: ${safebox_dir:="/usr/local/safebox"}
+: ${safebox_host:="127.0.0.1"}
 : ${safebox_port:="7375"}
-: ${safebox_command:="/home/trbouma/.local/bin/poetry"}
-: ${safebox_env:="APP_ENV=production"}
+: ${safebox_command:="/home/safebox/.local/bin/poetry"}
+: ${safebox_stdout:="/usr/local/safebox/logs/safebox.log"}
+: ${safebox_stderr:="/usr/local/safebox/logs/safebox.err"}
 
-pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-f -p ${pidfile} /usr/bin/env ${safebox_env} ${safebox_command} run uvicorn app.main:app --host ${safebox_host} --port ${safebox_port}"
-
-start_precmd="${name}_precmd"
-
-safebox_precmd()
-{
-    cd "${safebox_dir}" || exit 1
-    install -d -o "${safebox_user}" -g "${safebox_group}" /var/run
-}
+command_args="-f -r -u ${safebox_user} -o ${safebox_stdout} -e ${safebox_stderr} /bin/sh -c 'cd ${safebox_dir} && exec ${safebox_command} run gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
 
 run_rc_command "$1"
 ```
@@ -304,16 +310,10 @@ service safebox start
 service safebox status
 ```
 
-This keeps the service model close to your tested command:
+This keeps the service model close to the tested production-style command:
 
 ```sh
-poetry run uvicorn app.main:app --host 0.0.0.0 --port 7375
-```
-
-For a more production-style process model, you can replace the `uvicorn` command in `command_args` with Gunicorn:
-
-```sh
-/home/trbouma/.local/bin/poetry run gunicorn app.main:app \
+poetry run gunicorn app.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:7375 \
@@ -322,6 +322,9 @@ For a more production-style process model, you can replace the `uvicorn` command
 
 Notes:
 
+- `daemon -r` provides restart-on-exit behavior.
+- The service runs as the non-root `safebox` user.
+- SafeBox reads `.env` itself through `pydantic-settings`; the service wrapper should not source `.env` as a shell script.
 - Adjust `safebox_user`, `safebox_group`, `safebox_dir`, and the Poetry path for your system.
 - Keep your `.env`, `branding/`, and `data/` paths readable by the service user.
 - If you use a reverse proxy such as Nginx or Caddy, bind Safebox to localhost or a private interface instead of exposing it directly.

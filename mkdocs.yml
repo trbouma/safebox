@@ -44,6 +44,11 @@ nav:
       - Phase 3 Proposal: PHASE3-PROPOSAL.md
       - Nosfabrica Proposal: NOSFABRICA-PROPOSAL.md
       - Worknotes: WORKNOTES.md
+  - DevOps:
+      - SafeBox FreeBSD Jail from Scratch: devops/freebsd-jail-from-scratch.md
+      - SafeBox FreeBSD Appliance: devops/SAFEBOX-FREEBSD-APPLIANCE-SPEC.md
+      - Native FreeBSD Installation: FREEBSD-INSTALL.md
+      - Post-deploy Sanity Check: devops/post-deploy-sanity-check.md
   - Apostille:
       - Rationale: apostille/rationale.md
       - Private Apostille: apostille/private-apostille.md

@@ -24,7 +24,7 @@ The appliance should:
 
 - boot directly into the SafeBox service
 - automatically start SafeBox on boot
-- restart the service after crashes
+- restart the service after crashes, using a simple supervising strategy
 - expose the application over HTTPS
 - join an existing Tailscale network
 - run as a non-root service account
@@ -302,7 +302,7 @@ As `root`:
 
 ```sh
 pw groupadd safebox
-pw useradd safebox -g safebox -d /usr/local/safebox -m -s /bin/sh
+pw useradd safebox -g safebox -d /home/safebox -m -s /bin/sh
 ```
 
 Later, after setup stabilizes, you can lock this down:
@@ -333,18 +333,20 @@ hash -r
 
 If `hash -r` is not available in your shell, simply log out and start a fresh `su - safebox` session before running `poetry`.
 
+Verify the installed Poetry path:
+
+```sh
+su - safebox -c 'which poetry'
+```
+
+Use that returned path in later daemon and `rc.d` service configuration examples.
+
 ### 5. Clone SafeBox
 
-As user `safebox`:
+As `root`:
 
 ```sh
 git clone <repository-url> /usr/local/safebox
-cd /usr/local/safebox
-```
-
-If the repository is already present, make sure ownership is correct:
-
-```sh
 chown -R safebox:safebox /usr/local/safebox
 ```
 
@@ -362,11 +364,20 @@ As user `safebox`:
 
 ```sh
 cd /usr/local/safebox
-poetry env use python3.11
-poetry install
+/home/safebox/.local/bin/poetry config virtualenvs.in-project true
+/home/safebox/.local/bin/poetry env use python3.11
+/home/safebox/.local/bin/poetry install
 ```
 
 Expect long compile times for some dependencies on FreeBSD. This is normal.
+
+Verify the in-project virtual environment exists:
+
+```sh
+ls -l /usr/local/safebox/.venv/bin/python
+ls -l /usr/local/safebox/.venv/bin/uvicorn
+ls -l /usr/local/safebox/.venv/bin/gunicorn
+```
 
 ### 7. Verify core dependencies
 
@@ -375,7 +386,7 @@ As user `safebox`:
 ```sh
 python3.11 -c "import sqlite3"
 python3.11 -c "import oqs"
-poetry run python -c "import coincurve, oqs, psycopg2, zmq; print('ok')"
+/usr/local/safebox/.venv/bin/python -c "import coincurve, oqs, psycopg2, zmq; print('ok')"
 ```
 
 ### 8. Create the base `.env`
@@ -433,30 +444,37 @@ Confirm:
 - the UI is reachable
 - branding appears correctly
 
+This is the initial server test. Keep it simple here. Later production guidance can tighten the bind address once `nginx` is in front.
+
 ### 11. Test production-style startup
 
 As user `safebox`:
 
 ```sh
 cd /usr/local/safebox
-poetry run gunicorn app.main:app \
+/usr/local/safebox/.venv/bin/gunicorn \
+  --chdir /usr/local/safebox \
+  app.main:app \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:7375 \
   --timeout 120
 ```
 
-This is the current application service command.
+Do not proceed to daemon or `rc.d` setup until both the manual `uvicorn` and manual `gunicorn` commands work correctly as the `safebox` user.
 
 ### 12. Test daemonized execution from the command line
+
+Only do this after the manual commands above work.
 
 As `root` or an appropriate operator:
 
 ```sh
 cd /usr/local/safebox
-daemon -f -p /var/run/safebox.pid \
-  /usr/bin/env APP_ENV=production \
-  /usr/local/safebox/.local/bin/poetry run gunicorn app.main:app \
+daemon -f -p /usr/local/safebox/data/safebox.pid \
+  /usr/local/safebox/.venv/bin/gunicorn \
+    --chdir /usr/local/safebox \
+    app.main:app \
     --workers 4 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:7375 \
@@ -466,7 +484,7 @@ daemon -f -p /var/run/safebox.pid \
 Stop it:
 
 ```sh
-kill "$(cat /var/run/safebox.pid)"
+kill "$(cat /usr/local/safebox/data/safebox.pid)"
 ```
 
 ### 13. Enable SSH and Tailscale
@@ -479,12 +497,40 @@ service sshd start
 
 sysrc tailscaled_enable=YES
 service tailscaled start
+```
+
+### 14. Join the appliance to Tailscale
+
+Once `tailscaled` is running, join the appliance to your Tailnet.
+
+Interactive join:
+
+```sh
 tailscale up
+```
+
+If you want to advertise a stable appliance name:
+
+```sh
+tailscale up --hostname safebox-freebsd
+```
+
+If you are using an auth key for unattended provisioning:
+
+```sh
+tailscale up --authkey tskey-xxxxxxxxxxxxxxxx --hostname safebox-freebsd
+```
+
+Useful verification commands:
+
+```sh
+tailscale status
+tailscale ip
 ```
 
 At this point, verify you can administer the box over Tailscale SSH/network paths.
 
-### 14. Create the FreeBSD `rc.d` service
+### 15. Create the FreeBSD `rc.d` service
 
 Create `/usr/local/etc/rc.d/safebox`:
 
@@ -503,24 +549,15 @@ rcvar="safebox_enable"
 load_rc_config $name
 
 : ${safebox_enable:="NO"}
-: ${safebox_user:="safebox"}
-: ${safebox_group:="safebox"}
 : ${safebox_dir:="/usr/local/safebox"}
-: ${safebox_host:="127.0.0.1"}
+: ${safebox_host:="0.0.0.0"}
 : ${safebox_port:="7375"}
-: ${safebox_command:="/usr/local/safebox/.local/bin/poetry"}
-: ${safebox_env:="APP_ENV=production"}
+: ${safebox_gunicorn:="/usr/local/safebox/.venv/bin/gunicorn"}
+: ${safebox_log:="/usr/local/safebox/logs/safebox.log"}
+: ${safebox_pidfile:="/usr/local/safebox/data/safebox.pid"}
 
-pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-f -r -p ${pidfile} /usr/bin/env ${safebox_env} ${safebox_command} run gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120"
-
-start_precmd="${name}_precmd"
-
-safebox_precmd()
-{
-    cd "${safebox_dir}" || exit 1
-}
+command_args="-f -r -p ${safebox_pidfile} -o ${safebox_log} -m 3 /usr/bin/su -m safebox /bin/sh -c '${safebox_gunicorn} --chdir ${safebox_dir} app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
 
 run_rc_command "$1"
 ```
@@ -536,10 +573,12 @@ service safebox status
 
 Notes:
 
-- `daemon -r` gives you restart-on-exit behavior
-- bind to `127.0.0.1` once nginx is in front
+- the service uses the stable in-project virtualenv at `/usr/local/safebox/.venv`
+- SafeBox reads `.env` itself through `pydantic-settings`; the service wrapper should not source `.env` as a shell script
+- do not move to this step until manual `uvicorn` and `gunicorn` both work as `safebox`
+- you can tighten the bind to `127.0.0.1` later once nginx is in front
 
-### 15. Configure nginx reverse proxy
+### 16. Configure nginx reverse proxy
 
 Create a basic nginx site config such as:
 
@@ -577,7 +616,7 @@ service nginx start
 
 Certificate issuance can be added once DNS is in place.
 
-### 16. Lock the application down for steady state
+### 17. Lock the application down for steady state
 
 After everything works:
 
@@ -593,7 +632,7 @@ Recommended shell lock-down:
 chsh -s /usr/sbin/nologin safebox
 ```
 
-### 17. Regression checklist before treating the appliance as stable
+### 18. Regression checklist before treating the appliance as stable
 
 Verify:
 
