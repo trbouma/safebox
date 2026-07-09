@@ -60,7 +60,7 @@ agent = "safebox.cli_agent:cli"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
-pyinstaller = "^6.10.0"
+pyinstaller = { version = "^6.21.0", markers = "sys_platform != 'freebsd'" }
 
 [build-system]
 requires = ["poetry-core"]
