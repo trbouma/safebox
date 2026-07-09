@@ -12,9 +12,11 @@ Once these dependencies are present, Poetry is able to compile all required nati
 
 - `pydantic-core`
 - `cryptography`
-- `uvloop`
 - `asyncpg`
 - `pyzmq`
+
+`uvloop` should be treated as optional on FreeBSD. The standard asyncio event
+loop is acceptable for the FreeBSD deployment path.
 
 ## Prerequisites
 
@@ -125,7 +127,11 @@ liboqs version (major, minor) 0.15.0 differs from liboqs-python version 0.14.1
 
 This differs from the Docker build path. In Docker, the `Dockerfile` explicitly clones and compiles `liboqs` from source and then installs the Python dependencies on top of that compiled shared library. On FreeBSD, the recommended path is to install both `liboqs` and `py311-liboqs-python` from the package repository, so the PQC library is supplied by the operating system rather than built locally during the Safebox install.
 
-As a result, a long `poetry install` on FreeBSD does not necessarily mean `liboqs` is being rebuilt. More commonly, other native Python dependencies such as `cryptography`, `pydantic-core`, `uvloop`, `asyncpg`, or `pyzmq` are what take time to compile.
+As a result, a long `poetry install` on FreeBSD does not necessarily mean `liboqs` is being rebuilt. More commonly, other native Python dependencies such as `cryptography`, `pydantic-core`, `asyncpg`, or `pyzmq` are what take time to compile.
+
+If `liboqs` is built from source, make sure it is built as a shared library
+with `-DBUILD_SHARED_LIBS=ON`; the Python wrapper needs to load
+`/usr/local/lib/liboqs.so`.
 
 ## Poetry
 
@@ -159,7 +165,16 @@ cd safebox-2
 Create the virtual environment:
 
 ```sh
+poetry config virtualenvs.in-project true
 poetry env use python3.11
+```
+
+When relying on FreeBSD package-provided native modules such as `coincurve`,
+`yarl`, `multidict`, `frozenlist`, or `psycopg2`, enable system site packages
+before creating the environment:
+
+```sh
+poetry config virtualenvs.options.system-site-packages true
 ```
 
 Install the project:
@@ -176,7 +191,6 @@ Packages commonly built locally include:
 
 - `cryptography`
 - `pydantic-core`
-- `uvloop`
 - `asyncpg`
 - `pyzmq`
 
@@ -251,7 +265,7 @@ cd /usr/local/safebox
 daemon -f -p /usr/local/safebox/data/safebox.pid \
   /usr/bin/env APP_ENV=production \
   /home/safebox/.local/bin/poetry run gunicorn app.main:app \
-    --workers 4 \
+    --workers 1 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:7375 \
     --timeout 120
@@ -296,7 +310,7 @@ load_rc_config $name
 : ${safebox_stderr:="/usr/local/safebox/logs/safebox.err"}
 
 command="/usr/sbin/daemon"
-command_args="-f -r -u ${safebox_user} -o ${safebox_stdout} -e ${safebox_stderr} /bin/sh -c 'cd ${safebox_dir} && exec ${safebox_command} run gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
+command_args="-f -r -u ${safebox_user} -o ${safebox_stdout} -e ${safebox_stderr} /bin/sh -c 'cd ${safebox_dir} && exec ${safebox_command} run gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
 
 run_rc_command "$1"
 ```
@@ -314,7 +328,7 @@ This keeps the service model close to the tested production-style command:
 
 ```sh
 poetry run gunicorn app.main:app \
-  --workers 4 \
+  --workers 1 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:7375 \
   --timeout 120
@@ -323,6 +337,10 @@ poetry run gunicorn app.main:app \
 Notes:
 
 - `daemon -r` provides restart-on-exit behavior.
+- Use `--workers 1` for first startup and for SQLite-backed deployments. A
+  fresh SQLite database can hit a schema creation race when multiple Gunicorn
+  workers start at the same time. Use PostgreSQL before increasing workers for
+  production.
 - The service runs as the non-root `safebox` user.
 - SafeBox reads `.env` itself through `pydantic-settings`; the service wrapper should not source `.env` as a shell script.
 - Adjust `safebox_user`, `safebox_group`, `safebox_dir`, and the Poetry path for your system.
@@ -387,11 +405,48 @@ pkg install \
     py311-liboqs-python
 ```
 
+If building from source, configure CMake with:
+
+```sh
+cmake -GNinja -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=ON ..
+ninja
+ninja install
+ldconfig
+```
+
+### uvloop on FreeBSD
+
+`uvloop` is not required for the FreeBSD service path. If it fails to build or
+import, use the standard asyncio loop and make `uvloop` conditional on
+non-FreeBSD platforms.
+
+### Slow native modules
+
+Prefer FreeBSD packages where available:
+
+```sh
+pkg install py311-coincurve py311-yarl py311-multidict py311-frozenlist py311-psycopg2
+poetry config virtualenvs.options.system-site-packages true
+```
+
+If the repository pins `coincurve = "20.0.0"` and FreeBSD provides
+`py311-coincurve` 21.x, relax the local constraint before installing:
+
+```toml
+coincurve = ">=20.0.0,<22.0.0"
+```
+
+Then run:
+
+```sh
+poetry update coincurve
+poetry install --only main
+```
+
 ### Long Compilation Times
 
 The following packages compile native code and may take several minutes each:
 
-- `uvloop`
 - `cryptography`
 - `asyncpg`
 - `pyzmq`
@@ -419,7 +474,8 @@ After confirming the application is running, consider:
 - Running Safebox as a native FreeBSD `rc.d` service
 - Deploying Nginx as a reverse proxy with HTTPS
 - Using Tailscale for secure remote access
-- Running Safebox inside a FreeBSD jail, for example with Bastille
+- Running Safebox inside a FreeBSD jail; see
+  [SafeBox in a FreeBSD Jail](devops/freebsd-jail-from-scratch.md)
 - Leveraging ZFS snapshots before upgrades and database migrations
 
 These provide a clean, lightweight, and reliable deployment path suitable for a dedicated Safebox appliance.

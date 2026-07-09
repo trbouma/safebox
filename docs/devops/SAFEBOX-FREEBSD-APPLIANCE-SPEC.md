@@ -197,12 +197,16 @@ Recommended final proxy shape:
 - proxies `443` to `http://127.0.0.1:7375`
 - forwards `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`
 
-## Future Jail Architecture
+## Jail Architecture
 
-Long-term target:
+Validated native-jail target:
 
-- host OS manages ZFS, Bastille, Tailscale, and nginx
-- SafeBox runs inside a Bastille jail
+- host OS manages ZFS, jail lifecycle, Tailscale, and nginx
+- SafeBox runs inside a dedicated FreeBSD jail
+- the simplest validated jail networking mode is `ip4 = inherit`
+
+Longer-term variants may use Bastille or VNET if the deployment needs more
+automation or stronger network isolation.
 
 Target separation:
 
@@ -236,16 +240,19 @@ Completed:
 - bootstrap secrets working
 - SafeBox runs manually
 - SafeBox runs via `daemon`
+- SafeBox runs inside a native FreeBSD jail
+- `bsdinstall jail` path validated for a clean single-jail install
 
 In progress:
 
 - `rc.d` service
 - nginx reverse proxy
 - Tailscale integration
+- automated bootstrap script
 
 Planned:
 
-- Bastille jail deployment
+- Bastille or VNET variant, if needed
 - automated deployment
 - production appliance image
 
@@ -455,13 +462,18 @@ cd /usr/local/safebox
 /usr/local/safebox/.venv/bin/gunicorn \
   --chdir /usr/local/safebox \
   app.main:app \
-  --workers 4 \
+  --workers 1 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:7375 \
   --timeout 120
 ```
 
 Do not proceed to daemon or `rc.d` setup until both the manual `uvicorn` and manual `gunicorn` commands work correctly as the `safebox` user.
+
+Use one worker for the first startup and for SQLite-backed deployments. A fresh
+SQLite database can race during schema creation if multiple Gunicorn workers
+start simultaneously. After the database is initialized, two workers may work,
+but PostgreSQL is the safer path before increasing worker count for production.
 
 ### 12. Test daemonized execution from the command line
 
@@ -475,7 +487,7 @@ daemon -f -p /usr/local/safebox/data/safebox.pid \
   /usr/local/safebox/.venv/bin/gunicorn \
     --chdir /usr/local/safebox \
     app.main:app \
-    --workers 4 \
+    --workers 1 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:7375 \
     --timeout 120
@@ -557,7 +569,7 @@ load_rc_config $name
 : ${safebox_pidfile:="/usr/local/safebox/data/safebox.pid"}
 
 command="/usr/sbin/daemon"
-command_args="-f -r -p ${safebox_pidfile} -o ${safebox_log} -m 3 /usr/bin/su -m safebox /bin/sh -c '${safebox_gunicorn} --chdir ${safebox_dir} app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
+command_args="-f -r -p ${safebox_pidfile} -o ${safebox_log} -m 3 /usr/bin/su -m safebox /bin/sh -c '${safebox_gunicorn} --chdir ${safebox_dir} app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind ${safebox_host}:${safebox_port} --timeout 120'"
 
 run_rc_command "$1"
 ```
@@ -662,13 +674,21 @@ This means a long `poetry install` on FreeBSD is usually due to other native dep
 
 ### coincurve
 
-The project currently pins:
+Older project revisions pinned:
 
 ```text
 coincurve==20.0.0
 ```
 
-This is a temporary stability measure due to current upstream packaging/build issues.
+On FreeBSD 15/arm64, the package repository may provide `py311-coincurve` 21.x.
+If Poetry attempts to downgrade to 20.0.0, it can force a source build and fail
+in `scikit-build-core`. For FreeBSD, relax the local constraint to:
+
+```text
+coincurve>=20.0.0,<22.0.0
+```
+
+Then run `poetry update coincurve` before `poetry install --only main`.
 
 ### Logging
 

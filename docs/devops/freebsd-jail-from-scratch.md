@@ -30,9 +30,16 @@ The jail owns the application and its runtime:
 └── logs
 ```
 
-This guide uses a ZFS clone (a thin jail) and a simple shared-network-stack IP.
-That is easier to reproduce than VNET and is sufficient when the host provides
-the reverse proxy. A VNET variant is described later.
+This guide documents two jail creation paths:
+
+- a direct `bsdinstall jail` path, which was validated during a second clean
+  SafeBox install and is the simplest way to reproduce a single dedicated jail
+- a ZFS-template thin jail, which is best when you expect to create several
+  jails from one patched base image
+
+The direct `bsdinstall jail` path is the most straightforward starting point.
+A VNET variant is described later, but the validated install used shared
+networking with `ip4 = inherit`.
 
 ## Before you begin
 
@@ -63,14 +70,74 @@ netstat -rn -f inet
 All commands in the host sections run as `root` on the host. Commands prefixed
 with `jexec safebox` run inside the jail.
 
+## Lessons from the second clean jail install
+
+The second FreeBSD jail install confirmed that SafeBox runs cleanly inside a
+FreeBSD 15 jail, but it also exposed the details that make the difference
+between a working install and a long dependency hunt:
+
+- `bsdinstall jail /zroot/jails/safebox` is a good single-jail bootstrap path.
+- `ip4 = inherit` is sufficient when the host owns the network boundary and
+  reverse proxy.
+- Poetry should use an in-project virtual environment and, on FreeBSD, may need
+  `virtualenvs.options.system-site-packages true` so package-provided native
+  modules can be reused.
+- `liboqs` must be installed as a shared library, not only built as a static
+  archive.
+- `coincurve`, `yarl`, `multidict`, `frozenlist`, `psycopg2`, and similar
+  native modules are less painful when FreeBSD package versions are available.
+- `uvloop` is a Linux/macOS optimization and should not be treated as required
+  on FreeBSD.
+- `pyinstaller` belongs in development tooling and should not block a FreeBSD
+  production install.
+
+The rest of this guide incorporates those findings.
+
 ## 1. Prepare the host
 
-Enable jails at boot and create the standard ZFS hierarchy:
+Before creating the jail, verify and protect the fresh host:
 
 ```sh
+freebsd-version
+uname -m
+zpool list
+zpool status
+zfs list
+ping -c 3 pkg.freebsd.org
+```
+
+The validated fresh install used:
+
+- FreeBSD `15.1-RELEASE-p1`
+- `arm64`
+- root-on-ZFS with pool `zroot`
+- an `ONLINE` pool
+- working DNS/package network access
+
+Bootstrap and update packages, then enable the host services:
+
+```sh
+pkg bootstrap -f
+pkg update
+pkg upgrade
+
+sysrc sshd_enable=YES
 sysrc jail_enable=YES
 sysrc jail_parallel_start=YES
+service sshd start
+```
 
+Create a host boot-environment rollback point before touching jails:
+
+```sh
+bectl list
+bectl create before-safebox-jails
+bectl list
+```
+
+Create the standard ZFS hierarchy if you are using the template path:
+
+```sh
 zfs create -o mountpoint=/usr/local/jails zroot/jails
 zfs create zroot/jails/media
 zfs create zroot/jails/templates
@@ -96,7 +163,132 @@ Create the directory if necessary:
 mkdir -p /etc/jail.conf.d
 ```
 
-## 2. Build a FreeBSD jail template
+## 2. Create the jail
+
+There are two supported creation styles. Use the `bsdinstall jail` path for a
+single dedicated SafeBox jail. Use the ZFS-template path when you want a base
+image that can be cloned repeatedly.
+
+### Path A: Direct `bsdinstall jail` install
+
+Create a dedicated dataset and install a base userland directly into it:
+
+```sh
+zfs create -p zroot/jails/safebox
+bsdinstall jail /zroot/jails/safebox
+```
+
+This is the path used in the second clean install. It avoids maintaining a
+separate template dataset and is easy to repeat on a new machine.
+
+Create `/etc/jail.conf.d/safebox.conf`:
+
+```text
+exec.clean;
+mount.devfs;
+allow.raw_sockets = 0;
+
+exec.start = "/bin/sh /etc/rc";
+exec.stop = "/bin/sh /etc/rc.shutdown";
+
+safebox {
+    host.hostname = "safebox";
+    path = "/zroot/jails/safebox";
+    ip4 = inherit;
+    persist;
+}
+```
+
+Make sure `/etc/jail.conf` includes the per-jail config directory:
+
+```text
+.include "/etc/jail.conf.d/*.conf";
+```
+
+This `.include` line belongs in `/etc/jail.conf`, not inside the
+`safebox { ... }` block and not after the SafeBox entry in the same file. A
+clean layout is:
+
+```text
+/etc/jail.conf
+└── contains only: .include "/etc/jail.conf.d/*.conf";
+
+/etc/jail.conf.d/safebox.conf
+└── contains the safebox { ... } jail definition
+```
+
+Think of `/etc/jail.conf` as the table of contents and
+`/etc/jail.conf.d/safebox.conf` as the actual chapter.
+
+Validate the rc configuration before relying on `service jail stop/start`:
+
+```sh
+service jail config safebox
+```
+
+Start and enter the jail:
+
+```sh
+service jail start safebox
+jls
+jexec safebox /bin/sh
+```
+
+With `ip4 = inherit`, the jail shares the host network stack. This is simple
+and works well when the host provides SSH, Tailscale, firewalling, and reverse
+proxying. If you need a dedicated jail address, use the shared-IP alias example
+below or the VNET section later in this document.
+
+### Live install checkpoints
+
+When using this guide interactively, pause and verify at these checkpoints
+before continuing:
+
+1. Host baseline:
+
+   ```sh
+   freebsd-version
+   uname -m
+   zpool status
+   ping -c 3 pkg.freebsd.org
+   bectl list
+   ```
+
+2. Jail rc configuration:
+
+   ```sh
+   cat /etc/jail.conf
+   cat /etc/jail.conf.d/safebox.conf
+   service jail config safebox
+   ```
+
+3. Jail startup:
+
+   ```sh
+   service jail start safebox
+   jls
+   jexec safebox /bin/sh
+   ```
+
+4. Package/bootstrap inside the jail:
+
+   ```sh
+   pkg -v
+   pkg update
+   ```
+
+5. First application boot:
+
+   ```sh
+   .venv/bin/gunicorn --chdir /usr/local/safebox app.main:app \
+     --workers 1 --worker-class uvicorn.workers.UvicornWorker \
+     --bind 0.0.0.0:7375 --timeout 120
+   ```
+
+If a checkpoint fails, stop there and fix that layer before moving on. Most
+fresh-install problems come from skipping one of these boundaries.
+
+### Path B: ZFS-template thin jail
 
 Set the release and architecture for the current shell. Use `arm64` for an
 ARM64 Raspberry Pi and `amd64` for an x86-64 host.
@@ -133,9 +325,10 @@ zfs clone "zroot/jails/templates/${RELEASE}@base" \
   zroot/jails/containers/safebox
 ```
 
-## 3. Configure and start the jail
+## 3. Configure and start a shared-IP jail
 
-Create `/etc/jail.conf.d/safebox.conf`, changing the interface and address:
+If you did not use `ip4 = inherit`, create
+`/etc/jail.conf.d/safebox.conf`, changing the interface and address:
 
 ```text
 safebox {
@@ -176,12 +369,29 @@ alias; that can terminate the administrative connection. The `ifconfig` command
 adds it immediately, while the earlier `sysrc` setting restores it at boot.
 
 Inside the jail, verify DNS and outbound connectivity before attempting a
-build:
+build. `ping` is expected to fail when `allow.raw_sockets = 0`, so use `pkg` or
+`fetch` as the real network test:
 
 ```sh
 cat /etc/resolv.conf
-ping -c 1 pkg.freebsd.org
 pkg bootstrap -f
+pkg update
+fetch -qo - https://pkg.freebsd.org/
+```
+
+If `pkg bootstrap -f` asks whether to install the package manager and then
+returns quietly, verify with:
+
+```sh
+which pkg
+pkg -v
+pkg update
+```
+
+If it still behaves like the bootstrap stub, force a non-interactive bootstrap:
+
+```sh
+env ASSUME_ALWAYS_YES=yes pkg bootstrap -f
 pkg update
 ```
 
@@ -197,10 +407,12 @@ system, while Rust is needed by packages such as `pydantic-core` and modern
 
 ```sh
 jexec safebox pkg install -y \
-  ca_root_nss git curl \
-  python311 py311-pip py311-setuptools py311-wheel py311-sqlite3 \
-  cmake ninja gmake pkgconf rust \
-  openssl sqlite3 postgresql16-client libzmq4
+  ca_root_nss git curl wget bash vim tmux sudo \
+  python311 py311-pip py311-setuptools py311-wheel py311-virtualenv \
+  py311-sqlite3 \
+  cmake ninja gmake pkgconf rust llvm autoconf automake libtool \
+  openssl sqlite3 postgresql16-client py311-psycopg2 libzmq4 \
+  py311-cffi py311-coincurve py311-yarl py311-multidict py311-frozenlist
 ```
 
 Verify the tools before installing Python packages:
@@ -211,6 +423,7 @@ jexec safebox cmake --version
 jexec safebox ninja --version
 jexec safebox rustc --version
 jexec safebox python3.11 -c 'import sqlite3; print(sqlite3.sqlite_version)'
+jexec safebox python3.11 -c 'import coincurve; print("coincurve ok")'
 jexec safebox pg_config --version
 ```
 
@@ -339,16 +552,68 @@ jexec safebox install -d -o safebox -g safebox \
   /usr/local/safebox/data /usr/local/safebox/logs
 ```
 
-Install Poetry for the service user and create an in-project environment:
+Install Poetry for the service user and create an in-project environment.
+During the second FreeBSD install, allowing system site packages made the
+FreeBSD package-provided native modules available to the Poetry environment and
+reduced avoidable source builds:
 
 ```sh
 jexec -U safebox safebox python3.11 -m pip install --user poetry
 jexec -U safebox safebox sh -c \
   'cd /usr/local/safebox && \
    /home/safebox/.local/bin/poetry config virtualenvs.in-project true && \
+   /home/safebox/.local/bin/poetry config virtualenvs.options.system-site-packages true && \
    /home/safebox/.local/bin/poetry env use python3.11 && \
    /home/safebox/.local/bin/poetry install --only main'
 ```
+
+### FreeBSD `coincurve` adjustment
+
+The current repository may pin `coincurve = "20.0.0"`. On FreeBSD 15/arm64,
+the package-provided module was `py311-coincurve` 21.x. If Poetry tries to
+downgrade `coincurve` from 21.x to 20.0.0, it can force a source build and fail
+with a `scikit-build-core` error similar to:
+
+```text
+ERROR: Use build.verbose instead of cmake.verbose for scikit-build-core >= 0.10
+```
+
+Do not fight that build. Edit `pyproject.toml` in the jail before installing:
+
+```toml
+coincurve = ">=20.0.0,<22.0.0"
+```
+
+Then update the lock for that dependency and retry:
+
+```sh
+poetry update coincurve
+poetry install --only main
+```
+
+If Poetry still attempts to build `coincurve`, recreate the virtualenv after
+confirming system site packages are enabled:
+
+```sh
+rm -rf .venv
+poetry config virtualenvs.in-project true
+poetry config virtualenvs.options.system-site-packages true
+poetry env use python3.11
+poetry install --only main
+```
+
+If a clean FreeBSD install fails on `uvloop`, do not spend time forcing it.
+`uvloop` is not required for correctness on FreeBSD; the standard asyncio event
+loop is acceptable. The project should eventually express this as a platform
+marker in `pyproject.toml`, for example:
+
+```toml
+uvloop = { version = "^0.21.0", markers = "sys_platform != 'freebsd'" }
+```
+
+Likewise, `pyinstaller` should remain development-only and should not be part
+of a production jail install. If it appears in more than one dependency group,
+deduplicate it before locking.
 
 On ARM hardware this can take an hour. In another host terminal, confirm that
 the build is alive:
@@ -365,7 +630,7 @@ Run a consolidated dependency check:
 ```sh
 jexec -U safebox safebox sh -c \
   'cd /usr/local/safebox && .venv/bin/python -c \
-  "import sqlite3, oqs, coincurve, psycopg2, zmq, uvloop; print(\"native dependencies: OK\")"'
+  "import sqlite3, oqs, coincurve, psycopg2, zmq, yarl, multidict, frozenlist; print(\"native dependencies: OK\")"'
 ```
 
 ## 7. Configure first startup
@@ -392,13 +657,21 @@ SafeBox's guarded automatic bootstrap may create secrets only when its secret
 store is truly empty. Partial secret state fails closed. Back up the resulting
 `.env` and data immediately after a successful first start.
 
-Test interactively before creating a service:
+Test interactively before creating a service. On a fresh SQLite database, start
+with one worker for the first boot so only one process creates the schema and
+bootstrap state:
 
 ```sh
 jexec -U safebox safebox sh -c \
   'cd /usr/local/safebox && \
-   .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7375'
+   .venv/bin/gunicorn --chdir /usr/local/safebox app.main:app \
+   --workers 1 --worker-class uvicorn.workers.UvicornWorker \
+   --bind 0.0.0.0:7375 --timeout 120'
 ```
+
+After the first startup completes successfully, two workers can start against
+the already-created SQLite schema. For production, or for more workers, use
+PostgreSQL.
 
 From the host, test the jail address:
 
@@ -437,7 +710,7 @@ command_args="-f -r -P ${pidfile} -u ${safebox_user} \
   -o /usr/local/safebox/logs/safebox.log \
   -e /usr/local/safebox/logs/safebox.err \
   /bin/sh -c 'cd ${safebox_dir} && exec .venv/bin/gunicorn app.main:app \
-  --workers 2 --worker-class uvicorn.workers.UvicornWorker \
+  --workers 1 --worker-class uvicorn.workers.UvicornWorker \
   --bind ${safebox_bind} --timeout 120'"
 
 run_rc_command "$1"
@@ -464,7 +737,34 @@ The host reverse proxy should connect to `192.168.1.51:7375`. Keep TLS,
 certificate renewal, Tailscale, and public firewall policy on the host unless
 there is a specific reason to put them in this application jail.
 
-## 9. Validate the finished deployment
+For SQLite deployments, keep the service at `--workers 1` unless the database
+has already been initialized and you have tested the multi-worker startup. For
+PostgreSQL deployments, multiple workers are safer.
+
+## 9. Future automation target
+
+The second clean install showed that the remaining manual steps are predictable
+enough to automate. A future `bootstrap-freebsd.sh` should:
+
+- install the FreeBSD package set listed above
+- build or install `liboqs` as a shared library
+- configure Poetry with an in-project virtual environment
+- enable system site packages when relying on FreeBSD-provided native modules
+- run `poetry install --only main`
+- execute the native dependency checks before attempting to start Gunicorn
+
+The target operator experience should eventually be:
+
+```sh
+git clone https://github.com/trbouma/safebox.git /usr/local/safebox
+cd /usr/local/safebox
+./bootstrap-freebsd.sh
+```
+
+Until that script exists and is tested, the explicit commands in this runbook
+remain the canonical install path.
+
+## 10. Validate the finished deployment
 
 Run these checks after every fresh build:
 
@@ -482,13 +782,31 @@ fetch -qo - http://192.168.1.51:7375/
 Also test an application workflow that exercises PQC. A successful homepage
 does not prove that KEM key generation or encapsulation works.
 
-## 10. Snapshots, upgrades, and rollback
+If `service jail stop safebox` reports an invalid configuration, confirm that
+you are on the host, not inside the jail, and inspect:
+
+```sh
+hostname
+jls
+cat /etc/jail.conf
+ls -l /etc/jail.conf.d
+cat /etc/jail.conf.d/safebox.conf
+service jail config safebox
+```
+
+The most common miss is forgetting this line in `/etc/jail.conf`:
+
+```text
+.include "/etc/jail.conf.d/*.conf";
+```
+
+## 11. Snapshots, upgrades, and rollback
 
 Snapshot both code and mutable application state before an upgrade:
 
 ```sh
 service jail stop safebox
-zfs snapshot zroot/jails/containers/safebox@before-2026-07-upgrade
+zfs snapshot zroot/jails/safebox@before-2026-07-upgrade
 service jail start safebox
 ```
 
@@ -505,9 +823,12 @@ If the upgrade fails, stop the jail before rollback:
 
 ```sh
 service jail stop safebox
-zfs rollback zroot/jails/containers/safebox@before-2026-07-upgrade
+zfs rollback zroot/jails/safebox@before-2026-07-upgrade
 service jail start safebox
 ```
+
+If you used the ZFS-template path instead of `bsdinstall jail`, substitute the
+actual dataset, for example `zroot/jails/containers/safebox`.
 
 A snapshot is not an off-host backup. Replicate the dataset with `zfs send`,
 and separately protect the service identity, `.env`, and database.
@@ -553,6 +874,42 @@ which pg_config
 ```sh
 pkg install -y libzmq4 pkgconf
 pkgconf --libs libzmq
+```
+
+### `uvloop` fails to build or import
+
+Do not treat this as a deployment blocker on FreeBSD. Use the standard asyncio
+event loop and make `uvloop` conditional for non-FreeBSD platforms in
+`pyproject.toml`.
+
+### `pyinstaller` blocks a production install
+
+`pyinstaller` is not required to run the web service in a jail. Keep it in the
+development dependency group and exclude it from the production install with:
+
+```sh
+poetry install --only main
+```
+
+### `coincurve`, `yarl`, `multidict`, or `frozenlist` compile slowly
+
+Prefer FreeBSD packages when available:
+
+```sh
+pkg install -y py311-coincurve py311-yarl py311-multidict py311-frozenlist
+poetry config virtualenvs.options.system-site-packages true
+```
+
+Then recreate the Poetry environment if the package was installed after the
+virtualenv was created.
+
+### `asyncpg` or PostgreSQL headers fail
+
+Install the PostgreSQL client package before running Poetry:
+
+```sh
+pkg install -y postgresql16-client
+pg_config --version
 ```
 
 ### Rust package fails during metadata or wheel build
