@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "safebox-acorn"
+version = "0.1.0"
+description = "Installable Acorn component from Safebox"
+authors = ["trbouma <trbouma@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "acorn" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+monstr = "^0.1.9"
+click = "^8.1.7"
+coincurve = ">=20.0.0,<22.0.0"
+wheel = "^0.43.0"
+pyyaml = "^6.0.1"
+pydantic = "^2.8.2"
+hotel-names = "^0.0.1"
+requests = "^2.32.3"
+bech32 = "^1.2.0"
+mnemonic = "^0.21"
+bolt11 = "^2.1.0"
+qrcode = "^7.4.2"
+cbor2 = "^5.6.5"
+bip-utils = "^2.9.3"
+httpx = "^0.28.1"
+filelock = "^3.18.0"
+python-blossom = "^1.0.2"
+filetype = "^1.2.0"
+aioconsole = "^0.8.1"
+cryptography = "^49.0.0"
+liboqs-python = ">=0.14.1,<0.17.0"
+secp256k1 = ">=0.14.0"
+
+[tool.poetry.scripts]
+acorn = "acorn.cli_acorn:cli"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

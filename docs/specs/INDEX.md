@@ -47,6 +47,8 @@ Section convention used across current Safebox specs:
 - [Hardening in Unpredictable and Adversarial Environments](./HARDENING-IN-UNPREDICTABLE-AND-ADVERSARIAL-ENVIRONMENTS.md) - Cross-cutting hardening model covering shared failure modes, fallback classes, fail-closed boundaries, and graceful rollback/recovery patterns across all flow families.
   - Includes `Field Discoveries and Applied Fixes (2026-02)` and `Remaining Fragility and Risk Concentration` sections documenting recent QR/NFC handshake issues, applied remediations, and the immediate hardening backlog.
 - [Acorn Modularization Transition Plan](./ACORN-MODULARIZATION-TRANSITION-PLAN.md) - Design note for evolving Acorn from a god-class into compartmentalized services with phased migration and compatibility safeguards.
+- [Acorn Standalone Component](./ACORN-STANDALONE-COMPONENT.md) - First standalone package boundary for installing Acorn into other Python projects without the Safebox web application.
+- [Acorn and Safebox Separation Plan](./ACORN-SAFEBOX-SEPARATION-PLAN.md) - Safebox-side migration strategy for adopting the external `safebox-acorn` package without breaking the existing product.
 - [Acceptance Model](./ACCEPTANCE-MODEL.md) - Trust and acceptance rules for inbound records and events.
 - [WoT, Attestation, and Record Verification](./WOT-ATTESTATION-AND-RECORD-VERIFICATION.md) - Current implementation of root recognition, owner attestation lookup, trusted assertion provider scoring, and verification rendering across record flows.
 - [Issued-to-Holder Presentation Profile](./ISSUED-TO-HOLDER-PRESENTATION-PROFILE.md) - Generic acceptance profile for records issued to one actor and later presented by that same holder to another verifier.
