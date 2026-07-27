@@ -279,6 +279,8 @@ pkg install -y \
   pkgconf \
   sqlite3 \
   postgresql16-client \
+  libzmq4 \
+  py311-pyzmq \
   liboqs \
   py311-liboqs-python \
   openssl \
@@ -400,6 +402,21 @@ python3.11 -c "import oqs"
 
 As user `safebox`, create `/usr/local/safebox/.env`:
 
+For a first plain-HTTP smoke test, use non-production mode:
+
+```env
+APP_ENV=development
+DATABASE=sqlite:///data/database.db
+PUBLIC_BASE_URL=http://192.168.64.10:7375
+BRANDING=SafeBox FreeBSD
+BRANDING_MESSAGE=FreeBSD instance running
+BRANDING_RETRY=FreeBSD instance: please try again.
+COOKIE_SECURE=false
+SECRET_BOOTSTRAP_MODE=false
+```
+
+For a real HTTPS deployment, use production mode with secure cookies:
+
 ```env
 APP_ENV=production
 DATABASE=sqlite:///data/database.db
@@ -416,6 +433,8 @@ Notes:
 - `AUTO_BOOTSTRAP_ON_EMPTY_SECRET_STORE` now defaults to `true`
 - `SECRET_BOOTSTRAP_MODE=false` is the correct steady-state setting
 - if this is the first startup and the secret store is truly empty, bootstrap should still occur automatically
+- `APP_ENV=production` requires `COOKIE_SECURE=true`; use `APP_ENV=development`
+  for a temporary plain-HTTP smoke test
 
 ### 9. Set branding override file if desired
 

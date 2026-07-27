@@ -97,13 +97,16 @@ This provides:
 
 ## ZeroMQ
 
-Install:
+Install both the native ZeroMQ library and the Python binding:
 
 ```sh
-pkg install libzmq4
+pkg install \
+    libzmq4 \
+    py311-pyzmq
 ```
 
-This is required for the `pyzmq` package.
+`libzmq4` provides the native library. `py311-pyzmq` provides the Python module
+used by `import zmq`.
 
 ## Open Quantum Safe
 
@@ -425,7 +428,7 @@ non-FreeBSD platforms.
 Prefer FreeBSD packages where available:
 
 ```sh
-pkg install py311-coincurve py311-yarl py311-multidict py311-frozenlist py311-psycopg2
+pkg install py311-coincurve py311-pyzmq py311-yarl py311-multidict py311-frozenlist py311-psycopg2
 poetry config virtualenvs.options.system-site-packages true
 ```
 

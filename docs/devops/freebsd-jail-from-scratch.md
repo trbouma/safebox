@@ -411,7 +411,7 @@ jexec safebox pkg install -y \
   python311 py311-pip py311-setuptools py311-wheel py311-virtualenv \
   py311-sqlite3 \
   cmake ninja gmake pkgconf rust llvm autoconf automake libtool \
-  openssl sqlite3 postgresql16-client py311-psycopg2 libzmq4 \
+  openssl sqlite3 postgresql16-client py311-psycopg2 libzmq4 py311-pyzmq \
   py311-cffi py311-coincurve py311-yarl py311-multidict py311-frozenlist
 ```
 
@@ -638,6 +638,20 @@ jexec -U safebox safebox sh -c \
 Create `/usr/local/safebox/.env` inside the jail. Do not copy production keys
 into shell history.
 
+For a first plain-HTTP smoke test on a private VM or LAN address, do not mark
+the app as production. Production mode requires secure cookies, and secure
+cookies require HTTPS:
+
+```env
+APP_ENV=development
+DATABASE=sqlite:///data/database.db
+PUBLIC_BASE_URL=http://192.168.64.10:7375
+COOKIE_SECURE=false
+SECRET_BOOTSTRAP_MODE=false
+```
+
+For a real HTTPS deployment, switch to production settings:
+
 ```env
 APP_ENV=production
 DATABASE=sqlite:///data/database.db
@@ -645,6 +659,9 @@ PUBLIC_BASE_URL=https://safebox.example.com
 COOKIE_SECURE=true
 SECRET_BOOTSTRAP_MODE=false
 ```
+
+Do not use `APP_ENV=production` with `COOKIE_SECURE=false`; Safebox refuses to
+boot in that configuration.
 
 Set restrictive ownership and permissions:
 
@@ -869,12 +886,15 @@ pkg install -y postgresql16-client
 which pg_config
 ```
 
-### ZeroMQ headers or library missing
+### ZeroMQ headers, library, or Python module missing
 
 ```sh
-pkg install -y libzmq4 pkgconf
+pkg install -y libzmq4 py311-pyzmq pkgconf
 pkgconf --libs libzmq
 ```
+
+`libzmq4` provides the native ZeroMQ library. The Python import `import zmq`
+comes from `py311-pyzmq`, so install both inside the jail.
 
 ### `uvloop` fails to build or import
 
@@ -891,12 +911,12 @@ development dependency group and exclude it from the production install with:
 poetry install --only main
 ```
 
-### `coincurve`, `yarl`, `multidict`, or `frozenlist` compile slowly
+### `coincurve`, `pyzmq`, `yarl`, `multidict`, or `frozenlist` compile slowly
 
 Prefer FreeBSD packages when available:
 
 ```sh
-pkg install -y py311-coincurve py311-yarl py311-multidict py311-frozenlist
+pkg install -y py311-coincurve py311-pyzmq py311-yarl py311-multidict py311-frozenlist
 poetry config virtualenvs.options.system-site-packages true
 ```
 
