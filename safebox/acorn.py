@@ -4692,7 +4692,7 @@ class Acorn:
                             ).model_dump()
                         ]
                         data_to_send = {
-                            "inputs": [each_proof.model_dump()],
+                            "inputs": [each_proof.to_dict()],
                             "outputs": blinded_messages,
                         }
 
@@ -5184,7 +5184,7 @@ class Acorn:
                     self.logger.debug(f"keep proofs: {keep_proofs}")
                     melt_proofs = []
                     for each_proof in spend_proofs:
-                            melt_proofs.append(each_proof.model_dump())
+                            melt_proofs.append(each_proof.to_dict())
 
                     data_to_send = {"quote": post_melt_response.quote,
                                 "inputs": melt_proofs }
@@ -5322,7 +5322,7 @@ class Acorn:
             self.logger.debug(f"keep proofs: {keep_proofs}")
             melt_proofs = []
             for each_spend_proof in spend_proofs:
-                    melt_proofs.append(each_spend_proof.model_dump())
+                    melt_proofs.append(each_spend_proof.to_dict())
 
             data_to_send = {"quote": post_melt_response.quote,
                         "inputs": melt_proofs }
@@ -5555,7 +5555,7 @@ class Acorn:
             self.logger.debug(f"keep proofs:  {keep_proofs}")
             melt_proofs = []
             for each_proof in spend_proofs:
-                    melt_proofs.append(each_proof.model_dump())
+                    melt_proofs.append(each_proof.to_dict())
 
             data_to_send = {"quote": post_melt_response.quote,
                         "inputs": melt_proofs }
@@ -5769,7 +5769,7 @@ class Acorn:
         new_proofs = []
         for each_proof in incoming_swap_proofs:
             swap_amount+=each_proof.amount        
-            swap_proofs.append(each_proof.model_dump())                    
+            swap_proofs.append(each_proof.to_dict())
             count +=1
         
         r = PrivateKey()
@@ -5928,7 +5928,7 @@ class Acorn:
                 for each_proof in keyset_proofs[each_keyset]:
                     # print(each_proof.amount)
                     swap_amount+=each_proof.amount
-                    swap_proofs.append(each_proof.model_dump())                    
+                    swap_proofs.append(each_proof.to_dict())
                     count +=1
                     # print("swap proofs:", swap_proofs)
                 r = PrivateKey()
@@ -6143,7 +6143,7 @@ class Acorn:
                                                                 ).model_dump()
                                             )
                     data_to_send = {
-                                "inputs":   [each_proof.model_dump()],
+                                "inputs":   [each_proof.to_dict()],
                                 "outputs": blinded_messages
                                 
                     }
@@ -6315,7 +6315,7 @@ class Acorn:
                                                                 ).model_dump()
                                             )
                     data_to_send = {
-                                "inputs":   [each_proof.model_dump()],
+                                "inputs":   [each_proof.to_dict()],
                                 "outputs": blinded_messages
                                 
                     }
@@ -6435,7 +6435,7 @@ class Acorn:
 
         proofs_to_send =[]
         for each in proofs_to_use:
-            proofs_to_send.append(each.model_dump())
+            proofs_to_send.append(each.to_dict())
 
         data_to_send = {
                         "inputs":  proofs_to_send,
@@ -6587,7 +6587,7 @@ class Acorn:
 
         proofs_to_send =[]
         for each in proofs_to_use:
-            proofs_to_send.append(each.model_dump())
+            proofs_to_send.append(each.to_dict())
 
         data_to_send = {
                         "inputs":  proofs_to_send,
@@ -6731,7 +6731,7 @@ class Acorn:
 
         proofs_to_send =[]
         for each in proofs_to_use:
-            proofs_to_send.append(each.model_dump())
+            proofs_to_send.append(each.to_dict())
 
         data_to_send = {
                         "inputs":  proofs_to_send,
