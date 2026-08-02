@@ -1962,16 +1962,17 @@ test = ["ipykernel", "pre-commit", "pytest (<9)", "pytest-cov", "pytest-timeout"
 
 [[package]]
 name = "liboqs-python"
-version = "0.14.1"
+version = "0.16.0"
 description = "Python bindings for liboqs, providing post-quantum public key cryptography algorithms"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 files = [
-    {file = "liboqs_python-0.14.1-py3-none-any.whl", hash = "sha256:e3c81e632d02122dda3734edc4ba83bd457eefa3fdb266d33ea908a77a17642f"},
+    {file = "liboqs_python-0.16.0-py3-none-any.whl", hash = "sha256:50bb11a9767b88f68099cedef8de09f798f31eaba1aa18b483988bfcd50df440"},
+    {file = "liboqs_python-0.16.0.tar.gz", hash = "sha256:ee01445ccfbeab8dced956a642ce1eb5ba69438caba7ec291eea14083627d5c0"},
 ]
 
 [package.extras]
-dev = ["isort (==5.13.2)", "nose2 (==0.15.1)", "pre-commit (==4.1.0)", "ruff (==0.9.4)"]
+dev = ["isort (==5.13.2)", "nose2 (==0.15.1)", "pre-commit (==4.1.0)", "pyasn1 (==0.6.3)", "pyasn1-alt-modules (==0.4.6)", "ruff (==0.9.4)"]
 lint = ["mypy (==1.14.1)", "types-pytz (==2024.2.0.20241221)"]
 
 [[package]]
@@ -4306,4 +4307,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.14"
-content-hash = "db478a3d89242e77160061bb026e4fb750873224bf801d2eed4f6a85805c4edd"
+content-hash = "05f1170433c1946ecabfd33ac5641df13ed507521f6dc89ae44e30692d4411ee"

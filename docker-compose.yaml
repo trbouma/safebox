@@ -2,7 +2,7 @@ services:
   safebox:
     restart: always
     build:
-      context: https://github.com/trbouma/safebox.git#release-candidate
+      context: .
       dockerfile: Dockerfile
     container_name: safebox
     ports:

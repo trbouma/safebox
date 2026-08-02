@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=python:3.11-slim-bookworm
-ARG LIBOQS_REF=0.14.0
+ARG LIBOQS_REF=0.16.0
 ARG POETRY_VERSION=1.8.4
 
 # ---------- build stage: compile liboqs ----------
