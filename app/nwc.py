@@ -61,6 +61,17 @@ NWC_SERIALIZED_METHODS = {"pay_invoice", "pay_ecash", "accept_ecash"}
 _nwc_account_queue_locks: dict[str, asyncio.Lock] = {}
 _nwc_account_queue_depths: defaultdict[str, int] = defaultdict(int)
 
+
+def _serialize_nwc_payment_preimage(value: object) -> str:
+    """NIP-47 pay_invoice success responses must contain a string."""
+
+    if isinstance(value, str):
+        return value
+    logger.warning(
+        "op=nwc_pay_invoice status=missing_preimage compatibility=empty_string"
+    )
+    return ""
+
 import asyncio
 import logging
 from aiohttp import ClientSession
@@ -368,7 +379,9 @@ async def nwc_handle_instruction(
                     response_json = {
                                         "result_type": "pay_invoice",
                                         "result": {
-                                            "preimage": payment_preimage, 
+                                            "preimage": _serialize_nwc_payment_preimage(
+                                                payment_preimage
+                                            ),
                                             "fees_paid": final_fees * 1000
                                             }
                                     }
@@ -387,7 +400,9 @@ async def nwc_handle_instruction(
             response_json = {
                                 "result_type": "pay_invoice",
                                 "result": {
-                                    "preimage": payment_preimage, 
+                                    "preimage": _serialize_nwc_payment_preimage(
+                                        payment_preimage
+                                    ),
                                     "fees_paid": final_fees * 1000
                                     }
                             }

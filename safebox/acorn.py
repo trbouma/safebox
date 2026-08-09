@@ -81,6 +81,61 @@ RECEIVE_PROOF_MAINTENANCE_EAGER_BATCH_LIMIT: int = int(
 DEFAULT_BLOSSOM_HOME_SERVER: str = "https://blossom.getsafebox.app"
 DEFAULT_BLOSSOM_XFER_SERVER: str = "https://blossomx.getsafebox.app"
 
+
+def normalize_payment_preimage(value: object) -> str | None:
+    """Return a usable payment preimage without serializing null-like values."""
+
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or normalized.lower() in {"none", "null"}:
+        return None
+    return normalized
+
+
+async def recover_melt_payment_preimage(
+    mint: str,
+    quote: str,
+    *,
+    timeout: httpx.Timeout | float = 10.0,
+    attempts: int = 3,
+) -> str | None:
+    """Fetch a missing preimage from the final Cashu melt-quote state."""
+
+    quote_url = f"{str(mint).rstrip('/')}/v1/melt/quote/bolt11/{quote}"
+    delay = 0.2
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for attempt in range(max(1, attempts)):
+                response = await client.get(quote_url)
+                response.raise_for_status()
+                payload = response.json()
+                preimage = normalize_payment_preimage(
+                    payload.get("payment_preimage")
+                    if isinstance(payload, dict)
+                    else None
+                )
+                if preimage is not None:
+                    return preimage
+                if attempt + 1 < max(1, attempts):
+                    await asyncio.sleep(delay)
+                    delay *= 2
+    except (httpx.HTTPError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        logging.getLogger(__name__).warning(
+            "op=recover_melt_preimage status=failed mint=%s quote=%s error=%s",
+            mint,
+            quote,
+            type(exc).__name__,
+        )
+        return None
+
+    logging.getLogger(__name__).warning(
+        "op=recover_melt_preimage status=unavailable mint=%s quote=%s",
+        mint,
+        quote,
+    )
+    return None
+
 def powers_of_2_sum(amount):
     powers = []
     while amount > 0:
@@ -5577,10 +5632,36 @@ class Acorn:
                     )
                 raise
             self.logger.debug(response.json())  
-            payment_json = response.json() 
-            payment_preimage = payment_json.get('payment_preimage', None)            
-            if payment_json.get("paid",False):        
-                    self.logger.info(f"Lightning payment ok: {payment_hash} {payment_preimage}")
+            payment_json = response.json()
+            payment_preimage = normalize_payment_preimage(
+                payment_json.get("payment_preimage")
+            )
+            payment_succeeded = bool(payment_json.get("paid", False)) or (
+                str(payment_json.get("state", "")).upper() == "PAID"
+            )
+            if payment_succeeded:
+                if payment_preimage is None:
+                    payment_preimage = await recover_melt_payment_preimage(
+                        self.known_mints[chosen_keyset],
+                        post_melt_response.quote,
+                        timeout=timeout,
+                    )
+                if payment_preimage is None:
+                    self.logger.warning(
+                        "op=pay_multi_invoice status=paid_without_preimage "
+                        "mint=%s quote=%s",
+                        self.known_mints[chosen_keyset],
+                        post_melt_response.quote,
+                    )
+                    # NIP-47 requires a string. An empty string preserves
+                    # successful-payment semantics without inventing a
+                    # cryptographic preimage when the mint withholds it.
+                    payment_preimage = ""
+                self.logger.info(
+                    "Lightning payment ok: %s %s",
+                    payment_hash,
+                    payment_preimage,
+                )
             else:
                 self.logger.info(f"lighting payment did no go through")
                 await _restore_post_swap_wallet_state(
